@@ -18,6 +18,28 @@ The figure below provides a brief introduction to our method: our method can be 
 </div>
 
 
+If you want to know a **very high-level code implementation of our method**, see below.
+
+```
+# 🟩 Perform SVD on the original weight
+U, S, Vh = torch.linalg.svd(module.weight.data, full_matrices=False)
+
+# 🟨 Keep top r singular components (main weight)
+U_r = U[:, :r]      # 🔵 Shape: (out_features, r)
+S_r = S[:r]         # 🔵 Shape: (r,)
+Vh_r = Vh[:r, :]    # 🔵 Shape: (r, in_features)
+
+# 🟪 Reconstruct the main weight (fixed)
+weight_main = U_r @ torch.diag(S_r) @ Vh_r
+
+# 🟥 Residual components (trainable)
+U_residual = U[:, r:]    # 🔵 Shape: (out_features, n - r)
+S_residual = S[r:]       # 🔵 Shape: (n - r,)
+Vh_residual = Vh[r:, :]  # 🔵 Shape: (n - r, in_features)
+```
+
+If you want to see more method-specific implementation details, please see [effort_implementation](https://github.com/YZY-stack/Effort-AIGI-Detection/blob/main/DeepfakeBench/training/detectors/effort_detector.py).
+
 ---
 
 
