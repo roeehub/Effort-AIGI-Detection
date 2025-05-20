@@ -67,25 +67,26 @@ class EffortDetector(nn.Module):
     def classifier(self, features: torch.tensor) -> torch.tensor:
         return self.head(features)
 
-    # def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
-    #     label = data_dict['label']
-    #     pred = pred_dict['cls']
-    #     loss = self.loss_func(pred, label)
-        
-    #     # Regularization term
-    #     lambda_reg = 0.1
-    #     orthogonal_losses = []
-    #     for module in self.backbone.modules():
-    #         if isinstance(module, SVDResidualLinear):
-    #             # Apply orthogonal constraints to the U_residual and V_residual matrix
-    #             orthogonal_losses.append(module.compute_orthogonal_loss())
-        
-    #     if orthogonal_losses:
-    #         reg_term = sum(orthogonal_losses)
-    #         loss += lambda_reg * reg_term
-        
-    #     loss_dict = {'overall': loss}
-    #     return loss_dict
+    #def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
+    #    label = data_dict['label']
+    #    pred = pred_dict['cls']
+    #    loss = self.loss_func(pred, label)
+    #    
+    #    if self.training:
+    #        # Regularization term
+    #        lambda_reg = 1.0
+    #        reg_term = 0.0
+    #        num_reg = 0
+    #        for module in self.backbone.modules():
+    #            if isinstance(module, SVDResidualLinear):
+    #                reg_term += module.compute_orthogonal_loss()
+    #                reg_term += module.compute_keepsv_loss()
+    #                num_reg += 1
+    #        
+    #        loss += lambda_reg * reg_term / num_reg
+    #    
+    #    loss_dict = {'overall': loss}
+    #    return loss_dict
 
     def compute_weight_loss(self):
         weight_sum_dict = {}
@@ -212,8 +213,8 @@ class SVDResidualLinear(nn.Module):
     
     def compute_orthogonal_loss(self):
         # According to the properties of orthogonal matrices: A^TA = I
-        UUT_residual = self.U_residual @ self.U_residual.t()
-        VVT_residual = self.V_residual @ self.V_residual.t()
+        UUT = torch.cat((self.U_r, self.U_residual), dim=1) @ torch.cat((self.U_r, self.U_residual), dim=1).t()
+        VVT = torch.cat((self.V_r, self.V_residual), dim=0) @ torch.cat((self.V_r, self.V_residual), dim=0).t()
         
         # Construct an identity matrix
         UUT_residual_identity = torch.eye(UUT_residual.size(0), device=UUT_residual.device)
@@ -264,6 +265,8 @@ def replace_with_svd_residual(module, r):
         if bias and module.bias is not None:
             new_module.bias.data.copy_(module.bias.data)
 
+        new_module.weight_original_fnorm = torch.norm(module.weight.data, p='fro')
+
         # Perform SVD on the original weight
         U, S, Vh = torch.linalg.svd(module.weight.data, full_matrices=False)
 
@@ -278,6 +281,9 @@ def replace_with_svd_residual(module, r):
         # Reconstruct the main weight (fixed)
         weight_main = U_r @ torch.diag(S_r) @ Vh_r
 
+        # Calculate the frobenius norm of main weight
+        new_module.weight_main_fnorm = torch.norm(weight_main.data, p='fro')
+
         # Set the main weight
         new_module.weight_main.data.copy_(weight_main)
 
@@ -287,16 +293,21 @@ def replace_with_svd_residual(module, r):
         Vh_residual = Vh[r:, :]  # Shape: (n - r, in_features)
 
         if len(S_residual) > 0:
-            # S_residual is trainable
             new_module.S_residual = nn.Parameter(S_residual.clone())
-            # U_residual and V_residual are also trainable
             new_module.U_residual = nn.Parameter(U_residual.clone())
             new_module.V_residual = nn.Parameter(Vh_residual.clone())
+            
+            new_module.S_r = nn.Parameter(S_r.clone(), requires_grad=False)
+            new_module.U_r = nn.Parameter(U_r.clone(), requires_grad=False)
+            new_module.V_r = nn.Parameter(Vh_r.clone(), requires_grad=False)
         else:
-            # If no residual components, set placeholders
             new_module.S_residual = None
             new_module.U_residual = None
             new_module.V_residual = None
+            
+            new_module.S_r = None
+            new_module.U_r = None
+            new_module.V_r = None
 
         return new_module
     else:
