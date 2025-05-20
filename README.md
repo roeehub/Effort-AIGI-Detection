@@ -107,7 +107,7 @@ Since I am the creator and developer of [DeepfakeBench](https://github.com/SCLBD
 
 If you want to **try other codebases, such as UnivFD**, we provide a folder `UniversalFakeDetect_Benchmark/` to reproduce and implement our method using its codebase. Using this codebase, you can then **reproduce the results of Table 2 of our manuscript**.
 
-Below, we provide the detailed procedure to use DeepfakeBench to reproduce the results of our paper, such as Table 1.
+Below, we provide the **detailed procedure to use DeepfakeBench to reproduce the results** of our paper, such as Table 1.
 
 
 ### 1. Download datasets
@@ -152,7 +152,7 @@ python3 training/train.py \
 
 ### 5. Testing
 
-Once finishing training, you can test the model on several deepfake datasets such as DF40.
+Once you finish training, you can test the model on several deepfake datasets such as DF40.
 
 ```
 python3 training/test.py \
