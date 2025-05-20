@@ -96,6 +96,9 @@ python3 training/demo.py --detector_config training/config/detector/effort.yaml 
 After running the above line, you can obtain the prediction results (fake probabilities) for each image. 
 
 
+Note, you are processing a **face image**, please add the ``--landmark_model ./preprocessing/shape_predictor_81_face_landmarks.dat`` to **extract the facial region** for inference, as our model (trained on face deepfakes) used this face extractor for processing faces.
+
+
 ---
 
 
