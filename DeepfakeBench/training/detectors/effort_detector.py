@@ -150,6 +150,31 @@ class EffortDetector(nn.Module):
         }
         return loss_dict
 
+    def compute_keepsv_loss(self):
+        if (self.S_residual is not None) and (self.weight_original_fnorm is not None):
+            # Total current weight is the fixed main weight plus the residual
+            weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
+            # Frobenius norm of current weight
+            weight_current_fnorm = torch.norm(weight_current, p='fro')
+            
+            loss = torch.abs(weight_current_fnorm ** 2 - self.weight_original_fnorm ** 2)
+            # loss = torch.abs(weight_current_fnorm ** 2 + 0.01 * self.weight_main_fnorm ** 2 - 1.01 * self.weight_original_fnorm ** 2)
+        else:
+            loss = 0.0
+        
+        return loss
+    
+    def compute_fn_loss(self):
+        if (self.S_residual is not None):
+            weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
+            weight_current_fnorm = torch.norm(weight_current, p='fro')
+            
+            loss = weight_current_fnorm ** 2
+        else:
+            loss = 0.0
+        
+        return loss
+
     def get_train_metrics(self, data_dict: dict, pred_dict: dict) -> dict:
         label = data_dict['label']
         pred = pred_dict['cls']
