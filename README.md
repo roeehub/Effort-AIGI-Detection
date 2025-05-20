@@ -103,6 +103,10 @@ After running the above line, you can obtain the prediction results (fake probab
 
 <a href="#top">[Back to top]</a>
 
+Since I am the creator and developer of [DeepfakeBench](https://github.com/SCLBD/DeepfakeBench), the data, codebase, and benchmarking protocols are mainly used from it. If you are a researcher in (face) deepfake detection, I highly recommend you try DeepfakeBench.
+
+If you want to try other codebases, such as UnivFD, we provide a folder `UniversalFakeDetect_Benchmark/` to reproduce and implement our method using its codebase. Using this codebase, you can then reproduce the results of Table 2 of our manuscript.
+
 
 ### 1. Download datasets
 
