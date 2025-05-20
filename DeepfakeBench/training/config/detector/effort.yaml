@@ -1,13 +1,10 @@
 # log dir 
-#log_dir: /Youtu_Pangu_Security_Public/youtu-pangu-public/zhiyuanyan/logs/benchv2/iccv25/clipl_sora
-log_dir: /Youtu_Pangu_Security_Public/youtu-pangu-public/zhiyuanyan/logs/benchv2/icml25/release
-#log_dir: /Youtu_Pangu_Security/public/youtu-pangu-public/zhiyuanyan/logs/df40_exps/trainOnDF40/clip_multihead
+log_dir: ./zhiyuanyan/logs/benchv2/icml25/release
 
 # model setting
-pretrained: ./training/pretrained/xception-b5690688.pth   # path to a pre-trained model, if using one
+pretrained: 'no need to provide this for the effort model'
 model_name: effort   # model name
 backbone_name: vit  # backbone name
-num_classes: 9
 
 #backbone setting
 backbone_config:
@@ -48,15 +45,6 @@ data_aug:
 # mean and std for normalization
 mean: [0.48145466, 0.4578275, 0.40821073]
 std: [0.26862954, 0.26130258, 0.27577711]
-
-#mean: [0.485, 0.456, 0.406]
-#std: [0.229, 0.224, 0.225]
-
-#mean: [0.5, 0.5, 0.5]
-#std: [0.5, 0.5, 0.5]
-
-#mean: [0.5482207536697388, 0.42340534925460815, 0.3654651641845703]
-#std: [0.2789176106452942, 0.2438540756702423, 0.23493893444538116]
 
 # optimizer config
 optimizer:
