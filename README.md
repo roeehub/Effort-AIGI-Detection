@@ -74,7 +74,7 @@ python3 training/demo.py --detector_config training/config/detector/effort.yaml 
 After running the above line, you can obtain the prediction results (fake probabilities) for each image. 
 
 
-
+---
 
 
 ## 💻 Reproduction and Benchmarking Evaluation
@@ -135,7 +135,9 @@ python3 training/test.py \
 Then, you can obtain similar evaluation results reported in our manuscript.
 
 
-## Citation
+---
+
+## 📕 Citation
 If you find our work helpful to your research, please consider citing our paper as follows:
 ```
 @article{yan2024effort,
