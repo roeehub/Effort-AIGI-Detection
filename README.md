@@ -38,7 +38,7 @@ S_residual = S[r:]       # 🔵 Shape: (n - r,)
 Vh_residual = Vh[r:, :]  # 🔵 Shape: (n - r, in_features)
 ```
 
-If you want to see **more method-specific implementation details**, please see [effort_implementation](https://github.com/YZY-stack/Effort-AIGI-Detection/blob/main/DeepfakeBench/training/detectors/effort_detector.py).
+If you want to see **more method-specific implementation details**, please see the file [effort_implementation.py](https://github.com/YZY-stack/Effort-AIGI-Detection/blob/main/DeepfakeBench/training/detectors/effort_detector.py).
 
 ---
 
