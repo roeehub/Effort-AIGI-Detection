@@ -40,7 +40,7 @@ The following two tables display the **part results** of our method on **both th
 ---
 
 
-## ⏳ Quick Start (if you just want to do the *inference*)
+## ⏳ Quick Start (if you just want to do the *one-sample inference*)
 <a href="#top">[Back to top]</a>
 
 
