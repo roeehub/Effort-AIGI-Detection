@@ -23,7 +23,6 @@ import os
 from os.path import join
 
 """
-单张人脸图像真伪推理脚本
 Usage:
     python infer.py \
         --detector_config ./training/config/detector/effort.yaml \
@@ -151,7 +150,6 @@ def extract_aligned_face_dlib(face_detector, predictor, image, res=224, mask=Non
 
 
 def load_detector(detector_cfg: str, weights: str):
-    """装载检测模型"""
     with open(detector_cfg, "r") as f:
         cfg = yaml.safe_load(f)
 
@@ -159,7 +157,7 @@ def load_detector(detector_cfg: str, weights: str):
     model = model_cls(cfg).to(device)
 
     ckpt = torch.load(weights, map_location=device)
-    state = ckpt.get("state_dict", ckpt)          # 兼容两种保存格式
+    state = ckpt.get("state_dict", ckpt)
     state = {k.replace("module.", ""): v for k, v in state.items()}
     model.load_state_dict(state, strict=True)
     model.eval()
@@ -168,7 +166,7 @@ def load_detector(detector_cfg: str, weights: str):
 
 
 def preprocess_face(img_bgr: np.ndarray):
-    """BGR → tensor，并做 CLIP 统一归一化"""
+    """BGR → tensor"""
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     img_rgb = cv2.resize(img_rgb, (224, 224), interpolation=cv2.INTER_LINEAR)
     transform = T.Compose([
@@ -184,11 +182,9 @@ def infer_single_image(
     img_bgr: np.ndarray,
     face_detector,
     landmark_predictor,
-    model
-):
-    """返回：cls_out, prob"""
-
-    # 是否进行人脸裁剪
+    model,
+) -> Tuple[int, float]:
+    """Return (cls_out, prob)"""
     if face_detector is None or landmark_predictor is None:
         face_aligned = img_bgr
     else:
@@ -200,8 +196,24 @@ def infer_single_image(
     data = {"image": face_tensor, "label": torch.tensor([0]).to(device)}
     preds = inference(model, data)
     cls_out = preds["cls"].squeeze().cpu().numpy()   # 0/1
-    prob = preds["prob"].squeeze().cpu().numpy()     # 对应概率
+    prob = preds["prob"].squeeze().cpu().numpy()     # prob
     return cls_out, prob
+
+
+def collect_image_paths(path_str: str) -> List[Path]:
+    p = Path(path_str)
+    if not p.exists():
+        raise FileNotFoundError(f"path not exists: {path_str}")
+
+    if p.is_file():
+        if p.suffix.lower() not in IMG_EXTS:
+            raise ValueError(f"the image file is with wrong format: {p.name}")
+        return [p]
+
+    img_list = [fp for fp in p.iterdir() if fp.suffix.lower() in IMG_EXTS]
+    if not img_list:
+        raise RuntimeError(f"cannot find any image: {path_str}")
+    return sorted(img_list)
 
 
 def parse_args():
@@ -213,7 +225,7 @@ def parse_args():
     p.add_argument("--weights", required=True,
                    help="Detector 预训练权重")
     p.add_argument("--image", required=True,
-                   help="待检测图像（或帧）")
+                   help="tested image")
     p.add_argument("--landmark_model", default=False,
                    help="dlib 81 landmarks dat 文件 / 如果不需要裁剪人脸就是False")
     return p.parse_args()
@@ -222,7 +234,6 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # ---------- 初始化 ----------
     model = load_detector(args.detector_config, args.weights)
     if args.landmark_model:
         face_det = dlib.get_frontal_face_detector()
@@ -230,13 +241,23 @@ def main():
     else:
         face_det, shape_predictor = None, None
 
-    # ---------- 读取并推理 ----------
-    img = cv2.imread(args.image)
-    if img is None:
-        raise FileNotFoundError(f"Image not found: {args.image}")
+    img_paths = collect_image_paths(args.image)
+    multiple = len(img_paths) > 1
+    if multiple:
+        print(f"Collected {len(img_paths)} images in total，let's infer them...\n")
 
-    cls, prob = infer_single_image(img, face_det, shape_predictor, model)
-    print(f"预测标签: {cls} (0=Real, 1=Fake)  |  Fake 概率: {prob:.4f}")
+    # ---------- infer ----------
+    for idx, img_path in enumerate(img_paths, 1):
+        img = cv2.imread(str(img_path))
+        if img is None:
+            print(f"[Warning] loading wrong，skip: {img_path}", file=sys.stderr)
+            continue
+
+        cls, prob = infer_single_image(img, face_det, shape_predictor, model)
+        print(
+            f"[{idx}/{len(img_paths)}] {img_path.name:>30} | Pred Label: {cls} "
+            f"(0=Real, 1=Fake) | Fake Prob: {prob:.4f}"
+        )
 
 
 if __name__ == "__main__":
