@@ -52,11 +52,11 @@ class EffortDetector(nn.Module):
         # ViT-L/14 224*224: 1024-1
         clip_model.vision_model = apply_svd_residual_to_self_attn(clip_model.vision_model, r=1024-1)
 
-        for name, param in clip_model.vision_model.named_parameters():
-            print('{}: {}'.format(name, param.requires_grad))
-        num_param = sum(p.numel() for p in clip_model.vision_model.parameters() if p.requires_grad)
-        num_total_param = sum(p.numel() for p in clip_model.vision_model.parameters())
-        print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
+        #for name, param in clip_model.vision_model.named_parameters():
+        #    print('{}: {}'.format(name, param.requires_grad))
+        #num_param = sum(p.numel() for p in clip_model.vision_model.parameters() if p.requires_grad)
+        #num_total_param = sum(p.numel() for p in clip_model.vision_model.parameters())
+        #print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
 
         return clip_model.vision_model
 
