@@ -205,16 +205,17 @@ def infer_single_image(
 def collect_image_paths(path_str: str) -> List[Path]:
     p = Path(path_str)
     if not p.exists():
-        raise FileNotFoundError(f"path not exists: {path_str}")
+        raise FileNotFoundError(f"[Error] Path does not exist: {path_str}")
 
     if p.is_file():
         if p.suffix.lower() not in IMG_EXTS:
-            raise ValueError(f"the image file is with wrong format: {p.name}")
+            raise ValueError(f"[Error] Invalid image format: {p.name}")
         return [p]
 
-    img_list = [fp for fp in p.iterdir() if fp.suffix.lower() in IMG_EXTS]
+    img_list = [fp for fp in p.iterdir() if fp.is_file() and fp.suffix.lower() in IMG_EXTS]
     if not img_list:
-        raise RuntimeError(f"cannot find any image: {path_str}")
+        raise RuntimeError(f"[Error] No valid image files found in directory: {path_str}")
+
     return sorted(img_list)
 
 
