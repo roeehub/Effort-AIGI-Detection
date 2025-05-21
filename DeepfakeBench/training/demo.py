@@ -161,7 +161,7 @@ def load_detector(detector_cfg: str, weights: str):
     ckpt = torch.load(weights, map_location=device)
     state = ckpt.get("state_dict", ckpt)
     state = {k.replace("module.", ""): v for k, v in state.items()}
-    model.load_state_dict(state, strict=True)
+    model.load_state_dict(state, strict=False)  # FIXME ⚠
     model.eval()
     print("[✓] Detector loaded.")
     return model
