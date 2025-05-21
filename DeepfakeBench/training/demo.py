@@ -202,6 +202,7 @@ def infer_single_image(
     return cls_out, prob
 
 
+IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
 def collect_image_paths(path_str: str) -> List[Path]:
     p = Path(path_str)
     if not p.exists():
