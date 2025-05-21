@@ -39,14 +39,14 @@ class EffortDetector(nn.Module):
         self.correct, self.total = 0, 0
 
     def build_backbone(self, config):
-        # Download model
-        # https://huggingface.co/openai/clip-vit-large-patch14
+        # ⚠⚠⚠ Download CLIP model using the below link
+        # https://drive.google.com/drive/folders/1fm3Jd8lFMiSP1qgdmsxfqlJZGpr_bXsx?usp=drive_link
         
         # mean: [0.48145466, 0.4578275, 0.40821073]
         # std: [0.26862954, 0.26130258, 0.27577711]
         
         # ViT-L/14 224*224
-        clip_model = CLIPModel.from_pretrained("../../huggingface/hub/models--openai--clip-vit-large-patch14/snapshots/32bd64288804d66eefd0ccbe215aa642df71cc41/")
+        clip_model = CLIPModel.from_pretrained("../models--openai--clip-vit-large-patch14")  # the path of this folder in your disk (download from the above link)
 
         # Apply SVD to self_attn layers only
         # ViT-L/14 224*224: 1024-1
