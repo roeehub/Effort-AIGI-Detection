@@ -150,31 +150,6 @@ class EffortDetector(nn.Module):
         }
         return loss_dict
 
-    def compute_keepsv_loss(self):
-        if (self.S_residual is not None) and (self.weight_original_fnorm is not None):
-            # Total current weight is the fixed main weight plus the residual
-            weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
-            # Frobenius norm of current weight
-            weight_current_fnorm = torch.norm(weight_current, p='fro')
-            
-            loss = torch.abs(weight_current_fnorm ** 2 - self.weight_original_fnorm ** 2)
-            # loss = torch.abs(weight_current_fnorm ** 2 + 0.01 * self.weight_main_fnorm ** 2 - 1.01 * self.weight_original_fnorm ** 2)
-        else:
-            loss = 0.0
-        
-        return loss
-    
-    def compute_fn_loss(self):
-        if (self.S_residual is not None):
-            weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
-            weight_current_fnorm = torch.norm(weight_current, p='fro')
-            
-            loss = weight_current_fnorm ** 2
-        else:
-            loss = 0.0
-        
-        return loss
-
     def get_train_metrics(self, data_dict: dict, pred_dict: dict) -> dict:
         label = data_dict['label']
         pred = pred_dict['cls']
@@ -237,19 +212,50 @@ class SVDResidualLinear(nn.Module):
         return F.linear(x, weight, self.bias)
     
     def compute_orthogonal_loss(self):
-        # According to the properties of orthogonal matrices: A^TA = I
-        UUT = torch.cat((self.U_r, self.U_residual), dim=1) @ torch.cat((self.U_r, self.U_residual), dim=1).t()
-        VVT = torch.cat((self.V_r, self.V_residual), dim=0) @ torch.cat((self.V_r, self.V_residual), dim=0).t()
-        
-        # Construct an identity matrix
-        UUT_residual_identity = torch.eye(UUT_residual.size(0), device=UUT_residual.device)
-        VVT_residual_identity = torch.eye(VVT_residual.size(0), device=VVT_residual.device)
-        
-        # Frobenius norm
-        loss = 0.5 * torch.norm(UUT_residual - UUT_residual_identity, p='fro') + 0.5 * torch.norm(VVT_residual - VVT_residual_identity, p='fro')
+        if self.S_residual is not None:
+            # According to the properties of orthogonal matrices: A^TA = I
+            UUT = torch.cat((self.U_r, self.U_residual), dim=1) @ torch.cat((self.U_r, self.U_residual), dim=1).t()
+            VVT = torch.cat((self.V_r, self.V_residual), dim=0) @ torch.cat((self.V_r, self.V_residual), dim=0).t()
+            # print(self.U_r.size(), self.U_residual.size())  # torch.Size([1024, 1023]) torch.Size([1024, 1])
+            # print(self.V_r.size(), self.V_residual.size())  # torch.Size([1023, 1024]) torch.Size([1, 1024])
+            # UUT = self.U_residual @ self.U_residual.t()
+            # VVT = self.V_residual @ self.V_residual.t()
+            
+            # Construct an identity matrix
+            UUT_identity = torch.eye(UUT.size(0), device=UUT.device)
+            VVT_identity = torch.eye(VVT.size(0), device=VVT.device)
+            
+            # Using frobenius norm to compute loss
+            loss = 0.5 * torch.norm(UUT - UUT_identity, p='fro') + 0.5 * torch.norm(VVT - VVT_identity, p='fro')
+        else:
+            loss = 0.0
+            
+        return loss
+
+    def compute_keepsv_loss(self):
+        if (self.S_residual is not None) and (self.weight_original_fnorm is not None):
+            # Total current weight is the fixed main weight plus the residual
+            weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
+            # Frobenius norm of current weight
+            weight_current_fnorm = torch.norm(weight_current, p='fro')
+            
+            loss = torch.abs(weight_current_fnorm ** 2 - self.weight_original_fnorm ** 2)
+            # loss = torch.abs(weight_current_fnorm ** 2 + 0.01 * self.weight_main_fnorm ** 2 - 1.01 * self.weight_original_fnorm ** 2)
+        else:
+            loss = 0.0
         
         return loss
+    
+    def compute_fn_loss(self):
+        if (self.S_residual is not None):
+            weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
+            weight_current_fnorm = torch.norm(weight_current, p='fro')
+            
+            loss = weight_current_fnorm ** 2
+        else:
+            loss = 0.0
         
+        return loss
 
 # Function to replace nn.Linear modules within self_attn modules with SVDResidualLinear
 def apply_svd_residual_to_self_attn(model, r):
