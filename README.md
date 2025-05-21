@@ -75,7 +75,7 @@ sh install.sh
 
 ### 2. Download checkpoints
 If you are a deepfake player, more interested in face deepfake detection:
-- The checkpoint of "CLIP-L14 + our Effort" **training on FaceForensics++** are released at [Google Drive](https://drive.google.com/file/d/16QdtCScfOf4ZLGEX-VdlLcJQkj2e7zu2/view?usp=drive_link).
+- The checkpoint of "CLIP-L14 + our Effort" **training on FaceForensics++** are released at [Google Drive](https://drive.google.com/file/d/1m4fyJecABU-Yk3bJ4b1WhUwQa0xCkMLI/view?usp=drive_link).
 
 If you are interested in detecting general AI-generated images, we provide two checkpoints that are trained on GenImage and Chameleon datasets, respectively:
 - The checkpoint of "CLIP-L14 + our Effort" **training on GenImage (sdv1.4)** are released at [Google Drive](https://drive.google.com/file/d/1UXf1hC9FC1yV93uKwXSkdtepsgpIAU9d/view?usp=sharing).
