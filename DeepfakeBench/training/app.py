@@ -45,7 +45,7 @@ def startup_event() -> None:
     # 2) Paths from your batch_demo invocation
     cfg_path = Path("/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/config/detector/effort.yaml")
     weights_path = Path("/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/weights/effort_clip_L14_trainOn_FaceForensic.pth")
-    landmark_path = Path("home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/preprocessing/shape_predictor_81_face_landmarks.dat")
+    landmark_path = Path("/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/preprocessing/shape_predictor_81_face_landmarks.dat")
 
     if not cfg_path.exists() or not weights_path.exists() or not landmark_path.exists():
         logger.error("Missing file(s): %s, %s, %s", cfg_path, weights_path, landmark_path)
