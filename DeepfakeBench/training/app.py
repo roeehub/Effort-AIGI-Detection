@@ -2,6 +2,7 @@ import os
 import logging
 from pathlib import Path
 from typing import Optional, Tuple, List
+import tempfile, shutil
 
 import cv2  # noqa
 import dlib  # noqa
@@ -166,16 +167,16 @@ async def check_video(
 ) -> JSONResponse:
     """Detect deep-fake content in an uploaded video."""
 
-    # 1) MIME-type validation ────────────────────────────────────────────────
-    if not file.content_type.startswith("video/"):
+    # 1) File‐extension validation (fallback to OpenCV for actual readability)
+    ext = Path(file.filename).suffix.lower()
+    allowed = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".ogg", ".flv"}
+    if ext not in allowed:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Only video files are accepted"
+            detail=f"Unsupported video format {ext!r}"
         )
 
-    # 2) Persist upload to a temp file so OpenCV can read it
-    import tempfile, shutil
-
+    # 2) Temporary file creation ─────────────────────────────────────────────
     tmp_dir = tempfile.mkdtemp(prefix="effort-aigi-")
     tmp_path = Path(tmp_dir) / file.filename
     with tmp_path.open("wb") as fp:
