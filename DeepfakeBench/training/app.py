@@ -102,7 +102,6 @@ async def check_frame(file: UploadFile = File(...)) -> JSONResponse:
 
     if face_count != 1:
         logger.warning("Expected exactly 1 face, got %d", face_count)
-        # Not an error per se, but we can't run inference reliably
         return JSONResponse(
             status_code=400,
             content={
@@ -113,7 +112,7 @@ async def check_frame(file: UploadFile = File(...)) -> JSONResponse:
 
     # 4) Inference
     try:
-        pred_label, fake_prob = infer_single_image(
+        logits, fake_prob = infer_single_image(
             img,
             face_detector=app.state.face_detector,
             landmark_predictor=app.state.landmark_predictor,
@@ -123,8 +122,13 @@ async def check_frame(file: UploadFile = File(...)) -> JSONResponse:
         logger.exception("Inference failed")
         raise HTTPException(status_code=500, detail="Internal inference error")
 
-    logger.info("Inference result: label=%d, prob=%.4f", pred_label, fake_prob)
-    return InferResponse(pred_label=int(pred_label), fake_prob=float(fake_prob))
+    # 5) Map logits to label
+    label_idx = int(np.argmax(logits))       # 0 = REAL, 1 = FAKE
+    label_str = "FAKE" if label_idx == 1 else "REAL"
+    fake_prob = float(fake_prob)             # ensure native float
+
+    logger.info("Inference result: label=%s, fake_prob=%.4f", label_str, fake_prob)
+    return InferResponse(pred_label=label_str, fake_prob=fake_prob)
 
 
 # ──────────────────────────────────────────
