@@ -1,0 +1,26 @@
+# Virtual environments
+venv/
+env/
+ENV/
+virtualenv/
+.venv/
+.env/
+.ENV/
+.virtualenv/
+env.bak/
+venv.bak/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# My data files
+data/
+my_data/
+
+# checkpoints
+*.pth
