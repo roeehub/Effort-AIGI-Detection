@@ -29,7 +29,7 @@ app = FastAPI(title="Effort-AIGI Detector API", version="0.1.0")
 
 
 class InferResponse(BaseModel):
-    pred_label: int       # 0 = real, 1 = fake
+    pred_label: str      # "REAL" or "FAKE"
     fake_prob: float
 
 
@@ -122,7 +122,7 @@ async def check_frame(file: UploadFile = File(...)) -> JSONResponse:
         logger.exception("Inference failed")
         raise HTTPException(status_code=500, detail="Internal inference error")
 
-    # 5) Map logits to label
+    # 5) Map logits → string label
     label_idx = int(np.argmax(logits))       # 0 = REAL, 1 = FAKE
     label_str = "FAKE" if label_idx == 1 else "REAL"
     fake_prob = float(fake_prob)             # ensure native float
