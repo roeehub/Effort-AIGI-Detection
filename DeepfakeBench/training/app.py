@@ -163,7 +163,7 @@ async def check_video(
         file: UploadFile = File(...),
         sample_strategy: str = "uniform",
         num_samples: int = 32,
-        return_probs: bool = True
+        return_probs: bool = False
 ) -> JSONResponse:
     """Detect deep-fake content in an uploaded video."""
 
