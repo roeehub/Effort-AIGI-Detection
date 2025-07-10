@@ -1,0 +1,57 @@
+# config.yaml
+
+gcp:
+  bucket_name: "df40-frames"
+
+data_params:
+  # Use a fixed seed for reproducible splits and sampling
+  seed: 737
+  # Ratio for the validation set (0.1 = 10%)
+  val_split_ratio: 0.1
+  # Percentage of the total dataset to use. 1.0 = 100%, 0.2 = 20%.
+  # Useful for rapid debugging on a small, representative data slice.
+  data_subset_percentage: 1.0
+  # Number of frames to sample from each video's 32 frames
+  num_frames_per_video: 8
+
+# Define which sources/methods to include in the dataset.
+# To exclude a method, simply remove it from the list.
+methods:
+  use_real_sources:
+    - "FaceForensics++"
+    - "Celeb-real"
+    - "YouTube-real"
+  use_fake_methods:
+    - "simswap"
+    - "one_shot_free"
+    - "pirender"
+    - "mobileswap"
+    - "facevid2vid"
+    - "lia"
+    - "fomm"
+    - "MRAA"
+    - "e4s"
+    - "facedancer"
+    - "wav2lip"
+    - "faceswap"
+    - "mcnet"
+    - "inswap"
+    - "blendface"
+    - "fsgan"
+    - "VQGAN"
+    - "StyleGANXL"
+    - "StyleGAN3"
+    - "StyleGAN2"
+    - "SiT"
+    - "RDDM"
+    - "DiT"
+    - "sadtalker"
+    - "danet"
+    - "hyperreenact"
+    - "ddim"
+    - "uniface"
+    - "tpsm"
+
+dataloader_params:
+  batch_size: 16
+  num_workers: 8 # Adjust based on your machine's CPU cores

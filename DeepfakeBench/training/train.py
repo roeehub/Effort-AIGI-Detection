@@ -34,11 +34,13 @@ from detectors import DETECTOR
 from dataset import *
 from metrics.utils import parse_metric_for_print
 from logger import create_logger, RankFilter
+from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
+from GCP_codes.code import prepare_video_splits
 
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
-                    default='/data/home/zhiyuanyan/DeepfakeBenchv2/training/config/detector/effort.yaml',
+                    default='./training/config/detector/effort.yaml',
                     help='path to detector YAML file')
 parser.add_argument("--train_dataset", nargs="+")
 parser.add_argument("--test_dataset", nargs="+")
@@ -59,11 +61,12 @@ def init_seed(config):
         torch.cuda.manual_seed_all(config['manualSeed'])
 
 
-def prepare_training_data(config):
+def prepare_training_data(config, train_videos):
     # Only use the blending dataset class in training
     train_set = DeepfakeAbstractBaseDataset(
         config=config,
         mode='train',
+        train_videos=train_videos
     )
     if config['ddp']:
         sampler = DistributedSampler(train_set)
@@ -87,8 +90,8 @@ def prepare_training_data(config):
     return train_data_loader
 
 
-def prepare_testing_data(config):
-    def get_test_data_loader(config, test_name):
+def prepare_testing_data(config, val_videos):
+    def get_test_data_loader(config, test_name, val_videos):
         # update the config dictionary with the specific testing dataset
         config = config.copy()  # create a copy of config to avoid altering the original one
         config['test_dataset'] = test_name  # specify the current test dataset
@@ -96,6 +99,7 @@ def prepare_testing_data(config):
         test_set = DeepfakeAbstractBaseDataset(
                 config=config,
                 mode='test',
+                val_videos=val_videos,
         )
 
         test_data_loader = \
@@ -112,7 +116,7 @@ def prepare_testing_data(config):
 
     test_data_loaders = {}
     for one_test_name in config['test_dataset']:
-        test_data_loaders[one_test_name] = get_test_data_loader(config, one_test_name)
+        test_data_loaders[one_test_name] = get_test_data_loader(config, one_test_name, val_videos)
     return test_data_loaders
 
 
@@ -228,11 +232,14 @@ def main():
             timeout=timedelta(minutes=30)
         )
         logger.addFilter(RankFilter(0))
+    # Split the dataset
+    # Load train/val splits using prepare_video_splits
+    train_videos, val_videos, _ = prepare_video_splits('../GCP_codes/config.yml')
     # prepare the training data loader
-    train_data_loader = prepare_training_data(config)
+    train_data_loader = prepare_training_data(config, train_videos)
 
     # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config)
+    test_data_loaders = prepare_testing_data(config, val_videos)
 
     # prepare the model (detector)
     model_class = DETECTOR[config['model_name']]
