@@ -28,7 +28,7 @@ def prepare_video_splits(config_path: str):
     BUCKET_URI = f"gs://{cfg_gcp['bucket_name']}"
     SEED = cfg_data['seed']
     VAL_RATIO = cfg_data['val_split_ratio']
-    SUBSET_PERCENT = cfg_data['data_subset_percentage']
+    SUBSET_PERCENT = cfg_data['data_subset_percentage']  
     
     # Use fsspec to interact with GCS
     fs = get_fs_for_uri(BUCKET_URI)[0]

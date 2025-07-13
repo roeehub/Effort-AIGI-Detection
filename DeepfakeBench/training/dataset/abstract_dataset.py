@@ -62,7 +62,6 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         self.label_list = []
 
 
-        # Set the dataset dictionary based on the mode
         if VideoInfo:
             self.video_infos = VideoInfo
         else:
@@ -140,12 +139,13 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         video_name_list = []
 
         for video in video_infos:
+            # Video name based on "real/fake" and ID
             unique_video_name = f"{video.label}_{video.video_id}"
-            if video.label == 'real':
-                label = 0
-            else:
-                label = 1
-                
+            
+            # label: real - 0 / fake - 1
+            label = 0 if video.label == 'real' else 1
+            
+            # List of all the frame paths of a specific video
             frame_paths = video.frame_paths
 
             if len(frame_paths)==0:
@@ -159,11 +159,11 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                     frame_paths = sorted(frame_paths, key=lambda x: int(x.split('/')[-1].split('.')[0]))
 
 
-            # Consider the case when the actual number of frames (e.g., 270) is larger than the specified (i.e., self.frame_num=32)
-            # In this case, we select self.frame_num frames from the original 270 frames
+            # If video_level true, we take 'self.frame_num' frames one by one after randomely picked frame from the sorted frames. \
+                # If false, we take 'self.frame_num' frames randomely sorted as in the original dataset with even step between them.
             total_frames = len(frame_paths)
             if self.frame_num < total_frames:
-                total_frames = self.frame_num
+                # total_frames = self.frame_num
                 if self.video_level:
                     # Select clip_size continuous frames
                     start_frame = random.randint(0, total_frames - self.frame_num)
