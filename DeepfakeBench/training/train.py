@@ -262,7 +262,7 @@ def main():
     method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
 
     # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config)
+    test_data_loaders = prepare_testing_data(config, val_videos)
 
     # prepare the model (detector)
     model_class = DETECTOR[config['model_name']]
