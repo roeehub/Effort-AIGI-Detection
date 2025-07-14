@@ -1,38 +1,24 @@
 #!/usr/bin/env python3
-"""prepare_splits.py–train/val split with **target‑identity awareness**
+"""prepare_splits.py – train/val split with GroupShuffleSplit + local manifest cache.
 
-Three method groups
-===================
-* **EFS_METHODS**– entire‑face synthesis → each video gets its own synthetic
-  identity (no clash with real IDs).
-* **REG_METHODS**– folder name pattern`source_target`(→ *target* is **2nd**
-  3‑digit token or the only one present).
-* **REV_METHODS**– pattern`target_source`(→ *target* is **1st** 3‑digit
-  token).
-
-Real videos
------------
-* **FaceForensics++**(real) retain their numeric ID (000‑999).
-* **Celeb‑real / YouTube‑real** have no 3‑digit token → they are treated like
-  EFS and assigned a synthetic unique ID so they can safely land in any split.
-
-Fill `REG_METHODS` and `REV_METHODS` below with your final lists; sensible
-pre‑fills are provided from DF‑40 documentation.
+See README_prefetch.md for notes on tiny-method exclusion and resource tuning.
 """
 from __future__ import annotations
 
+import json
 import random
 import re
-import yaml  # noqa
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Set, Tuple
 
-from fsspec.core import get_fs_for_uri  # noqa
+import yaml
+from fsspec.core import get_fs_for_uri  # pip install gcsfs
+from sklearn.model_selection import GroupShuffleSplit  # pip install scikit-learn
 
 # ---------------------------------------------------------------------------
-# 1Method categories (edit REG/REV if needed)
+# 1 Method categories (edit REG/REV if needed)
 # ---------------------------------------------------------------------------
 EFS_METHODS: Set[str] = {
     "DiT", "SiT", "ddim", "RDDM",
@@ -48,11 +34,11 @@ REG_METHODS: Set[str] = {
 }
 
 # target_source (target = 1st token)
-REV_METHODS = {}
+REV_METHODS: Set[str] = {}
 
 EXCLUDE_METHODS: Set[str] = {
-    "hyperreenact"
-}  # methods to exclude from the split
+    "hyperreenact",
+}
 
 _RE_3DIGIT = re.compile(r"\b(\d{3})\b")
 
@@ -63,58 +49,60 @@ class VideoInfo:
     label: str  # 'real' | 'fake'
     method: str  # generation/source method
     video_id: str  # folder name
-    frame_paths: List[str]  # gs:// paths to frames
+    frame_paths: List[str]  # gs:// paths
     identity: int  # target identity (numeric)
 
 
 # ---------------------------------------------------------------------------
-# 2Identity extraction helper
+# 2 Identity-extraction helper
 # ---------------------------------------------------------------------------
-
 def extract_target_id(label: str, method: str, vid_folder: str) -> int | None:
-    """Return integer target ID or None (synthetic).
-
-    • For EFS and non‑FF++ real clips (Celeb‑real / YouTube‑real) ⇒ None.
-    • For REG  ⇒ last 3‑digit token (or only token).
-    • For REV  ⇒ first 3‑digit token.
-    """
+    """Return integer target ID or None (= synthetic)."""
     if method in EFS_METHODS:
         return None
-
     if label == "real" and method != "FaceForensics++":
-        return None  # Celeb‑real / YouTube‑real treated as synthetic
-
+        return None  # Celeb-real / YouTube-real
     ids = [int(tok) for tok in _RE_3DIGIT.findall(vid_folder)]
     if not ids:
-        return None  # fallback to synthetic if no 3‑digit chunk
-
+        return None
     if method in REV_METHODS:
         return ids[0]
-    # default → REG
-    return ids[-1]
+    return ids[-1]  # default → REG
 
 
 # ---------------------------------------------------------------------------
-# 3Main function
+# 3 Main entry
 # ---------------------------------------------------------------------------
-
-def prepare_video_splits(cfg_path: str = "config.yaml") -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
+def prepare_video_splits(cfg_path: str = "config.yaml"
+                         ) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
     cfg = yaml.safe_load(open(cfg_path))
-
     BUCKET = f"gs://{cfg['gcp']['bucket_name']}"
     SEED = cfg['data_params']['seed']
     VAL_RATIO = cfg['data_params']['val_split_ratio']
     SUBSET = cfg['data_params']['data_subset_percentage']
+    allowed = set(cfg['methods']['use_real_sources']
+                  + cfg['methods']['use_fake_methods'])
 
-    allowed_methods = set(cfg['methods']['use_real_sources'] + cfg['methods']['use_fake_methods'])
+    random.seed(SEED)
+    manifest_path = Path(__file__).with_name("frame_manifest.json")
 
-    fs = get_fs_for_uri(BUCKET)[0]
+    # ------------------------------------------------------------------ #
+    # 1 Load or build manifest of frame paths                            #
+    # ------------------------------------------------------------------ #
+    if manifest_path.exists():
+        frame_paths = json.loads(manifest_path.read_text())
+        print(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
+    else:
+        print("Listing frame objects on GCS (first run – may take a minute)…")
+        fs = get_fs_for_uri(BUCKET)[0]
+        frame_paths = [p for p in fs.glob(f"{BUCKET}/**")
+                       if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
+        print(f"Found {len(frame_paths):,} frame files – caching manifest")
+        manifest_path.write_text(json.dumps(frame_paths))
 
-    print("Listing frame objects …")
-    frame_paths = [p for p in fs.glob(f"{BUCKET}/**") if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
-    print(f"Found {len(frame_paths):,} frame files")
-
-    # group by video --------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # 2 Group frames → VideoInfo objects                                 #
+    # ------------------------------------------------------------------ #
     vids_dict: dict[tuple[str, str, str], List[str]] = defaultdict(list)
     for p in frame_paths:
         parts = Path(p).parts
@@ -122,76 +110,70 @@ def prepare_video_splits(cfg_path: str = "config.yaml") -> Tuple[List[VideoInfo]
             label, method, vid = parts[-4], parts[-3], parts[-2]
         except IndexError:
             continue
-        if method not in allowed_methods:
+        if method not in allowed:
             continue
         vids_dict[(label, method, vid)].append(p)
 
-    seen_excluded = set()
     videos: List[VideoInfo] = []
+    warned = set()
     for (label, method, vid), fr in vids_dict.items():
         if method in EXCLUDE_METHODS:
-            if method not in seen_excluded:
-                print(f"[WARN] excluding all videos from method '{method}'")  # single warn
-                seen_excluded.add(method)
+            if method not in warned:
+                print(f"[WARN] excluding all videos from method '{method}'")
+                warned.add(method)
             continue
         fr.sort()
         tid = extract_target_id(label, method, vid)
-        if tid is None:
-            tid = (hash((method, vid)) & 0x7FFFFFFF) + 100000  # synthetic unique
+        if tid is None:  # synthetic unique
+            tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
         videos.append(VideoInfo(label, method, vid, fr, tid))
 
-    print(f"Discovered {len(videos):,} videos across {len(allowed_methods)} methods")
+    print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
 
-    random.seed(SEED)
-
-    # optional per‑method subset ------------------------------------------
+    # ------------------------------------------------------------------ #
+    # 3 Optional per-method subset (for fast debugging)                  #
+    # ------------------------------------------------------------------ #
     if SUBSET < 1.0:
         per_method = defaultdict(list)
         for v in videos:
             per_method[v.method].append(v)
-        selected: List[VideoInfo] = []
+        selected = []
         for m, lst in per_method.items():
             random.shuffle(lst)
             keep = max(1, int(len(lst) * SUBSET))
             selected.extend(lst[:keep])
+        print(f"Subset active ({SUBSET * 100:.0f} %) → {len(selected):,} videos")
     else:
         selected = videos
 
-    total = len(selected)
-    print(f"After subset: {total:,} videos")
+    # ------------------------------------------------------------------ #
+    # 4 GroupShuffleSplit (identity-aware, video-balanced)               #
+    # ------------------------------------------------------------------ #
+    gss = GroupShuffleSplit(n_splits=1,
+                            test_size=VAL_RATIO,
+                            random_state=SEED)
+    indices = list(range(len(selected)))
+    groups = [v.identity for v in selected]
+    train_idx, val_idx = next(gss.split(indices, groups=groups))
 
-    # group by identity ----------------------------------------------------
-    id2videos = defaultdict(list)
-    for v in selected:
-        id2videos[v.identity].append(v)
+    train_videos = [selected[i] for i in train_idx]
+    val_videos = [selected[i] for i in val_idx]
 
-    identities = list(id2videos)
-    random.shuffle(identities)
+    # sanity check
+    actual_ratio = len(val_videos) / len(selected)
+    if abs(actual_ratio - VAL_RATIO) > 0.005:
+        print(f"[NOTE] Val ratio {actual_ratio:.3f} differs >0.5 % from "
+              f"target {VAL_RATIO:.3f}")
 
-    target_val = int(total * VAL_RATIO)
-    train_videos: List[VideoInfo] = []
-    val_videos: List[VideoInfo] = []
-    val_cnt = 0
-    for i in identities:
-        vids = id2videos[i]
-        if val_cnt < target_val:
-            val_videos.extend(vids)
-            val_cnt += len(vids)
-        else:
-            train_videos.extend(vids)
-
-    print(f"Split complete ▶ train {len(train_videos):,} | val {len(val_videos):,}")
+    print(f"Split complete ▶ train {len(train_videos):,} | "
+          f"val {len(val_videos):,}")
 
     random.shuffle(train_videos)
     random.shuffle(val_videos)
-
     return train_videos, val_videos, cfg
 
 
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    tr, va, _ = prepare_video_splits("config.yaml")
-    if tr:
-        print("train example:", tr[0].method, tr[0].video_id, tr[0].identity)
-    if va:
-        print("val   example:", va[0].method, va[0].video_id, va[0].identity)
+    tr, va, _ = prepare_video_splits()
+    print("train example:", tr[0].method, tr[0].video_id, tr[0].identity)
+    print("val   example:", va[0].method, va[0].video_id, va[0].identity)
