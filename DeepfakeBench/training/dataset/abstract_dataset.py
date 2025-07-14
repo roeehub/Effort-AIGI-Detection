@@ -67,6 +67,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         else:
             raise NotImplementedError('Only train and test modes are supported.')
 
+        # image_list: list of all the frames in all videos.\
+        # label_list: list of all labels corresponding to each frame in the image_list
         image_list, label_list, _ = self.collect_img_and_label_for_one_dataset(self.video_infos)
 
         if self.lmdb:
@@ -231,10 +233,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
     def load_rgb(self, file_path):
         """
         Load an RGB image from a file path and resize it to a specified resolution.
-        This version is updated to handle both local paths and GCS (gs://) paths.
 
         Args:
-            file_path: A string indicating the path to the image file (e.g., '/path/to/img.png' or 'gs://bucket/img.png').
+            file_path: A string indicating the path to the image file.
 
         Returns:
             An Image object containing the loaded and resized image.
@@ -242,42 +243,25 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         Raises:
             ValueError: If the loaded image is None.
         """
-        size = self.config['resolution']
+        size = self.config['resolution'] # if self.mode == "train" else self.config['resolution']
+        if not self.lmdb:
+            assert os.path.exists(file_path), f"{file_path} does not exist"
+            img = cv2.imread(file_path)
 
-        # The LMDB logic remains unchanged as it reads from a local database.
-        if self.lmdb:
+            if img is None:
+                img = Image.open(file_path)
+                img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                if img is None:
+                    raise ValueError('Loaded image is None: {}'.format(file_path))
+        elif self.lmdb:
             with self.env.begin(write=False) as txn:
-                if file_path.startswith('./datasets\\'):
-                    file_path = file_path.replace('./datasets\\', '')
+                # transfer the path format from rgb-path to lmdb-key
+                if file_path[0]=='.':
+                    file_path=file_path.replace('./datasets\\','')
+
                 image_bin = txn.get(file_path.encode())
                 image_buf = np.frombuffer(image_bin, dtype=np.uint8)
                 img = cv2.imdecode(image_buf, cv2.IMREAD_COLOR)
-        else:
-            # --- MODIFICATION START ---
-            # Check if the file path is a Google Cloud Storage URI
-            if file_path.startswith('gs://'):
-                # Use fsspec to open the remote file in binary read mode ('rb')
-                # This is the same mechanism used in your dataloaders.py
-                with fsspec.open(file_path, 'rb') as f:
-                    # Read the file's byte stream into a NumPy array
-                    image_buf = np.frombuffer(f.read(), dtype=np.uint8)
-                    # Decode the image buffer using OpenCV, which is consistent with the original logic
-                    img = cv2.imdecode(image_buf, cv2.IMREAD_COLOR)
-            else:
-                # This is the original logic for handling local files
-                assert os.path.exists(file_path), f"{file_path} does not exist"
-                img = cv2.imread(file_path)
-
-                # Original fallback logic
-                if img is None:
-                    img_pil = Image.open(file_path)
-                    img = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-            # --- MODIFICATION END ---
-
-        if img is None:
-            raise ValueError('Loaded image is None: {}'.format(file_path))
-
-        # The rest of the function remains the same, ensuring consistent processing
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (size, size), interpolation=cv2.INTER_CUBIC)
         return Image.fromarray(np.array(img, dtype=np.uint8))

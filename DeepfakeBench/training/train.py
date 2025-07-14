@@ -36,6 +36,7 @@ from metrics.utils import parse_metric_for_print
 from logger import create_logger, RankFilter
 from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
 from GCP_codes.prepare_splits import prepare_video_splits
+from dataset.dataloaders import create_method_aware_dataloaders
 
 
 parser = argparse.ArgumentParser(description='Process some paths.')
@@ -218,6 +219,10 @@ def main():
     for key, value in config.items():
         params_string += "{}: {}".format(key, value) + "\n"
     logger.info(params_string)
+    
+    config_path = "./config/dataloader_config.yml"
+    with open(config_path, 'r') as f:
+        data_config = yaml.safe_load(f)
 
     # init seed
     init_seed(config)
@@ -235,11 +240,29 @@ def main():
     # Split the dataset
     # Load train/val splits using prepare_video_splits
     train_videos, val_videos, _ = prepare_video_splits('../GCP_codes/config.yml')
+    
+    
     # prepare the training data loader
-    train_data_loader = prepare_training_data(config, train_videos)
+    method_loaders = create_method_aware_dataloaders(train_videos, data_config)
+    
+    # Training Loop for Method-Aware
+    # To cycle through methods:
+    method_names = list(method_loaders.keys())
+    random.shuffle(method_names)
+    print(f"Training on methods in this order: {method_names[:5]}...")
+    
+    # For a balanced approach, you can create a weighted sampler over `method_names`
+    method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
+    total_videos = sum(method_sizes.values())
+    weights = [method_sizes[m] / total_videos for m in method_names]
+    
+    print("\n--- Example: Method-Aware BALANCED Training Loop ---")
+    # In each step, you'd pick a method based on weights and get a batch from it
+    # This requires creating iterators for each dataloader.
+    method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
 
     # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config, val_videos)
+    test_data_loaders = prepare_testing_data(config)
 
     # prepare the model (detector)
     model_class = DETECTOR[config['model_name']]
@@ -261,8 +284,11 @@ def main():
     for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
         trainer.model.epoch = epoch
         best_metric = trainer.train_epoch(
+                    method_names=method_names,
+                    weights=weights,
                     epoch=epoch,
-                    train_data_loader=train_data_loader,
+                    method_iters=method_iters,
+                    train_data_loader=method_loaders,
                     test_data_loaders=test_data_loaders,
                 )
         if best_metric is not None:

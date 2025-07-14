@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torchdata.datapipes.iter import IterableWrapper, Zipper, Demultiplexer
 from torchdata.datapipes.map import Mapper
 from fsspec.core import open_files
+from collections import defaultdict
 
 from prepare_splits import VideoInfo, prepare_video_splits
 

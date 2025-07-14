@@ -12,6 +12,7 @@ sys.path.append(project_root_dir)
 
 import pickle
 import datetime
+import random
 import logging
 import numpy as np
 from copy import deepcopy
@@ -213,7 +214,10 @@ class Trainer(object):
 
     def train_epoch(
         self,
+        method_names,
+        weights,
         epoch,
+        method_iters,
         train_data_loader,
         test_data_loaders=None,
         ):
@@ -223,7 +227,6 @@ class Trainer(object):
             times_per_epoch = 2
         else:
             times_per_epoch = 2
-
 
         #times_per_epoch=4
 
@@ -237,8 +240,23 @@ class Trainer(object):
         train_recorder_loss = defaultdict(Recorder)
         train_recorder_metric = defaultdict(Recorder)
 
-        for iteration, data_dict in tqdm(enumerate(train_data_loader),total=len(train_data_loader)):
+        for iteration, _ in tqdm(enumerate(train_data_loader),total=len(train_data_loader)):
             self.setTrain()
+            # Pick a method based on its data abundance
+            chosen_method = random.choices(method_names, weights=weights, k=1)[0]
+            
+            # Load the batch from the dataloader
+            try:
+                data_dict = next(method_iters[chosen_method])
+                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'. Shape={video_batch.shape}")
+            except StopIteration:
+                # Refill the iterator if it's exhausted
+                print(f"Method '{chosen_method}' exhausted. Resetting iterator.")
+                method_iters[chosen_method] = iter(train_data_loader[chosen_method])
+                data_dict = next(method_iters[chosen_method])
+                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'. Shape={video_batch.shape}")
+
+
             # more elegant and more scalable way of moving data to GPU
             for key in data_dict.keys():
                 if data_dict[key]!=None and key!='name':
