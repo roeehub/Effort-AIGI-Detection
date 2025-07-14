@@ -47,10 +47,10 @@ methods:
     - "DiT"
     - "sadtalker"
     - "danet"
-    - "hyperreenact"
     - "ddim"
     - "uniface"
     - "tpsm"
+#    - "hyperreenact"
 
 dataloader_params:
   batch_size: 16

@@ -18,19 +18,19 @@ def main():
 
     # --- CHOOSE YOUR DATALOADER TYPE ---
 
-    # Option A: Naive 50/50 Real/Fake Dataloader
-    print("\n--- Example: Naive Dataloader ---")
-    naive_loader = create_naive_dataloader(train_videos, config)
-    for i, (video_batch, label_batch, _) in enumerate(naive_loader):
-        print(f"Batch {i}: Video shape={video_batch.shape}, Labels={label_batch.tolist()}")
-        if i >= 2: break # Demo a few batches
-
-    # Option B: Simple Shuffled Dataloader (My Suggestion)
-    print("\n--- Example: Simple Shuffled Dataloader (Baseline) ---")
-    simple_loader = create_simple_dataloader(train_videos, config)
-    for i, (video_batch, label_batch, method_batch) in enumerate(simple_loader):
-        print(f"Batch {i}: Video shape={video_batch.shape}, Methods in batch={method_batch}")
-        if i >= 2: break
+    # # Option A: Naive 50/50 Real/Fake Dataloader
+    # print("\n--- Example: Naive Dataloader ---")
+    # naive_loader = create_naive_dataloader(train_videos, config)
+    # for i, (video_batch, label_batch, _) in enumerate(naive_loader):
+    #     print(f"Batch {i}: Video shape={video_batch.shape}, Labels={label_batch.tolist()}")
+    #     if i >= 2: break # Demo a few batches
+    #
+    # # Option B: Simple Shuffled Dataloader (My Suggestion)
+    # print("\n--- Example: Simple Shuffled Dataloader (Baseline) ---")
+    # simple_loader = create_simple_dataloader(train_videos, config)
+    # for i, (video_batch, label_batch, method_batch) in enumerate(simple_loader):
+    #     print(f"Batch {i}: Video shape={video_batch.shape}, Methods in batch={method_batch}")
+    #     if i >= 2: break
 
     # Option C: Method-Aware Dataloaders (Separate loader for each method)
     print("\n--- Example: Method-Aware Dataloaders ---")
