@@ -9,6 +9,8 @@ from torchvision import transforms as T
 import numpy as np
 from copy import deepcopy
 from collections import defaultdict
+import albumentations as A
+from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
 
 class DeepfakePipeDataset(IterDataPipe):
     def __init__(self, dataset_class: DeepfakeAbstractBaseDataset):
@@ -30,6 +32,61 @@ class DeepfakePipeDataset(IterDataPipe):
     @staticmethod
     def collate_fn(batch):
         return DeepfakeAbstractBaseDataset.collate_fn(batch)
+
+def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
+        """
+        Apply data augmentation to an image, landmark, and mask.
+
+        Args:
+            img: An Image object containing the image to be augmented.
+            landmark: A numpy array containing the 2D facial landmarks to be augmented.
+            mask: A numpy array containing the binary mask to be augmented.
+
+        Returns:
+            The augmented image, landmark, and mask.
+        """
+
+        # Set the seed for the random number generator
+        if augmentation_seed is not None:
+            random.seed(augmentation_seed)
+            np.random.seed(augmentation_seed)
+        
+        # Define augmentation pipeline (from init_data_aug_method)
+        transform = A.Compose([
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+            A.HueSaturationValue(p=0.3),
+            A.ImageCompression(quality_lower=40, quality_upper=100, p=0.1),
+            A.GaussNoise(p=0.1),
+            A.MotionBlur(p=0.1),
+            A.CLAHE(p=0.1),
+            A.ChannelShuffle(p=0.1),
+            A.Cutout(p=0.1),
+            A.RandomGamma(p=0.3),
+            A.GlassBlur(p=0.3),
+        ])
+
+        # Create a dictionary of arguments
+        kwargs = {'image': img}
+
+        # Check if the landmark and mask are not None
+        if mask is not None:
+            kwargs['mask'] = mask
+
+        # Run transform
+        transformed = transform(**kwargs)
+
+        # Extract results
+        augmented_img = transformed['image']
+        augmented_mask = transformed.get('mask')
+        augmented_landmark = None  # Not used here
+
+        # Reset seed (optional)
+        if augmentation_seed is not None:
+            random.seed()
+            np.random.seed()
+
+        return augmented_img, augmented_landmark, augmented_mask
 
 
 def load_video_frames_as_dataset(sample, config, mode='train'):
@@ -73,9 +130,7 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
 
         if mode == 'train' and config['use_data_augmentation']:
             # Implement basic augmentation or skip to keep logic close
-            image_aug = image_np
-            mask_aug = mask
-            landmarks_aug = landmarks
+            image_aug, mask_aug, landmarks_aug = data_aug(image, landmarks, mask, augmentation_seed)
         else:
             image_aug = deepcopy(image_np)
             mask_aug = deepcopy(mask)
@@ -111,26 +166,34 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
     return image_tensors, label, landmark_tensors, mask_tensors
 
 
-def create_base_videopipe(dataset):
+def create_base_videopipe(dataset, method):
     """
     Converts a DeepfakeAbstractBaseDataset into a DataPipe that loads from GCS.
     """
     samples = []
     for i in range(len(dataset)):
+        # Loads an image from the image list of the dataset object
         frame_paths = dataset.data_dict['image'][i]
+        
+        # The returned DataPipe has only the images of the current method as its a method aware approach
+        if method not in frame_paths:
+            continue
+        
         if not isinstance(frame_paths, list):
-            frame_paths = [frame_paths]
+            frame_paths = [frame_paths] # One frame path inside a list
+        # A list of dictionaries of frames and their labels
         samples.append({
-            'frames': frame_paths,
-            'label': dataset.data_dict['label'][i],
-            'config': dataset.config,
-            'video_level': dataset.video_level
+            'frames': frame_paths,                    # One frame path inside a list
+            'label': dataset.data_dict['label'][i],   # real / fake frame?
+            'config': dataset.config,                 # Effort configuration file
+            'video_level': dataset.video_level        # If to perform the dataloading in the video level scenario
         })
 
+    # Wrapps the 
     pipe = IterableWrapper(samples)
     pipe = pipe.shuffle()
     pipe = pipe.sharding_filter()
-    pipe = pipe.map(lambda sample: load_video_frames_as_dataset(sample, dataset.config, dataset.mode))
+    pipe = pipe.map(lambda sample: load_video_frames_as_dataset(sample, dataset.config, dataset.mode)) # Loads the image from the GCS and performs augmentations and normalization
     pipe = pipe.prefetch(10)
     return pipe
 
@@ -142,8 +205,9 @@ def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, config
         videos_by_method[v.method].append(v)
     
     dataloaders = {}
-    for method, videos in videos_by_method.items():
-        pipe = create_base_videopipe(dataset)
+    for method in videos_by_method.keys():
+        # returns a data pip that used to load the data from the GCP
+        pipe = create_base_videopipe(dataset, method)
         dataloaders[method] = DataLoader(
             pipe,
             batch_size=config['batch_size'],

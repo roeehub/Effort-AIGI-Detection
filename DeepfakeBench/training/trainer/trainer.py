@@ -214,12 +214,12 @@ class Trainer(object):
 
     def train_epoch(
         self,
-        method_names,
+        method_names,           # A list of all the methods
         weights,
         epoch,
-        method_iters,
-        train_data_loader,
-        test_data_loaders=None,
+        method_iters,           # A dictionary of methods as keys and dataloaders iterators as values
+        dataloader_dict,      # A dictionary of methods as keys and dataloaders as values
+        test_data_loaders=None, # Usual dataloader for the test
         ):
 
         self.logger.info("===> Epoch[{}] start!".format(epoch))
@@ -229,11 +229,14 @@ class Trainer(object):
             times_per_epoch = 2
 
         #times_per_epoch=4
+        # Pick a method based on its data abundance
+        chosen_method = random.choices(method_names, weights=weights, k=1)[0]
+        train_data_loader = dataloader_dict[chosen_method]
 
         test_step = len(train_data_loader) // times_per_epoch    # test 10 times per epoch
         step_cnt = epoch * len(train_data_loader)
 
-        # save the training data_dict
+        # save the training data_dict dictionary in pickle file
         data_dict = train_data_loader.dataset.data_dict
         self.save_data_dict('train', data_dict, ','.join(self.config['train_dataset']))
         # define training recorder
@@ -242,43 +245,44 @@ class Trainer(object):
 
         for iteration, _ in tqdm(enumerate(train_data_loader),total=len(train_data_loader)):
             self.setTrain()
-            # Pick a method based on its data abundance
-            chosen_method = random.choices(method_names, weights=weights, k=1)[0]
-            
+                        
             # Load the batch from the dataloader
             try:
                 data_dict = next(method_iters[chosen_method])
-                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'. Shape={video_batch.shape}")
+                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'.")
             except StopIteration:
                 # Refill the iterator if it's exhausted
                 print(f"Method '{chosen_method}' exhausted. Resetting iterator.")
                 method_iters[chosen_method] = iter(train_data_loader[chosen_method])
                 data_dict = next(method_iters[chosen_method])
-                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'. Shape={video_batch.shape}")
+                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'. ")
 
-
-            # more elegant and more scalable way of moving data to GPU
+            # move data to GPU
             for key in data_dict.keys():
                 if data_dict[key]!=None and key!='name':
                     data_dict[key]=data_dict[key].cuda()
 
-            losses,predictions=self.train_step(data_dict)
+            # Returns the predictions dictionary with the scores for 'real' and 'fake' and the probability to be a 'fake' and features vector for all the batch\
+                # Returns also the losses dictionary that has: 'overall loss', 'real loss' and 'fake loss'
+            losses,predictions=self.train_step(data_dict) 
 
             # update learning rate
 
             if 'SWA' in self.config and self.config['SWA'] and epoch>self.config['swa_start']:
                 self.swa_model.update_parameters(self.model)
 
-            # compute training metric for each batch data
+            # Returns a dictionary of average precition and accuracy\
+                # each element in the batch has its own dictionary of metrics
             if type(self.model) is DDP:
                 batch_metrics = self.model.module.get_train_metrics(data_dict, predictions)
             else:
-                batch_metrics = self.model.get_train_metrics(data_dict, predictions)
+                batch_metrics = self.model.get_train_metrics(data_dict, predictions) # batch_metrics[avg_precition], batch_metrics[accuracy]
 
-            # store data by recorder
+            # Creates one dictionary for all metrics
             ## store metric
             for name, value in batch_metrics.items():
                 train_recorder_metric[name].update(value)
+            # Creates a dictionary for all types of losses
             ## store loss
             for name, value in losses.items():
                 train_recorder_loss[name].update(value)
@@ -289,6 +293,8 @@ class Trainer(object):
                     self.scheduler.step()
                 # info for loss
                 loss_str = f"Iter: {step_cnt}    "
+                
+                # Calculates the average losses for all images in the batch
                 for k, v in train_recorder_loss.items():
                     v_avg = v.average()
                     if v_avg == None:
@@ -301,6 +307,8 @@ class Trainer(object):
                 self.logger.info(loss_str)
                 # info for metric
                 metric_str = f"Iter: {step_cnt}    "
+                
+                # Calculates the average accuracy and precition for all images in the batch
                 for k, v in train_recorder_metric.items():
                     v_avg = v.average()
                     if v_avg == None:

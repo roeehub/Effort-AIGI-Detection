@@ -32,7 +32,7 @@ class EffortDetector(nn.Module):
     def __init__(self, config=None):
         super(EffortDetector, self).__init__()
         self.config = config
-        self.backbone = self.build_backbone(config)
+        self.backbone = self.build_backbone(config) # Initialize Backbone model
         self.head = nn.Linear(1024, 2)
         self.loss_func = nn.CrossEntropyLoss()
         self.prob, self.label = [], []

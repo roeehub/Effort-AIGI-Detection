@@ -241,17 +241,24 @@ def main():
     # Load train/val splits using prepare_video_splits
     train_videos, val_videos, _ = prepare_video_splits('../GCP_codes/config.yml')
     
+    # Create a dataset object to include all the instances of the dataset to load
+    train_set = DeepfakeAbstractBaseDataset(
+        config=config,
+        mode='train',
+        VideoInfo=train_videos,
+    )
     
-    # prepare the training data loader
-    method_loaders = create_method_aware_dataloaders(train_videos, data_config)
+    
+    # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
+    method_loaders = create_method_aware_dataloaders(train_set, data_config)
     
     # Training Loop for Method-Aware
-    # To cycle through methods:
+    # to cycle through methods:
     method_names = list(method_loaders.keys())
     random.shuffle(method_names)
     print(f"Training on methods in this order: {method_names[:5]}...")
     
-    # For a balanced approach, you can create a weighted sampler over `method_names`
+    # For a balanced approach, we create a weighted sampler over `method_names`
     method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
     total_videos = sum(method_sizes.values())
     weights = [method_sizes[m] / total_videos for m in method_names]
@@ -284,12 +291,12 @@ def main():
     for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
         trainer.model.epoch = epoch
         best_metric = trainer.train_epoch(
-                    method_names=method_names,
+                    method_names=method_names,          # A list of all the methods
                     weights=weights,
-                    epoch=epoch,
-                    method_iters=method_iters,
-                    train_data_loader=method_loaders,
-                    test_data_loaders=test_data_loaders,
+                    epoch=epoch,                        
+                    method_iters=method_iters,          # A dictionary of methods as keys and dataloaders iterators as values
+                    train_data_loader=method_loaders,   # A dictionary of methods as keys and dataloaders as values
+                    test_data_loaders=test_data_loaders,# Usual dataloader for the test
                 )
         if best_metric is not None:
             logger.info(f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")
