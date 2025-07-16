@@ -286,6 +286,15 @@ def main():
 
     # prepare the trainer
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
+    
+    
+    # Define the path to your pretrained checkpoint
+    checkpoint_path = './weights/effort_2023-10-27-10-30-00/test/FF-DF/ckpt_best.pth'
+    # Check if a path is provided and then load the checkpoint
+    if checkpoint_path:
+        trainer.load_ckpt(checkpoint_path)
+    
+    
 
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
