@@ -1,5 +1,5 @@
 # log dir 
-log_dir: ./zhiyuanyan/logs/benchv2/icml25/release
+log_dir: ./logs
 
 # model setting
 pretrained: 'no need to provide this for the effort model'

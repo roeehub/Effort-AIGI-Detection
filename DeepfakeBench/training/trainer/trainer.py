@@ -14,6 +14,7 @@ import pickle
 import datetime
 import random
 import logging
+from collections import OrderedDict
 import numpy as np
 from copy import deepcopy
 from collections import defaultdict
@@ -24,7 +25,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.nn import DataParallel
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from metrics.base_metrics_class import Recorder
 from torch.optim.swa_utils import AveragedModel, SWALR
 from torch import distributed as dist
@@ -57,7 +58,7 @@ class Trainer(object):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.swa_model = swa_model
-        self.writers = {}  # dict to maintain different tensorboard writers for each dataset and metric
+        # self.writers = {}  # dict to maintain different tensorboard writers for each dataset and metric
         self.logger = logger
         self.metric_scoring = metric_scoring
         # maintain the best metric of all epochs
@@ -83,21 +84,21 @@ class Trainer(object):
             )
         os.makedirs(self.log_dir, exist_ok=True)
 
-    def get_writer(self, phase, dataset_key, metric_key):
-        writer_key = f"{phase}-{dataset_key}-{metric_key}"
-        if writer_key not in self.writers:
-            # update directory path
-            writer_path = os.path.join(
-                self.log_dir,
-                phase,
-                dataset_key,
-                metric_key,
-                "metric_board"
-            )
-            os.makedirs(writer_path, exist_ok=True)
-            # update writers dictionary
-            self.writers[writer_key] = SummaryWriter(writer_path)
-        return self.writers[writer_key]
+    # def get_writer(self, phase, dataset_key, metric_key):
+    #     writer_key = f"{phase}-{dataset_key}-{metric_key}"
+    #     if writer_key not in self.writers:
+    #         # update directory path
+    #         writer_path = os.path.join(
+    #             self.log_dir,
+    #             phase,
+    #             dataset_key,
+    #             metric_key,
+    #             "metric_board"
+    #         )
+    #         os.makedirs(writer_path, exist_ok=True)
+    #         # update writers dictionary
+    #         # self.writers[writer_key] = SummaryWriter(writer_path)
+    #     return self.writers[writer_key]
 
 
     def speed_up(self):
@@ -123,9 +124,16 @@ class Trainer(object):
             saved = torch.load(model_path, map_location='cpu')
             suffix = model_path.split('.')[-1]
             if suffix == 'p':
-                self.model.load_state_dict(saved.state_dict())
+                # self.model.load_state_dict(saved.state_dict())
+                state_dict = saved.state_dict()
             else:
-                self.model.load_state_dict(saved)
+                # self.model.load_state_dict(saved)
+                state_dict = saved
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                name = k[7:] if k.startswith('module.') else k  # remove `module.`
+                new_state_dict[name] = v
+            self.model.load_state_dict(new_state_dict, strict=False)
             self.logger.info('Model found in {}'.format(model_path))
         else:
             raise NotImplementedError(
@@ -219,6 +227,7 @@ class Trainer(object):
         epoch,
         method_iters,           # A dictionary of methods as keys and dataloaders iterators as values
         dataloader_dict,      # A dictionary of methods as keys and dataloaders as values
+        train_set,
         test_data_loaders=None, # Usual dataloader for the test
         ):
 
@@ -237,7 +246,8 @@ class Trainer(object):
         step_cnt = epoch * len(train_data_loader)
 
         # save the training data_dict dictionary in pickle file
-        data_dict = train_data_loader.dataset.data_dict
+        # data_dict = train_data_loader.dataset.data_dict
+        data_dict = train_set.data_dict
         self.save_data_dict('train', data_dict, ','.join(self.config['train_dataset']))
         # define training recorder
         train_recorder_loss = defaultdict(Recorder)
@@ -302,8 +312,8 @@ class Trainer(object):
                         continue
                     loss_str += f"training-loss, {k}: {v_avg}    "
                     # tensorboard-1. loss
-                    writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
-                    writer.add_scalar(f'train_loss/{k}', v_avg, global_step=step_cnt)
+                    # writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
+                    # writer.add_scalar(f'train_loss/{k}', v_avg, global_step=step_cnt)
                 self.logger.info(loss_str)
                 # info for metric
                 metric_str = f"Iter: {step_cnt}    "
@@ -316,8 +326,8 @@ class Trainer(object):
                         continue
                     metric_str += f"training-metric, {k}: {v_avg}    "
                     # tensorboard-2. metric
-                    writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
-                    writer.add_scalar(f'train_metric/{k}', v_avg, global_step=step_cnt)
+                    # writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
+                    # writer.add_scalar(f'train_metric/{k}', v_avg, global_step=step_cnt)
                 self.logger.info(metric_str)
 
 
@@ -419,13 +429,13 @@ class Trainer(object):
             # info for each dataset
             loss_str = f"dataset: {key}    step: {step}    "
             for k, v in losses_one_dataset_recorder.items():
-                writer = self.get_writer('test', key, k)
+                # writer = self.get_writer('test', key, k)
                 v_avg = v.average()
                 if v_avg == None:
                     print(f'{k} is not calculated')
                     continue
                 # tensorboard-1. loss
-                writer.add_scalar(f'test_losses/{k}', v_avg, global_step=step)
+                # writer.add_scalar(f'test_losses/{k}', v_avg, global_step=step)
                 loss_str += f"testing-loss, {k}: {v_avg}    "
             self.logger.info(loss_str)
         # tqdm.write(loss_str)
@@ -435,13 +445,13 @@ class Trainer(object):
                 continue
             metric_str += f"testing-metric, {k}: {v}    "
             # tensorboard-2. metric
-            writer = self.get_writer('test', key, k)
-            writer.add_scalar(f'test_metrics/{k}', v, global_step=step)
+            # writer = self.get_writer('test', key, k)
+            # writer.add_scalar(f'test_metrics/{k}', v, global_step=step)
         if 'pred' in metric_one_dataset:
             acc_real, acc_fake = self.get_respect_acc(metric_one_dataset['pred'], metric_one_dataset['label'])
             metric_str += f'testing-metric, acc_real:{acc_real}; acc_fake:{acc_fake}'
-            writer.add_scalar(f'test_metrics/acc_real', acc_real, global_step=step)
-            writer.add_scalar(f'test_metrics/acc_fake', acc_fake, global_step=step)
+            # writer.add_scalar(f'test_metrics/acc_real', acc_real, global_step=step)
+            # writer.add_scalar(f'test_metrics/acc_fake', acc_fake, global_step=step)
         self.logger.info(metric_str)
 
     def test_epoch(self, epoch, iteration, test_data_loaders, step):

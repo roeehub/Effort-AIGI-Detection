@@ -46,7 +46,10 @@ class EffortDetector(nn.Module):
         # std: [0.26862954, 0.26130258, 0.27577711]
         
         # ViT-L/14 224*224
-        clip_model = CLIPModel.from_pretrained("/home/roee/models/clip-vit-large-patch14", local_files_only=True)  # the path of this folder in your disk (download from the above link)
+        clip_model = CLIPModel.from_pretrained("/home/jupyter/Effort-AIGI-Detection/models--openai--clip-vit-large-patch14", local_files_only=True) # the path of this folder in your disk (download from the above link)
+        # clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir="./clip-vit-large-patch14")
+        
+        
 
         # Apply SVD to self_attn layers only
         # ViT-L/14 224*224: 1024-1

@@ -194,7 +194,7 @@ def create_base_videopipe(dataset, method):
     pipe = pipe.shuffle()
     pipe = pipe.sharding_filter()
     pipe = pipe.map(lambda sample: load_video_frames_as_dataset(sample, dataset.config, dataset.mode)) # Loads the image from the GCS and performs augmentations and normalization
-    pipe = pipe.prefetch(10)
+    # pipe = pipe.prefetch(10)
     return pipe
 
 
@@ -210,8 +210,8 @@ def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, config
         pipe = create_base_videopipe(dataset, method)
         dataloaders[method] = DataLoader(
             pipe,
-            batch_size=config['batch_size'],
-            num_workers=config['num_workers'],
+            batch_size=config['dataloader_params']['batch_size'],
+            num_workers=config['dataloader_params']['num_workers'],
             collate_fn=DeepfakePipeDataset.collate_fn
         )
     return dataloaders

@@ -33,9 +33,10 @@ from trainer.trainer import Trainer
 from detectors import DETECTOR
 from dataset import *
 from metrics.utils import parse_metric_for_print
-from logger import create_logger, RankFilter
+from logger import create_logger
+from PIL.ImageFilter import RankFilter
 from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
-from GCP_codes.prepare_splits import prepare_video_splits
+from prepare_splits import prepare_video_splits
 from dataset.dataloaders import create_method_aware_dataloaders
 
 
@@ -100,7 +101,7 @@ def prepare_testing_data(config, val_videos):
         test_set = DeepfakeAbstractBaseDataset(
                 config=config,
                 mode='test',
-                val_videos=val_videos,
+                VideoInfo=val_videos,
         )
 
         test_data_loader = \
@@ -188,6 +189,9 @@ def choose_metric(config):
 
 
 def main():
+    print("We are in Before:",os.getcwd())
+    os.chdir('../')
+    print("We are in:",os.getcwd())
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -220,7 +224,7 @@ def main():
         params_string += "{}: {}".format(key, value) + "\n"
     logger.info(params_string)
     
-    config_path = "./config/dataloader_config.yml"
+    config_path = "./training/config/dataloader_config.yml"
     with open(config_path, 'r') as f:
         data_config = yaml.safe_load(f)
 
@@ -289,7 +293,7 @@ def main():
     
     
     # Define the path to your pretrained checkpoint
-    checkpoint_path = './weights/effort_2023-10-27-10-30-00/test/FF-DF/ckpt_best.pth'
+    checkpoint_path = './training/weights/Effort_ckpts/effort_clip_L14_trainOn_FaceForensic.pth'
     # Check if a path is provided and then load the checkpoint
     if checkpoint_path:
         trainer.load_ckpt(checkpoint_path)
@@ -304,7 +308,8 @@ def main():
                     weights=weights,
                     epoch=epoch,                        
                     method_iters=method_iters,          # A dictionary of methods as keys and dataloaders iterators as values
-                    train_data_loader=method_loaders,   # A dictionary of methods as keys and dataloaders as values
+                    dataloader_dict=method_loaders,   # A dictionary of methods as keys and dataloaders as values
+                    train_set=train_set,
                     test_data_loaders=test_data_loaders,# Usual dataloader for the test
                 )
         if best_metric is not None:

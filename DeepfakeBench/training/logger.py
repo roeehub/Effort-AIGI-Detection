@@ -3,8 +3,9 @@ import logging
 
 def create_logger(log_path):
     # Create log path
-    if os.path.isdir(os.path.dirname(log_path)):
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    print("The Logger is in: ", os.getcwd())
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
 
     # Create logger object
     logger = logging.getLogger()
