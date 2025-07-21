@@ -12,7 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.nn import DataParallel
-from torch.utils.tensorboard import SummaryWriter
 
 from metrics.base_metrics_class import calculate_metrics_for_train
 
@@ -46,7 +45,8 @@ class EffortDetector(nn.Module):
         # std: [0.26862954, 0.26130258, 0.27577711]
         
         # ViT-L/14 224*224
-        clip_model = CLIPModel.from_pretrained("/home/jupyter/Effort-AIGI-Detection/models--openai--clip-vit-large-patch14", local_files_only=True) # the path of this folder in your disk (download from the above link)
+        print("The CLIP is in: ", os.getcwd())
+        clip_model = CLIPModel.from_pretrained("../models--openai--clip-vit-large-patch14", local_files_only=True) # the path of this folder in your disk (download from the above link)
         # clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir="./clip-vit-large-patch14")
         
         
