@@ -51,9 +51,12 @@ def probe_video(video_id: str, cfg_probe: dict, cfg_face: dict) -> Tuple[bool, f
                 if not ret:
                     break
                 frames_checked += 1
-                if detect_faces_bgr(frame, det_conf=cfg_face["min_confidence"]):
-                    found = True
-                    break
+                faces = detect_faces_bgr(frame, det_conf=cfg_face["min_confidence"])
+                for f in faces:
+                    area = (f.w * f.h) / (frame.shape[0] * frame.shape[1])
+                    if area >= cfg_probe.get("min_face_area", 0.0):
+                        found = True
+                        break
             cap.release()
             os.unlink(tmp)
             if found:
