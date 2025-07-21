@@ -44,12 +44,19 @@ def probe_video(video_id: str, cfg_probe: dict, cfg_face: dict) -> Tuple[bool, f
         try:
             tmp = fetch_snippet(low_url, t, snip_sec)
             cap = cv2.VideoCapture(str(tmp))
-            ret, frame = cap.read();
+            found = False
+            frames_checked = 0
+            while frames_checked < 10:  # inspect up to 10 frames / snippet
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frames_checked += 1
+                if detect_faces_bgr(frame, det_conf=cfg_face["min_confidence"]):
+                    found = True
+                    break
             cap.release()
             os.unlink(tmp)
-            if not ret:
-                continue
-            if detect_faces_bgr(frame, det_conf=cfg_face["min_confidence"]):
+            if found:
                 hits += 1
                 if hits >= hits_needed:
                     return True, float(duration), low_url, high_url, ""

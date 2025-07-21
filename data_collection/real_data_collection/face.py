@@ -13,8 +13,8 @@ from typing import List
 import mediapipe as mp  # noqa
 
 # lazy-init on first call
-_mp_det = None
-_gpu_capable = None
+_mp_det = None  # lazy-initialized detector
+_gpu_capable: bool | None = None  # True / False / None = “unknown”
 
 
 @dataclass(slots=True, frozen=True)
@@ -29,13 +29,13 @@ class Face:
 
 def _init(det_conf: float):
     global _mp_det
-    _mp_det = mp.solutions.face_detection.FaceDetection(
-        model_selection=0,
-        min_detection_confidence=det_conf,
-        # GPU delegate auto-enabled when CUDA present
-    )
-    global _gpu_capable
-    _gpu_capable = getattr(_mp_det._graph_runner.runner_options, "use_gpu", False)
+    _mp_det = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=det_conf)
+
+    # Newer MediaPipe removes private _graph_runner; fall back to “unknown”
+    try:
+        _gpu_capable = bool(getattr(_mp_det, "_graph_runner").runner_options.use_gpu)  # type: ignore[attr-defined]
+    except Exception:  # AttributeError or anything else
+        _gpu_capable = None
 
 
 def detect_faces_bgr(frame_bgr, det_conf=0.5) -> List[Face]:
@@ -63,7 +63,7 @@ def detect_faces_bgr(frame_bgr, det_conf=0.5) -> List[Face]:
     return faces
 
 
-def gpu_enabled() -> bool:
+def gpu_enabled() -> bool | None:
     if _gpu_capable is None:
         _init(0.1)
     return _gpu_capable
