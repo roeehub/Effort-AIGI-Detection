@@ -1,0 +1,34 @@
+# --- required ---------------------------------------------------
+youtube_api_key: ""   # <-- put your key here
+output_dir: "clips"                           # where frames will be written
+
+# Tell the scraper where to find videos
+sources_csv: "sources.csv"    # same file you already have (channels + playlists)
+queries_txt: null            # or e.g. "queries.txt" for keyword search
+
+# --- optional: tweak only if you care right now ----------------
+probe:
+  samples: 5
+  snippet_sec: 10
+  hits_needed: 2
+  min_res_p: 480
+
+mining:
+  window_sec: 5
+  sample_fps: 5
+  stride_sec: 30
+  max_dead: 10
+  sparse_interval: 20
+  oversample: 35
+  keep_frames: 32
+  yaw_threshold: 0.35
+
+face_detector:
+  backend: mediapipe_gpu
+  min_confidence: 0.5
+
+dedup:
+  phash_bits: 64
+
+bandwidth:
+  max_bytes_per_video: 150_000_000   # ≈150 MB guard-rail
