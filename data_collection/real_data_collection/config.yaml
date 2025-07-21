@@ -9,7 +9,7 @@ queries_txt: null            # or e.g. "queries.txt" for keyword search
 # --- optional: tweak only if you care right now ----------------
 probe:
   samples: 5
-  snippet_sec: 10
+  snippet_sec: 20
   hits_needed: 2
   min_res_p: 480
 

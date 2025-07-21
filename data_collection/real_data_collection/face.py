@@ -4,14 +4,17 @@ face.py – CUDA-accelerated MediaPipe detector with yaw estimate.
 """
 
 from __future__ import annotations
-import math, cv2, numpy as np
+import math
+import cv2  # noqa
+import numpy as np  # noqa
 from dataclasses import dataclass
 from typing import List
 
-import mediapipe as mp
+import mediapipe as mp  # noqa
 
 # lazy-init on first call
 _mp_det = None
+_gpu_capable = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -31,6 +34,8 @@ def _init(det_conf: float):
         min_detection_confidence=det_conf,
         # GPU delegate auto-enabled when CUDA present
     )
+    global _gpu_capable
+    _gpu_capable = getattr(_mp_det._graph_runner.runner_options, "use_gpu", False)
 
 
 def detect_faces_bgr(frame_bgr, det_conf=0.5) -> List[Face]:
@@ -56,3 +61,9 @@ def detect_faces_bgr(frame_bgr, det_conf=0.5) -> List[Face]:
                 yaw = 0.0
             faces.append(Face(x, y, fw, fh, conf, yaw))
     return faces
+
+
+def gpu_enabled() -> bool:
+    if _gpu_capable is None:
+        _init(0.1)
+    return _gpu_capable

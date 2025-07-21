@@ -9,13 +9,14 @@ import argparse, pprint
 from pathlib import Path
 from config import load_config, asdict_recursive
 import logging
-import tqdm
+import tqdm  # noqa
 from dataclasses import asdict
 from probe import probe_video
 from youtube_api import (
     yt_build, search_videos, video_details,
     iter_sources_csv,
 )
+from face import gpu_enabled
 
 
 def parse_cli() -> argparse.Namespace:
@@ -25,7 +26,8 @@ def parse_cli() -> argparse.Namespace:
 
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("preview", help="List candidate videos without downloading")
-    sub.add_parser("scrape", help="Run full scrape pipeline")
+    p_scr = sub.add_parser("scrape", help="Run full scrape pipeline")
+    p_scr.add_argument("--max-videos", type=int, default=None, help = "limit discovery list for faster trials")
 
     return p.parse_args()
 
@@ -61,9 +63,11 @@ def run_preview(cfg):
         print(f"|{i}|{vid}|{title}|{chan}|{dur}|https://youtu.be/{vid}|")
 
 
-def run_scrape(cfg):
+def run_scrape(cfg, args):
     logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s",
                         datefmt="%H:%M:%S", level=logging.INFO)
+
+    print("⚡  MediaPipe GPU:", gpu_enabled())
 
     svc = yt_build(cfg.youtube_api_key)
     # 1. discovery (reuse preview logic)
@@ -76,13 +80,16 @@ def run_scrape(cfg):
                 if q:
                     candidates += search_videos(svc, q, 20)
 
+    if args.max_videos:
+        candidates = candidates[:args.max_videos]
     print(f"\n🎥 Starting PROBE on {len(candidates)} videos …\n")
     probe_cfg_dict = asdict(cfg.probe)
     face_cfg_dict = asdict(cfg.face_detector)
     for vid in tqdm.tqdm(candidates, unit="vid"):
-        ok, dur, *_ = probe_video(vid, probe_cfg_dict, face_cfg_dict)
-        status = "ACCEPT" if ok else "reject"
-        tqdm.tqdm.write(f"{status:7} {vid}  ({dur / 60:.1f} min)")
+        ok, dur, _, _, reason = probe_video(vid, probe_cfg_dict, face_cfg_dict)
+        tag = "ACCEPT" if ok else f"reject-{reason}"
+        link = f"https://youtu.be/{vid}"
+        tqdm.tqdm.write(f"{tag:13} {vid}  ({dur / 60:.1f} min)  {link}")
 
     print("\n✅ Probe phase finished. Mining not yet implemented.\n")
 
@@ -98,7 +105,7 @@ def main() -> None:
     if args.cmd == "preview":
         run_preview(cfg)
     elif args.cmd == "scrape":
-        run_scrape(cfg)
+        run_scrape(cfg, args)
 
 
 if __name__ == "__main__":
