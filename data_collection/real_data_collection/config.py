@@ -19,6 +19,7 @@ DEFAULTS: dict[str, Any] = {
         "snippet_sec": 10,
         "hits_needed": 2,
         "min_res_p": 480,
+        "min_face_area": 0.10,  # 10% of frame area
     },
     "mining": {
         "window_sec": 5,
@@ -44,6 +45,7 @@ class ProbeCfg:
     snippet_sec: int
     hits_needed: int
     min_res_p: int
+    min_face_area: float
 
 
 @dataclass(frozen=True, slots=True)
