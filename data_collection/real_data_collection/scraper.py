@@ -10,6 +10,7 @@ from pathlib import Path
 from config import load_config, asdict_recursive
 import logging
 import tqdm
+from dataclasses import asdict
 from probe import probe_video
 from youtube_api import (
     yt_build, search_videos, video_details,
@@ -76,8 +77,10 @@ def run_scrape(cfg):
                     candidates += search_videos(svc, q, 20)
 
     print(f"\n🎥 Starting PROBE on {len(candidates)} videos …\n")
+    probe_cfg_dict = asdict(cfg.probe)
+    face_cfg_dict = asdict(cfg.face_detector)
     for vid in tqdm.tqdm(candidates, unit="vid"):
-        ok, dur, *_ = probe_video(vid, cfg.probe.__dict__, cfg.face_detector.__dict__)
+        ok, dur, *_ = probe_video(vid, probe_cfg_dict, face_cfg_dict)
         status = "ACCEPT" if ok else "reject"
         tqdm.tqdm.write(f"{status:7} {vid}  ({dur / 60:.1f} min)")
 
