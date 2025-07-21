@@ -8,6 +8,9 @@ scraper.py – CLI front-end for the talking-head scraper.
 import argparse, pprint
 from pathlib import Path
 from config import load_config, asdict_recursive
+import logging
+import tqdm
+from probe import probe_video
 from youtube_api import (
     yt_build, search_videos, video_details,
     iter_sources_csv,
@@ -57,6 +60,30 @@ def run_preview(cfg):
         print(f"|{i}|{vid}|{title}|{chan}|{dur}|https://youtu.be/{vid}|")
 
 
+def run_scrape(cfg):
+    logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s",
+                        datefmt="%H:%M:%S", level=logging.INFO)
+
+    svc = yt_build(cfg.youtube_api_key)
+    # 1. discovery (reuse preview logic)
+    candidates = []
+    if cfg.sources_csv:
+        candidates += list(iter_sources_csv(svc, cfg.sources_csv, 200))
+    if cfg.queries_txt:
+        with open(cfg.queries_txt) as fh:
+            for q in (l.strip() for l in fh):
+                if q:
+                    candidates += search_videos(svc, q, 20)
+
+    print(f"\n🎥 Starting PROBE on {len(candidates)} videos …\n")
+    for vid in tqdm.tqdm(candidates, unit="vid"):
+        ok, dur, *_ = probe_video(vid, cfg.probe.__dict__, cfg.face_detector.__dict__)
+        status = "ACCEPT" if ok else "reject"
+        tqdm.tqdm.write(f"{status:7} {vid}  ({dur / 60:.1f} min)")
+
+    print("\n✅ Probe phase finished. Mining not yet implemented.\n")
+
+
 def main() -> None:
     args = parse_cli()
     cfg = load_config(args.config)
@@ -68,7 +95,7 @@ def main() -> None:
     if args.cmd == "preview":
         run_preview(cfg)
     elif args.cmd == "scrape":
-        print("\n👉 SCRAPE mode is not implemented yet.")
+        run_scrape(cfg)
 
 
 if __name__ == "__main__":
