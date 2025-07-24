@@ -252,15 +252,23 @@ def main():
         VideoInfo=train_videos,
     )
     
+    test_set = DeepfakeAbstractBaseDataset(
+                config=config,
+                mode='test',
+                VideoInfo=val_videos,
+        )
     
     # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
     method_loaders = create_method_aware_dataloaders(train_set, data_config)
+    
+    test_method_loaders = create_method_aware_dataloaders(test_set, data_config, config=config, test=True)
     
     # Training Loop for Method-Aware
     # to cycle through methods:
     method_names = list(method_loaders.keys())
     random.shuffle(method_names)
     print(f"Training on methods in this order: {method_names[:5]}...")
+    
     
     # For a balanced approach, we create a weighted sampler over `method_names`
     method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
@@ -270,8 +278,10 @@ def main():
     print("\n--- Example: Method-Aware BALANCED Training Loop ---")
     # In each step, you'd pick a method based on weights and get a batch from it
     # This requires creating iterators for each dataloader.
-    method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
+    # method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
 
+
+    
     # prepare the testing data loader
     test_data_loaders = prepare_testing_data(config, val_videos)
 
@@ -287,30 +297,30 @@ def main():
 
     # prepare the metric
     metric_scoring = choose_metric(config)
-
+    
     # prepare the trainer
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
     
     
     # Define the path to your pretrained checkpoint
-    checkpoint_path = './training/weights/Effort_ckpts/effort_clip_L14_trainOn_FaceForensic.pth'
+    checkpoint_path = './training/weights/effort_clip_L14_trainOn_FaceForensic.pth'
     # Check if a path is provided and then load the checkpoint
     if checkpoint_path:
         trainer.load_ckpt(checkpoint_path)
     
     
-
+   
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
         trainer.model.epoch = epoch
         best_metric = trainer.train_epoch(
-                    method_names=method_names,          # A list of all the methods
+                    method_names=method_names,            # A list of all the methods
                     weights=weights,
-                    epoch=epoch,                        
-                    method_iters=method_iters,          # A dictionary of methods as keys and dataloaders iterators as values
-                    dataloader_dict=method_loaders,   # A dictionary of methods as keys and dataloaders as values
-                    train_set=train_set,
-                    test_data_loaders=test_data_loaders,# Usual dataloader for the test
+                    epoch=epoch,                          # A dictionary of methods as keys and dataloaders iterators as values
+                    dataloader_dict=method_loaders,       # A dictionary of methods as keys and dataloaders as values
+                    train_set=train_set,                  # The class dataset of test
+                    test_set=test_set,                    # The class dataset of test
+                    test_data_loaders=test_method_loaders,# Usual dataloader for the test
                 )
         if best_metric is not None:
             logger.info(f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")

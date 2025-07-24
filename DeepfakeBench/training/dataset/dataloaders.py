@@ -130,7 +130,7 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
 
         if mode == 'train' and config['use_data_augmentation']:
             # Implement basic augmentation or skip to keep logic close
-            image_aug, mask_aug, landmarks_aug = data_aug(image, landmarks, mask, augmentation_seed)
+            image_aug, mask_aug, landmarks_aug = data_aug(image_np, landmarks, mask, augmentation_seed)
         else:
             image_aug = deepcopy(image_np)
             mask_aug = deepcopy(mask)
@@ -166,7 +166,7 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
     return image_tensors, label, landmark_tensors, mask_tensors
 
 
-def create_base_videopipe(dataset, method):
+def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     """
     Converts a DeepfakeAbstractBaseDataset into a DataPipe that loads from GCS.
     """
@@ -176,7 +176,9 @@ def create_base_videopipe(dataset, method):
         frame_paths = dataset.data_dict['image'][i]
         
         # The returned DataPipe has only the images of the current method as its a method aware approach
-        if method not in frame_paths:
+        if method and method not in frame_paths and not test:
+            continue
+        if dataset_name and dataset_name.lower() not in frame_paths.lower():
             continue
         
         if not isinstance(frame_paths, list):
@@ -198,20 +200,33 @@ def create_base_videopipe(dataset, method):
     return pipe
 
 
-def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, config):
+def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, dataloader_config, test=False, config=None):
     # Group videos by method
     videos_by_method = defaultdict(list)
     for v in dataset.video_infos:
         videos_by_method[v.method].append(v)
     
     dataloaders = {}
-    for method in videos_by_method.keys():
-        # returns a data pip that used to load the data from the GCP
-        pipe = create_base_videopipe(dataset, method)
-        dataloaders[method] = DataLoader(
-            pipe,
-            batch_size=config['dataloader_params']['batch_size'],
-            num_workers=config['dataloader_params']['num_workers'],
-            collate_fn=DeepfakePipeDataset.collate_fn
-        )
+    if not test:
+        for method in videos_by_method.keys():
+            # returns a data pip that used to load the data from the GCP
+            pipe = create_base_videopipe(dataset, method, test)
+            
+            dataloaders[method] = DataLoader(
+                pipe,
+                batch_size=dataloader_config['dataloader_params']['batch_size'],
+                num_workers=dataloader_config['dataloader_params']['num_workers'],
+                collate_fn=DeepfakePipeDataset.collate_fn
+            )
+    else:
+        for dataset_name in config['test_dataset']:
+            # returns a data pip that used to load the data from the GCP
+            pipe = create_base_videopipe(dataset, None, test, dataset_name)
+            
+            dataloaders[dataset_name] = DataLoader(
+                pipe,
+                batch_size=dataloader_config['dataloader_params']['batch_size'],
+                num_workers=dataloader_config['dataloader_params']['num_workers'],
+                collate_fn=DeepfakePipeDataset.collate_fn
+            )
     return dataloaders

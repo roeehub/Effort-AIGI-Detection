@@ -225,12 +225,12 @@ class Trainer(object):
         method_names,           # A list of all the methods
         weights,
         epoch,
-        method_iters,           # A dictionary of methods as keys and dataloaders iterators as values
         dataloader_dict,      # A dictionary of methods as keys and dataloaders as values
         train_set,
-        test_data_loaders=None, # Usual dataloader for the test
+        test_set,
+        test_data_loaders=None, # Test dataloader that loads from the GCP
         ):
-
+        
         self.logger.info("===> Epoch[{}] start!".format(epoch))
         if epoch>=1:
             times_per_epoch = 2
@@ -253,19 +253,18 @@ class Trainer(object):
         train_recorder_loss = defaultdict(Recorder)
         train_recorder_metric = defaultdict(Recorder)
 
-        for iteration, _ in tqdm(enumerate(train_data_loader),total=len(train_data_loader)):
+        # for iteration, _ in tqdm(enumerate(train_data_loader),total=len(train_data_loader)):
+        for iteration in tqdm(range(len(train_data_loader)), desc=f"EPOCH: {epoch+1}"):
             self.setTrain()
                         
             # Load the batch from the dataloader
             try:
-                data_dict = next(method_iters[chosen_method])
+                data_dict = next(iter(train_data_loader))
                 print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'.")
             except StopIteration:
                 # Refill the iterator if it's exhausted
                 print(f"Method '{chosen_method}' exhausted. Resetting iterator.")
-                method_iters[chosen_method] = iter(train_data_loader[chosen_method])
-                data_dict = next(method_iters[chosen_method])
-                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'. ")
+                print("Appeared a problem in 'next(iter(dataloader_dict[chosen_method]))'")
 
             # move data to GPU
             for key in data_dict.keys():
@@ -347,6 +346,7 @@ class Trainer(object):
                     test_best_metric = self.test_epoch(
                         epoch,
                         iteration,
+                        test_set,
                         test_data_loaders,
                         step_cnt,
                     )
@@ -381,8 +381,10 @@ class Trainer(object):
         prediction_lists = []
         feature_lists=[]
         label_lists = []
-        for i, data_dict in tqdm(enumerate(data_loader),total=len(data_loader)):
+        # for i, data_dict in tqdm(enumerate(data_loader),total=len(data_loader)):
+        for iteration in range(len(data_loader)):
             # get data
+            data_dict = next(iter(data_loader))
             if 'label_spe' in data_dict:
                 data_dict.pop('label_spe')  # remove the specific label
             data_dict['label'] = torch.where(data_dict['label']!=0, 1, 0)  # fix the label to 0 and 1 only
@@ -454,7 +456,7 @@ class Trainer(object):
             # writer.add_scalar(f'test_metrics/acc_fake', acc_fake, global_step=step)
         self.logger.info(metric_str)
 
-    def test_epoch(self, epoch, iteration, test_data_loaders, step):
+    def test_epoch(self, epoch, iteration, test_set, test_data_loaders, step):
         # set model to eval mode
         self.setEval()
 
@@ -467,7 +469,10 @@ class Trainer(object):
         keys = test_data_loaders.keys()
         for key in keys:
             # save the testing data_dict
-            data_dict = test_data_loaders[key].dataset.data_dict
+            ###################### ADAM CHANGED ###################
+            # data_dict = test_data_loaders[key].dataset.data_dict
+            data_dict = test_set.data_dict
+            ###################### ADAM CHANGED ###################
             self.save_data_dict('test', data_dict, key)
 
             # compute loss for each dataset

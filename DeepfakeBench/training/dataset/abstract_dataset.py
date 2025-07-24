@@ -245,7 +245,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         """
         size = self.config['resolution'] # if self.mode == "train" else self.config['resolution']
         if not self.lmdb:
-            assert os.path.exists(file_path), f"{file_path} does not exist"
+            # assert os.path.exists(file_path), f"{file_path} does not exist"
             img = cv2.imread(file_path)
 
             if img is None:
@@ -520,12 +520,12 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
 
         # Special case for landmarks and masks if they are None
         if not any(landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmarks):
-            landmarks = torch.stack(landmarks, dim=0)
+            landmarks = torch.from_numpy(np.stack(landmarks, axis=0))
         else:
             landmarks = None
 
         if not any(m is None or (isinstance(m, list) and None in m) for m in masks):
-            masks = torch.stack(masks, dim=0)
+            masks = torch.from_numpy(np.stack(masks, axis=0))
         else:
             masks = None
 

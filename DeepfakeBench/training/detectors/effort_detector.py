@@ -46,7 +46,7 @@ class EffortDetector(nn.Module):
         
         # ViT-L/14 224*224
         print("The CLIP is in: ", os.getcwd())
-        clip_model = CLIPModel.from_pretrained("../models--openai--clip-vit-large-patch14", local_files_only=True) # the path of this folder in your disk (download from the above link)
+        clip_model = CLIPModel.from_pretrained("/home/roee/repos/Effort-AIGI-Detection/models--openai--clip-vit-large-patch14", local_files_only=True) # the path of this folder in your disk (download from the above link)
         # clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir="./clip-vit-large-patch14")
         
         
