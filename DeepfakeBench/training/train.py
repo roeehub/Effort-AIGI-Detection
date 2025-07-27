@@ -212,7 +212,10 @@ def main():
     if config['lmdb']:
         config['dataset_json_folder'] = 'preprocessing/dataset_json_v3'
     # create logger
-    logger_path = config['log_dir']
+    logger_path = os.path.join(
+                    config['log_dir'],
+                    config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+                )
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info('Save log to {}'.format(logger_path))
@@ -243,7 +246,7 @@ def main():
         logger.addFilter(RankFilter(0))
     # Split the dataset
     # Load train/val splits using prepare_video_splits
-    train_videos, val_videos, _ = prepare_video_splits('../GCP_codes/config.yml')
+    train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
     
     # Create a dataset object to include all the instances of the dataset to load
     train_set = DeepfakeAbstractBaseDataset(

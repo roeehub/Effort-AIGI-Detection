@@ -153,7 +153,7 @@ class Trainer(object):
                             'state_dict': self.model.state_dict(),}, save_path)
             else:
                 torch.save(self.model.state_dict(), save_path)
-        self.logger.info(f"Checkpoint saved to {save_path}, current ckpt is {ckpt_info}")
+        # self.logger.info(f"Checkpoint saved to {save_path}, current ckpt is {ckpt_info}")
 
     def save_swa_ckpt(self):
         save_dir = self.log_dir
@@ -161,7 +161,7 @@ class Trainer(object):
         ckpt_name = f"swa.pth"
         save_path = os.path.join(save_dir, ckpt_name)
         torch.save(self.swa_model.state_dict(), save_path)
-        self.logger.info(f"SWA Checkpoint saved to {save_path}")
+        # self.logger.info(f"SWA Checkpoint saved to {save_path}")
 
 
     def save_feat(self, phase, fea, dataset_key):
@@ -187,7 +187,7 @@ class Trainer(object):
         file_path = os.path.join(save_dir, 'metric_dict_best.pickle')
         with open(file_path, 'wb') as file:
             pickle.dump(metric_one_dataset, file)
-        self.logger.info(f"Metrics saved to {file_path}")
+        # self.logger.info(f"Metrics saved to {file_path}")
 
     def train_step(self,data_dict):
         if self.config['optimizer']['type']=='sam':
@@ -260,7 +260,7 @@ class Trainer(object):
             # Load the batch from the dataloader
             try:
                 data_dict = next(iter(train_data_loader))
-                print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'.")
+                # print(f"Step {iteration}: Training on batch from balanced choice '{chosen_method}'.")
             except StopIteration:
                 # Refill the iterator if it's exhausted
                 print(f"Method '{chosen_method}' exhausted. Resetting iterator.")

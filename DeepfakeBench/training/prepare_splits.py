@@ -16,10 +16,6 @@ from typing import List, Set, Tuple
 import yaml
 from fsspec.core import url_to_fs  # pip install gcsfs
 from sklearn.model_selection import GroupShuffleSplit  # pip install scikit-learn
-import itertools ### ADAM CHANGED
-TOTAL_FILES_ESTIMATE = 1_000_000  # An estimate of the total number of images ### ADAM CHANGED
-SAMPLE_PERCENTAGE = 0.05 ### ADAM CHANGED
-limit = int(TOTAL_FILES_ESTIMATE * SAMPLE_PERCENTAGE) ### ADAM CHANGED
 
 # ---------------------------------------------------------------------------
 # 1 Method categories (edit REG/REV if needed)
@@ -102,20 +98,20 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     print("Listing frame objects on GCS (first run – may take a minute)…")
     fs = url_to_fs(BUCKET)[0]
     #################### ADAM CHANGED ################################
-    # frame_paths = [f"gs://{p}" for p in fs.glob(f"{BUCKET}/**")
-    #                 if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
+    frame_paths = [f"gs://{p}" for p in fs.glob(f"{BUCKET}/**")
+                    if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
     # fs.glob returns an iterator, which is memory-efficient
-    MANIFEST_FILENAME = "/home/roee/repos/Effort-AIGI-Detection/partial_manifest.json"
-    manifest_path = Path(MANIFEST_FILENAME)
+    # MANIFEST_FILENAME = "/home/roee/repos/Effort-AIGI-Detection/partial_manifest.json"
+    # manifest_path = Path(MANIFEST_FILENAME)
 
-    if not manifest_path.exists():
-        print(f"Error: Manifest file not found at '{manifest_path}'")
-        print("Please run 'create_partial_manifest.py' first to generate the file list.")
-        return None
+    # if not manifest_path.exists():
+    #     print(f"Error: Manifest file not found at '{manifest_path}'")
+    #     print("Please run 'create_partial_manifest.py' first to generate the file list.")
+    #     return None
 
-    print(f"Loading cached file paths from '{manifest_path}'...")
-    with open(manifest_path, 'r') as f:
-        frame_paths = json.load(f)
+    # print(f"Loading cached file paths from '{manifest_path}'...")
+    # with open(manifest_path, 'r') as f:
+    #     frame_paths = json.load(f)
     #################### ADAM CHANGED ################################
     print(f"Found {len(frame_paths):,} frame files – caching manifest")
     manifest_path.write_text(json.dumps(frame_paths))

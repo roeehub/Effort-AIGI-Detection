@@ -1,0 +1,10 @@
+wandb_version: 1
+
+eps:
+  value: 6.764225258715518e-06
+lr:
+  value: 0.005010413659075162
+train_batchSize:
+  value: 64
+weight_decay:
+  value: 0.0001
