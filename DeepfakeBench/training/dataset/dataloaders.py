@@ -209,14 +209,16 @@ def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, datalo
     dataloaders = {}
     if not test:
         for method in videos_by_method.keys():
-            # returns a data pip that used to load the data from the GCP
+            # returns a data pipe that is used to load the data from the GCP
             pipe = create_base_videopipe(dataset, method, test)
             
             dataloaders[method] = DataLoader(
                 pipe,
                 batch_size=dataloader_config['dataloader_params']['batch_size'],
                 num_workers=dataloader_config['dataloader_params']['num_workers'],
-                collate_fn=DeepfakePipeDataset.collate_fn
+                collate_fn=DeepfakePipeDataset.collate_fn,
+                prefetch_factor=1,        # ↓ RAM
+                persistent_workers=True   # keep workers hot between batches
             )
     else:
         for dataset_name in config['test_dataset']:
@@ -227,6 +229,8 @@ def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, datalo
                 pipe,
                 batch_size=dataloader_config['dataloader_params']['batch_size'],
                 num_workers=dataloader_config['dataloader_params']['num_workers'],
-                collate_fn=DeepfakePipeDataset.collate_fn
+                collate_fn=DeepfakePipeDataset.collate_fn,
+                prefetch_factor=1,        # ↓ RAM
+                persistent_workers=True   # keep workers hot between batches
             )
     return dataloaders

@@ -16,6 +16,8 @@ import numpy as np
 from datetime import timedelta
 from copy import deepcopy
 from PIL import Image as pil_image
+import math
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -262,9 +264,26 @@ def main():
         )
     
     # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
+    breakpoint()
     method_loaders = create_method_aware_dataloaders(train_set, data_config)
-    
     test_method_loaders = create_method_aware_dataloaders(test_set, data_config, config=config, test=True)
+    breakpoint()
+
+    # Count videos per method
+    video_counts = defaultdict(int)
+    for v in train_videos:  # train_videos is List[VideoInfo]
+        video_counts[v.method] += 1
+    total_videos = len(train_videos)
+
+    # Compute weights for random method choice
+    method_names = list(method_loaders.keys())
+    weights = [video_counts[m] / total_videos for m in method_names]
+
+    # Compute epoch length: number of steps to roughly see all videos once
+    batch_size = data_config['dataloader_params']['batch_size']
+    epoch_len = math.ceil(total_videos / batch_size)
+
+    print(f"Total videos: {total_videos}, batch size: {batch_size}, epoch_len: {epoch_len}")
     
     # Training Loop for Method-Aware
     # to cycle through methods:
@@ -277,6 +296,7 @@ def main():
     method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
     total_videos = sum(method_sizes.values())
     weights = [method_sizes[m] / total_videos for m in method_names]
+
     
     print("\n--- Example: Method-Aware BALANCED Training Loop ---")
     # In each step, you'd pick a method based on weights and get a batch from it
@@ -310,8 +330,6 @@ def main():
     # Check if a path is provided and then load the checkpoint
     if checkpoint_path:
         trainer.load_ckpt(checkpoint_path)
-    
-    
    
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
@@ -321,6 +339,7 @@ def main():
                     weights=weights,
                     epoch=epoch,                          # A dictionary of methods as keys and dataloaders iterators as values
                     dataloader_dict=method_loaders,       # A dictionary of methods as keys and dataloaders as values
+                    epoch_len=epoch_len,                 # The number of steps in an epoch
                     train_set=train_set,                  # The class dataset of test
                     test_set=test_set,                    # The class dataset of test
                     test_data_loaders=test_method_loaders,# Usual dataloader for the test
