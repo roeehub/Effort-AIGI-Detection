@@ -91,6 +91,19 @@ def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
     return augmented_img, augmented_landmark, augmented_mask
 
 
+def safe_loader(sample, config, mode='train'):
+    """
+    Calls load_video_frames_as_dataset and swallows any exception.
+    If something goes wrong (corrupt image, missing mask, etc.) the
+    video is silently dropped.
+    """
+    try:
+        return load_video_frames_as_dataset(sample, config, mode)
+    except Exception as e:
+        print(f"[WARN] Dropped video due to error: {e}")
+        return None      # signals the DataPipe to skip this sample
+
+
 def load_video_frames_as_dataset(sample, config, mode='train'):
     """
     • Needs `target_frames` (= frame_num) good images.
@@ -99,11 +112,10 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
     """
 
     # ---- 1. how many frames do we need? -----------------------------
-    fn_cfg = config.get("frame_num", 8)
-    if isinstance(fn_cfg, dict):
-        target_frames = fn_cfg.get("train" if mode == "train" else "test", 8)
-    else:
-        target_frames = int(fn_cfg)
+    fn_cfg = config.get("frame_num", 8)  # could be int OR dict
+    if isinstance(fn_cfg, dict):  # YAML style: {train: 8, test: 8}
+        fn_cfg = fn_cfg.get("train" if mode == "train" else "test", 8)
+    target_frames = int(fn_cfg)  # now guaranteed int
 
     frame_paths_all = list(sample["frames"])  # 32 paths per video
     random.shuffle(frame_paths_all)
@@ -228,11 +240,9 @@ def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     pipe = IterableWrapper(samples)
     pipe = pipe.shuffle()
     pipe = pipe.sharding_filter()
-    pipe = pipe.map(
-        lambda s: load_video_frames_as_dataset(
-            s, dataset.config, dataset.mode
-        )
-    ).filter(lambda x: x is not None)
+    pipe = (pipe
+            .map(lambda s: safe_loader(s, dataset.config, dataset.mode))
+            .filter(lambda x: x is not None))  # drop videos that returned None
     return pipe
 
 
