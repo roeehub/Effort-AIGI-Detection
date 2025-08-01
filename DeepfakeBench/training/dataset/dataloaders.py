@@ -11,6 +11,7 @@ from copy import deepcopy
 from collections import defaultdict
 import albumentations as A
 from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
+from itertools import filterfalse
 
 
 class DeepfakePipeDataset(IterDataPipe):
@@ -242,7 +243,7 @@ def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     pipe = pipe.sharding_filter()
     pipe = (pipe
             .map(lambda s: safe_loader(s, dataset.config, dataset.mode))
-            .filter(lambda x: x is not None))  # drop videos that returned None
+            .filterfalse(lambda x: x is None))  # ← drop the bad videos
     return pipe
 
 
