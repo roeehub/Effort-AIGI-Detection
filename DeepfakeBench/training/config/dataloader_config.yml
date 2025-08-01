@@ -50,7 +50,7 @@ methods:
     - "hyperreenact"
     - "ddim"
     - "uniface"
-#    - "tpsm"
+    #    - "tpsm"
 
 dataloader_params:
   batch_size: 16
