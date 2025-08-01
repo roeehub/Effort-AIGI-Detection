@@ -285,6 +285,23 @@ def sanity_check_loaders(fake_loader_dict,
     print("\n============ END SANITY CHECK – review above =========\n")
 
 
+def check_label_in_paths(video_infos, split_name):
+    bad_videos = []
+    for v in video_infos:
+        lbl_tag = f"/{v.label}/"  # "/real/" or "/fake/"
+        # every path should contain this tag
+        if any(lbl_tag not in p for p in v.frame_paths):
+            bad_videos.append(f"{v.method}/{v.video_id}")
+
+    if bad_videos:
+        print(f"[{split_name}] ❌  {len(bad_videos)} videos failed label-in-path check")
+        # show first few for inspection
+        for vid in bad_videos[:5]:
+            print("   →", vid)
+    else:
+        print(f"[{split_name}] ✅  all {len(video_infos)} videos have consistent paths")
+
+
 def main():
     print("We are in Before:", os.getcwd())
     os.chdir('../')
@@ -345,6 +362,8 @@ def main():
     # Load train/val splits using prepare_video_splits
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
+    check_label_in_paths(train_videos, "train")
+    check_label_in_paths(val_videos, "val")
     breakpoint()
 
     # Create a dataset object to include all the instances of the dataset to load
