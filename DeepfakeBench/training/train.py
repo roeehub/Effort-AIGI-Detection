@@ -345,6 +345,8 @@ def main():
     # Load train/val splits using prepare_video_splits
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
+    breakpoint()
+
     # Create a dataset object to include all the instances of the dataset to load
     train_set = DeepfakeAbstractBaseDataset(
         config=config,

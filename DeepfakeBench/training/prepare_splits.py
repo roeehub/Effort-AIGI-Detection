@@ -52,6 +52,22 @@ class VideoInfo:
     frame_paths: List[str]  # gs:// paths
     identity: int  # target identity (numeric)
 
+    def __post_init__(self):
+        # 1) strict label check
+        if self.label not in {"real", "fake"}:
+            raise ValueError(
+                f"[VideoInfo] Invalid label '{self.label}' "
+                f"for video '{self.method}/{self.video_id}'. "
+                "Allowed: 'real' or 'fake'."
+            )
+
+        # 2) basic sanity on frame list
+        if not self.frame_paths:
+            raise ValueError(
+                f"[VideoInfo] Empty frame list for video "
+                f"'{self.method}/{self.video_id}'."
+            )
+
 
 # ---------------------------------------------------------------------------
 # 2 Identity-extraction helper
@@ -103,7 +119,6 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         print(f"Found {len(frame_paths):,} frame files – caching manifest")
         manifest_path.write_text(json.dumps(frame_paths))
 
-    
     # ------------------------------------------------------------------ #
     # 2 Group frames → VideoInfo objects                                 #
     # ------------------------------------------------------------------ #
@@ -122,8 +137,6 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
             # print(f"[WARN] Skipping path with disallowed method: {method} in {p}")
             continue
         vids_dict[(label, method, vid)].append(p)
-
-    breakpoint()
 
     videos: List[VideoInfo] = []
     warned = set()
