@@ -172,66 +172,47 @@ def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     """
     Build a DataPipe that streams frames for ONE method (or dataset-name).
 
-    Parameters
-    ----------
-    dataset : DeepfakeAbstractBaseDataset
-    method  : str | None
-        • Training mode: a fake-generation method (e.g. 'fomm')
-        • Testing  mode: None   (you filter with dataset_name instead)
-    test    : bool
-        If True, we do NOT drop real videos, because test loaders may mix
-        real & fake.  We still filter by dataset_name.
-    dataset_name : str | None
-        Only used in test mode – keeps videos whose path contains this
-        dataset identifier (case-insensitive).
+    • Training   (test=False, method='fomm' etc.)
+        – keeps only label==1 videos whose paths contain "/fomm/"
+    • Testing    (test=True, method=None, dataset_name='DFDC' etc.)
+        – keeps videos whose path contains dataset_name
+        – keeps both real & fake labels
     """
     samples = []
     for i in range(len(dataset)):
-        # --------------------------------------------------------------
-        # 0) Collect frame paths as a *list* (always)
-        # --------------------------------------------------------------
+        # 0) always treat frame_paths as a list
         frame_paths = dataset.data_dict['image'][i]
         if not isinstance(frame_paths, list):
             frame_paths = [frame_paths]
 
-        # meta
-        sample_label = dataset.data_dict['label'][i]  # 0/1
-        sample_method = dataset.video_infos[i].method  # textual
-        sample_vid = dataset.video_infos[i].video_id
+        sample_label = dataset.data_dict['label'][i]  # 0 real | 1 fake
 
-        # --------------------------------------------------------------
-        # 1) TRAIN-TIME filter: keep only *fake* videos for this method
-        # --------------------------------------------------------------
+        # 1) TRAIN-time: fake-loader → drop real videos, then path filter
         if method and not test:
-            # 1-a  drop any REAL (label==0) video
-            if sample_label == 0:
+            if sample_label == 0:  # drop real
                 continue
-            # 1-b  drop any video whose paths don't contain "/{method}/"
-            if f"/{method}/" not in frame_paths[0]:
+            if f"/{method}/" not in frame_paths[0]:  # path mismatch
                 continue
 
-        # --------------------------------------------------------------
-        # 2) TEST-TIME filter: keep only the requested dataset name
-        # --------------------------------------------------------------
+        # 2) TEST-time: filter by dataset name if provided
         if dataset_name and dataset_name.lower() not in frame_paths[0].lower():
             continue
 
-        # --------------------------------------------------------------
-        # 3) Assemble sample dict
-        # --------------------------------------------------------------
         samples.append({
             'frames': frame_paths,
-            'label': sample_label,  # 0 real | 1 fake
+            'label': sample_label,
             'config': dataset.config,
             'video_level': dataset.video_level,
         })
 
-    # Wrap into a DataPipe
+    # Wrap into a streaming DataPipe
     pipe = IterableWrapper(samples)
     pipe = pipe.shuffle()
     pipe = pipe.sharding_filter()
     pipe = pipe.map(
-        lambda s: load_video_frames_as_dataset(s, dataset.config, dataset.mode)
+        lambda s: load_video_frames_as_dataset(
+            s, dataset.config, dataset.mode
+        )
     )
     return pipe
 
