@@ -120,7 +120,7 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
 
     frame_paths_all = list(sample["frames"])  # 32 paths per video
     random.shuffle(frame_paths_all)
-    max_retries = 3
+    max_retries = 1
 
     good_imgs, good_masks, good_lms, good_paths = [], [], [], []
 
@@ -151,6 +151,10 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
 
         mask_path = path.replace("frames", "masks")
         landmark_path = path.replace("frames", "landmarks").replace(".png", ".npy")
+
+        remaining = len(frame_paths_all) - len(good_paths)
+        if len(good_imgs) + remaining < target_frames:
+            return None  # <–– drop video immediately
 
         try:
             with fsspec.open(mask_path, "rb") as mf:
