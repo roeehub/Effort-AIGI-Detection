@@ -263,7 +263,7 @@ def sanity_check_loaders(fake_loader_dict,
     all_keys = list(fake_loader_dict.keys()) + list(real_loader_dict.keys())
     for method in all_keys:
         is_fake_loader = method in fake_loader_dict
-        loader = fake_loader_dict.get(method) or real_loader_dict.get(method)
+        loader = fake_loader_dict[method] if method in fake_loader_dict else real_loader_dict[method]
         if loader is None:
             print(f"[{method}]  ⚠  loader missing – skipped")
             continue
