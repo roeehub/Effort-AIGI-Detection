@@ -112,10 +112,11 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         parts = Path(p).parts
         try:
             label, method, vid = parts[-4], parts[-3], parts[-2]
-            print(f"{label}", end=" ")
-            assert label in {"real", "fake"}
+            if label not in {"real", "fake"}:
+                print(f"[WARN] Skipping invalid label: {label} in {p}")
+                continue
         except Exception:
-            print(f"[WARN] Skipping invalid path: {p}")
+            print(f"[WARN] Skipping problematic path: {p}")
             continue
         if method not in allowed:
             # print(f"[WARN] Skipping path with disallowed method: {method} in {p}")
