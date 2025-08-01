@@ -3,7 +3,12 @@ import random
 import cv2
 import numpy as np
 from albumentations import DualTransform, ImageOnlyTransform
-from albumentations.augmentations.crops.functional import crop
+try:
+    # For newer versions of albumentations
+    from albumentations.augmentations.crops.functional import crop
+except ImportError:
+    # For older versions of albumentations (fallback)
+    from albumentations.augmentations.functional import crop
 
 
 def isotropically_resize_image(img, size, interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC):
