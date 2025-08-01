@@ -117,6 +117,7 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
             print(f"[WARN] Skipping invalid path: {p}")
             continue
         if method not in allowed:
+            print(f"[WARN] Skipping path with disallowed method: {method} in {p}")
             continue
         vids_dict[(label, method, vid)].append(p)
 
