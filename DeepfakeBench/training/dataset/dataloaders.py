@@ -12,6 +12,7 @@ from collections import defaultdict
 import albumentations as A
 from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
 
+
 class DeepfakePipeDataset(IterDataPipe):
     def __init__(self, dataset_class: DeepfakeAbstractBaseDataset):
         self.dataset = dataset_class
@@ -33,60 +34,61 @@ class DeepfakePipeDataset(IterDataPipe):
     def collate_fn(batch):
         return DeepfakeAbstractBaseDataset.collate_fn(batch)
 
+
 def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
-        """
-        Apply data augmentation to an image, landmark, and mask.
+    """
+    Apply data augmentation to an image, landmark, and mask.
 
-        Args:
-            img: An Image object containing the image to be augmented.
-            landmark: A numpy array containing the 2D facial landmarks to be augmented.
-            mask: A numpy array containing the binary mask to be augmented.
+    Args:
+        img: An Image object containing the image to be augmented.
+        landmark: A numpy array containing the 2D facial landmarks to be augmented.
+        mask: A numpy array containing the binary mask to be augmented.
 
-        Returns:
-            The augmented image, landmark, and mask.
-        """
+    Returns:
+        The augmented image, landmark, and mask.
+    """
 
-        # Set the seed for the random number generator
-        if augmentation_seed is not None:
-            random.seed(augmentation_seed)
-            np.random.seed(augmentation_seed)
-        
-        # Define augmentation pipeline (from init_data_aug_method)
-        transform = A.Compose([
-            A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-            A.HueSaturationValue(p=0.3),
-            A.ImageCompression(quality_lower=40, quality_upper=100, p=0.1),
-            A.GaussNoise(p=0.1),
-            A.MotionBlur(p=0.1),
-            A.CLAHE(p=0.1),
-            A.ChannelShuffle(p=0.1),
-            A.Cutout(p=0.1),
-            A.RandomGamma(p=0.3),
-            A.GlassBlur(p=0.3),
-        ])
+    # Set the seed for the random number generator
+    if augmentation_seed is not None:
+        random.seed(augmentation_seed)
+        np.random.seed(augmentation_seed)
 
-        # Create a dictionary of arguments
-        kwargs = {'image': img}
+    # Define augmentation pipeline (from init_data_aug_method)
+    transform = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.HueSaturationValue(p=0.3),
+        A.ImageCompression(quality_lower=40, quality_upper=100, p=0.1),
+        A.GaussNoise(p=0.1),
+        A.MotionBlur(p=0.1),
+        A.CLAHE(p=0.1),
+        A.ChannelShuffle(p=0.1),
+        A.Cutout(p=0.1),
+        A.RandomGamma(p=0.3),
+        A.GlassBlur(p=0.3),
+    ])
 
-        # Check if the landmark and mask are not None
-        if mask is not None:
-            kwargs['mask'] = mask
+    # Create a dictionary of arguments
+    kwargs = {'image': img}
 
-        # Run transform
-        transformed = transform(**kwargs)
+    # Check if the landmark and mask are not None
+    if mask is not None:
+        kwargs['mask'] = mask
 
-        # Extract results
-        augmented_img = transformed['image']
-        augmented_mask = transformed.get('mask')
-        augmented_landmark = None  # Not used here
+    # Run transform
+    transformed = transform(**kwargs)
 
-        # Reset seed (optional)
-        if augmentation_seed is not None:
-            random.seed()
-            np.random.seed()
+    # Extract results
+    augmented_img = transformed['image']
+    augmented_mask = transformed.get('mask')
+    augmented_landmark = None  # Not used here
 
-        return augmented_img, augmented_landmark, augmented_mask
+    # Reset seed (optional)
+    if augmentation_seed is not None:
+        random.seed()
+        np.random.seed()
+
+    return augmented_img, augmented_landmark, augmented_mask
 
 
 def load_video_frames_as_dataset(sample, config, mode='train'):
@@ -100,7 +102,7 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
     image_tensors = []
     landmark_tensors = []
     mask_tensors = []
-    augmentation_seed = random.randint(0, 2**32 - 1) if video_level else None
+    augmentation_seed = random.randint(0, 2 ** 32 - 1) if video_level else None
 
     files = fsspec.open_files(frame_paths, mode='rb')
     for i, f in enumerate(files):
@@ -147,56 +149,82 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
     if sample['video_level']:
         image_tensors = torch.stack(image_tensors, dim=0)
         # Stack landmark and mask tensors along a new dimension (time)
-        if not any(landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmark_tensors):
+        if not any(
+                landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmark_tensors):
             landmark_tensors = torch.stack(landmark_tensors, dim=0)
         if not any(m is None or (isinstance(m, list) and None in m) for m in mask_tensors):
             mask_tensors = torch.stack(mask_tensors, dim=0)
-    
+
     else:
         # Get the first image tensor
         image_tensors = image_tensors[0]
         # Get the first landmark and mask tensors
-        if not any(landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmark_tensors):
+        if not any(
+                landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmark_tensors):
             landmark_tensors = landmark_tensors[0]
         if not any(m is None or (isinstance(m, list) and None in m) for m in mask_tensors):
             mask_tensors = mask_tensors[0]
-
-    
 
     return image_tensors, label, landmark_tensors, mask_tensors, frame_paths
 
 
 def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     """
-    Converts a DeepfakeAbstractBaseDataset into a DataPipe that loads from GCS.
+    Convert a DeepfakeAbstractBaseDataset into an IterableWrapper-based
+    DataPipe that streams frames (and metadata) from GCS / local storage.
+
+    Parameters
+    ----------
+    dataset : DeepfakeAbstractBaseDataset
+    method  : str | None
+        • When training  -> a specific fake-generation method name
+        • When test=True -> None   (we filter by dataset_name instead)
+    test    : bool
+        If True, keep every method but filter by `dataset_name`.
+    dataset_name : str | None
+        Only used when test=True; keeps videos whose path contains
+        this dataset identifier (case-insensitive).
+
+    Returns
+    -------
+    torchdata.datapipes.iter.IterableWrapper
+        Each item is a tuple that `collate_fn` will turn into a batch dict:
+            (image_tensor, label, landmark, mask, frame_paths)
     """
     samples = []
     for i in range(len(dataset)):
-        # Loads an image from the image list of the dataset object
+        # 1) full path(s) for the current video (string OR list[str])
         frame_paths = dataset.data_dict['image'][i]
-        
-        # The returned DataPipe has only the images of the current method as its a method aware approach
+        if not isinstance(frame_paths, list):
+            frame_paths = [frame_paths]  # ← ensure list first!
+
+        # 2) FILTERS ------------------------------------------------------
+        # 2-a  training: keep only videos whose path contains /{method}/
         if method and (f"/{method}/" not in frame_paths[0]) and not test:
             continue
-        if dataset_name and dataset_name.lower() not in frame_paths.lower():
+
+        # 2-b  testing: keep only videos that match dataset_name
+        if dataset_name and dataset_name.lower() not in frame_paths[0].lower():
             continue
-        
-        if not isinstance(frame_paths, list):
-            frame_paths = [frame_paths] # One frame path inside a list
-        # A list of dictionaries of frames and their labels
+        # -----------------------------------------------------------------
+
         samples.append({
-            'frames': frame_paths,                    # One frame path inside a list
-            'label': dataset.data_dict['label'][i],   # real / fake frame?
-            'config': dataset.config,                 # Effort configuration file
-            'video_level': dataset.video_level        # If to perform the dataloading in the video level scenario
+            'frames': frame_paths,
+            'label': dataset.data_dict['label'][i],  # 0 = real, 1 = fake
+            'config': dataset.config,
+            'video_level': dataset.video_level,  # clip-vs-frame mode
         })
 
-    # Wrapps the 
-    pipe = IterableWrapper(samples)
+    # Wrap in a DataPipe
+    pipe = IterableWrapper(samples)  # ➜ yields one dict per video
     pipe = pipe.shuffle()
     pipe = pipe.sharding_filter()
-    pipe = pipe.map(lambda sample: load_video_frames_as_dataset(sample, dataset.config, dataset.mode)) # Loads the image from the GCS and performs augmentations and normalization
-    # pipe = pipe.prefetch(10)
+    pipe = pipe.map(
+        lambda sample: load_video_frames_as_dataset(
+            sample, dataset.config, dataset.mode
+        )
+    )
+    # pipe = pipe.prefetch(10)   # optional
     return pipe
 
 
@@ -205,32 +233,32 @@ def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, datalo
     videos_by_method = defaultdict(list)
     for v in dataset.video_infos:
         videos_by_method[v.method].append(v)
-    
+
     dataloaders = {}
     if not test:
         for method in videos_by_method.keys():
             # returns a data pipe that is used to load the data from the GCP
             pipe = create_base_videopipe(dataset, method, test)
-            
+
             dataloaders[method] = DataLoader(
                 pipe,
                 batch_size=dataloader_config['dataloader_params']['batch_size'],
                 num_workers=dataloader_config['dataloader_params']['num_workers'],
                 collate_fn=DeepfakePipeDataset.collate_fn,
-                prefetch_factor=1,        # ↓ RAM
-                persistent_workers=True   # keep workers hot between batches
+                prefetch_factor=1,  # ↓ RAM
+                persistent_workers=True  # keep workers hot between batches
             )
     else:
         for dataset_name in config['test_dataset']:
             # returns a data pip that used to load the data from the GCP
             pipe = create_base_videopipe(dataset, None, test, dataset_name)
-            
+
             dataloaders[dataset_name] = DataLoader(
                 pipe,
                 batch_size=dataloader_config['dataloader_params']['batch_size'],
                 num_workers=dataloader_config['dataloader_params']['num_workers'],
                 collate_fn=DeepfakePipeDataset.collate_fn,
-                prefetch_factor=1,        # ↓ RAM
-                persistent_workers=True   # keep workers hot between batches
+                prefetch_factor=1,  # ↓ RAM
+                persistent_workers=True  # keep workers hot between batches
             )
     return dataloaders
