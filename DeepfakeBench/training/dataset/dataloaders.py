@@ -243,7 +243,7 @@ def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     pipe = pipe.sharding_filter()
     pipe = (pipe
             .map(lambda s: safe_loader(s, dataset.config, dataset.mode))
-            .filterfalse(lambda x: x is None))  # ← drop the bad videos
+            .filter(lambda x: x is not None))  # filter out None samples
     return pipe
 
 
