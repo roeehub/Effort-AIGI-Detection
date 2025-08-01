@@ -244,13 +244,14 @@ def sanity_check_loaders(fake_loader_dict,
             # 3) path substring rule
             if 'path' in batch:
                 expect_sub = f"/{method_name}/"
-                for p in batch['path']:
-                    cond = (expect_fake and expect_sub not in p) or \
-                           (not expect_fake and expect_sub in p)
-                    if cond:
-                        bad_path_count += 1
-                if len(example_paths) < max_paths_to_show:
-                    example_paths.extend(batch['path'][:max_paths_to_show])
+                for p_group in batch['path']:
+                    for p in p_group:  # p is now a str
+                        cond = (expect_fake and expect_sub not in p) or \
+                               (not expect_fake and expect_sub in p)
+                        if cond:
+                            bad_path_count += 1
+                        if len(example_paths) < max_paths_to_show:
+                            example_paths.append(p)
 
             # 4) masks / landmarks just type-check
             assert isinstance(batch['mask'], (type(None), torch.Tensor))
@@ -364,7 +365,6 @@ def main():
 
     check_label_in_paths(train_videos, "train")
     check_label_in_paths(val_videos, "val")
-    breakpoint()
 
     # Create a dataset object to include all the instances of the dataset to load
     train_set = DeepfakeAbstractBaseDataset(

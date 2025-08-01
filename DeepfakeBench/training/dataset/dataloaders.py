@@ -170,61 +170,69 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
 
 def create_base_videopipe(dataset, method, test=False, dataset_name=None):
     """
-    Convert a DeepfakeAbstractBaseDataset into an IterableWrapper-based
-    DataPipe that streams frames (and metadata) from GCS / local storage.
+    Build a DataPipe that streams frames for ONE method (or dataset-name).
 
     Parameters
     ----------
     dataset : DeepfakeAbstractBaseDataset
     method  : str | None
-        • When training  -> a specific fake-generation method name
-        • When test=True -> None   (we filter by dataset_name instead)
+        • Training mode: a fake-generation method (e.g. 'fomm')
+        • Testing  mode: None   (you filter with dataset_name instead)
     test    : bool
-        If True, keep every method but filter by `dataset_name`.
+        If True, we do NOT drop real videos, because test loaders may mix
+        real & fake.  We still filter by dataset_name.
     dataset_name : str | None
-        Only used when test=True; keeps videos whose path contains
-        this dataset identifier (case-insensitive).
-
-    Returns
-    -------
-    torchdata.datapipes.iter.IterableWrapper
-        Each item is a tuple that `collate_fn` will turn into a batch dict:
-            (image_tensor, label, landmark, mask, frame_paths)
+        Only used in test mode – keeps videos whose path contains this
+        dataset identifier (case-insensitive).
     """
     samples = []
     for i in range(len(dataset)):
-        # 1) full path(s) for the current video (string OR list[str])
+        # --------------------------------------------------------------
+        # 0) Collect frame paths as a *list* (always)
+        # --------------------------------------------------------------
         frame_paths = dataset.data_dict['image'][i]
         if not isinstance(frame_paths, list):
-            frame_paths = [frame_paths]  # ← ensure list first!
+            frame_paths = [frame_paths]
 
-        # 2) FILTERS ------------------------------------------------------
-        # 2-a  training: keep only videos whose path contains /{method}/
-        if method and (f"/{method}/" not in frame_paths[0]) and not test:
-            continue
+        # meta
+        sample_label = dataset.data_dict['label'][i]  # 0/1
+        sample_method = dataset.video_infos[i].method  # textual
+        sample_vid = dataset.video_infos[i].video_id
 
-        # 2-b  testing: keep only videos that match dataset_name
+        # --------------------------------------------------------------
+        # 1) TRAIN-TIME filter: keep only *fake* videos for this method
+        # --------------------------------------------------------------
+        if method and not test:
+            # 1-a  drop any REAL (label==0) video
+            if sample_label == 0:
+                continue
+            # 1-b  drop any video whose paths don't contain "/{method}/"
+            if f"/{method}/" not in frame_paths[0]:
+                continue
+
+        # --------------------------------------------------------------
+        # 2) TEST-TIME filter: keep only the requested dataset name
+        # --------------------------------------------------------------
         if dataset_name and dataset_name.lower() not in frame_paths[0].lower():
             continue
-        # -----------------------------------------------------------------
 
+        # --------------------------------------------------------------
+        # 3) Assemble sample dict
+        # --------------------------------------------------------------
         samples.append({
             'frames': frame_paths,
-            'label': dataset.data_dict['label'][i],  # 0 = real, 1 = fake
+            'label': sample_label,  # 0 real | 1 fake
             'config': dataset.config,
-            'video_level': dataset.video_level,  # clip-vs-frame mode
+            'video_level': dataset.video_level,
         })
 
-    # Wrap in a DataPipe
-    pipe = IterableWrapper(samples)  # ➜ yields one dict per video
+    # Wrap into a DataPipe
+    pipe = IterableWrapper(samples)
     pipe = pipe.shuffle()
     pipe = pipe.sharding_filter()
     pipe = pipe.map(
-        lambda sample: load_video_frames_as_dataset(
-            sample, dataset.config, dataset.mode
-        )
+        lambda s: load_video_frames_as_dataset(s, dataset.config, dataset.mode)
     )
-    # pipe = pipe.prefetch(10)   # optional
     return pipe
 
 
