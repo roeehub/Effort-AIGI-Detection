@@ -191,72 +191,98 @@ def choose_metric(config):
     return metric_scoring
 
 
-def sanity_check_loaders(fake_loader_dict, real_loader_dict,
-                         num_batches=3, max_print_per_loader=2):
-    """
-    Quick consistency scan over a few batches of every DataLoader.
+# ================================================================
+#  Sanity-check utility for DataLoaders
+# ================================================================
 
-    • Verifies label purity (all-fake or all-real as expected)
-    • Confirms tensor shapes are consistent
-    • Checks that the frame paths contain the method name (fake loaders)
-      or *not* the method name (real loaders)
-    • Prints a small sample of paths for manual spot-checking
+
+def sanity_check_loaders(fake_loader_dict,
+                         real_loader_dict,
+                         num_batches=3,
+                         max_paths_to_show=2):
+    """
+    Scan a handful of batches from every loader and print:
+
+      • label distribution   (expect all-1 for fake loaders, all-0 for real)
+      • unique tensor shapes (image, mask, landmark)
+      • #paths whose string does *not* match the method rule
+      • example frame paths
+
+    Args
+    ----
+    fake_loader_dict : dict[str, DataLoader]
+        keys are fake method names
+    real_loader_dict : dict[str, DataLoader]
+        keys are real-source names
+    num_batches : int
+        how many batches to read per loader
+    max_paths_to_show : int
+        how many sample paths to print per loader
     """
 
     def scan(loader, expect_fake, method_name):
-        cnt = Counter()
-        bad_path = 0
+        """Return stats gathered from ≤ num_batches of `loader`."""
+        label_counter = Counter()
         img_shapes = Counter()
-        for bi, batch in enumerate(loader):
-            if bi >= num_batches:
+        bad_path_count = 0
+        example_paths = []
+
+        it = iter(loader)  # fresh iterator every call
+        for _ in range(num_batches):
+            try:
+                batch = next(it)
+            except StopIteration:
                 break
-            labels = batch['label']
+
+            # 1) labels
+            lbls = batch['label']
+            label_counter.update(lbls.tolist())
+
+            # 2) image shapes
             img_shapes.update([tuple(batch['image'].shape)])
-            cnt.update(labels.tolist())
 
-            # path string test
-            expect_sub = f"/{method_name}/"
-            for p in batch['path']:
-                if (expect_fake and expect_sub not in p) or \
-                        (not expect_fake and expect_sub in p):
-                    bad_path += 1
-            # optional masks / landmarks – just check types
-            assert isinstance(batch['mask'], (type(None), torch.Tensor)), "mask type error"
-            assert isinstance(batch['landmark'], (type(None), torch.Tensor)), "landmark type error"
+            # 3) path substring rule
+            if 'path' in batch:
+                expect_sub = f"/{method_name}/"
+                for p in batch['path']:
+                    cond = (expect_fake and expect_sub not in p) or \
+                           (not expect_fake and expect_sub in p)
+                    if cond:
+                        bad_path_count += 1
+                if len(example_paths) < max_paths_to_show:
+                    example_paths.extend(batch['path'][:max_paths_to_show])
 
-        return cnt, img_shapes, bad_path
+            # 4) masks / landmarks just type-check
+            assert isinstance(batch['mask'], (type(None), torch.Tensor))
+            assert isinstance(batch['landmark'], (type(None), torch.Tensor))
+
+        return label_counter, img_shapes, bad_path_count, example_paths[:max_paths_to_show]
 
     print("\n==================== SANITY CHECK ====================")
-    table = defaultdict(dict)
 
-    # ---- fake method loaders ----
-    for m, loader in fake_loader_dict.items():
-        cnt, shapes, bad_p = scan(loader, expect_fake=True, method_name=m)
-        table[m]['labels'] = dict(cnt)
-        table[m]['shapes'] = list(shapes.keys())
-        table[m]['bad_path'] = bad_p
+    all_keys = list(fake_loader_dict.keys()) + list(real_loader_dict.keys())
+    for method in all_keys:
+        is_fake_loader = method in fake_loader_dict
+        loader = fake_loader_dict.get(method) or real_loader_dict.get(method)
+        if loader is None:
+            print(f"[{method}]  ⚠  loader missing – skipped")
+            continue
 
-    # ---- real source loaders ----
-    for m, loader in real_loader_dict.items():
-        cnt, shapes, bad_p = scan(loader, expect_fake=False, method_name=m)
-        table[m]['labels'] = dict(cnt)
-        table[m]['shapes'] = list(shapes.keys())
-        table[m]['bad_path'] = bad_p
+        labels, shapes, bad_paths, samples = scan(
+            loader,
+            expect_fake=is_fake_loader,
+            method_name=method
+        )
 
-    # ---- pretty print ----
-    for m, info in table.items():
-        print(f"\n[{m}]")
-        print("  label counts :", info['labels'])
-        print("  image shapes :", info['shapes'])
-        if info['bad_path']:
-            print(f"  ⚠  {info['bad_path']} paths failed the substring test")
-        # show up to max_print_per_loader sample paths
-        sample_loader = fake_loader_dict.get(m) or real_loader_dict[m]
-        sample_paths = next(iter(sample_loader))['path'][:max_print_per_loader]
-        for p in sample_paths:
-            print("  sample path  :", p)
+        print(f"\n[{method}]   ({'fake' if is_fake_loader else 'real'})")
+        print("  label counts:", dict(labels) or "(loader empty)")
+        print("  image shapes:", list(shapes.keys()) or "(none)")
+        if bad_paths:
+            print(f"  ⚠  {bad_paths} paths failed the substring test")
+        for sp in samples:
+            print("  sample path :", sp)
 
-    print("\n============ END SANITY CHECK (review above) =========\n")
+    print("\n============ END SANITY CHECK – review above =========\n")
 
 
 def main():
@@ -344,11 +370,10 @@ def main():
             real_source_loaders[real_source] = method_loaders[real_source]
             del method_loaders[real_source]
 
-    breakpoint()
     # after you created method_loaders and real_source_loaders
     sanity_check_loaders(method_loaders, real_source_loaders,
                          num_batches=3,  # scan first 3 batches per loader
-                         max_print_per_loader=2)  # print 2 example paths
+                         max_paths_to_show=2)  # print 2 example paths
 
     breakpoint()
 
