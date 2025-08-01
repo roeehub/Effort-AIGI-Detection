@@ -264,12 +264,20 @@ def main():
         )
     
     # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
-    breakpoint()
     method_loaders = create_method_aware_dataloaders(train_set, data_config)
     test_method_loaders = create_method_aware_dataloaders(test_set, data_config, config=config, test=True)
+
+    # we need to separate the real sources from the fake methods
+    real_sources = data_config['methods']['use_real_sources']
+    real_source_loaders = {}
+    for real_source in real_sources:
+        if real_source in method_loaders:
+            real_source_loaders[real_source] = method_loaders[real_source]
+            del method_loaders[real_source]
+
     breakpoint()
 
-    # Count videos per method
+    # Count videos per fake method
     video_counts = defaultdict(int)
     for v in train_videos:  # train_videos is List[VideoInfo]
         video_counts[v.method] += 1
