@@ -93,71 +93,73 @@ def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
 
 def load_video_frames_as_dataset(sample, config, mode='train'):
     """
-    Robust frame loader with retry logic.
-
-    • Tries to collect `config['frame_num']` good frames.
-    • Each corrupt frame triggers up to 3 random retries.
-    • If still not enough good frames → return None (caller drops video).
+    • Needs `target_frames` (= frame_num) good images.
+    • Each corrupt image triggers up to 3 retries with alternate frames.
+    • If still < target_frames → return None  (caller drops video).
     """
-    frame_paths_all = list(sample['frames'])  # 32 paths
-    random.shuffle(frame_paths_all)  # random order
-    target_frames = config.get('frame_num', 8)  # default 8
+
+    # ---- 1. how many frames do we need? -----------------------------
+    fn_cfg = config.get("frame_num", 8)
+    if isinstance(fn_cfg, dict):
+        target_frames = fn_cfg.get("train" if mode == "train" else "test", 8)
+    else:
+        target_frames = int(fn_cfg)
+
+    frame_paths_all = list(sample["frames"])  # 32 paths per video
+    random.shuffle(frame_paths_all)
     max_retries = 3
 
     good_imgs, good_masks, good_lms, good_paths = [], [], [], []
 
     for path in frame_paths_all:
-        # ---------------- attempt to open the image ----------------
-        success = False
-        for attempt in range(max_retries):
+        # -------- 2. try to open / retry up to 3 alternates ----------
+        success, orig_path = False, path
+        for _ in range(max_retries):
             try:
-                with fsspec.open(path, 'rb') as stream:
-                    img = Image.open(stream).convert('RGB')
+                with fsspec.open(path, "rb") as stream:
+                    img = Image.open(stream).convert("RGB")
                 success = True
                 break
             except Exception:
-                # pick another unused frame path as a retry
-                print(f"[WARN] Failed to load frame from {path} (attempt {attempt + 1}/{max_retries})")
-                alt_candidates = [p for p in frame_paths_all
-                                  if p not in good_paths and p != path]
-                if alt_candidates:
-                    path = random.choice(alt_candidates)
-                else:
-                    break  # nowhere else to look
-        if not success:
-            continue  # skip this slot
+                print(f"[WARN] Failed to open image: {path} - trying alternate paths")
+                alt = [p for p in frame_paths_all
+                       if p not in good_paths and p != orig_path]
+                if not alt:
+                    break
+                path = random.choice(alt)
 
-        # -------------- pre-process & optional augmentation --------
-        img = img.resize((config['resolution'], config['resolution']),
-                         Image.BICUBIC)
+        if not success:
+            print(f"[ERROR] Could not open image after retries: {orig_path}")
+            continue
+
+        # -------- 3. preprocessing & augmentation -------------------
+        img = img.resize((config["resolution"], config["resolution"]), Image.BICUBIC)
         img_np = np.array(img)
 
-        # load optional mask / landmarks exactly like before
-        mask_path = path.replace('frames', 'masks')
-        landmark_path = path.replace('frames', 'landmarks').replace('.png',
-                                                                    '.npy')
+        mask_path = path.replace("frames", "masks")
+        landmark_path = path.replace("frames", "landmarks").replace(".png", ".npy")
 
         try:
-            with fsspec.open(mask_path, 'rb') as mf:
-                mask = Image.open(mf).convert('L').resize(
-                    (config['resolution'], config['resolution'])
+            with fsspec.open(mask_path, "rb") as mf:
+                mask_img = Image.open(mf).convert("L").resize(
+                    (config["resolution"], config["resolution"])
                 )
-                mask = np.expand_dims(np.array(mask) / 255.0, axis=2)
+                mask = np.expand_dims(np.array(mask_img) / 255.0, axis=2)
         except Exception:
-            mask = np.zeros((config['resolution'], config['resolution'], 1))
+            mask = np.zeros((config["resolution"], config["resolution"], 1))
 
         try:
-            with fsspec.open(landmark_path, 'rb') as lf:
+            with fsspec.open(landmark_path, "rb") as lf:
                 lms = np.load(lf)
-                if config['resolution'] != 256:
-                    lms = lms * (config['resolution'] / 256)
+                if config["resolution"] != 256:
+                    lms = lms * (config["resolution"] / 256)
         except Exception:
             lms = np.zeros((81, 2))
 
-        if mode == 'train' and config['use_data_augmentation']:
+        if mode == "train" and config["use_data_augmentation"]:
             img_np, _, mask = data_aug(img_np, lms, mask)
 
-        img_tensor = T.Normalize(mean=config['mean'], std=config['std'])(
+        img_tensor = T.Normalize(mean=config["mean"], std=config["std"])(
             T.ToTensor()(img_np)
         )
 
@@ -167,21 +169,22 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
         good_paths.append(path)
 
         if len(good_imgs) == target_frames:
-            break  # we have enough
+            break
 
-    # ------------ final check: do we have enough frames? -----------
+    # -------- 4. drop video if not enough good frames ---------------
     if len(good_imgs) < target_frames:
-        return None  # caller will drop this video
+        return None
 
-    # --------- stack tensors the same way as before ---------------
-    if sample['video_level']:
+    video_level = sample["video_level"]
+
+    if video_level:
         img_tensor = torch.stack(good_imgs, dim=0)
-        lm_tensor = torch.stack(good_lms, dim=0) if good_lms[0] is not None else None
-        mask_tensor = torch.stack(good_masks, dim=0) if good_masks[0] is not None else None
+        lm_tensor = torch.stack(good_lms, dim=0)
+        mask_tensor = torch.stack(good_masks, dim=0)
     else:
         img_tensor, lm_tensor, mask_tensor = good_imgs[0], good_lms[0], good_masks[0]
 
-    return img_tensor, sample['label'], lm_tensor, mask_tensor, good_paths
+    return (img_tensor, sample["label"], lm_tensor, mask_tensor, good_paths)
 
 
 def create_base_videopipe(dataset, method, test=False, dataset_name=None):
