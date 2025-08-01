@@ -87,34 +87,21 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     manifest_path = Path(__file__).with_name("frame_manifest.json")
 
     # ------------------------------------------------------------------ #
-    # 1 Load or build manifest of frame paths                            #
+    # 1) Load cached manifest if it exists, else list & cache it        #
     # ------------------------------------------------------------------ #
-    ###########################################################################
-    # if manifest_path.exists():
-    #     frame_paths = json.loads(manifest_path.read_text())
-    #     print(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
-    # else:
-    ###########################################################################
-    print("Listing frame objects on GCS (first run – may take a minute)…")
-    fs = url_to_fs(BUCKET)[0]
-    #################### ADAM CHANGED ################################
-    frame_paths = [f"gs://{p}" for p in fs.glob(f"{BUCKET}/**")
-                    if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
-    # fs.glob returns an iterator, which is memory-efficient
-    # MANIFEST_FILENAME = "/home/roee/repos/Effort-AIGI-Detection/partial_manifest.json"
-    # manifest_path = Path(MANIFEST_FILENAME)
-
-    # if not manifest_path.exists():
-    #     print(f"Error: Manifest file not found at '{manifest_path}'")
-    #     print("Please run 'create_partial_manifest.py' first to generate the file list.")
-    #     return None
-
-    # print(f"Loading cached file paths from '{manifest_path}'...")
-    # with open(manifest_path, 'r') as f:
-    #     frame_paths = json.load(f)
-    #################### ADAM CHANGED ################################
-    print(f"Found {len(frame_paths):,} frame files – caching manifest")
-    manifest_path.write_text(json.dumps(frame_paths))
+    if manifest_path.exists():
+        frame_paths = json.loads(manifest_path.read_text())
+        print(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
+    else:
+        print("Listing frame objects on GCS (first run – may take a minute)…")
+        fs = url_to_fs(BUCKET)[0]
+        frame_paths = [
+            f"gs://{p}"
+            for p in fs.glob(f"{BUCKET}/**")
+            if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}
+        ]
+        print(f"Found {len(frame_paths):,} frame files – caching manifest")
+        manifest_path.write_text(json.dumps(frame_paths))
 
     
     # ------------------------------------------------------------------ #

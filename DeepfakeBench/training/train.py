@@ -277,6 +277,11 @@ def main():
 
     breakpoint()
 
+
+    # num_fake_videos = sum(len(dl.dataset) for dl in method_loaders.values())
+    # num_real_videos = sum(len(dl.dataset) for dl in real_source_loaders.values())
+
+
     # Count videos per fake method
     video_counts = defaultdict(int)
     for v in train_videos:  # train_videos is List[VideoInfo]
