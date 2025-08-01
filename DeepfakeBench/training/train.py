@@ -286,6 +286,23 @@ def sanity_check_loaders(fake_loader_dict,
     print("\n============ END SANITY CHECK – review above =========\n")
 
 
+def quick_single_process_check(loader):
+    print("\n--- single-process probe ---")
+    sp_loader = torch.utils.data.DataLoader(
+        loader.dataset,  # same dataset/DataPipe
+        batch_size=loader.batch_size,
+        num_workers=0,  # ← no subprocesses
+        collate_fn=loader.collate_fn
+    )
+    try:
+        batch = next(iter(sp_loader))
+        print("✅  got batch:", {k: v.shape if torch.is_tensor(v) else type(v)
+                                for k, v in batch.items()})
+    except Exception as e:
+        print("❌  raised:", repr(e))
+        raise
+
+
 def check_label_in_paths(video_infos, split_name):
     bad_videos = []
     for v in video_infos:
@@ -390,6 +407,9 @@ def main():
         if real_source in method_loaders:
             real_source_loaders[real_source] = method_loaders[real_source]
             del method_loaders[real_source]
+
+    quick_single_process_check(method_loaders['sadtalker'])  # or any loader
+    breakpoint()
 
     # after you created method_loaders and real_source_loaders
     sanity_check_loaders(method_loaders, real_source_loaders,
