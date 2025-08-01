@@ -408,7 +408,7 @@ def main():
             real_source_loaders[real_source] = method_loaders[real_source]
             del method_loaders[real_source]
 
-    quick_single_process_check(method_loaders['sadtalker'])  # or any loader
+    quick_single_process_check(method_loaders['fomm'])  # or any loader
     breakpoint()
 
     # after you created method_loaders and real_source_loaders
