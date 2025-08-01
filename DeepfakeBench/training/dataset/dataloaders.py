@@ -93,79 +93,95 @@ def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
 
 def load_video_frames_as_dataset(sample, config, mode='train'):
     """
-    Use `open_files` to fetch frames from GCS and build full image/landmark/mask logic like in __getitem__.
+    Robust frame loader with retry logic.
+
+    • Tries to collect `config['frame_num']` good frames.
+    • Each corrupt frame triggers up to 3 random retries.
+    • If still not enough good frames → return None (caller drops video).
     """
-    frame_paths, label = sample['frames'], sample['label']
-    video_level = sample['video_level']
-    config = sample['config']
+    frame_paths_all = list(sample['frames'])  # 32 paths
+    random.shuffle(frame_paths_all)  # random order
+    target_frames = config.get('frame_num', 8)  # default 8
+    max_retries = 3
 
-    image_tensors = []
-    landmark_tensors = []
-    mask_tensors = []
-    augmentation_seed = random.randint(0, 2 ** 32 - 1) if video_level else None
+    good_imgs, good_masks, good_lms, good_paths = [], [], [], []
 
-    files = fsspec.open_files(frame_paths, mode='rb')
-    for i, f in enumerate(files):
-        with f as stream:
-            image = Image.open(stream).convert('RGB')
-        image = image.resize((config['resolution'], config['resolution']), Image.BICUBIC)
-        image_np = np.array(image)
+    for path in frame_paths_all:
+        # ---------------- attempt to open the image ----------------
+        success = False
+        for attempt in range(max_retries):
+            try:
+                with fsspec.open(path, 'rb') as stream:
+                    img = Image.open(stream).convert('RGB')
+                success = True
+                break
+            except Exception:
+                # pick another unused frame path as a retry
+                print(f"[WARN] Failed to load frame from {path} (attempt {attempt + 1}/{max_retries})")
+                alt_candidates = [p for p in frame_paths_all
+                                  if p not in good_paths and p != path]
+                if alt_candidates:
+                    path = random.choice(alt_candidates)
+                else:
+                    break  # nowhere else to look
+        if not success:
+            continue  # skip this slot
 
-        # Load landmarks and masks (assuming GCS or local paths)
-        mask_path = frame_paths[i].replace('frames', 'masks')
-        landmark_path = frame_paths[i].replace('frames', 'landmarks').replace('.png', '.npy')
+        # -------------- pre-process & optional augmentation --------
+        img = img.resize((config['resolution'], config['resolution']),
+                         Image.BICUBIC)
+        img_np = np.array(img)
+
+        # load optional mask / landmarks exactly like before
+        mask_path = path.replace('frames', 'masks')
+        landmark_path = path.replace('frames', 'landmarks').replace('.png',
+                                                                    '.npy')
 
         try:
             with fsspec.open(mask_path, 'rb') as mf:
-                mask = Image.open(mf).convert('L').resize((config['resolution'], config['resolution']))
+                mask = Image.open(mf).convert('L').resize(
+                    (config['resolution'], config['resolution'])
+                )
                 mask = np.expand_dims(np.array(mask) / 255.0, axis=2)
         except Exception:
             mask = np.zeros((config['resolution'], config['resolution'], 1))
 
         try:
             with fsspec.open(landmark_path, 'rb') as lf:
-                landmarks = np.load(lf)
+                lms = np.load(lf)
                 if config['resolution'] != 256:
-                    landmarks = landmarks * (config['resolution'] / 256)
+                    lms = lms * (config['resolution'] / 256)
         except Exception:
-            landmarks = np.zeros((81, 2))
+            lms = np.zeros((81, 2))
 
         if mode == 'train' and config['use_data_augmentation']:
-            # Implement basic augmentation or skip to keep logic close
-            image_aug, mask_aug, landmarks_aug = data_aug(image_np, landmarks, mask, augmentation_seed)
-        else:
-            image_aug = deepcopy(image_np)
-            mask_aug = deepcopy(mask)
-            landmarks_aug = deepcopy(landmarks)
+            img_np, _, mask = data_aug(img_np, lms, mask)
 
-        to_tensor = T.ToTensor()
-        normalize = T.Normalize(mean=config['mean'], std=config['std'])
-        image_tensor = normalize(to_tensor(image_aug))
+        img_tensor = T.Normalize(mean=config['mean'], std=config['std'])(
+            T.ToTensor()(img_np)
+        )
 
-        image_tensors.append(image_tensor)
-        landmark_tensors.append(landmarks_aug)
-        mask_tensors.append(mask_aug)
+        good_imgs.append(img_tensor)
+        good_masks.append(mask)
+        good_lms.append(lms)
+        good_paths.append(path)
 
+        if len(good_imgs) == target_frames:
+            break  # we have enough
+
+    # ------------ final check: do we have enough frames? -----------
+    if len(good_imgs) < target_frames:
+        return None  # caller will drop this video
+
+    # --------- stack tensors the same way as before ---------------
     if sample['video_level']:
-        image_tensors = torch.stack(image_tensors, dim=0)
-        # Stack landmark and mask tensors along a new dimension (time)
-        if not any(
-                landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmark_tensors):
-            landmark_tensors = torch.stack(landmark_tensors, dim=0)
-        if not any(m is None or (isinstance(m, list) and None in m) for m in mask_tensors):
-            mask_tensors = torch.stack(mask_tensors, dim=0)
-
+        img_tensor = torch.stack(good_imgs, dim=0)
+        lm_tensor = torch.stack(good_lms, dim=0) if good_lms[0] is not None else None
+        mask_tensor = torch.stack(good_masks, dim=0) if good_masks[0] is not None else None
     else:
-        # Get the first image tensor
-        image_tensors = image_tensors[0]
-        # Get the first landmark and mask tensors
-        if not any(
-                landmark is None or (isinstance(landmark, list) and None in landmark) for landmark in landmark_tensors):
-            landmark_tensors = landmark_tensors[0]
-        if not any(m is None or (isinstance(m, list) and None in m) for m in mask_tensors):
-            mask_tensors = mask_tensors[0]
+        img_tensor, lm_tensor, mask_tensor = good_imgs[0], good_lms[0], good_masks[0]
 
-    return image_tensors, label, landmark_tensors, mask_tensors, frame_paths
+    return img_tensor, sample['label'], lm_tensor, mask_tensor, good_paths
 
 
 def create_base_videopipe(dataset, method, test=False, dataset_name=None):
@@ -213,7 +229,7 @@ def create_base_videopipe(dataset, method, test=False, dataset_name=None):
         lambda s: load_video_frames_as_dataset(
             s, dataset.config, dataset.mode
         )
-    )
+    ).filter(lambda x: x is not None)
     return pipe
 
 
