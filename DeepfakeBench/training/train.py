@@ -16,6 +16,8 @@ import numpy as np
 from datetime import timedelta
 from copy import deepcopy
 from PIL import Image as pil_image
+import re
+from collections import Counter, defaultdict
 import math
 from collections import defaultdict
 
@@ -40,7 +42,6 @@ from PIL.ImageFilter import RankFilter
 from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
 from prepare_splits import prepare_video_splits
 from dataset.dataloaders import create_method_aware_dataloaders
-
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
@@ -90,7 +91,7 @@ def prepare_training_data(config, train_videos):
                 shuffle=True,
                 num_workers=int(config['workers']),
                 collate_fn=train_set.collate_fn,
-                )
+            )
     return train_data_loader
 
 
@@ -101,9 +102,9 @@ def prepare_testing_data(config, val_videos):
         config['test_dataset'] = test_name  # specify the current test dataset
 
         test_set = DeepfakeAbstractBaseDataset(
-                config=config,
-                mode='test',
-                VideoInfo=val_videos,
+            config=config,
+            mode='test',
+            VideoInfo=val_videos,
         )
 
         test_data_loader = \
@@ -113,7 +114,7 @@ def prepare_testing_data(config, val_videos):
                 shuffle=False,
                 num_workers=int(config['workers']),
                 collate_fn=test_set.collate_fn,
-                drop_last = (test_name=='DeepFakeDetection'),
+                drop_last=(test_name == 'DeepFakeDetection'),
             )
 
         return test_data_loader
@@ -177,7 +178,7 @@ def choose_scheduler(config, optimizer):
         scheduler = LinearDecayLR(
             optimizer,
             config['nEpochs'],
-            int(config['nEpochs']/4),
+            int(config['nEpochs'] / 4),
         )
     else:
         raise NotImplementedError('Scheduler {} is not implemented'.format(config['lr_scheduler']))
@@ -190,20 +191,88 @@ def choose_metric(config):
     return metric_scoring
 
 
+def sanity_check_loaders(fake_loader_dict, real_loader_dict,
+                         num_batches=3, max_print_per_loader=2):
+    """
+    Quick consistency scan over a few batches of every DataLoader.
+
+    • Verifies label purity (all-fake or all-real as expected)
+    • Confirms tensor shapes are consistent
+    • Checks that the frame paths contain the method name (fake loaders)
+      or *not* the method name (real loaders)
+    • Prints a small sample of paths for manual spot-checking
+    """
+
+    def scan(loader, expect_fake, method_name):
+        cnt = Counter()
+        bad_path = 0
+        img_shapes = Counter()
+        for bi, batch in enumerate(loader):
+            if bi >= num_batches:
+                break
+            labels = batch['label']
+            img_shapes.update([tuple(batch['image'].shape)])
+            cnt.update(labels.tolist())
+
+            # path string test
+            expect_sub = f"/{method_name}/"
+            for p in batch['path']:
+                if (expect_fake and expect_sub not in p) or \
+                        (not expect_fake and expect_sub in p):
+                    bad_path += 1
+            # optional masks / landmarks – just check types
+            assert isinstance(batch['mask'], (type(None), torch.Tensor)), "mask type error"
+            assert isinstance(batch['landmark'], (type(None), torch.Tensor)), "landmark type error"
+
+        return cnt, img_shapes, bad_path
+
+    print("\n==================== SANITY CHECK ====================")
+    table = defaultdict(dict)
+
+    # ---- fake method loaders ----
+    for m, loader in fake_loader_dict.items():
+        cnt, shapes, bad_p = scan(loader, expect_fake=True, method_name=m)
+        table[m]['labels'] = dict(cnt)
+        table[m]['shapes'] = list(shapes.keys())
+        table[m]['bad_path'] = bad_p
+
+    # ---- real source loaders ----
+    for m, loader in real_loader_dict.items():
+        cnt, shapes, bad_p = scan(loader, expect_fake=False, method_name=m)
+        table[m]['labels'] = dict(cnt)
+        table[m]['shapes'] = list(shapes.keys())
+        table[m]['bad_path'] = bad_p
+
+    # ---- pretty print ----
+    for m, info in table.items():
+        print(f"\n[{m}]")
+        print("  label counts :", info['labels'])
+        print("  image shapes :", info['shapes'])
+        if info['bad_path']:
+            print(f"  ⚠  {info['bad_path']} paths failed the substring test")
+        # show up to max_print_per_loader sample paths
+        sample_loader = fake_loader_dict.get(m) or real_loader_dict[m]
+        sample_paths = next(iter(sample_loader))['path'][:max_print_per_loader]
+        for p in sample_paths:
+            print("  sample path  :", p)
+
+    print("\n============ END SANITY CHECK (review above) =========\n")
+
+
 def main():
-    print("We are in Before:",os.getcwd())
+    print("We are in Before:", os.getcwd())
     os.chdir('../')
-    print("We are in:",os.getcwd())
+    print("We are in:", os.getcwd())
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
     with open('./training/config/train_config.yaml', 'r') as f:
         config2 = yaml.safe_load(f)
     config.update(config2)
-    config['local_rank']=args.local_rank
+    config['local_rank'] = args.local_rank
     if config['dry_run']:
         config['nEpochs'] = 0
-        config['save_feat']=False
+        config['save_feat'] = False
     # If arguments are provided, they will overwrite the yaml settings
     if args.train_dataset:
         config['train_dataset'] = args.train_dataset
@@ -215,20 +284,20 @@ def main():
         config['dataset_json_folder'] = 'preprocessing/dataset_json_v3'
     # create logger
     logger_path = os.path.join(
-                    config['log_dir'],
-                    config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-                )
+        config['log_dir'],
+        config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    )
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info('Save log to {}'.format(logger_path))
-    config['ddp']= args.ddp
+    config['ddp'] = args.ddp
     # print configuration
     logger.info("--------------- Configuration ---------------")
     params_string = "Parameters: \n"
     for key, value in config.items():
         params_string += "{}: {}".format(key, value) + "\n"
     logger.info(params_string)
-    
+
     config_path = "./training/config/dataloader_config.yml"
     with open(config_path, 'r') as f:
         data_config = yaml.safe_load(f)
@@ -249,20 +318,20 @@ def main():
     # Split the dataset
     # Load train/val splits using prepare_video_splits
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
-    
+
     # Create a dataset object to include all the instances of the dataset to load
     train_set = DeepfakeAbstractBaseDataset(
         config=config,
         mode='train',
         VideoInfo=train_videos,
     )
-    
+
     test_set = DeepfakeAbstractBaseDataset(
-                config=config,
-                mode='test',
-                VideoInfo=val_videos,
-        )
-    
+        config=config,
+        mode='test',
+        VideoInfo=val_videos,
+    )
+
     # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
     method_loaders = create_method_aware_dataloaders(train_set, data_config)
     test_method_loaders = create_method_aware_dataloaders(test_set, data_config, config=config, test=True)
@@ -276,11 +345,15 @@ def main():
             del method_loaders[real_source]
 
     breakpoint()
+    # after you created method_loaders and real_source_loaders
+    sanity_check_loaders(method_loaders, real_source_loaders,
+                         num_batches=3,  # scan first 3 batches per loader
+                         max_print_per_loader=2)  # print 2 example paths
 
+    breakpoint()
 
     # num_fake_videos = sum(len(dl.dataset) for dl in method_loaders.values())
     # num_real_videos = sum(len(dl.dataset) for dl in real_source_loaders.values())
-
 
     # Count videos per fake method
     video_counts = defaultdict(int)
@@ -297,27 +370,23 @@ def main():
     epoch_len = math.ceil(total_videos / batch_size)
 
     print(f"Total videos: {total_videos}, batch size: {batch_size}, epoch_len: {epoch_len}")
-    
+
     # Training Loop for Method-Aware
     # to cycle through methods:
     method_names = list(method_loaders.keys())
     random.shuffle(method_names)
     print(f"Training on methods in this order: {method_names[:5]}...")
-    
-    
+
     # For a balanced approach, we create a weighted sampler over `method_names`
     method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
     total_videos = sum(method_sizes.values())
     weights = [method_sizes[m] / total_videos for m in method_names]
 
-    
     print("\n--- Example: Method-Aware BALANCED Training Loop ---")
     # In each step, you'd pick a method based on weights and get a batch from it
     # This requires creating iterators for each dataloader.
     # method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
 
-
-    
     # prepare the testing data loader
     test_data_loaders = prepare_testing_data(config, val_videos)
 
@@ -333,32 +402,32 @@ def main():
 
     # prepare the metric
     metric_scoring = choose_metric(config)
-    
+
     # prepare the trainer
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
-    
-    
+
     # Define the path to your pretrained checkpoint
     checkpoint_path = './training/weights/effort_clip_L14_trainOn_FaceForensic.pth'
     # Check if a path is provided and then load the checkpoint
     if checkpoint_path:
         trainer.load_ckpt(checkpoint_path)
-   
+
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
         trainer.model.epoch = epoch
         best_metric = trainer.train_epoch(
-                    method_names=method_names,            # A list of all the methods
-                    weights=weights,
-                    epoch=epoch,                          # A dictionary of methods as keys and dataloaders iterators as values
-                    dataloader_dict=method_loaders,       # A dictionary of methods as keys and dataloaders as values
-                    epoch_len=epoch_len,                 # The number of steps in an epoch
-                    train_set=train_set,                  # The class dataset of test
-                    test_set=test_set,                    # The class dataset of test
-                    test_data_loaders=test_method_loaders,# Usual dataloader for the test
-                )
+            method_names=method_names,  # A list of all the methods
+            weights=weights,
+            epoch=epoch,  # A dictionary of methods as keys and dataloaders iterators as values
+            dataloader_dict=method_loaders,  # A dictionary of methods as keys and dataloaders as values
+            epoch_len=epoch_len,  # The number of steps in an epoch
+            train_set=train_set,  # The class dataset of test
+            test_set=test_set,  # The class dataset of test
+            test_data_loaders=test_method_loaders,  # Usual dataloader for the test
+        )
         if best_metric is not None:
-            logger.info(f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")
+            logger.info(
+                f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")
     logger.info("Stop Training on best Testing metric {}".format(parse_metric_for_print(best_metric)))
     # update
     if 'svdd' in config['model_name']:
@@ -369,7 +438,6 @@ def main():
     # close the tensorboard writers
     for writer in trainer.writers.values():
         writer.close()
-
 
 
 if __name__ == '__main__':

@@ -163,7 +163,7 @@ def load_video_frames_as_dataset(sample, config, mode='train'):
 
     
 
-    return image_tensors, label, landmark_tensors, mask_tensors
+    return image_tensors, label, landmark_tensors, mask_tensors, frame_paths
 
 
 def create_base_videopipe(dataset, method, test=False, dataset_name=None):
@@ -176,7 +176,7 @@ def create_base_videopipe(dataset, method, test=False, dataset_name=None):
         frame_paths = dataset.data_dict['image'][i]
         
         # The returned DataPipe has only the images of the current method as its a method aware approach
-        if method and method not in frame_paths and not test:
+        if method and (f"/{method}/" not in frame_paths[0]) and not test:
             continue
         if dataset_name and dataset_name.lower() not in frame_paths.lower():
             continue

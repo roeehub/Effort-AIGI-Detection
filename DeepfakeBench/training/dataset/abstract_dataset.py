@@ -512,7 +512,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             and the mask tensor.
         """
         # Separate the image, label, landmark, and mask tensors
-        images, labels, landmarks, masks = zip(*batch)
+        images, labels, landmarks, masks, paths = zip(*batch)
 
         # Stack the image, label, landmark, and mask tensors
         images = torch.stack(images, dim=0)
@@ -530,11 +530,11 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             masks = None
 
         # Create a dictionary of the tensors
-        data_dict = {}
-        data_dict['image'] = images
-        data_dict['label'] = labels
-        data_dict['landmark'] = landmarks
-        data_dict['mask'] = masks
+        data_dict = {'image': images,
+                     'label': labels,
+                     'landmark': landmarks,
+                     'mask': masks,
+                     'path': list(paths)}
         return data_dict
 
     def __len__(self):
