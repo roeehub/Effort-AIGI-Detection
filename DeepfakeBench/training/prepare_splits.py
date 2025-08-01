@@ -112,11 +112,15 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         parts = Path(p).parts
         try:
             label, method, vid = parts[-4], parts[-3], parts[-2]
-        except IndexError:
+            assert label in {"real", "fake"}
+        except (IndexError, AssertionError):
+            print(f"[WARN] Skipping invalid path: {p}")
             continue
         if method not in allowed:
             continue
         vids_dict[(label, method, vid)].append(p)
+
+    breakpoint()
 
     videos: List[VideoInfo] = []
     warned = set()
