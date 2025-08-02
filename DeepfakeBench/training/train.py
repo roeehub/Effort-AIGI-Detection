@@ -268,8 +268,10 @@ def main():
     optimizer = choose_optimizer(model, config)
     scheduler = choose_scheduler(config, optimizer)
     metric_scoring = choose_metric(config)
-    # NEW: Pass wandb_run to the trainer
-    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, wandb_run=wandb_run)
+    trainer = Trainer(
+        config, model, optimizer, scheduler, logger, metric_scoring,
+        wandb_run=wandb_run, val_videos=val_videos
+    )
 
     # --- Training Loop Setup ---
     real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
