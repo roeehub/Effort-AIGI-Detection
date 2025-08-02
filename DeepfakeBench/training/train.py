@@ -210,13 +210,15 @@ def main():
     with open("./training/config/dataloader_config.yml", 'r') as f:
         data_config = yaml.safe_load(f)
 
+    config.update(data_config) # Merge data_config into config
+
     # --- NEW: W&B Initialization ---
     # W&B will automatically read entity/project from environment variables
     # (WANDB_ENTITY, WANDB_PROJECT) or your local wandb configuration.
     run_name = f"{config['model_name']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
     wandb_run = wandb.init(
         name=run_name,
-        config={**config, **data_config},  # Log all configs
+        config=config,
         # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
         # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
     )
