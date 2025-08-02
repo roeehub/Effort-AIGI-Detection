@@ -78,121 +78,118 @@ def choose_metric(config):
     return metric_scoring
 
 
-# in train.py
-
 def comprehensive_sampler_check(
         real_loaders,
         fake_loaders,
         real_method_names,
-        fake_method_names,
-        real_weights,
-        fake_weights,
         full_batch_size,
         train_videos
 ):
     """
-    Simulates data fetching to test performance, correctness, and data integrity.
-    Provides a detailed report on which methods are successfully providing data
-    and which are failing due to data corruption.
+    Performs a deterministic, one-by-one check of each fake method.
+    For each fake method, it attempts to load one batch and pairs it with a
+    random real source to verify data integrity.
     """
 
     def _get_next_batch(method, dataloader_dict, iter_dict):
-        it = iter_dict.get(method)
-        if it is None:
-            it = iter_dict[method] = iter(dataloader_dict[method])
+        """Gets the next batch, creating an iterator if one doesn't exist."""
+        if method not in iter_dict:
+            iter_dict[method] = iter(dataloader_dict[method])
         try:
-            return next(it)
+            return next(iter_dict[method])
         except StopIteration:
-            # Dataloader is exhausted. For this check, we don't restart it
-            # to see if it runs out of data prematurely.
-            return None  # Signal exhaustion
+            # Dataloader is exhausted.
+            return None
 
     print("\n\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
     if not fake_loaders or not real_loaders:
         print("❌ No fake or real loaders provided. Aborting check.")
         return
 
-    # Run for more iterations to ensure even low-weight methods are likely sampled
-    num_iterations = max(200, len(fake_loaders) * 10)
+    fake_method_names = sorted(list(fake_loaders.keys()))
+    num_fake_methods = len(fake_method_names)
     half_batch_size = full_batch_size // 2
-    print(f"Simulating {num_iterations} batch creation steps...")
-    print(f"Expecting combined batches of size {full_batch_size} ({half_batch_size} real + {half_batch_size} fake).\n")
+    print(f"Deterministically checking {num_fake_methods} fake methods...")
+    print(f"Expecting half-batches of size {half_batch_size}.\n")
 
-    # Mimic Trainer state
-    real_method_iters = {name: iter(loader) for name, loader in real_loaders.items()}
-    fake_method_iters = {name: iter(loader) for name, loader in fake_loaders.items()}
+    # Use persistent iterators to not re-test the same initial data
+    real_method_iters = {}
+    fake_method_iters = {}
 
-    # --- Enhanced Tracking ---
-    successful_batches = defaultdict(int)
-    empty_batches = defaultdict(int)
+    # --- Tracking ---
+    # We use a simple dictionary to store the status of each fake method
+    fake_method_status = {}
+    real_source_usage = defaultdict(int)
     batch_times = []
-    video_counts = Counter(v.method for v in train_videos)
-    all_methods_in_check = set(real_loaders.keys()) | set(fake_loaders.keys())
 
-    pbar = tqdm(range(num_iterations), desc="Testing Sampler")
-    for i in pbar:
+    pbar = tqdm(fake_method_names, desc="Checking Methods")
+    for chosen_fake_method in pbar:
         iteration_start_time = time.time()
+        pbar.set_postfix_str(f"Testing: {chosen_fake_method}")
 
-        # 1. Sample and fetch a FAKE half-batch
-        chosen_fake_method = random.choices(fake_method_names, weights=fake_weights, k=1)[0]
+        # 1. Attempt to fetch a FAKE half-batch for the current method
         fake_data_dict = _get_next_batch(chosen_fake_method, fake_loaders, fake_method_iters)
 
         if not fake_data_dict or fake_data_dict['image'].shape[0] == 0:
-            empty_batches[chosen_fake_method] += 1
-            fake_method_iters[chosen_fake_method] = iter(fake_loaders[chosen_fake_method])  # Restart for next attempt
+            fake_method_status[chosen_fake_method] = "❌ EMPTY (Corrupt data or paths)"
+            continue
+        if fake_data_dict['image'].shape[0] < half_batch_size:
+            fake_method_status[chosen_fake_method] = f"⚠️ PARTIAL (Not enough videos for a full batch)"
             continue
 
-        # 2. Sample and fetch a REAL half-batch
-        chosen_real_method = random.choices(real_method_names, weights=real_weights, k=1)[0]
+        # 2. Attempt to fetch a REAL half-batch to pair with it
+        if not real_method_names:
+            fake_method_status[chosen_fake_method] = "❌ SKIPPED (No real sources available)"
+            continue
+
+        chosen_real_method = random.choice(real_method_names)
         real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
 
+        # If real source is exhausted, try to restart its iterator ONCE
+        if real_data_dict is None:
+            real_method_iters[chosen_real_method] = iter(real_loaders[chosen_real_method])
+            real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
+
         if not real_data_dict or real_data_dict['image'].shape[0] == 0:
-            empty_batches[chosen_real_method] += 1
-            real_method_iters[chosen_real_method] = iter(real_loaders[chosen_real_method])  # Restart
+            fake_method_status[chosen_fake_method] = f"❌ SKIPPED (Paired real source '{chosen_real_method}' is empty)"
+            continue
+        if real_data_dict['image'].shape[0] < half_batch_size:
+            fake_method_status[
+                chosen_fake_method] = f"❌ SKIPPED (Paired real source '{chosen_real_method}' gave partial batch)"
             continue
 
-        successful_batches[chosen_fake_method] += 1
-        successful_batches[chosen_real_method] += 1
-
-        # 3. Combine and check the batch
-        combined_labels = torch.cat((real_data_dict['label'], fake_data_dict['label']), dim=0)
-        assert combined_labels.shape[0] == full_batch_size, f"Batch size mismatch!"
-        label_counts = Counter(combined_labels.tolist())
-        assert label_counts.get(0, 0) == half_batch_size, f"Real sample count mismatch!"
-        assert label_counts.get(1, 0) == half_batch_size, f"Fake sample count mismatch!"
-
+        # 3. If both are successful
+        fake_method_status[chosen_fake_method] = f"✅ OK (Paired with {chosen_real_method})"
+        real_source_usage[chosen_real_method] += 1
         batch_times.append(time.time() - iteration_start_time)
-        pbar.set_postfix_str(f"OK | Real: {chosen_real_method}, Fake: {chosen_fake_method}")
 
     print("\n-------------------- CHECK COMPLETE: DIAGNOSTIC REPORT --------------------")
-    print(f"Total time for {num_iterations} simulated batches: {sum(batch_times):.2f} seconds.")
+    total_time = sum(batch_times)
+    print(f"Total time for {len(batch_times)} successful pairs: {total_time:.2f} seconds.")
     if batch_times:
         print(f"Avg batch creation time: {np.mean(batch_times):.3f}s | Max: {np.max(batch_times):.3f}s")
 
-    print("\n--- Data Source Health ---")
-    print(f"{'Method':<20} | {'Total Videos':>12} | {'Successful Batches':>20} | {'Empty/Failed Batches':>22}")
-    print("-" * 80)
-
-    for method in sorted(list(all_methods_in_check)):
+    print("\n--- Fake Methods Report ---")
+    video_counts = Counter(v.method for v in train_videos)
+    print(f"{'Method':<20} | {'Total Vids':>10} | Status & Details")
+    print("-" * 85)
+    for method in fake_method_names:
         total_vids = video_counts.get(method, 0)
-        success = successful_batches.get(method, 0)
-        failed = empty_batches.get(method, 0)
+        status = fake_method_status.get(method, "❔ NOT TESTED (Should not happen)")
+        print(f"{method:<20} | {total_vids:>10} | {status}")
 
-        status = "✅ OK"
-        if success == 0 and failed > 0:
-            status = "❌ TOTAL FAILURE"
-        elif failed > 0:
-            status = f"⚠️ PARTIAL FAILURE ({failed / (success + failed):.0%} failed)"
-
-        print(f"{method:<20} | {total_vids:>12} | {success:>20} | {failed:>22} | {status}")
+    print("\n--- Real Sources Usage Report ---")
+    print("How many times each real source was successfully used for pairing:")
+    for method in sorted(real_method_names):
+        count = real_source_usage.get(method, 0)
+        print(f"- {method:<20}: {count} times")
 
     print("\nRecommendations:")
+    print("  - For '❌ EMPTY' methods, all videos are likely corrupt. Remove from `dataloader_config.yml`.")
     print(
-        "  - For methods with 'TOTAL FAILURE', all videos are likely corrupt or missing. Consider removing them from `dataloader_config.yml`.")
+        "  - For '⚠️ PARTIAL' methods, there aren't enough videos for one half-batch. Consider removing or adding more data.")
     print(
-        "  - For methods with 'PARTIAL FAILURE', some videos are corrupt. The robust loader is handling this, but be aware of the data loss.")
-    print(
-        "  - If a method shows 0 successful and 0 failed batches, it was likely never sampled. Check its weight/video count.")
+        "  - For '❌ SKIPPED' methods, the issue may be with the real sources, not the fake one. Check real source health.")
     print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
 
 
@@ -247,33 +244,11 @@ def main():
 
     logger.info(f"Created {len(real_loaders)} real loaders and {len(fake_loaders)} fake loaders.")
 
-    real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
-    for v in train_videos:
-        (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
-
-    total_real_videos = sum(real_video_counts.values())
-    total_fake_videos = sum(fake_video_counts.values())
-
-    real_method_names = list(real_loaders.keys())
-    real_weights = [real_video_counts[m] / total_real_videos for m in
-                    real_method_names] if total_real_videos > 0 else []
-
-    fake_method_names = list(fake_loaders.keys())
-    fake_weights = [fake_video_counts[m] / total_fake_videos for m in
-                    fake_method_names] if total_fake_videos > 0 else []
-
-    total_train_videos = len(train_videos)
-    epoch_len = math.ceil(total_train_videos / train_batch_size)
-    logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
-
     # --- Call the new sanity check ---
     comprehensive_sampler_check(
         real_loaders=real_loaders,
         fake_loaders=fake_loaders,
-        real_method_names=real_method_names,
-        fake_method_names=fake_method_names,
-        real_weights=real_weights,
-        fake_weights=fake_weights,
+        real_method_names=list(real_loaders.keys()),
         full_batch_size=train_batch_size,
         train_videos=train_videos  # Pass video info for reporting
     )
@@ -288,6 +263,24 @@ def main():
     metric_scoring = choose_metric(config)
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
 
+    # This part of the code is now unreachable due to the 'return' above,
+    # but kept for completeness of the original file structure.
+    real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
+    for v in train_videos:
+        (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
+
+    total_real_videos = sum(real_video_counts.values())
+    total_fake_videos = sum(fake_video_counts.values())
+
+    real_weights = [real_video_counts[m] / total_real_videos for m in
+                    real_source_names] if total_real_videos > 0 else []
+    fake_method_names = list(fake_loaders.keys())
+    fake_weights = [fake_video_counts[m] / total_fake_videos for m in
+                    fake_method_names] if total_fake_videos > 0 else []
+
+    total_train_videos = len(train_videos)
+    epoch_len = math.ceil(total_train_videos / train_batch_size)
+
     if config.get('checkpoint_path'):
         trainer.load_ckpt(config['checkpoint_path'])
 
@@ -296,7 +289,7 @@ def main():
         trainer.train_epoch(
             real_loaders=real_loaders,
             fake_loaders=fake_loaders,
-            real_method_names=real_method_names,
+            real_method_names=real_source_names,
             fake_method_names=fake_method_names,
             real_weights=real_weights,
             fake_weights=fake_weights,
