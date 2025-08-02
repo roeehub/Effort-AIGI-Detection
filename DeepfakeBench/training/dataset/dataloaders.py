@@ -1,287 +1,175 @@
-import torch
-from torch.utils.data import IterDataPipe
-from torch.utils.data import DataLoader
-from torchdata.datapipes.iter import IterableWrapper
+# --- dataloaders.py ---
+
+import torch  # noqa
+from torch.utils.data import DataLoader, IterDataPipe  # noqa
+from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
 import random
-import fsspec
-from PIL import Image
-from torchvision import transforms as T
-import numpy as np
-from copy import deepcopy
+import fsspec  # noqa
+from PIL import Image  # noqa
+from torchvision import transforms as T  # noqa
+import numpy as np  # noqa
+import albumentations as A  # noqa
 from collections import defaultdict
-import albumentations as A
-from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
-from itertools import filterfalse
+from DeepfakeBench.training.prepare_splits import VideoInfo
+from itertools import chain  # noqa
 
 
-class DeepfakePipeDataset(IterDataPipe):
-    def __init__(self, dataset_class: DeepfakeAbstractBaseDataset):
-        self.dataset = dataset_class
-        self.image_list = dataset_class.image_list
-        self.label_list = dataset_class.label_list
-        self.config = dataset_class.config
-        self.mode = dataset_class.mode
-        self.frame_num = dataset_class.frame_num
-        self.video_level = dataset_class.video_level
-
-    def __iter__(self):
-        for index in range(len(self.dataset)):
-            yield self.dataset[index]
-
-    def __len__(self):
-        return len(self.dataset)
-
-    @staticmethod
-    def collate_fn(batch):
-        return DeepfakeAbstractBaseDataset.collate_fn(batch)
-
-
+# This data augmentation function is fine, we can keep it.
 def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
-    """
-    Apply data augmentation to an image, landmark, and mask.
-
-    Args:
-        img: An Image object containing the image to be augmented.
-        landmark: A numpy array containing the 2D facial landmarks to be augmented.
-        mask: A numpy array containing the binary mask to be augmented.
-
-    Returns:
-        The augmented image, landmark, and mask.
-    """
-
-    # Set the seed for the random number generator
     if augmentation_seed is not None:
         random.seed(augmentation_seed)
         np.random.seed(augmentation_seed)
-
-    # Define augmentation pipeline (from init_data_aug_method)
     transform = A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-        A.HueSaturationValue(p=0.3),
-        A.ImageCompression(quality_lower=40, quality_upper=100, p=0.1),
-        A.GaussNoise(p=0.1),
-        A.MotionBlur(p=0.1),
-        A.CLAHE(p=0.1),
-        A.ChannelShuffle(p=0.1),
-        A.Cutout(p=0.1),
-        A.RandomGamma(p=0.3),
-        A.GlassBlur(p=0.3),
+        A.HorizontalFlip(p=0.5), A.RandomBrightnessContrast(p=0.5), A.HueSaturationValue(p=0.3),
+        A.ImageCompression(quality_lower=40, p=0.1), A.GaussNoise(p=0.1), A.MotionBlur(p=0.1),
+        A.CLAHE(p=0.1), A.ChannelShuffle(p=0.1), A.Cutout(p=0.1), A.RandomGamma(p=0.3), A.GlassBlur(p=0.3),
     ])
-
-    # Create a dictionary of arguments
-    kwargs = {'image': img}
-
-    # Check if the landmark and mask are not None
-    if mask is not None:
-        kwargs['mask'] = mask
-
-    # Run transform
-    transformed = transform(**kwargs)
-
-    # Extract results
-    augmented_img = transformed['image']
-    augmented_mask = transformed.get('mask')
-    augmented_landmark = None  # Not used here
-
-    # Reset seed (optional)
-    if augmentation_seed is not None:
-        random.seed()
-        np.random.seed()
-
-    return augmented_img, augmented_landmark, augmented_mask
+    transformed = transform(image=np.array(img))
+    return Image.fromarray(transformed['image'])
 
 
-def safe_loader(sample, config, mode='train'):
+def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
     """
-    Calls load_video_frames_as_dataset and swallows any exception.
-    If something goes wrong (corrupt image, missing mask, etc.) the
-    video is silently dropped.
+    This function replaces `load_video_frames_as_dataset`.
+    It takes a VideoInfo object and loads the required frames from GCP.
+    It returns None on failure, so it can be filtered out.
     """
     try:
-        return load_video_frames_as_dataset(sample, config, mode)
+        frame_num = config['frame_num'][mode]
+        resolution = config['resolution']
+
+        all_frame_paths = list(video_info.frame_paths)
+        if len(all_frame_paths) < frame_num:
+            # Not enough frames in the video to begin with
+            return None
+
+        # Randomly select `frame_num` paths to try
+        selected_paths = random.sample(all_frame_paths, k=frame_num)
+
+        images = []
+        for path in selected_paths:
+            with fsspec.open(path, "rb") as f:
+                img = Image.open(f).convert("RGB")
+                img = img.resize((resolution, resolution), Image.BICUBIC)
+            images.append(img)
+
+        # Apply same augmentation to all frames of a video if in train mode
+        if mode == 'train' and config['use_data_augmentation']:
+            aug_seed = random.randint(0, 2 ** 32 - 1)
+            images = [data_aug(img, augmentation_seed=aug_seed) for img in images]
+
+        # Convert to tensor and normalize
+        normalize_transform = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean=config['mean'], std=config['std'])
+        ])
+
+        image_tensors = [normalize_transform(img) for img in images]
+
+        # For this project, it seems you only need one frame per sample in the batch
+        # If video_level is True, you would stack them: torch.stack(image_tensors)
+        # Based on your trainer, you process one frame at a time.
+
+        label = 0 if video_info.label == 'real' else 1
+
+        # The dataloader expects a batch of these tuples. We return one instance.
+        # We only return the first successfully processed frame's data.
+        # Note: Your collate_fn expects (image, label, landmark, mask, path)
+        # We provide placeholders for landmark and mask as they are not used in this simplified loader.
+        return (image_tensors[0], label, None, None, selected_paths[0])
+
     except Exception as e:
-        print(f"[WARN] Dropped video due to error: {e}")
-        return None      # signals the DataPipe to skip this sample
-
-
-def load_video_frames_as_dataset(sample, config, mode='train'):
-    """
-    • Needs `target_frames` (= frame_num) good images.
-    • Each corrupt image triggers up to 3 retries with alternate frames.
-    • If still < target_frames → return None  (caller drops video).
-    """
-
-    # ---- 1. how many frames do we need? -----------------------------
-    fn_cfg = config.get("frame_num", 8)  # could be int OR dict
-    if isinstance(fn_cfg, dict):  # YAML style: {train: 8, test: 8}
-        fn_cfg = fn_cfg.get("train" if mode == "train" else "test", 8)
-    target_frames = int(fn_cfg)  # now guaranteed int
-
-    frame_paths_all = list(sample["frames"])  # 32 paths per video
-    random.shuffle(frame_paths_all)
-    max_retries = 1
-
-    good_imgs, good_masks, good_lms, good_paths = [], [], [], []
-
-    for path in frame_paths_all:
-        # -------- 2. try to open / retry up to 3 alternates ----------
-        success, orig_path = False, path
-        for _ in range(max_retries):
-            try:
-                with fsspec.open(path, "rb") as stream:
-                    img = Image.open(stream).convert("RGB")
-                success = True
-                break
-            except Exception:
-                print(f"[WARN] Failed to open image: {path} - trying alternate paths")
-                alt = [p for p in frame_paths_all
-                       if p not in good_paths and p != orig_path]
-                if not alt:
-                    break
-                path = random.choice(alt)
-
-        if not success:
-            print(f"[ERROR] Could not open image after retries: {orig_path}")
-            continue
-
-        # -------- 3. preprocessing & augmentation -------------------
-        img = img.resize((config["resolution"], config["resolution"]), Image.BICUBIC)
-        img_np = np.array(img)
-
-        mask_path = path.replace("frames", "masks")
-        landmark_path = path.replace("frames", "landmarks").replace(".png", ".npy")
-
-        remaining = len(frame_paths_all) - len(good_paths)
-        if len(good_imgs) + remaining < target_frames:
-            return None  # <–– drop video immediately
-
-        try:
-            with fsspec.open(mask_path, "rb") as mf:
-                mask_img = Image.open(mf).convert("L").resize(
-                    (config["resolution"], config["resolution"])
-                )
-                mask = np.expand_dims(np.array(mask_img) / 255.0, axis=2)
-        except Exception:
-            mask = np.zeros((config["resolution"], config["resolution"], 1))
-
-        try:
-            with fsspec.open(landmark_path, "rb") as lf:
-                lms = np.load(lf)
-                if config["resolution"] != 256:
-                    lms = lms * (config["resolution"] / 256)
-        except Exception:
-            lms = np.zeros((81, 2))
-
-        if mode == "train" and config["use_data_augmentation"]:
-            img_np, _, mask = data_aug(img_np, lms, mask)
-
-        img_tensor = T.Normalize(mean=config["mean"], std=config["std"])(
-            T.ToTensor()(img_np)
-        )
-
-        good_imgs.append(img_tensor)
-        good_masks.append(mask)
-        good_lms.append(lms)
-        good_paths.append(path)
-
-        if len(good_imgs) == target_frames:
-            break
-
-    # -------- 4. drop video if not enough good frames ---------------
-    if len(good_imgs) < target_frames:
+        # print(f"[WARN] Skipping video {video_info.method}/{video_info.video_id} due to error: {e}")
         return None
 
-    video_level = sample["video_level"]
 
-    if video_level:
-        img_tensor = torch.stack(good_imgs, dim=0)
-        lm_tensor = torch.stack(good_lms, dim=0)
-        mask_tensor = torch.stack(good_masks, dim=0)
-    else:
-        img_tensor, lm_tensor, mask_tensor = good_imgs[0], good_lms[0], good_masks[0]
-
-    return (img_tensor, sample["label"], lm_tensor, mask_tensor, good_paths)
-
-
-def create_base_videopipe(dataset, method, test=False, dataset_name=None):
+def collate_fn(batch):
     """
-    Build a DataPipe that streams frames for ONE method (or dataset-name).
-
-    • Training   (test=False, method='fomm' etc.)
-        – keeps only label==1 videos whose paths contain "/fomm/"
-    • Testing    (test=True, method=None, dataset_name='DFDC' etc.)
-        – keeps videos whose path contains dataset_name
-        – keeps both real & fake labels
+    A simplified collate_fn, matching the one in abstract_dataset.py.
     """
-    samples = []
-    for i in range(len(dataset)):
-        # 0) always treat frame_paths as a list
-        frame_paths = dataset.data_dict['image'][i]
-        if not isinstance(frame_paths, list):
-            frame_paths = [frame_paths]
+    images, labels, landmarks, masks, paths = zip(*batch)
 
-        sample_label = dataset.data_dict['label'][i]  # 0 real | 1 fake
+    images = torch.stack(images, dim=0)
+    labels = torch.LongTensor(labels)
 
-        # 1) TRAIN-time: fake-loader → drop real videos, then path filter
-        if method and not test:
-            if sample_label == 0:  # drop real
-                continue
-            if f"/{method}/" not in frame_paths[0]:  # path mismatch
-                continue
-
-        # 2) TEST-time: filter by dataset name if provided
-        if dataset_name and dataset_name.lower() not in frame_paths[0].lower():
-            continue
-
-        samples.append({
-            'frames': frame_paths,
-            'label': sample_label,
-            'config': dataset.config,
-            'video_level': dataset.video_level,
-        })
-
-    # Wrap into a streaming DataPipe
-    pipe = IterableWrapper(samples)
-    pipe = pipe.shuffle()
-    pipe = pipe.sharding_filter()
-    pipe = (pipe
-            .map(lambda s: safe_loader(s, dataset.config, dataset.mode))
-            .filter(lambda x: x is not None))  # filter out None samples
-    return pipe
+    # Landmarks and masks are None from our loader, so we pass them as is.
+    data_dict = {
+        'image': images,
+        'label': labels,
+        'landmark': None,  # Or handle properly if you need them
+        'mask': None,  # Or handle properly if you need them
+        'path': list(paths)
+    }
+    return data_dict
 
 
-def create_method_aware_dataloaders(dataset: DeepfakeAbstractBaseDataset, dataloader_config, test=False, config=None):
-    # Group videos by method
+def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
+                                    data_config: dict):
+    """
+    Creates separate dataloaders for train (per-method) and val (per-dataset).
+    """
+    # --- 1. Create Training DataLoaders (per fake method + combined real) ---
+    train_loaders = {}
     videos_by_method = defaultdict(list)
-    for v in dataset.video_infos:
+    for v in train_videos:
         videos_by_method[v.method].append(v)
 
-    dataloaders = {}
-    if not test:
-        for method in videos_by_method.keys():
-            # returns a data pipe that is used to load the data from the GCP
-            pipe = create_base_videopipe(dataset, method, test)
+    # Combine all real videos into one group
+    real_sources = data_config['methods']['use_real_sources']
+    all_real_videos = list(
+        chain.from_iterable(videos_by_method[src] for src in real_sources if src in videos_by_method))
 
-            dataloaders[method] = DataLoader(
-                pipe,
-                batch_size=dataloader_config['dataloader_params']['batch_size'],
-                num_workers=dataloader_config['dataloader_params']['num_workers'],
-                collate_fn=DeepfakePipeDataset.collate_fn,
-                prefetch_factor=1,  # ↓ RAM
-                persistent_workers=True  # keep workers hot between batches
-            )
-    else:
-        for dataset_name in config['test_dataset']:
-            # returns a data pip that used to load the data from the GCP
-            pipe = create_base_videopipe(dataset, None, test, dataset_name)
+    # Create a loader for the combined real videos
+    if all_real_videos:
+        pipe = IterableWrapper(all_real_videos).shuffle()
+        pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
+        pipe = Filter(pipe, lambda x: x is not None)
+        train_loaders['real'] = DataLoader(
+            pipe,
+            batch_size=data_config['dataloader_params']['batch_size'],
+            num_workers=data_config['dataloader_params']['num_workers'],
+            collate_fn=collate_fn,
+            persistent_workers=True
+        )
 
-            dataloaders[dataset_name] = DataLoader(
+    # Create loaders for each fake method
+    fake_methods = data_config['methods']['use_fake_methods']
+    for method in fake_methods:
+        if method in videos_by_method:
+            pipe = IterableWrapper(videos_by_method[method]).shuffle()
+            pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
+            pipe = Filter(pipe, lambda x: x is not None)
+            train_loaders[method] = DataLoader(
                 pipe,
-                batch_size=dataloader_config['dataloader_params']['batch_size'],
-                num_workers=dataloader_config['dataloader_params']['num_workers'],
-                collate_fn=DeepfakePipeDataset.collate_fn,
-                prefetch_factor=1,  # ↓ RAM
-                persistent_workers=True  # keep workers hot between batches
+                batch_size=data_config['dataloader_params']['batch_size'],
+                num_workers=data_config['dataloader_params']['num_workers'],
+                collate_fn=collate_fn,
+                persistent_workers=True
             )
-    return dataloaders
+
+    # --- 2. Create Validation DataLoaders (per dataset name) ---
+    val_loaders = {}
+    videos_by_dataset = defaultdict(list)
+    for v in val_videos:
+        # This is a simple way to guess dataset from method name, adjust if needed
+        dataset_name = v.method.split('_')[0]  # e.g., 'fsgan_some_variant' -> 'fsgan'
+        if v.method in FFpp_pool: dataset_name = 'FaceForensics++'
+        videos_by_dataset[dataset_name].append(v)
+
+    for name, videos in videos_by_dataset.items():
+        pipe = IterableWrapper(videos)  # No shuffle for validation
+        pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'test'))
+        pipe = Filter(pipe, lambda x: x is not None)
+        val_loaders[name] = DataLoader(
+            pipe,
+            batch_size=config['test_batchSize'],
+            num_workers=data_config['dataloader_params']['num_workers'],
+            collate_fn=collate_fn,
+            persistent_workers=True
+        )
+
+    return train_loaders, val_loaders
+
+
+# A list of FF++ methods for grouping validation data
+FFpp_pool = ['FaceForensics++', 'FaceShifter', 'DeepFakeDetection', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']

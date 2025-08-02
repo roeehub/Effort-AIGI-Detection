@@ -1,47 +1,32 @@
-# author: Zhiyuan Yan
-# email: zhiyuanyan@link.cuhk.edu.cn
-# date: 2023-03-30
-# description: training code.
-
-import os
 import argparse
-from os.path import join
-import cv2
 import random
 import datetime
-import time
-import yaml
-from tqdm import tqdm
-import numpy as np
+import yaml  # noqa
 from datetime import timedelta
-from copy import deepcopy
-from PIL import Image as pil_image
-import re
-from collections import Counter, defaultdict
+from collections import Counter
 import math
 from collections import defaultdict
 
-import torch
-import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.utils.data
-import torch.optim as optim
-from torch.utils.data.distributed import DistributedSampler
-import torch.distributed as dist
+import torch  # noqa
+import torch.nn.parallel  # noqa
+import torch.backends.cudnn as cudnn  # noqa
+import torch.utils.data  # noqa
+import torch.optim as optim  # noqa
+from torch.utils.data.distributed import DistributedSampler  # noqa
+import torch.distributed as dist  # noqa
 
 from optimizor.SAM import SAM
 from optimizor.LinearLR import LinearDecayLR
 
 from trainer.trainer import Trainer
-from detectors import DETECTOR
+from detectors import DETECTOR  # noqa
 from dataset import *
 from metrics.utils import parse_metric_for_print
 from logger import create_logger
-from PIL.ImageFilter import RankFilter
-from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
+from PIL.ImageFilter import RankFilter  # noqa
+from dataset.abstract_dataset import DeepfakeAbstractBaseDataset  # noqa
 from prepare_splits import prepare_video_splits
-from dataset.dataloaders import create_method_aware_dataloaders
+from dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
@@ -383,22 +368,9 @@ def main():
     check_label_in_paths(train_videos, "train")
     check_label_in_paths(val_videos, "val")
 
-    # Create a dataset object to include all the instances of the dataset to load
-    train_set = DeepfakeAbstractBaseDataset(
-        config=config,
-        mode='train',
-        VideoInfo=train_videos,
+    method_loaders, test_method_loaders = create_method_aware_dataloaders(
+        train_videos, val_videos, config, data_config
     )
-
-    test_set = DeepfakeAbstractBaseDataset(
-        config=config,
-        mode='test',
-        VideoInfo=val_videos,
-    )
-
-    # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
-    method_loaders = create_method_aware_dataloaders(train_set, data_config)
-    test_method_loaders = create_method_aware_dataloaders(test_set, data_config, config=config, test=True)
 
     # we need to separate the real sources from the fake methods
     real_sources = data_config['methods']['use_real_sources']
