@@ -16,6 +16,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
 from metrics.utils import get_test_metrics  # noqa
 from torch.cuda.amp import autocast, GradScaler  # noqa
 import wandb  # noqa
+from collections import defaultdict
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -210,115 +211,73 @@ class Trainer(object):
     @torch.no_grad()
     def test_epoch(self, epoch, val_method_loaders):
         self.setEval()
+        self.logger.info(f"--- Starting evaluation for epoch {epoch + 1} ---")
 
-        # --- START: NEW "MEGA-LOADER" IMPLEMENTATION ---
+        # Use defaultdict to easily collect predictions and labels for each method
+        results_by_method = defaultdict(lambda: {'preds': [], 'labels': []})
 
-        # 1. Combine all validation datasets into a single list
-        all_val_videos = []
-        for loader in val_method_loaders.values():
-            if hasattr(loader.dataset, 'items'):  # Adapt for IterableWrapper
-                all_val_videos.extend(loader.dataset.items)
+        # Store all predictions and labels to calculate overall metrics at the end
+        all_preds_list, all_labels_list = [], []
 
-        if not all_val_videos:
-            self.logger.error("Validation failed: No data found in any validation loader.")
+        # 1. Iterate directly through the dictionary of validation loaders.
+        #    The 'tqdm' wrapper will give you a nice progress bar.
+        for method, loader in tqdm(val_method_loaders.items(), desc="Validating Methods"):
+            # This loop processes all videos for a single method (e.g., 'FF-DF')
+            for data_dict in loader:
+                # Move data to the correct device
+                for key in data_dict.keys():
+                    if isinstance(data_dict[key], torch.Tensor):
+                        data_dict[key] = data_dict[key].to(self.model.device)
+
+                if data_dict['image'].shape[0] == 0:
+                    continue
+
+                # The model expects a 5D tensor [B, T, C, H, W] for videos
+                if data_dict['image'].dim() != 5:
+                    self.logger.warning(
+                        f"Validation batch for method '{method}' has incorrect shape: {data_dict['image'].shape}. Expected 5 dimensions. Skipping.")
+                    continue
+
+                B, T = data_dict['image'].shape[:2]
+
+                # Get model predictions
+                predictions = self.model(data_dict, inference=True)
+
+                # Aggregate frame probabilities to get a single score per video
+                video_probs = predictions['prob'].view(B, T).mean(dim=1)
+
+                # Collect results
+                labels_np = data_dict['label'].cpu().numpy()
+                preds_np = video_probs.cpu().numpy()
+
+                results_by_method[method]['labels'].extend(labels_np)
+                results_by_method[method]['preds'].extend(preds_np)
+
+                all_labels_list.extend(labels_np)
+                all_preds_list.extend(preds_np)
+
+        # 2. Check if any data was processed
+        if not all_labels_list:
+            self.logger.error(
+                "Validation failed: No data was processed after iterating through all validation loaders.")
             return
 
-        # 2. Create a single, efficient validation loader
-        # We can use a larger batch size for validation as there's no backprop
-        val_batch_size = self.config.get('test_batchSize', 16)
-        unified_val_loader = torch.utils.data.DataLoader(
-            all_val_videos,
-            batch_size=val_batch_size,
-            num_workers=self.config.get('num_workers', 2),
-            collate_fn=val_method_loaders[next(iter(val_method_loaders))].collate_fn,  # Reuse an existing collate_fn
-            shuffle=False,
-            persistent_workers=True,  # Important for performance
-            prefetch_factor=self.config['dataloader_params']['prefetch_factor']
-        )
-        # We need a custom processing function for this new setup
-        # Re-using the one from dataloaders.py is a good approach
-        from dataset.dataloaders import load_and_process_video
-
-        # Create a processing pipe
-        pipe = torch.utils.data.datapipes.iter.IterableWrapper(all_val_videos)
-        pipe = pipe.map(lambda v: load_and_process_video(v, self.config, 'test'))
-        pipe = pipe.filter(lambda x: x is not None)
-
-        unified_val_loader = torch.utils.data.DataLoader(
-            pipe,
-            batch_size=val_batch_size,
-            num_workers=self.config['dataloader_params']['num_workers'],
-            collate_fn=val_method_loaders[next(iter(val_method_loaders))].collate_fn,
-            persistent_workers=True,
-            prefetch_factor=self.config['dataloader_params']['prefetch_factor']
-        )
-
-        self.logger.info(f"--- Evaluating on {len(all_val_videos)} videos using a single unified loader ---")
-
-        # 3. Collect all predictions from the unified loader
-        all_preds, all_labels, all_paths = [], [], []
-        for data_dict in tqdm(unified_val_loader, desc="Validating", leave=False):
-            for key in data_dict.keys():
-                if isinstance(data_dict[key], torch.Tensor):
-                    data_dict[key] = data_dict[key].to(self.model.device)
-
-            if data_dict['image'].shape[0] == 0: continue
-
-            if data_dict['image'].dim() != 5:
-                self.logger.error(
-                    f"Validation batch has incorrect dimensions: {data_dict['image'].dim()}. Expected 5. Skipping.")
-                continue
-            B, T = data_dict['image'].shape[:2]
-
-            predictions = self.model(data_dict, inference=True)
-
-            frame_probs = predictions['prob'].view(B, T)
-            video_probs = frame_probs.mean(dim=1)
-
-            all_labels.extend(data_dict['label'].cpu().numpy())
-            all_preds.extend(video_probs.cpu().numpy())
-            all_paths.extend(data_dict['path'])
-
-        # 4. Post-process to group results by method for metrics
-        results_by_method = defaultdict(lambda: {'preds': [], 'labels': [], 'paths': []})
-        for pred, label, path in zip(all_preds, all_labels, all_paths):
-            method = path.split('/')[0]  # Assumes path is 'method/videoid'
-            results_by_method[method]['preds'].append(pred)
-            results_by_method[method]['labels'].append(label)
-            results_by_method[method]['paths'].append(path)
-
-        # 5. Calculate per-method metrics and overall metrics
-        wandb_log_dict = {"val/step": epoch + 1}
-        self.logger.info("--- Calculating metrics for individual methods ---")
-        for method, data in results_by_method.items():
-            method_preds = np.array(data['preds'])
-            method_labels = np.array(data['labels'])
-
-            if len(np.unique(method_labels)) < 2:
-                self.logger.warning(f"Method '{method}' contains only one class. Skipping AUC/EER calculation.")
-                continue
-
-            try:
-                method_metrics = get_test_metrics(method_preds, method_labels, data['paths'])
-                for name, value in method_metrics.items():
-                    if name not in ['pred', 'label']:
-                        wandb_log_dict[f'val_method/{name}/{method}'] = value
-            except Exception as e:
-                self.logger.error(f"Could not compute metrics for method '{method}'. Error: {e}")
-
-        # --- Calculate and log OVERALL validation metrics ---
-        if not all_labels:
-            self.logger.error("Validation failed: No data was processed.")
-            return
-
+        # 3. Calculate metrics
+        wandb_log_dict = {"val/epoch": epoch + 1}
         self.logger.info("--- Calculating overall validation performance ---")
-        overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
+
+        overall_preds_np = np.array(all_preds_list)
+        overall_labels_np = np.array(all_labels_list)
+
+        # This function should return a dictionary of metrics like {'auc': ..., 'eer': ...}
+        overall_metrics = get_test_metrics(overall_preds_np, overall_labels_np)
+
         for name, value in overall_metrics.items():
             if name not in ['pred', 'label']:
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
 
-        # --- (The rest of the function remains the same) ---
+        # 4. Check for new best model and save checkpoint
         current_metric = overall_metrics.get(self.metric_scoring)
         if current_metric is not None and current_metric > self.best_val_metric:
             self.best_val_metric = current_metric
