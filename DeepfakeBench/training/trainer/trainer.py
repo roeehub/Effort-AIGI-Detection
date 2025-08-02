@@ -7,15 +7,15 @@ project_root_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(project_root_dir)
 
-
 import random
 from collections import OrderedDict
-import numpy as np # noqa
-from tqdm import tqdm # noqa
-import torch # noqa
-from torch.nn.parallel import DistributedDataParallel as DDP # noqa
-from metrics.utils import get_test_metrics # noqa
-import wandb # noqa
+import numpy as np  # noqa
+from tqdm import tqdm  # noqa
+import torch  # noqa
+from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
+from metrics.utils import get_test_metrics  # noqa
+from torch.cuda.amp import autocast, GradScaler  # noqa
+import wandb  # noqa
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,6 +47,9 @@ class Trainer(object):
         # NEW: Track best metric for model saving
         self.best_val_metric = -1.0
         self.best_val_epoch = -1
+
+        # Initialize AMP scaler for mixed precision training
+        self.scaler = GradScaler()
 
         self.speed_up()
 
@@ -96,14 +99,21 @@ class Trainer(object):
             self.wandb_run.log_artifact(artifact)
 
     def train_step(self, data_dict):
-        predictions = self.model(data_dict)
-        if type(self.model) is DDP:
-            losses = self.model.module.get_losses(data_dict, predictions)
-        else:
-            losses = self.model.get_losses(data_dict, predictions)
+        # --- Use autocast for the forward pass ---
+        with autocast():
+            predictions = self.model(data_dict)
+            if type(self.model) is DDP:
+                losses = self.model.module.get_losses(data_dict, predictions)
+            else:
+                losses = self.model.get_losses(data_dict, predictions)
+
         self.optimizer.zero_grad()
-        losses['overall'].backward()
-        self.optimizer.step()
+
+        # --- Scale the loss and call backward and step via the scaler ---
+        self.scaler.scale(losses['overall']).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+
         return losses, predictions
 
     def _next_batch_from_group(self, method, dataloader_dict, iter_dict):

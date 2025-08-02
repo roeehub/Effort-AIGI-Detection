@@ -31,7 +31,7 @@ class EffortDetector(nn.Module):
     def __init__(self, config=None):
         super(EffortDetector, self).__init__()
         self.config = config
-        self.backbone = self.build_backbone(config) # Initialize Backbone model
+        self.backbone = self.build_backbone(config)  # Initialize Backbone model
         self.head = nn.Linear(1024, 2)
         self.loss_func = nn.CrossEntropyLoss()
         self.prob, self.label = [], []
@@ -40,26 +40,26 @@ class EffortDetector(nn.Module):
     def build_backbone(self, config):
         # ⚠⚠⚠ Download CLIP model using the below link
         # https://drive.google.com/drive/folders/1fm3Jd8lFMiSP1qgdmsxfqlJZGpr_bXsx?usp=drive_link
-        
+
         # mean: [0.48145466, 0.4578275, 0.40821073]
         # std: [0.26862954, 0.26130258, 0.27577711]
-        
+
         # ViT-L/14 224*224
         print("The CLIP is in: ", os.getcwd())
-        clip_model = CLIPModel.from_pretrained("/home/roee/repos/Effort-AIGI-Detection/models--openai--clip-vit-large-patch14", local_files_only=True) # the path of this folder in your disk (download from the above link)
+        clip_model = CLIPModel.from_pretrained(
+            "/home/roee/repos/Effort-AIGI-Detection/models--openai--clip-vit-large-patch14",
+            local_files_only=True)  # the path of this folder in your disk (download from the above link)
         # clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir="./clip-vit-large-patch14")
-        
-        
 
         # Apply SVD to self_attn layers only
         # ViT-L/14 224*224: 1024-1
-        clip_model.vision_model = apply_svd_residual_to_self_attn(clip_model.vision_model, r=1024-1)
+        clip_model.vision_model = apply_svd_residual_to_self_attn(clip_model.vision_model, r=1024 - 1)
 
-        #for name, param in clip_model.vision_model.named_parameters():
+        # for name, param in clip_model.vision_model.named_parameters():
         #    print('{}: {}'.format(name, param.requires_grad))
-        #num_param = sum(p.numel() for p in clip_model.vision_model.parameters() if p.requires_grad)
-        #num_total_param = sum(p.numel() for p in clip_model.vision_model.parameters())
-        #print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
+        # num_param = sum(p.numel() for p in clip_model.vision_model.parameters() if p.requires_grad)
+        # num_total_param = sum(p.numel() for p in clip_model.vision_model.parameters())
+        # print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
 
         return clip_model.vision_model
 
@@ -70,7 +70,7 @@ class EffortDetector(nn.Module):
     def classifier(self, features: torch.tensor) -> torch.tensor:
         return self.head(features)
 
-    #def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
+    # def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
     #    label = data_dict['label']
     #    pred = pred_dict['cls']
     #    loss = self.loss_func(pred, label)
@@ -103,7 +103,7 @@ class EffortDetector(nn.Module):
                 else:
                     weight_sum_dict[str(weight_curr.size())] += weight_curr
                     num_weight_dict[str(weight_curr.size())] += 1
-        
+
         loss2 = 0.0
         for k in weight_sum_dict.keys():
             _, S_sum, _ = torch.linalg.svd(weight_sum_dict[k], full_matrices=False)
@@ -156,7 +156,19 @@ class EffortDetector(nn.Module):
     def get_train_metrics(self, data_dict: dict, pred_dict: dict) -> dict:
         label = data_dict['label']
         pred = pred_dict['cls']
+
+        # If predictions are per-frame (B*T) and labels are per-video (B),
+        # we must expand the labels to match the predictions for per-frame metric calculation.
+        # This aligns with how the loss is calculated in get_losses().
+        if pred.shape[0] > label.shape[0]:
+            B = label.shape[0]
+            # Calculate T (number of frames) from the discrepancy
+            T = pred.shape[0] // B
+            # Repeat each label T times to match the reshaped predictions
+            label = label.repeat_interleave(T)
+
         # compute metrics for batch data
+        # Now, `label` and `pred` will have compatible shapes
         auc, eer, acc, ap = calculate_metrics_for_train(label.detach(), pred.detach())
         metric_batch_dict = {'acc': acc, 'auc': auc, 'eer': eer, 'ap': ap}
         return metric_batch_dict
@@ -208,7 +220,7 @@ class SVDResidualLinear(nn.Module):
             nn.init.zeros_(self.bias)
         else:
             self.register_parameter('bias', None)
-    
+
     def compute_current_weight(self):
         if self.S_residual is not None:
             return self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
@@ -226,7 +238,7 @@ class SVDResidualLinear(nn.Module):
             weight = self.weight_main
 
         return F.linear(x, weight, self.bias)
-    
+
     def compute_orthogonal_loss(self):
         if self.S_residual is not None:
             # According to the properties of orthogonal matrices: A^TA = I
@@ -236,16 +248,16 @@ class SVDResidualLinear(nn.Module):
             # print(self.V_r.size(), self.V_residual.size())  # torch.Size([1023, 1024]) torch.Size([1, 1024])
             # UUT = self.U_residual @ self.U_residual.t()
             # VVT = self.V_residual @ self.V_residual.t()
-            
+
             # Construct an identity matrix
             UUT_identity = torch.eye(UUT.size(0), device=UUT.device)
             VVT_identity = torch.eye(VVT.size(0), device=VVT.device)
-            
+
             # Using frobenius norm to compute loss
             loss = 0.5 * torch.norm(UUT - UUT_identity, p='fro') + 0.5 * torch.norm(VVT - VVT_identity, p='fro')
         else:
             loss = 0.0
-            
+
         return loss
 
     def compute_keepsv_loss(self):
@@ -254,24 +266,25 @@ class SVDResidualLinear(nn.Module):
             weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
             # Frobenius norm of current weight
             weight_current_fnorm = torch.norm(weight_current, p='fro')
-            
+
             loss = torch.abs(weight_current_fnorm ** 2 - self.weight_original_fnorm ** 2)
             # loss = torch.abs(weight_current_fnorm ** 2 + 0.01 * self.weight_main_fnorm ** 2 - 1.01 * self.weight_original_fnorm ** 2)
         else:
             loss = 0.0
-        
+
         return loss
-    
+
     def compute_fn_loss(self):
         if (self.S_residual is not None):
             weight_current = self.weight_main + self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
             weight_current_fnorm = torch.norm(weight_current, p='fro')
-            
+
             loss = weight_current_fnorm ** 2
         else:
             loss = 0.0
-        
+
         return loss
+
 
 # Function to replace nn.Linear modules within self_attn modules with SVDResidualLinear
 def apply_svd_residual_to_self_attn(model, r):
@@ -321,9 +334,9 @@ def replace_with_svd_residual(module, r):
         r = min(r, len(S))  # Ensure r does not exceed the number of singular values
 
         # Keep top r singular components (main weight)
-        U_r = U[:, :r]      # Shape: (out_features, r)
-        S_r = S[:r]         # Shape: (r,)
-        Vh_r = Vh[:r, :]    # Shape: (r, in_features)
+        U_r = U[:, :r]  # Shape: (out_features, r)
+        S_r = S[:r]  # Shape: (r,)
+        Vh_r = Vh[:r, :]  # Shape: (r, in_features)
 
         # Reconstruct the main weight (fixed)
         weight_main = U_r @ torch.diag(S_r) @ Vh_r
@@ -335,15 +348,15 @@ def replace_with_svd_residual(module, r):
         new_module.weight_main.data.copy_(weight_main)
 
         # Residual components (trainable)
-        U_residual = U[:, r:]    # Shape: (out_features, n - r)
-        S_residual = S[r:]       # Shape: (n - r,)
+        U_residual = U[:, r:]  # Shape: (out_features, n - r)
+        S_residual = S[r:]  # Shape: (n - r,)
         Vh_residual = Vh[r:, :]  # Shape: (n - r, in_features)
 
         if len(S_residual) > 0:
             new_module.S_residual = nn.Parameter(S_residual.clone())
             new_module.U_residual = nn.Parameter(U_residual.clone())
             new_module.V_residual = nn.Parameter(Vh_residual.clone())
-            
+
             new_module.S_r = nn.Parameter(S_r.clone(), requires_grad=False)
             new_module.U_r = nn.Parameter(U_r.clone(), requires_grad=False)
             new_module.V_r = nn.Parameter(Vh_r.clone(), requires_grad=False)
@@ -351,7 +364,7 @@ def replace_with_svd_residual(module, r):
             new_module.S_residual = None
             new_module.U_residual = None
             new_module.V_residual = None
-            
+
             new_module.S_r = None
             new_module.U_r = None
             new_module.V_r = None
