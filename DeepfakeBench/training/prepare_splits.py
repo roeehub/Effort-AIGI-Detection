@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
-"""prepare_splits.py – train/val split with GroupShuffleSplit + local manifest cache.
+# --- prepare_splits.py ---
 
-See README_prefetch.md for notes on tiny-method exclusion and resource tuning.
+# !/usr/bin/env python3
+"""prepare_splits.py – train/val split with GroupShuffleSplit + local manifest cache.
 """
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Set, Tuple
 
-import yaml
-from fsspec.core import url_to_fs  # pip install gcsfs
-from sklearn.model_selection import GroupShuffleSplit  # pip install scikit-learn
+import yaml  # noqa
+from fsspec.core import url_to_fs  # pip install gcsfs  # noqa
+from sklearn.model_selection import GroupShuffleSplit  # pip install scikit-learn  # noqa
 
 # ---------------------------------------------------------------------------
 # 1 Method categories (edit REG/REV if needed)
@@ -92,9 +92,10 @@ def _balance_and_subset_videos(
         real_source_names: List[str]
 ) -> List[VideoInfo]:
     """Balances the number of real and fake videos and applies subset percentage."""
-    if subset_percentage > 1.0:
-        print("[balance] `data_subset_percentage` >= 1.0, skipping balancing.")
-        return videos
+    if subset_percentage >= 1.0:
+        print("[balance] `data_subset_percentage` >= 1.0, using full dataset but balancing classes.")
+        # Even if using 100%, we still balance the classes to the size of the smaller one
+        subset_percentage = 1.0
 
     print(f"[balance] Balancing dataset with subset percentage: {subset_percentage:.2f}")
 
@@ -225,28 +226,38 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
 
     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
 
+    # --- START OF PATCH ---
+    # Apply balancing and subsetting to the *entire* dataset *before* splitting.
+    # This ensures the train and validation sets are scaled down proportionally.
+    print("\n--- Applying Balancing and Subsetting to the Entire Dataset ---")
+    balanced_subset_videos = _balance_and_subset_videos(
+        videos=videos,
+        subset_percentage=SUBSET,
+        real_source_names=cfg['methods']['use_real_sources']
+    )
+
+    if not balanced_subset_videos:
+        print(
+            "[ERROR] No videos remaining after balancing/subsetting. Check your data and config. Returning empty lists.")
+        return [], [], cfg
+
+    print("\n--- Performing Train/Validation Split on the Scaled Dataset ---")
     # ------------------------------------------------------------------ #
     # 3 GroupShuffleSplit (identity-aware, video-balanced)               #
     # ------------------------------------------------------------------ #
     gss = GroupShuffleSplit(n_splits=1,
                             test_size=VAL_RATIO,
                             random_state=SEED)
-    indices = list(range(len(videos)))
-    groups = [v.identity for v in videos]
+    indices = list(range(len(balanced_subset_videos)))
+    groups = [v.identity for v in balanced_subset_videos]
     train_idx, val_idx = next(gss.split(indices, groups=groups))
 
-    train_videos_unbalanced = [videos[i] for i in train_idx]
-    val_videos = [videos[i] for i in val_idx]
-
-    # --- APPLY BALANCING AND SUBSETTING TO TRAIN SPLIT ---
-    train_videos = _balance_and_subset_videos(
-        videos=train_videos_unbalanced,
-        subset_percentage=SUBSET,
-        real_source_names=cfg['methods']['use_real_sources']
-    )
+    train_videos = [balanced_subset_videos[i] for i in train_idx]
+    val_videos = [balanced_subset_videos[i] for i in val_idx]
 
     # sanity check
-    actual_ratio = len(val_videos) / len(videos)
+    total_subset_videos = len(balanced_subset_videos)
+    actual_ratio = len(val_videos) / total_subset_videos if total_subset_videos > 0 else 0
     if abs(actual_ratio - VAL_RATIO) > 0.005:
         print(f"[NOTE] Val ratio {actual_ratio:.3f} differs >0.5 % from "
               f"target {VAL_RATIO:.3f}")

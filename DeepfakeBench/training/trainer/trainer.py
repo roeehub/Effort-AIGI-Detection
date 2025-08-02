@@ -147,8 +147,17 @@ class Trainer(object):
             real_data_dict = self._next_batch_from_group(chosen_real_method, real_loaders, self.real_method_iters)
 
             # Combine batches
-            data_dict = {key: torch.cat((fake_data_dict[key], real_data_dict[key]), dim=0) if torch.is_tensor(
-                fake_data_dict[key]) else fake_data_dict[key] + real_data_dict[key] for key in fake_data_dict.keys()}
+            data_dict = {}
+            # This robustly combines batches, handling Tensors, lists, and None values.
+            for key in fake_data_dict.keys():
+                f_val, r_val = fake_data_dict[key], real_data_dict[key]
+                if torch.is_tensor(f_val):
+                    data_dict[key] = torch.cat((f_val, r_val), dim=0)
+                elif isinstance(f_val, list):
+                    data_dict[key] = f_val + r_val
+                else:
+                    # This correctly handles the NoneType for 'landmark' and 'mask'
+                    data_dict[key] = f_val
 
             batch_size = data_dict['label'].shape[0]
             if batch_size == 0: continue  # Skip empty batches
