@@ -56,4 +56,4 @@ dataloader_params:
   batch_size: 4
   test_batch_size:
   num_workers: 2 # Adjust based on your machine's CPU cores - !! per data loader !!
-  prefetch_factor: 2 # Number of batches to prefetch
+  prefetch_factor: 3 # Number of batches to prefetch
