@@ -24,7 +24,6 @@ from dataset import *
 from metrics.utils import parse_metric_for_print
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
-from dataset.abstract_dataset import DeepfakeAbstractBaseDataset  # noqa
 from prepare_splits import prepare_video_splits
 from dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
 
