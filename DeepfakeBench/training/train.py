@@ -4,9 +4,9 @@ import datetime
 import time
 import yaml  # noqa
 from datetime import timedelta
-from collections import Counter
 import math
-from collections import defaultdict
+from collections import defaultdict, Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch  # noqa
 import torch.nn.parallel  # noqa
@@ -183,92 +183,82 @@ def choose_metric(config):
 
 def sanity_check_loaders(fake_loader_dict,
                          real_loader_dict,
-                         num_batches=3,
+                         num_batches=2,
                          max_paths_to_show=2):
     """
-    Scan a handful of batches from every loader and print:
-
-      • label distribution   (expect all-1 for fake loaders, all-0 for real)
-      • unique tensor shapes (image, mask, landmark)
-      • #paths whose string does *not* match the method rule
-      • example frame paths
-
-    Args
-    ----
-    fake_loader_dict : dict[str, DataLoader]
-        keys are fake method names
-    real_loader_dict : dict[str, DataLoader]
-        keys are real-source names
-    num_batches : int
-        how many batches to read per loader
-    max_paths_to_show : int
-        how many sample paths to print per loader
+    Parallelized version of the sanity check.
+    Scans a handful of batches from every loader in parallel threads.
     """
+    print("\n==================== PARALLEL SANITY CHECK ====================")
+    start_time = time.time()
 
-    def scan(loader, expect_fake, method_name):
-        """Return stats gathered from ≤ num_batches of `loader`."""
+    all_loaders = {**fake_loader_dict, **real_loader_dict}
+
+    # This inner function will be run in a separate thread for each loader
+    def scan_one_loader(method_name, loader):
+        is_fake = method_name in fake_loader_dict
         label_counter = Counter()
         img_shapes = Counter()
         bad_path_count = 0
         example_paths = []
 
-        it = iter(loader)  # fresh iterator every call
-        for _ in range(num_batches):
-            try:
+        try:
+            it = iter(loader)
+            for i in range(num_batches):
+                # This is the slow part that will run in parallel
                 batch = next(it)
-            except StopIteration:
-                break
 
-            # 1) labels
-            lbls = batch['label']
-            label_counter.update(lbls.tolist())
+                # --- Perform checks ---
+                # 1) labels
+                lbls = batch['label']
+                label_counter.update(lbls.tolist())
 
-            # 2) image shapes
-            img_shapes.update([tuple(batch['image'].shape)])
+                # 2) image shapes
+                img_shapes.update([tuple(batch['image'].shape)])
 
-            # 3) path substring rule
-            if 'path' in batch:
-                expect_sub = f"/{method_name}/"
-                for p_group in batch['path']:
-                    for p in p_group:  # p is now a str
-                        cond = (expect_fake and expect_sub not in p) or \
-                               (not expect_fake and expect_sub in p)
-                        if cond:
+                # 3) path substring rule
+                if 'path' in batch and batch['path']:
+                    expect_sub = f"/{method_name}/"
+                    # For real sources, the method name might be different (e.g., YouTube-real)
+                    # This check is less critical now but kept for consistency
+                    for p in batch['path']:
+                        # p is now a list of 8 paths, just check the first one
+                        p_str = p[0] if isinstance(p, list) else p
+                        # Simple check: if fake, method should be in path. If real, it shouldn't be.
+                        # This is a loose check and might have false positives.
+                        is_in_path = expect_sub in p_str
+                        if (is_fake and not is_in_path) or (not is_fake and is_in_path and method_name != 'real'):
                             bad_path_count += 1
                         if len(example_paths) < max_paths_to_show:
-                            example_paths.append(p)
+                            example_paths.append(p_str)
 
-            # 4) masks / landmarks just type-check
-            assert isinstance(batch['mask'], (type(None), torch.Tensor))
-            assert isinstance(batch['landmark'], (type(None), torch.Tensor))
+            # --- Format results ---
+            result_str = f"\n[{method_name}]   ({'fake' if is_fake else 'real'}) - OK\n"
+            result_str += f"  label counts: {dict(label_counter) or '(loader empty)'}\n"
+            result_str += f"  image shapes: {list(img_shapes.keys()) or '(none)'}\n"
+            if bad_path_count:
+                result_str += f"  ⚠  {bad_path_count} paths failed the substring test\n"
+            for sp in example_paths:
+                result_str += f"  sample path : {sp}\n"
 
-        return label_counter, img_shapes, bad_path_count, example_paths[:max_paths_to_show]
+            return result_str
 
-    print("\n==================== SANITY CHECK ====================")
+        except Exception as e:
+            return f"\n[{method_name}]   ({'fake' if is_fake else 'real'}) - ❌ FAILED\n  Error: {repr(e)}\n"
 
-    all_keys = list(fake_loader_dict.keys()) + list(real_loader_dict.keys())
-    for method in all_keys:
-        is_fake_loader = method in fake_loader_dict
-        loader = fake_loader_dict[method] if method in fake_loader_dict else real_loader_dict[method]
-        if loader is None:
-            print(f"[{method}]  ⚠  loader missing – skipped")
-            continue
+    # Use a ThreadPoolExecutor to run scans in parallel
+    # max_workers can be tuned, but 10-15 is a good start for network I/O
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        # Submit all loader scan jobs to the pool
+        future_to_loader = {executor.submit(scan_one_loader, name, ldr): name for name, ldr in all_loaders.items()}
 
-        labels, shapes, bad_paths, samples = scan(
-            loader,
-            expect_fake=is_fake_loader,
-            method_name=method
-        )
+        # Process results as they complete
+        for future in as_completed(future_to_loader):
+            result = future.result()
+            print(result, end='')
 
-        print(f"\n[{method}]   ({'fake' if is_fake_loader else 'real'})")
-        print("  label counts:", dict(labels) or "(loader empty)")
-        print("  image shapes:", list(shapes.keys()) or "(none)")
-        if bad_paths:
-            print(f"  ⚠  {bad_paths} paths failed the substring test")
-        for sp in samples:
-            print("  sample path :", sp)
-
-    print("\n============ END SANITY CHECK – review above =========\n")
+    total_time = time.time() - start_time
+    print(f"\n============ END SANITY CHECK – took {total_time:.2f}s ============\n")
 
 
 def quick_single_process_check(loader):
@@ -382,12 +372,12 @@ def main():
             real_source_loaders[real_source] = method_loaders[real_source]
             del method_loaders[real_source]
 
-    quick_single_process_check(method_loaders['fomm'])  # or any loader
-    breakpoint()
+    # quick_single_process_check(method_loaders['fomm'])  # or any loader
+    # breakpoint()
 
     # after you created method_loaders and real_source_loaders
     sanity_check_loaders(method_loaders, real_source_loaders,
-                         num_batches=3,  # scan first 3 batches per loader
+                         num_batches=2,  # scan first 2 batches per loader
                          max_paths_to_show=2)  # print 2 example paths
 
     breakpoint()

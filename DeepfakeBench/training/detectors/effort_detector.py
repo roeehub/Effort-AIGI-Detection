@@ -112,44 +112,44 @@ class EffortDetector(nn.Module):
         return loss2
 
     def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
-        label = data_dict['label']  # Tensor of shape [batch_size]
-        pred = pred_dict['cls']     # Tensor of shape [batch_size, num_classes]
+        label = data_dict['label']
+        pred = pred_dict['cls']
+
+        # Check if the batch was originally 5D by comparing label and pred batch sizes
+        # If len(pred) > len(label), it means we reshaped a video batch
+        if pred.shape[0] > label.shape[0]:
+            B = label.shape[0]
+            # Calculate T (number of frames) from the discrepancy
+            T = pred.shape[0] // B
+            # Repeat each label T times to match the reshaped predictions
+            label = label.repeat_interleave(T)
+
+        # The rest of the loss calculation logic remains the same
+        # It now works correctly for both 4D and 5D original inputs
 
         # Compute overall loss using all samples
         loss = self.loss_func(pred, label)
 
         # Create masks for real and fake classes
-        mask_real = label == 0  # Boolean tensor
-        mask_fake = label == 1  # Boolean tensor
+        mask_real = label == 0
+        mask_fake = label == 1
 
         # Compute loss for real class
         if mask_real.sum() > 0:
-            pred_real = pred[mask_real]
-            label_real = label[mask_real]
-            loss_real = self.loss_func(pred_real, label_real)
+            loss_real = self.loss_func(pred[mask_real], label[mask_real])
         else:
-            # No real samples in batch
             loss_real = torch.tensor(0.0, device=pred.device)
 
         # Compute loss for fake class
         if mask_fake.sum() > 0:
-            pred_fake = pred[mask_fake]
-            label_fake = label[mask_fake]
-            loss_fake = self.loss_func(pred_fake, label_fake)
+            loss_fake = self.loss_func(pred[mask_fake], label[mask_fake])
         else:
-            # No fake samples in batch
             loss_fake = torch.tensor(0.0, device=pred.device)
-        
 
-        # loss2 = self.compute_weight_loss()
-        # overall_loss = loss + loss2
-
-        # Return a dictionary with all losses
         loss_dict = {
             'overall': loss,
             'real_loss': loss_real,
             'fake_loss': loss_fake,
-            # 'erank_loss': loss2
         }
         return loss_dict
 
@@ -162,8 +162,21 @@ class EffortDetector(nn.Module):
         return metric_batch_dict
 
     def forward(self, data_dict: dict, inference=False) -> dict:
-        # get the features by backbone
-        features = self.features(data_dict)
+        image = data_dict['image']
+
+        # Check if the input is a 5D tensor (batch of videos)
+        if image.dim() == 5:
+            # data_dict['image'] has shape [B, T, C, H, W]
+            B, T, C, H, W = image.shape
+            # Reshape to treat every frame as a separate sample: [B * T, C, H, W]
+            image = image.view(B * T, C, H, W)
+
+        # Create a temporary dict for the backbone
+        temp_data_dict = {'image': image}
+
+        # Now the backbone receives a 4D tensor as expected
+        features = self.features(temp_data_dict)
+
         # get the prediction by classifier
         pred = self.classifier(features)
         # get the probability of the pred
