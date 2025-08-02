@@ -10,7 +10,7 @@ data_params:
   val_split_ratio: 0.2
   # Percentage of the total dataset to use. 1.0 = 100%, 0.2 = 20%.
   # Useful for rapid debugging on a small, representative data slice.
-  data_subset_percentage: 0.2
+  data_subset_percentage: 0.1
   # Number of frames to sample from each video's 32 frames
   num_frames_per_video: 8
 
