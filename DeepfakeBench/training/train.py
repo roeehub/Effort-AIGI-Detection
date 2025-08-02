@@ -87,47 +87,47 @@ def comprehensive_sampler_check(
         fake_method_names,
         real_weights,
         fake_weights,
-        full_batch_size
+        full_batch_size,
+        train_videos
 ):
     """
-    Simulates the training loop's data fetching to test performance and correctness.
-    Ensures all dataloaders are used and combined batches are correctly formed.
+    Simulates data fetching to test performance, correctness, and data integrity.
+    Provides a detailed report on which methods are successfully providing data
+    and which are failing due to data corruption.
     """
 
-    # --- FIX: Define the helper function inside this function's scope ---
     def _get_next_batch(method, dataloader_dict, iter_dict):
-        """Helper to fetch a batch from a specific dataloader, creating an iterator if needed."""
         it = iter_dict.get(method)
         if it is None:
-            print(f"\n   ... Initializing iterator for '{method}' ...")
             it = iter_dict[method] = iter(dataloader_dict[method])
         try:
             return next(it)
         except StopIteration:
-            print(f"\n   ... Restarting exhausted iterator for '{method}' ...")
-            it = iter_dict[method] = iter(dataloader_dict[method])
-            return next(it)
+            # Dataloader is exhausted. For this check, we don't restart it
+            # to see if it runs out of data prematurely.
+            return None  # Signal exhaustion
 
-    print("\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
-    if not fake_loaders:
-        print("❌ No fake loaders provided. Aborting check.")
+    print("\n\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
+    if not fake_loaders or not real_loaders:
+        print("❌ No fake or real loaders provided. Aborting check.")
         return
 
-    num_iterations = len(fake_loaders)
+    # Run for more iterations to ensure even low-weight methods are likely sampled
+    num_iterations = max(200, len(fake_loaders) * 10)
     half_batch_size = full_batch_size // 2
-    print(f"Running for {num_iterations} iterations to ensure all {len(fake_loaders)} fake loaders are likely sampled.")
+    print(f"Simulating {num_iterations} batch creation steps...")
     print(f"Expecting combined batches of size {full_batch_size} ({half_batch_size} real + {half_batch_size} fake).\n")
 
-    # Mimic the state maintained by the Trainer
-    real_method_iters = {}
-    fake_method_iters = {}
+    # Mimic Trainer state
+    real_method_iters = {name: iter(loader) for name, loader in real_loaders.items()}
+    fake_method_iters = {name: iter(loader) for name, loader in fake_loaders.items()}
 
-    # Tracking for the report
-    seen_real_methods = set()
-    seen_fake_methods = set()
+    # --- Enhanced Tracking ---
+    successful_batches = defaultdict(int)
+    empty_batches = defaultdict(int)
     batch_times = []
-
-    overall_start_time = time.time()
+    video_counts = Counter(v.method for v in train_videos)
+    all_methods_in_check = set(real_loaders.keys()) | set(fake_loaders.keys())
 
     pbar = tqdm(range(num_iterations), desc="Testing Sampler")
     for i in pbar:
@@ -136,63 +136,63 @@ def comprehensive_sampler_check(
         # 1. Sample and fetch a FAKE half-batch
         chosen_fake_method = random.choices(fake_method_names, weights=fake_weights, k=1)[0]
         fake_data_dict = _get_next_batch(chosen_fake_method, fake_loaders, fake_method_iters)
-        seen_fake_methods.add(chosen_fake_method)
+
+        if not fake_data_dict or fake_data_dict['image'].shape[0] == 0:
+            empty_batches[chosen_fake_method] += 1
+            fake_method_iters[chosen_fake_method] = iter(fake_loaders[chosen_fake_method])  # Restart for next attempt
+            continue
 
         # 2. Sample and fetch a REAL half-batch
         chosen_real_method = random.choices(real_method_names, weights=real_weights, k=1)[0]
         real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
-        seen_real_methods.add(chosen_real_method)
 
-        # 3. Combine into a single batch dictionary
-        combined_data_dict = {}
-        for key in fake_data_dict.keys():
-            if torch.is_tensor(fake_data_dict[key]):
-                combined_data_dict[key] = torch.cat((fake_data_dict[key], real_data_dict[key]), dim=0)
-            elif isinstance(fake_data_dict[key], list):
-                combined_data_dict[key] = fake_data_dict[key] + real_data_dict[key]
-            else:
-                combined_data_dict[key] = fake_data_dict[key]
+        if not real_data_dict or real_data_dict['image'].shape[0] == 0:
+            empty_batches[chosen_real_method] += 1
+            real_method_iters[chosen_real_method] = iter(real_loaders[chosen_real_method])  # Restart
+            continue
 
-        # 4. Perform checks on the combined batch
-        image_shape = combined_data_dict['image'].shape
-        assert image_shape[0] == full_batch_size, f"Expected batch size {full_batch_size}, but got {image_shape[0]}"
+        successful_batches[chosen_fake_method] += 1
+        successful_batches[chosen_real_method] += 1
 
-        label_counts = Counter(combined_data_dict['label'].tolist())
-        assert label_counts.get(0,
-                                0) == half_batch_size, f"Expected {half_batch_size} real samples, but got {label_counts.get(0, 0)}"
-        assert label_counts.get(1,
-                                0) == half_batch_size, f"Expected {half_batch_size} fake samples, but got {label_counts.get(1, 0)}"
+        # 3. Combine and check the batch
+        combined_labels = torch.cat((real_data_dict['label'], fake_data_dict['label']), dim=0)
+        assert combined_labels.shape[0] == full_batch_size, f"Batch size mismatch!"
+        label_counts = Counter(combined_labels.tolist())
+        assert label_counts.get(0, 0) == half_batch_size, f"Real sample count mismatch!"
+        assert label_counts.get(1, 0) == half_batch_size, f"Fake sample count mismatch!"
 
-        iteration_time = time.time() - iteration_start_time
-        batch_times.append(iteration_time)
+        batch_times.append(time.time() - iteration_start_time)
+        pbar.set_postfix_str(f"OK | Real: {chosen_real_method}, Fake: {chosen_fake_method}")
 
-        pbar.set_description(
-            f"Batch {i + 1}/{num_iterations} | Last: {iteration_time:.2f}s | Real: {chosen_real_method} | Fake: {chosen_fake_method}")
-
-    overall_time = time.time() - overall_start_time
-
-    print("\n-------------------- CHECK COMPLETE: REPORT --------------------")
-    print(f"Total time for {num_iterations} batches: {overall_time:.2f} seconds.")
+    print("\n-------------------- CHECK COMPLETE: DIAGNOSTIC REPORT --------------------")
+    print(f"Total time for {num_iterations} simulated batches: {sum(batch_times):.2f} seconds.")
     if batch_times:
-        print(f"Batch creation time (sec):")
-        print(f"  - Average: {np.mean(batch_times):.3f}")
-        print(f"  - Min:     {np.min(batch_times):.3f}")
-        print(f"  - Max:     {np.max(batch_times):.3f}")
+        print(f"Avg batch creation time: {np.mean(batch_times):.3f}s | Max: {np.max(batch_times):.3f}s")
 
-    # Coverage Report
-    print("\nLoader Coverage:")
-    all_fakes_seen = set(fake_loaders.keys()) == seen_fake_methods
-    print(f"  - Fake Methods: {'✅' if all_fakes_seen else '❌'} Seen {len(seen_fake_methods)}/{len(fake_loaders)}")
-    if not all_fakes_seen:
-        missing = set(fake_loaders.keys()) - seen_fake_methods
-        print(f"    - Missing: {missing}")
+    print("\n--- Data Source Health ---")
+    print(f"{'Method':<20} | {'Total Videos':>12} | {'Successful Batches':>20} | {'Empty/Failed Batches':>22}")
+    print("-" * 80)
 
-    all_reals_seen = set(real_loaders.keys()) == seen_real_methods
-    print(f"  - Real Sources: {'✅' if all_reals_seen else '❌'} Seen {len(seen_real_methods)}/{len(real_loaders)}")
-    if not all_reals_seen:
-        missing = set(real_loaders.keys()) - seen_real_methods
-        print(f"    - Missing: {missing}")
+    for method in sorted(list(all_methods_in_check)):
+        total_vids = video_counts.get(method, 0)
+        success = successful_batches.get(method, 0)
+        failed = empty_batches.get(method, 0)
 
+        status = "✅ OK"
+        if success == 0 and failed > 0:
+            status = "❌ TOTAL FAILURE"
+        elif failed > 0:
+            status = f"⚠️ PARTIAL FAILURE ({failed / (success + failed):.0%} failed)"
+
+        print(f"{method:<20} | {total_vids:>12} | {success:>20} | {failed:>22} | {status}")
+
+    print("\nRecommendations:")
+    print(
+        "  - For methods with 'TOTAL FAILURE', all videos are likely corrupt or missing. Consider removing them from `dataloader_config.yml`.")
+    print(
+        "  - For methods with 'PARTIAL FAILURE', some videos are corrupt. The robust loader is handling this, but be aware of the data loss.")
+    print(
+        "  - If a method shows 0 successful and 0 failed batches, it was likely never sampled. Check its weight/video count.")
     print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
 
 
@@ -227,29 +227,9 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
-    # --- pretty print a bunch of configuration data for clarity ---
-    logger.info("------- Configuration: -------")
-    for key, value in config.items():
-        if isinstance(value, dict):
-            logger.info(f"{key}:")
-            for sub_key, sub_value in value.items():
-                logger.info(f"  {sub_key}: {sub_value}")
-        else:
-            logger.info(f"{key}: {value}")
-    logger.info("Data Configuration:")
-    for key, value in data_config.items():
-        if isinstance(value, dict):
-            logger.info(f"{key}:")
-            for sub_key, sub_value in value.items():
-                logger.info(f"  {sub_key}: {sub_value}")
-        else:
-            logger.info(f"{key}: {value}")
-
-    logger.info("------- Starting training process ---")
-
+    logger.info("------- Configuration & Data Loading -------")
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
-    # --- 50/50 BATCH SETUP ---
     train_batch_size = data_config['dataloader_params']['batch_size']
     if train_batch_size % 2 != 0:
         raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
@@ -274,11 +254,6 @@ def main():
     total_real_videos = sum(real_video_counts.values())
     total_fake_videos = sum(fake_video_counts.values())
 
-    if total_real_videos != total_fake_videos and total_real_videos > 0 and total_fake_videos > 0:
-        logger.warning(
-            f"Mismatch after balancing: {total_real_videos} real vs {total_fake_videos} fake. Balance not perfect."
-        )
-
     real_method_names = list(real_loaders.keys())
     real_weights = [real_video_counts[m] / total_real_videos for m in
                     real_method_names] if total_real_videos > 0 else []
@@ -299,7 +274,8 @@ def main():
         fake_method_names=fake_method_names,
         real_weights=real_weights,
         fake_weights=fake_weights,
-        full_batch_size=train_batch_size
+        full_batch_size=train_batch_size,
+        train_videos=train_videos  # Pass video info for reporting
     )
 
     logger.info("Sanity check complete. Halting execution as planned.")
