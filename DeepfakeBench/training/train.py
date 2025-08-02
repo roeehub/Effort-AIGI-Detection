@@ -7,6 +7,7 @@ from datetime import timedelta
 import math
 import os
 from collections import defaultdict, Counter
+from tqdm import tqdm  # noqa
 
 import torch  # noqa
 import torch.nn.parallel  # noqa
@@ -207,6 +208,11 @@ def main():
     if config['ddp']:
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
+
+    # --- print a bunch of configuration data for clarity ---
+    logger.info(f"Configuration: {config}")
+    logger.info(f"Data configuration: {data_config}")
+    logger.info(f"Command line arguments: {args}")
 
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
