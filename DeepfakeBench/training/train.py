@@ -250,9 +250,10 @@ def main():
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
     # --- 50/50 BATCH SETUP ---
-    if config['train_batchSize'] % 2 != 0:
-        raise ValueError(f"train_batchSize must be even for 50/50 split, but got {config['train_batchSize']}")
-    half_batch_size = config['train_batchSize'] // 2
+    train_batch_size = data_config['dataloader_params']['batch_size']
+    if train_batch_size % 2 != 0:
+        raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
+    half_batch_size = train_batch_size // 2
     logger.info(f"Using 50/50 real/fake split. Half-batch size: {half_batch_size}.")
 
     all_train_loaders, test_method_loaders = create_method_aware_dataloaders(
@@ -287,7 +288,7 @@ def main():
                     fake_method_names] if total_fake_videos > 0 else []
 
     total_train_videos = len(train_videos)
-    epoch_len = math.ceil(total_train_videos / config['train_batchSize'])
+    epoch_len = math.ceil(total_train_videos / train_batch_size)
     logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
 
     # --- Call the new sanity check ---
@@ -298,7 +299,7 @@ def main():
         fake_method_names=fake_method_names,
         real_weights=real_weights,
         fake_weights=fake_weights,
-        full_batch_size=config['train_batchSize']
+        full_batch_size=train_batch_size
     )
 
     logger.info("Sanity check complete. Halting execution as planned.")
