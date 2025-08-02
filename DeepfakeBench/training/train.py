@@ -339,13 +339,13 @@ def main():
     # breakpoint()
 
     # print the names of the loaders
-    print("\n--- Method Loaders ---")
-    for method_name, loader in method_loaders.items():
-        print(f"{method_name}: {len(loader.dataset)} videos")
+    print("\n--- Fake Method Loaders ---")
+    for method_name in method_loaders.keys():
+        print(f"  - {method_name} (fake method)")
 
     print("\n--- Real Source Loaders ---")
-    for method_name, loader in real_source_loaders.items():
-        print(f"{method_name}: {len(loader.dataset)} videos")
+    for method_name in real_source_loaders.keys():
+        print(f"  - {method_name} (real source)")
 
     # after you created method_loaders and real_source_loaders
     sanity_check_loaders(method_loaders, real_source_loaders,
