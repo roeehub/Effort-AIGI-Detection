@@ -106,6 +106,7 @@ def parse_metric_for_print(metric_dict):
 def get_test_metrics(y_pred, y_true, img_names=None):
     """
     Calculates frame-level and, optionally, video-level metrics.
+    This version is robust to single-class inputs.
 
     Args:
         y_pred (np.ndarray): 1D array of frame-level prediction probabilities.
@@ -121,62 +122,77 @@ def get_test_metrics(y_pred, y_true, img_names=None):
     y_pred = np.array(y_pred).squeeze()
     y_true = np.array(y_true).squeeze()
 
+    metrics_dict = {}
+
     # --- 1. Frame-level Metrics (Always Calculated) ---
-    fpr, tpr, _ = metrics.roc_curve(y_true, y_pred, pos_label=1)
-    fnr = 1 - tpr
+    # --- START OF FRAME-LEVEL FIX ---
+    unique_frame_labels = np.unique(y_true)
+    if len(y_true) > 0 and len(unique_frame_labels) > 1:
+        # Both classes are present, calculate all metrics
+        fpr, tpr, _ = metrics.roc_curve(y_true, y_pred, pos_label=1)
+        fnr = 1 - tpr
+        frame_auc = metrics.auc(fpr, tpr)
+        frame_eer = fpr[np.nanargmin(np.absolute(fnr - fpr))]
+        frame_ap = metrics.average_precision_score(y_true, y_pred)
+    else:
+        # Single class or empty input, cannot calculate AUC/EER/AP
+        frame_auc = -1.0
+        frame_eer = -1.0
+        frame_ap = -1.0
 
-    frame_auc = metrics.auc(fpr, tpr)
-    # EER is the point where FNR == FPR
-    frame_eer = fpr[np.nanargmin(np.absolute(fnr - fpr))]
-    frame_ap = metrics.average_precision_score(y_true, y_pred)
-
-    # Calculate frame-level accuracy
+    # Accuracy can always be calculated
     pred_class = (y_pred > 0.5).astype(int)
-    correct = (pred_class == y_true).sum().item()
+    correct = (pred_class == y_true).sum()
     frame_acc = correct / len(y_true) if len(y_true) > 0 else 0.0
 
-    metrics_dict = {
+    metrics_dict.update({
         'acc': frame_acc,
         'auc': frame_auc,
         'eer': frame_eer,
         'ap': frame_ap,
-    }
+    })
+    # --- END OF FRAME-LEVEL FIX ---
 
     # --- 2. Video-level Metrics (Calculated if img_names is provided) ---
     if img_names is not None and len(img_names) > 0:
-        # Group predictions and labels by video ID
         videos = defaultdict(lambda: {'preds': [], 'label': -1})
         for path, pred, label in zip(img_names, y_pred, y_true):
-            # Assumes video ID is the name of the parent directory of the frame
+            # Using Path object correctly
             video_id = Path(path).parent.name
             videos[video_id]['preds'].append(pred)
-            # All frames from a video have the same label, so we only need to set it once
             if videos[video_id]['label'] == -1:
                 videos[video_id]['label'] = label
 
-        # Aggregate predictions and labels to the video level
         video_preds = []
         video_labels = []
         for video_id, data in videos.items():
-            if not data['preds']: continue  # Skip if a video had no predictions for some reason
-            # The video's prediction is the average of its frame predictions
+            if not data['preds']: continue
             video_preds.append(np.mean(data['preds']))
-            # The video's label is the single label we stored
             video_labels.append(data['label'])
 
-        if len(video_labels) > 1:  # Need at least 2 videos to calculate metrics
+        # --- START OF VIDEO-LEVEL FIX ---
+        if len(video_labels) > 1:
             video_preds = np.array(video_preds)
             video_labels = np.array(video_labels)
 
-            v_fpr, v_tpr, _ = metrics.roc_curve(video_labels, video_preds, pos_label=1)
-            v_fnr = 1 - v_tpr
+            unique_video_labels = np.unique(video_labels)
+            if len(unique_video_labels) > 1:
+                # Both classes are present at video level
+                v_fpr, v_tpr, _ = metrics.roc_curve(video_labels, video_preds, pos_label=1)
+                v_fnr = 1 - v_tpr
+                metrics_dict['video_auc'] = metrics.auc(v_fpr, v_tpr)
+                metrics_dict['video_eer'] = v_fpr[np.nanargmin(np.absolute(v_fnr - v_fpr))]
+                metrics_dict['video_ap'] = metrics.average_precision_score(video_labels, video_preds)
+            else:
+                # Single class at video level
+                metrics_dict['video_auc'] = -1.0
+                metrics_dict['video_eer'] = -1.0
+                metrics_dict['video_ap'] = -1.0
 
-            metrics_dict['video_auc'] = metrics.auc(v_fpr, v_tpr)
-            metrics_dict['video_eer'] = v_fpr[np.nanargmin(np.absolute(v_fnr - v_fpr))]
-            metrics_dict['video_ap'] = metrics.average_precision_score(video_labels, video_preds)
-
+            # Video accuracy can always be calculated
             v_pred_class = (video_preds > 0.5).astype(int)
-            v_correct = (v_pred_class == video_labels).sum().item()
-            metrics_dict['video_acc'] = v_correct / len(video_labels)
+            v_correct = (v_pred_class == video_labels).sum()
+            metrics_dict['video_acc'] = v_correct / len(video_labels) if len(video_labels) > 0 else 0.0
+        # --- END OF VIDEO-LEVEL FIX ---
 
     return metrics_dict

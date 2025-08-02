@@ -200,13 +200,10 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         try:
             label, method, vid = parts[-4], parts[-3], parts[-2]
             if label not in {"real", "fake"}:
-                # print(f"[WARN] Skipping invalid label: {label} in {p}")
                 continue
         except Exception:
-            # print(f"[WARN] Skipping problematic path: {p}")
             continue
         if method not in allowed:
-            # print(f"[WARN] Skipping path with disallowed method: {method} in {p}")
             continue
         vids_dict[(label, method, vid)].append(p)
 
@@ -226,41 +223,65 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
 
     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
 
-    # --- START OF PATCH ---
-    # Apply balancing and subsetting to the *entire* dataset *before* splitting.
-    # This ensures the train and validation sets are scaled down proportionally.
-    print("\n--- Applying Balancing and Subsetting to the Entire Dataset ---")
-    balanced_subset_videos = _balance_and_subset_videos(
-        videos=videos,
+    # ------------------------------------------------------------------ #
+    # 3. Stratified GroupShuffleSplit (identity-aware, method-stratified)#
+    # ------------------------------------------------------------------ #
+    print(f"[split] Performing Stratified GroupShuffleSplit to ensure all methods are in val set.")
+    train_idx, val_idx = [], []
+
+    # Group videos by method first
+    videos_by_method = defaultdict(list)
+    for i, v in enumerate(videos):
+        videos_by_method[v.method].append((i, v))  # Store original index and video
+
+    for method, method_videos_with_indices in videos_by_method.items():
+        # Prepare for splitting this specific method
+        method_indices = [item[0] for item in method_videos_with_indices]
+        method_groups = [item[1].identity for item in method_videos_with_indices]
+
+        # Cannot split a method with fewer than 2 videos or 2 unique identity groups
+        if len(method_indices) < 2 or len(set(method_groups)) < 2:
+            print(
+                f"[split] WARN: Method '{method}' is too small or has only 1 identity group. Assigning all to training.")
+            train_idx.extend(method_indices)
+            continue
+
+        # Create a splitter for this method
+        gss = GroupShuffleSplit(n_splits=1, test_size=VAL_RATIO, random_state=SEED)
+
+        # Perform the split *only on this method's videos*
+        try:
+            method_train_indices_local, method_val_indices_local = next(gss.split(
+                X=method_videos_with_indices, groups=method_groups
+            ))
+
+            # Map back to original indices in the main `videos` list
+            original_train_indices = [method_indices[i] for i in method_train_indices_local]
+            original_val_indices = [method_indices[i] for i in method_val_indices_local]
+
+            train_idx.extend(original_train_indices)
+            val_idx.extend(original_val_indices)
+        except ValueError:
+            # This can happen if gss.split can't make a split (e.g., too few groups for test_size)
+            print(f"[split] WARN: Could not split method '{method}' while respecting groups. Assigning all to train.")
+            train_idx.extend(method_indices)
+
+    train_videos_unbalanced = [videos[i] for i in train_idx]
+    val_videos = [videos[i] for i in val_idx]
+
+    # --- APPLY BALANCING AND SUBSETTING TO TRAIN SPLIT ---
+    train_videos = _balance_and_subset_videos(
+        videos=train_videos_unbalanced,
         subset_percentage=SUBSET,
         real_source_names=cfg['methods']['use_real_sources']
     )
 
-    if not balanced_subset_videos:
-        print(
-            "[ERROR] No videos remaining after balancing/subsetting. Check your data and config. Returning empty lists.")
-        return [], [], cfg
-
-    print("\n--- Performing Train/Validation Split on the Scaled Dataset ---")
-    # ------------------------------------------------------------------ #
-    # 3 GroupShuffleSplit (identity-aware, video-balanced)               #
-    # ------------------------------------------------------------------ #
-    gss = GroupShuffleSplit(n_splits=1,
-                            test_size=VAL_RATIO,
-                            random_state=SEED)
-    indices = list(range(len(balanced_subset_videos)))
-    groups = [v.identity for v in balanced_subset_videos]
-    train_idx, val_idx = next(gss.split(indices, groups=groups))
-
-    train_videos = [balanced_subset_videos[i] for i in train_idx]
-    val_videos = [balanced_subset_videos[i] for i in val_idx]
-
     # sanity check
-    total_subset_videos = len(balanced_subset_videos)
-    actual_ratio = len(val_videos) / total_subset_videos if total_subset_videos > 0 else 0
-    if abs(actual_ratio - VAL_RATIO) > 0.005:
-        print(f"[NOTE] Val ratio {actual_ratio:.3f} differs >0.5 % from "
-              f"target {VAL_RATIO:.3f}")
+    # Note: actual_ratio is now checked against the total number of videos before subsetting
+    actual_ratio = len(val_videos) / len(videos) if len(videos) > 0 else 0
+    if abs(actual_ratio - VAL_RATIO) > 0.01:  # Loosened tolerance slightly for stratified split
+        print(f"[NOTE] Val ratio {actual_ratio:.3f} differs >1% from "
+              f"target {VAL_RATIO:.3f}. This can happen due to stratification of small methods.")
 
     print(f"Split complete ▶ train {len(train_videos):,} | "
           f"val {len(val_videos):,}")
