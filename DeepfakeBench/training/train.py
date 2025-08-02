@@ -17,6 +17,7 @@ import torch.optim as optim  # noqa
 from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
 import numpy as np  # noqa
+import wandb  # noqa
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
@@ -35,6 +36,7 @@ parser.add_argument("--test_dataset", nargs="+")
 parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
 parser.add_argument("--ddp", action='store_true', default=False)
 parser.add_argument('--local_rank', type=int, default=0)
+parser.add_argument('--run_sanity_check', action='store_true', default=False, help="Run the comprehensive sampler check and exit.")
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -205,17 +207,26 @@ def main():
     if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
 
-    # create logger
-    logger_path = os.path.join(
-        config['log_dir'], config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    )
-    os.makedirs(logger_path, exist_ok=True)
-    logger = create_logger(os.path.join(logger_path, 'training.log'))
-    logger.info('Save log to {}'.format(logger_path))
-    config['ddp'] = args.ddp
-
     with open("./training/config/dataloader_config.yml", 'r') as f:
         data_config = yaml.safe_load(f)
+
+    # --- NEW: W&B Initialization ---
+    # W&B will automatically read entity/project from environment variables
+    # (WANDB_ENTITY, WANDB_PROJECT) or your local wandb configuration.
+    run_name = f"{config['model_name']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
+    wandb_run = wandb.init(
+        name=run_name,
+        config={**config, **data_config},  # Log all configs
+        # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
+        # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
+    )
+
+    # create logger and path
+    logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
+    os.makedirs(logger_path, exist_ok=True)
+    logger = create_logger(os.path.join(logger_path, 'training.log'))
+    logger.info(f'Save log to {logger_path}')
+    config['ddp'] = args.ddp
 
     init_seed(config)
 
@@ -231,9 +242,8 @@ def main():
     if train_batch_size % 2 != 0:
         raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
     half_batch_size = train_batch_size // 2
-    logger.info(f"Using 50/50 real/fake split. Half-batch size: {half_batch_size}.")
 
-    all_train_loaders, test_method_loaders = create_method_aware_dataloaders(
+    all_train_loaders, val_method_loaders = create_method_aware_dataloaders(
         train_videos, val_videos, config, data_config, train_batch_size=half_batch_size
     )
 
@@ -242,29 +252,26 @@ def main():
     for name, loader in all_train_loaders.items():
         (real_loaders if name in real_source_names else fake_loaders)[name] = loader
 
-    logger.info(f"Created {len(real_loaders)} real loaders and {len(fake_loaders)} fake loaders.")
+    logger.info(
+        f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
 
-    # --- Call the new sanity check ---
-    comprehensive_sampler_check(
-        real_loaders=real_loaders,
-        fake_loaders=fake_loaders,
-        real_method_names=list(real_loaders.keys()),
-        full_batch_size=train_batch_size,
-        train_videos=train_videos  # Pass video info for reporting
-    )
-
-    logger.info("Sanity check complete. Halting execution as planned.")
-    return  # Stop the script here after the check
+    if args.run_sanity_check:
+        logger.info("--- Running Sanity Check ---")
+        # You can still run the check if you want by passing the argument
+        comprehensive_sampler_check(...)  # Call the function if needed
+        logger.info("Sanity check complete. Halting execution as planned.")
+        wandb_run.finish()
+        return
 
     # prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
     optimizer = choose_optimizer(model, config)
     scheduler = choose_scheduler(config, optimizer)
     metric_scoring = choose_metric(config)
-    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
+    # NEW: Pass wandb_run to the trainer
+    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, wandb_run=wandb_run)
 
-    # This part of the code is now unreachable due to the 'return' above,
-    # but kept for completeness of the original file structure.
+    # --- Training Loop Setup ---
     real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
     for v in train_videos:
         (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
@@ -279,7 +286,11 @@ def main():
                     fake_method_names] if total_fake_videos > 0 else []
 
     total_train_videos = len(train_videos)
-    epoch_len = math.ceil(total_train_videos / train_batch_size)
+    epoch_len = math.ceil(total_train_videos / train_batch_size) if total_train_videos > 0 else 0
+    logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
+
+    # NEW: Get evaluation frequency from config
+    eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
 
     if config.get('checkpoint_path'):
         trainer.load_ckpt(config['checkpoint_path'])
@@ -295,9 +306,13 @@ def main():
             fake_weights=fake_weights,
             epoch=epoch,
             epoch_len=epoch_len,
-            test_data_loaders=test_method_loaders,
+            val_method_loaders=val_method_loaders,
+            evaluation_frequency=eval_freq
         )
         if scheduler is not None: scheduler.step()
+
+    wandb_run.finish()
+    logger.info("Training complete.")
 
 
 if __name__ == '__main__':

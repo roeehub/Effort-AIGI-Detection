@@ -53,20 +53,15 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
     all_frame_paths = list(video_info.frame_paths)
 
     if len(all_frame_paths) < frame_num:
-        # Not enough frames in the video to begin with
-        # print(f"[WARN] Skipping video {video_info.method}/{video_info.video_id}: needs {frame_num} frames, has {len(all_frame_paths)}.")
         return None
 
-    # Shuffle all available paths to introduce randomness
     random.shuffle(all_frame_paths)
 
     images = []
     loaded_frame_count = 0
-    unsuccessful_count = 0
-
     for path in all_frame_paths:
         if loaded_frame_count == frame_num:
-            break  # We have enough frames
+            break
         try:
             with fsspec.open(path, "rb") as f:
                 img = Image.open(f).convert("RGB")
@@ -74,23 +69,15 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
             images.append(img)
             loaded_frame_count += 1
         except Exception:
-            unsuccessful_count += 1
-            if unsuccessful_count > 3:
-                return None  # Too many failed frames
             continue
 
-
-    # After trying all paths, check if we gathered enough frames
     if loaded_frame_count < frame_num:
-        # print(f"[WARN] Skipping video {video_info.method}/{video_info.video_id}: found only {loaded_frame_count}/{frame_num} valid frames.")
         return None
 
-    # Apply same augmentation to all frames of a video if in train mode
     if mode == 'train' and config['use_data_augmentation']:
         aug_seed = random.randint(0, 2 ** 32 - 1)
         images = [data_aug(img, augmentation_seed=aug_seed) for img in images]
 
-    # Convert to tensor and normalize
     normalize_transform = T.Compose([
         T.ToTensor(),
         T.Normalize(mean=config['mean'], std=config['std'])
@@ -107,10 +94,8 @@ def collate_fn(batch):
     """
     A simplified collate_fn, matching the one in abstract_dataset.py.
     """
-    # Filter out any None values that might have slipped through the cracks
     batch = [b for b in batch if b is not None]
     if not batch:
-        # Return an empty dict if the whole batch was corrupt
         return {'image': torch.empty(0), 'label': torch.empty(0), 'path': []}
 
     images, labels, landmarks, masks, paths = zip(*batch)
@@ -118,7 +103,6 @@ def collate_fn(batch):
     images = torch.stack(images, dim=0)
     labels = torch.LongTensor(labels)
 
-    # Landmarks and masks are None from our loader, so we pass them as is.
     data_dict = {
         'image': images,
         'label': labels,
@@ -132,43 +116,39 @@ def collate_fn(batch):
 def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
                                     data_config: dict, train_batch_size: int):
     """
-    Creates separate dataloaders for train (per-method) and val (per-dataset).
+    Creates separate dataloaders for train (per-method) and val (per-method).
     """
     # --- 1. Create Training DataLoaders (per fake method AND per real source) ---
     train_loaders = {}
-    videos_by_method = defaultdict(list)
+    videos_by_method_train = defaultdict(list)
     for v in train_videos:
-        videos_by_method[v.method].append(v)
+        videos_by_method_train[v.method].append(v)
 
-    # The set of all methods we are interested in for training
-    # (includes both real sources and fake methods)
     all_train_methods = data_config['methods']['use_real_sources'] + data_config['methods']['use_fake_methods']
 
     for method in all_train_methods:
-        if method in videos_by_method and videos_by_method[method]:
-            pipe = IterableWrapper(videos_by_method[method]).shuffle()
+        if method in videos_by_method_train and videos_by_method_train[method]:
+            pipe = IterableWrapper(videos_by_method_train[method]).shuffle()
             pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
-            pipe = Filter(pipe, lambda x: x is not None)  # Filter out videos that failed loading
+            pipe = Filter(pipe, lambda x: x is not None)
             train_loaders[method] = DataLoader(
                 pipe,
-                batch_size=train_batch_size,  # Use the passed half-batch size
+                batch_size=train_batch_size,
                 num_workers=data_config['dataloader_params']['num_workers'],
                 collate_fn=collate_fn,
                 persistent_workers=True,
                 prefetch_factor=data_config['dataloader_params']['prefetch_factor']
             )
 
-    # --- 2. Create Validation DataLoaders (per dataset name) ---
+    # --- 2. Create Validation DataLoaders (per method, both real and fake) ---
+    # MODIFICATION: Now creates a loader for each method in the validation set.
     val_loaders = {}
-    videos_by_dataset = defaultdict(list)
-    FFpp_pool = ['FaceForensics++', 'FaceShifter', 'DeepFakeDetection', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
+    videos_by_method_val = defaultdict(list)
     for v in val_videos:
-        # This is a simple way to guess dataset from method name, adjust if needed
-        dataset_name = v.method.split('_')[0]
-        if v.method in FFpp_pool: dataset_name = 'FaceForensics++'
-        videos_by_dataset[dataset_name].append(v)
+        videos_by_method_val[v.method].append(v)
 
-    for name, videos in videos_by_dataset.items():
+    for name, videos in videos_by_method_val.items():
+        if not videos: continue
         pipe = IterableWrapper(videos)  # No shuffle for validation
         pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'test'))
         pipe = Filter(pipe, lambda x: x is not None)
