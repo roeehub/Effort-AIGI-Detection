@@ -76,9 +76,8 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
 
         image_tensors = [normalize_transform(img) for img in images]
 
-        # For this project, it seems you only need one frame per sample in the batch
-        # If video_level is True, you would stack them: torch.stack(image_tensors)
-        # Based on your trainer, you process one frame at a time.
+        # Stack the list of 8 tensors into a single [8, 3, 224, 224] tensor
+        video_tensor = torch.stack(image_tensors, dim=0)
 
         label = 0 if video_info.label == 'real' else 1
 
@@ -86,7 +85,7 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
         # We only return the first successfully processed frame's data.
         # Note: Your collate_fn expects (image, label, landmark, mask, path)
         # We provide placeholders for landmark and mask as they are not used in this simplified loader.
-        return (image_tensors[0], label, None, None, selected_paths[0])
+        return video_tensor, label, None, None, video_info.frame_paths
 
     except Exception as e:
         # print(f"[WARN] Skipping video {video_info.method}/{video_info.video_id} due to error: {e}")
