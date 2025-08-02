@@ -138,7 +138,8 @@ def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: l
                 batch_size=train_batch_size,  # Use the passed half-batch size
                 num_workers=data_config['dataloader_params']['num_workers'],
                 collate_fn=collate_fn,
-                persistent_workers=True
+                persistent_workers=True,
+                prefetch_factor=data_config['dataloader_params']['prefetch_factor']
             )
 
     # --- 2. Create Validation DataLoaders (per dataset name) ---
@@ -159,7 +160,8 @@ def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: l
             batch_size=config['test_batchSize'],
             num_workers=data_config['dataloader_params']['num_workers'],
             collate_fn=collate_fn,
-            persistent_workers=True
+            persistent_workers=True,
+            prefetch_factor=data_config['dataloader_params']['prefetch_factor']
         )
 
     return train_loaders, val_loaders
