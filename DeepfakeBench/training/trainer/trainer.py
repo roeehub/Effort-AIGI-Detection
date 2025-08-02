@@ -226,22 +226,18 @@ class Trainer(object):
 
                 if data_dict['image'].shape[0] == 0: continue
 
-                # The input tensor is 5D: [B, T, C, H, W]
-                # B = number of videos in batch, T = number of frames per video
                 if data_dict['image'].dim() != 5:
-                    self.logger.error(f"Validation batch for method {method} has incorrect dimensions: {data_dict['image'].dim()}. Expected 5. Skipping.")
+                    self.logger.error(
+                        f"Validation batch for method {method} has incorrect dimensions: {data_dict['image'].dim()}. Expected 5. Skipping.")
                     continue
                 B, T = data_dict['image'].shape[:2]
 
                 predictions = self.model(data_dict, inference=True)
 
-                # The model outputs per-frame predictions, but we need per-video (!!) predictions for evaluation.
-                # predictions['prob'] has shape [B * T].
-                frame_probs = predictions['prob'].view(B, T)  # Reshape to [B, T]
-                video_probs = frame_probs.mean(dim=1)      # Average across frames to get one score per video -> shape [B]
+                frame_probs = predictions['prob'].view(B, T)
+                video_probs = frame_probs.mean(dim=1)
 
                 method_labels.extend(data_dict['label'].cpu().numpy())
-                # Now we append the video-level probabilities, which have the same length as the labels.
                 method_preds.extend(video_probs.cpu().numpy())
                 method_paths.extend(data_dict['path'])
 
@@ -249,20 +245,39 @@ class Trainer(object):
                 self.logger.warning(f"No valid data found for validation method: {method}")
                 continue
 
+            # --- START: NEW ROBUSTNESS FIX ---
+            # Check if we have more than one class. Metrics like AUC/EER are only valid if we do.
+            unique_labels = np.unique(method_labels)
+            if len(unique_labels) < 2:
+                self.logger.warning(
+                    f"Method '{method}' contains only one class (label: {unique_labels[0]}). Skipping AUC/EER calculation for this method.")
+                # We can still calculate accuracy if needed, or just skip all metrics.
+                # For simplicity, we will just skip.
+
+                # Add the results to the overall list for final calculation
+                all_labels.extend(method_labels)
+                all_preds.extend(method_preds)
+                continue  # Move to the next method
+
+            try:
+                # Calculate and log metrics for this specific method
+                method_metrics = get_test_metrics(np.array(method_preds), np.array(method_labels), method_paths)
+                for name, value in method_metrics.items():
+                    if name not in ['pred', 'label']:
+                        wandb_log_dict[f'val_method/{name}/{method}'] = value
+            except Exception as e:
+                self.logger.error(f"Could not compute metrics for method '{method}'. Error: {e}")
+            # --- END: NEW ROBUSTNESS FIX ---
+
             all_labels.extend(method_labels)
             all_preds.extend(method_preds)
-
-            # Calculate and log metrics for this specific method
-            method_metrics = get_test_metrics(np.array(method_preds), np.array(method_labels), method_paths)
-            for name, value in method_metrics.items():
-                if name not in ['pred', 'label']:
-                    wandb_log_dict[f'val_method/{name}/{method}'] = value
 
         # --- Calculate and log OVERALL validation metrics ---
         if not all_labels:
             self.logger.error("Validation failed: No data was loaded for any validation method.")
             return
 
+        # The overall metrics will be valid because `all_labels` contains both real and fake samples
         self.logger.info("--- Calculating overall validation performance ---")
         overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
         for name, value in overall_metrics.items():
@@ -270,7 +285,7 @@ class Trainer(object):
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
 
-        # --- NEW: Save Best Model Checkpoint ---
+        # --- Save Best Model Checkpoint ---
         current_metric = overall_metrics.get(self.metric_scoring)
         if current_metric is not None and current_metric > self.best_val_metric:
             self.best_val_metric = current_metric
