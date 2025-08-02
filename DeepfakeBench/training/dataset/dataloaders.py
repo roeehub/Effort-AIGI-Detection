@@ -141,13 +141,13 @@ def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: l
             )
 
     # --- 2. Create Validation DataLoaders (per method, both real and fake) ---
-    # MODIFICATION: Now creates a loader for each method in the validation set.
     val_loaders = {}
     videos_by_method_val = defaultdict(list)
     for v in val_videos:
         videos_by_method_val[v.method].append(v)
 
     for name, videos in videos_by_method_val.items():
+        # --- FIX: Check if the list of videos is empty BEFORE creating the loader ---
         if not videos: continue
         pipe = IterableWrapper(videos)  # No shuffle for validation
         pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'test'))

@@ -216,7 +216,7 @@ class Trainer(object):
 
         self.logger.info("--- Evaluating on individual methods ---")
         for method, loader in tqdm(val_method_loaders.items(), desc="Validating", leave=False):
-            if not loader: continue
+            # if not loader: continue
 
             method_preds, method_labels, method_paths = [], [], []
             for data_dict in loader:
