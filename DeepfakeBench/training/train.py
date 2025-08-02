@@ -6,7 +6,6 @@ import yaml  # noqa
 from datetime import timedelta
 import math
 from collections import defaultdict, Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch  # noqa
 import torch.nn.parallel  # noqa
@@ -186,76 +185,40 @@ def sanity_check_loaders(fake_loader_dict,
                          num_batches=2,
                          max_paths_to_show=2):
     """
-    Parallelized version of the sanity check.
-    Scans a handful of batches from every loader in parallel threads.
+    Sequential version of the sanity check.
+    Iterates through each loader one by one to verify it can produce data.
     """
-    print("\n==================== PARALLEL SANITY CHECK ====================")
+    print("\n==================== SEQUENTIAL SANITY CHECK ====================")
     start_time = time.time()
-
     all_loaders = {**fake_loader_dict, **real_loader_dict}
+    total_loaders = len(all_loaders)
 
-    # This inner function will be run in a separate thread for each loader
-    def scan_one_loader(method_name, loader):
+    for i, (method_name, loader) in enumerate(all_loaders.items()):
         is_fake = method_name in fake_loader_dict
-        label_counter = Counter()
-        img_shapes = Counter()
-        bad_path_count = 0
-        example_paths = []
+        print(f"\n--- [{i + 1}/{total_loaders}] Checking loader: {method_name} ({'fake' if is_fake else 'real'}) ---")
 
         try:
             it = iter(loader)
-            for i in range(num_batches):
-                # This is the slow part that will run in parallel
+            for batch_num in range(num_batches):
+                batch_start_time = time.time()
                 batch = next(it)
+                batch_load_time = time.time() - batch_start_time
 
-                # --- Perform checks ---
-                # 1) labels
-                lbls = batch['label']
-                label_counter.update(lbls.tolist())
+                # --- Perform checks for the first batch only for brevity ---
+                if batch_num == 0:
+                    label_counter = Counter(batch['label'].tolist())
+                    img_shape = tuple(batch['image'].shape)
 
-                # 2) image shapes
-                img_shapes.update([tuple(batch['image'].shape)])
-
-                # 3) path substring rule
-                if 'path' in batch and batch['path']:
-                    expect_sub = f"/{method_name}/"
-                    # For real sources, the method name might be different (e.g., YouTube-real)
-                    # This check is less critical now but kept for consistency
-                    for p in batch['path']:
-                        # p is now a list of 8 paths, just check the first one
-                        p_str = p[0] if isinstance(p, list) else p
-                        # Simple check: if fake, method should be in path. If real, it shouldn't be.
-                        # This is a loose check and might have false positives.
-                        is_in_path = expect_sub in p_str
-                        if (is_fake and not is_in_path) or (not is_fake and is_in_path and method_name != 'real'):
-                            bad_path_count += 1
-                        if len(example_paths) < max_paths_to_show:
-                            example_paths.append(p_str)
-
-            # --- Format results ---
-            result_str = f"\n[{method_name}]   ({'fake' if is_fake else 'real'}) - OK\n"
-            result_str += f"  label counts: {dict(label_counter) or '(loader empty)'}\n"
-            result_str += f"  image shapes: {list(img_shapes.keys()) or '(none)'}\n"
-            if bad_path_count:
-                result_str += f"  ⚠  {bad_path_count} paths failed the substring test\n"
-            for sp in example_paths:
-                result_str += f"  sample path : {sp}\n"
-
-            return result_str
+                    print(f"  ✅ Batch {batch_num + 1}/{num_batches} loaded in {batch_load_time:.2f}s")
+                    print(f"     Image shape: {img_shape}")
+                    print(f"     Label counts: {dict(label_counter)}")
+                else:
+                    print(f"  ✅ Batch {batch_num + 1}/{num_batches} loaded in {batch_load_time:.2f}s")
 
         except Exception as e:
-            return f"\n[{method_name}]   ({'fake' if is_fake else 'real'}) - ❌ FAILED\n  Error: {repr(e)}\n"
-
-    # Use a ThreadPoolExecutor to run scans in parallel
-    # max_workers can be tuned, but 10-15 is a good start for network I/O
-    with ThreadPoolExecutor(max_workers=15) as executor:
-        # Submit all loader scan jobs to the pool
-        future_to_loader = {executor.submit(scan_one_loader, name, ldr): name for name, ldr in all_loaders.items()}
-
-        # Process results as they complete
-        for future in as_completed(future_to_loader):
-            result = future.result()
-            print(result, end='')
+            print(f"  ❌ FAILED to load from {method_name}. Error: {repr(e)}")
+            # Optional: decide if you want to stop on failure or continue
+            # raise e  # Uncomment to stop immediately
 
     total_time = time.time() - start_time
     print(f"\n============ END SANITY CHECK – took {total_time:.2f}s ============\n")
