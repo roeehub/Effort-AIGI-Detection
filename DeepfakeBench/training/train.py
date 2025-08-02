@@ -25,7 +25,7 @@ from metrics.utils import parse_metric_for_print
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
 from prepare_splits import prepare_video_splits
-from dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
+from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
