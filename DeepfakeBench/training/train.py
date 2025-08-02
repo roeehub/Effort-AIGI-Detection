@@ -16,6 +16,7 @@ import torch.utils.data  # noqa
 import torch.optim as optim  # noqa
 from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
+import numpy as np  # noqa
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
@@ -77,6 +78,8 @@ def choose_metric(config):
     return metric_scoring
 
 
+# in train.py
+
 def comprehensive_sampler_check(
         real_loaders,
         fake_loaders,
@@ -90,6 +93,21 @@ def comprehensive_sampler_check(
     Simulates the training loop's data fetching to test performance and correctness.
     Ensures all dataloaders are used and combined batches are correctly formed.
     """
+
+    # --- FIX: Define the helper function inside this function's scope ---
+    def _get_next_batch(method, dataloader_dict, iter_dict):
+        """Helper to fetch a batch from a specific dataloader, creating an iterator if needed."""
+        it = iter_dict.get(method)
+        if it is None:
+            print(f"\n   ... Initializing iterator for '{method}' ...")
+            it = iter_dict[method] = iter(dataloader_dict[method])
+        try:
+            return next(it)
+        except StopIteration:
+            print(f"\n   ... Restarting exhausted iterator for '{method}' ...")
+            it = iter_dict[method] = iter(dataloader_dict[method])
+            return next(it)
+
     print("\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
     if not fake_loaders:
         print("❌ No fake loaders provided. Aborting check.")
@@ -140,10 +158,10 @@ def comprehensive_sampler_check(
         assert image_shape[0] == full_batch_size, f"Expected batch size {full_batch_size}, but got {image_shape[0]}"
 
         label_counts = Counter(combined_data_dict['label'].tolist())
-        assert label_counts[
-                   0] == half_batch_size, f"Expected {half_batch_size} real samples, but got {label_counts.get(0, 0)}"
-        assert label_counts[
-                   1] == half_batch_size, f"Expected {half_batch_size} fake samples, but got {label_counts.get(1, 0)}"
+        assert label_counts.get(0,
+                                0) == half_batch_size, f"Expected {half_batch_size} real samples, but got {label_counts.get(0, 0)}"
+        assert label_counts.get(1,
+                                0) == half_batch_size, f"Expected {half_batch_size} fake samples, but got {label_counts.get(1, 0)}"
 
         iteration_time = time.time() - iteration_start_time
         batch_times.append(iteration_time)
@@ -209,10 +227,25 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
-    # --- print a bunch of configuration data for clarity ---
-    logger.info(f"Configuration: {config}")
-    logger.info(f"Data configuration: {data_config}")
-    logger.info(f"Command line arguments: {args}")
+    # --- pretty print a bunch of configuration data for clarity ---
+    logger.info("------- Configuration: -------")
+    for key, value in config.items():
+        if isinstance(value, dict):
+            logger.info(f"{key}:")
+            for sub_key, sub_value in value.items():
+                logger.info(f"  {sub_key}: {sub_value}")
+        else:
+            logger.info(f"{key}: {value}")
+    logger.info("Data Configuration:")
+    for key, value in data_config.items():
+        if isinstance(value, dict):
+            logger.info(f"{key}:")
+            for sub_key, sub_value in value.items():
+                logger.info(f"  {sub_key}: {sub_value}")
+        else:
+            logger.info(f"{key}: {value}")
+
+    logger.info("------- Starting training process ---")
 
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
