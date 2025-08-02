@@ -277,7 +277,7 @@ def quick_single_process_check(loader):
     sp_loader = torch.utils.data.DataLoader(
         loader.dataset,  # same dataset/DataPipe
         batch_size=loader.batch_size,
-        num_workers=4,  # ← no subprocesses
+        num_workers=0,  # ← no subprocesses
         collate_fn=loader.collate_fn
     )
     try:
