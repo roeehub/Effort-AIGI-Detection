@@ -86,74 +86,45 @@ def extract_target_id(label: str, method: str, vid_folder: str) -> int | None:
     return ids[-1]  # default → REG
 
 
-def _balance_and_subset_videos(
+# ---------------------------------------------------------------------------
+# BALANCING HELPER FUNCTION
+# ---------------------------------------------------------------------------
+def _balance_video_list(
         videos: List[VideoInfo],
-        subset_percentage: float,
         real_source_names: List[str]
 ) -> List[VideoInfo]:
-    """Balances the number of real and fake videos and applies subset percentage."""
-    if subset_percentage >= 1.0:
-        print("[balance] `data_subset_percentage` >= 1.0, using full dataset but balancing classes.")
-        # Even if using 100%, we still balance the classes to the size of the smaller one
-        subset_percentage = 1.0
+    """Balances a given list of videos to have an equal number of real and fake videos."""
+    if not videos:
+        return []
+    print(f"[balance] Balancing list of {len(videos)} videos.")
 
-    print(f"[balance] Balancing dataset with subset percentage: {subset_percentage:.2f}")
+    # 1. Categorize videos
+    real_videos = [v for v in videos if v.method in real_source_names]
+    fake_videos = [v for v in videos if v.method not in real_source_names]
 
-    # 1. Categorize videos by label and then by method/source
-    reals_by_source = defaultdict(list)
-    fakes_by_method = defaultdict(list)
-    for v in videos:
-        if v.method in real_source_names:
-            reals_by_source[v.method].append(v)
-        else:
-            fakes_by_method[v.method].append(v)
+    num_reals = len(real_videos)
+    num_fakes = len(fake_videos)
+    print(f"[balance] Initial counts: {num_reals} real, {num_fakes} fake videos.")
 
-    num_total_reals = sum(len(vids) for vids in reals_by_source.values())
-    num_total_fakes = sum(len(vids) for vids in fakes_by_method.values())
-
-    if num_total_reals == 0 or num_total_fakes == 0:
-        print("[balance] WARN: One class has 0 videos. Cannot balance.")
+    if num_reals == 0 or num_fakes == 0:
+        print("[balance] WARN: One class has 0 videos. Cannot balance. Returning original list.")
+        # Returning a shuffled version of the original list
+        random.shuffle(videos)
         return videos
 
-    print(f"[balance] Initial counts: {num_total_reals} real, {num_total_fakes} fake videos.")
+    # 2. Determine target size (size of the smaller class)
+    target_size = min(num_reals, num_fakes)
+    print(f"[balance] Target videos per class: {target_size}")
 
-    # 2. Determine smaller class and target number of videos
-    smaller_class_size = min(num_total_reals, num_total_fakes)
-    target_videos_per_class = max(1, int(smaller_class_size * subset_percentage))
-    print(f"[balance] Target videos per class: {target_videos_per_class}")
+    # 3. Shuffle and trim the larger list to match the smaller one
+    random.shuffle(real_videos)
+    random.shuffle(fake_videos)
 
-    # 3. Subsample REAL videos proportionally from each source
-    final_real_videos = []
-    if num_total_reals > 0:
-        for source, source_videos in reals_by_source.items():
-            proportion = len(source_videos) / num_total_reals
-            num_to_take = round(proportion * target_videos_per_class)
-            random.shuffle(source_videos)
-            final_real_videos.extend(source_videos[:int(num_to_take)])
-
-    # 4. Subsample FAKE videos proportionally from each method
-    final_fake_videos = []
-    if num_total_fakes > 0:
-        for method, method_videos in fakes_by_method.items():
-            proportion = len(method_videos) / num_total_fakes
-            num_to_take = round(proportion * target_videos_per_class)
-            random.shuffle(method_videos)
-            final_fake_videos.extend(method_videos[:int(num_to_take)])
-
-    # 5. Adjust counts to be exactly equal (due to rounding)
-    while len(final_real_videos) > target_videos_per_class:
-        final_real_videos.pop()
-    while len(final_fake_videos) > target_videos_per_class:
-        final_fake_videos.pop()
-
-    final_target = min(len(final_real_videos), len(final_fake_videos))
-    final_real_videos = final_real_videos[:final_target]
-    final_fake_videos = final_fake_videos[:final_target]
-
-    balanced_videos = final_real_videos + final_fake_videos
+    balanced_videos = real_videos[:target_size] + fake_videos[:target_size]
     random.shuffle(balanced_videos)
 
-    print(f"[balance] Final balanced counts: {len(final_real_videos)} real, {len(final_fake_videos)} fake videos.")
+    print(
+        f"[balance] Final balanced counts: {target_size} real, {target_size} fake videos. Total: {len(balanced_videos)}")
 
     return balanced_videos
 
@@ -192,7 +163,7 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         manifest_path.write_text(json.dumps(frame_paths))
 
     # ------------------------------------------------------------------ #
-    # 2 Group frames → VideoInfo objects                                 #
+    # 2) Group frames → VideoInfo objects                                #
     # ------------------------------------------------------------------ #
     vids_dict: dict[tuple[str, str, str], List[str]] = defaultdict(list)
     for p in frame_paths:
@@ -224,67 +195,73 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
 
     # ------------------------------------------------------------------ #
-    # 3. Stratified GroupShuffleSplit (identity-aware, method-stratified)#
+    # 3. (NEW) Apply subset percentage to the ENTIRE dataset FIRST       #
     # ------------------------------------------------------------------ #
-    print(f"[split] Performing Stratified GroupShuffleSplit to ensure all methods are in val set.")
-    train_idx, val_idx = [], []
+    if SUBSET < 1.0:
+        print(f"\n[subset] Applying `data_subset_percentage`={SUBSET:.2f} to the entire dataset.")
+        # Use GroupShuffleSplit to get a representative subset while respecting identities
+        subset_splitter = GroupShuffleSplit(n_splits=1, train_size=SUBSET, random_state=SEED)
+        all_identities = [v.identity for v in videos]
+        try:
+            # The 'train_idx' from this split will be our subset
+            subset_indices, _ = next(subset_splitter.split(X=videos, groups=all_identities))
+            videos = [videos[i] for i in subset_indices]
+            print(f"[subset] Dataset reduced to {len(videos):,} videos.")
+        except ValueError as e:
+            print(f"[subset] WARN: Could not create a subset while respecting groups. Error: {e}")
+            print("[subset] Using a random sample instead. This may cause minor identity leakage in the subset.")
+            random.shuffle(videos)
+            subset_size = int(len(videos) * SUBSET)
+            videos = videos[:subset_size]
 
-    # Group videos by method first
+    # ------------------------------------------------------------------ #
+    # 4. Stratified GroupShuffleSplit (on the potentially smaller dataset)#
+    # ------------------------------------------------------------------ #
+    print(f"\n[split] Performing Stratified GroupShuffleSplit on {len(videos):,} videos...")
+    train_idx, val_idx = [], []
     videos_by_method = defaultdict(list)
     for i, v in enumerate(videos):
-        videos_by_method[v.method].append((i, v))  # Store original index and video
+        videos_by_method[v.method].append((i, v))
 
     for method, method_videos_with_indices in videos_by_method.items():
-        # Prepare for splitting this specific method
         method_indices = [item[0] for item in method_videos_with_indices]
         method_groups = [item[1].identity for item in method_videos_with_indices]
 
-        # Cannot split a method with fewer than 2 videos or 2 unique identity groups
         if len(method_indices) < 2 or len(set(method_groups)) < 2:
-            print(
-                f"[split] WARN: Method '{method}' is too small or has only 1 identity group. Assigning all to training.")
             train_idx.extend(method_indices)
             continue
 
-        # Create a splitter for this method
         gss = GroupShuffleSplit(n_splits=1, test_size=VAL_RATIO, random_state=SEED)
-
-        # Perform the split *only on this method's videos*
         try:
             method_train_indices_local, method_val_indices_local = next(gss.split(
                 X=method_videos_with_indices, groups=method_groups
             ))
-
-            # Map back to original indices in the main `videos` list
-            original_train_indices = [method_indices[i] for i in method_train_indices_local]
-            original_val_indices = [method_indices[i] for i in method_val_indices_local]
-
-            train_idx.extend(original_train_indices)
-            val_idx.extend(original_val_indices)
+            train_idx.extend([method_indices[i] for i in method_train_indices_local])
+            val_idx.extend([method_indices[i] for i in method_val_indices_local])
         except ValueError:
-            # This can happen if gss.split can't make a split (e.g., too few groups for test_size)
-            print(f"[split] WARN: Could not split method '{method}' while respecting groups. Assigning all to train.")
             train_idx.extend(method_indices)
 
+    # These are the complete, unbalanced splits
     train_videos_unbalanced = [videos[i] for i in train_idx]
-    val_videos = [videos[i] for i in val_idx]
+    val_videos_unbalanced = [videos[i] for i in val_idx]
+    print(f"Split complete (unbalanced) ▶ train {len(train_videos_unbalanced):,} | val {len(val_videos_unbalanced):,}")
 
-    # --- APPLY BALANCING AND SUBSETTING TO TRAIN SPLIT ---
-    train_videos = _balance_and_subset_videos(
+    # ------------------------------------------------------------------ #
+    # 5. (NEW) Balance BOTH the training and validation sets             #
+    # ------------------------------------------------------------------ #
+    print("\n--- Balancing Training Set ---")
+    train_videos = _balance_video_list(
         videos=train_videos_unbalanced,
-        subset_percentage=SUBSET,
         real_source_names=cfg['methods']['use_real_sources']
     )
 
-    # sanity check
-    # Note: actual_ratio is now checked against the total number of videos before subsetting
-    actual_ratio = len(val_videos) / len(videos) if len(videos) > 0 else 0
-    if abs(actual_ratio - VAL_RATIO) > 0.01:  # Loosened tolerance slightly for stratified split
-        print(f"[NOTE] Val ratio {actual_ratio:.3f} differs >1% from "
-              f"target {VAL_RATIO:.3f}. This can happen due to stratification of small methods.")
+    print("\n--- Balancing Validation Set ---")
+    val_videos = _balance_video_list(
+        videos=val_videos_unbalanced,
+        real_source_names=cfg['methods']['use_real_sources']
+    )
 
-    print(f"Split complete ▶ train {len(train_videos):,} | "
-          f"val {len(val_videos):,}")
+    print(f"\nFinal balanced split ▶ train {len(train_videos):,} | val {len(val_videos):,}")
 
     random.shuffle(train_videos)
     random.shuffle(val_videos)
