@@ -92,7 +92,7 @@ def _balance_and_subset_videos(
         real_source_names: List[str]
 ) -> List[VideoInfo]:
     """Balances the number of real and fake videos and applies subset percentage."""
-    if subset_percentage >= 1.0:
+    if subset_percentage > 1.0:
         print("[balance] `data_subset_percentage` >= 1.0, skipping balancing.")
         return videos
 
