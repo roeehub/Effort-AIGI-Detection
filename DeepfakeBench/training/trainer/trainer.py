@@ -226,9 +226,23 @@ class Trainer(object):
 
                 if data_dict['image'].shape[0] == 0: continue
 
+                # The input tensor is 5D: [B, T, C, H, W]
+                # B = number of videos in batch, T = number of frames per video
+                if data_dict['image'].dim() != 5:
+                    self.logger.error(f"Validation batch for method {method} has incorrect dimensions: {data_dict['image'].dim()}. Expected 5. Skipping.")
+                    continue
+                B, T = data_dict['image'].shape[:2]
+
                 predictions = self.model(data_dict, inference=True)
+
+                # The model outputs per-frame predictions, but we need per-video (!!) predictions for evaluation.
+                # predictions['prob'] has shape [B * T].
+                frame_probs = predictions['prob'].view(B, T)  # Reshape to [B, T]
+                video_probs = frame_probs.mean(dim=1)      # Average across frames to get one score per video -> shape [B]
+
                 method_labels.extend(data_dict['label'].cpu().numpy())
-                method_preds.extend(predictions['prob'].cpu().numpy())
+                # Now we append the video-level probabilities, which have the same length as the labels.
+                method_preds.extend(video_probs.cpu().numpy())
                 method_paths.extend(data_dict['path'])
 
             if not method_labels:
