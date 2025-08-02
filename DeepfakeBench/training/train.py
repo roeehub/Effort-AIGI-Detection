@@ -5,6 +5,7 @@ import time
 import yaml  # noqa
 from datetime import timedelta
 import math
+import os
 from collections import defaultdict, Counter
 
 import torch  # noqa
@@ -15,12 +16,8 @@ import torch.optim as optim  # noqa
 from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
 
-from optimizor.SAM import SAM
-from optimizor.LinearLR import LinearDecayLR
-
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
-from dataset import *
 from metrics.utils import parse_metric_for_print
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
@@ -34,7 +31,6 @@ parser.add_argument('--detector_path', type=str,
 parser.add_argument("--train_dataset", nargs="+")
 parser.add_argument("--test_dataset", nargs="+")
 parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
-parser.add_argument('--no-save_feat', dest='save_feat', action='store_false', default=True)
 parser.add_argument("--ddp", action='store_true', default=False)
 parser.add_argument('--local_rank', type=int, default=0)
 args = parser.parse_args()
@@ -50,122 +46,27 @@ def init_seed(config):
         torch.cuda.manual_seed_all(config['manualSeed'])
 
 
-def prepare_training_data(config, train_videos):
-    # Only use the blending dataset class in training
-    train_set = DeepfakeAbstractBaseDataset(
-        config=config,
-        mode='train',
-        train_videos=train_videos
-    )
-    if config['ddp']:
-        sampler = DistributedSampler(train_set)
-        train_data_loader = \
-            torch.utils.data.DataLoader(
-                dataset=train_set,
-                batch_size=config['train_batchSize'],
-                num_workers=int(config['workers']),
-                collate_fn=train_set.collate_fn,
-                sampler=sampler
-            )
-    else:
-        train_data_loader = \
-            torch.utils.data.DataLoader(
-                dataset=train_set,
-                batch_size=config['train_batchSize'],
-                shuffle=True,
-                num_workers=int(config['workers']),
-                collate_fn=train_set.collate_fn,
-            )
-    return train_data_loader
-
-
-def prepare_testing_data(config, val_videos):
-    def get_test_data_loader(config, test_name, val_videos):
-        # update the config dictionary with the specific testing dataset
-        config = config.copy()  # create a copy of config to avoid altering the original one
-        config['test_dataset'] = test_name  # specify the current test dataset
-
-        test_set = DeepfakeAbstractBaseDataset(
-            config=config,
-            mode='test',
-            VideoInfo=val_videos,
-        )
-
-        test_data_loader = \
-            torch.utils.data.DataLoader(
-                dataset=test_set,
-                batch_size=config['test_batchSize'],
-                shuffle=False,
-                num_workers=int(config['workers']),
-                collate_fn=test_set.collate_fn,
-                drop_last=(test_name == 'DeepFakeDetection'),
-            )
-
-        return test_data_loader
-
-    test_data_loaders = {}
-    for one_test_name in config['test_dataset']:
-        test_data_loaders[one_test_name] = get_test_data_loader(config, one_test_name, val_videos)
-    return test_data_loaders
-
-
 def choose_optimizer(model, config):
     opt_name = config['optimizer']['type']
-    if opt_name == 'sgd':
-        optimizer = optim.SGD(
-            params=model.parameters(),
-            lr=config['optimizer'][opt_name]['lr'],
-            momentum=config['optimizer'][opt_name]['momentum'],
-            weight_decay=config['optimizer'][opt_name]['weight_decay']
-        )
-        return optimizer
-    elif opt_name == 'adam':
+    if opt_name == 'adam':
         optimizer = optim.Adam(
-            params=model.parameters(),
+            params=filter(lambda p: p.requires_grad, model.parameters()),
             lr=config['optimizer'][opt_name]['lr'],
             weight_decay=config['optimizer'][opt_name]['weight_decay'],
-            betas=(config['optimizer'][opt_name]['beta1'], config['optimizer'][opt_name]['beta2']),
-            eps=config['optimizer'][opt_name]['eps'],
-            amsgrad=config['optimizer'][opt_name]['amsgrad'],
         )
         return optimizer
-    elif opt_name == 'sam':
-        optimizer = SAM(
-            model.parameters(),
-            optim.SGD,
-            lr=config['optimizer'][opt_name]['lr'],
-            momentum=config['optimizer'][opt_name]['momentum'],
-        )
     else:
         raise NotImplementedError('Optimizer {} is not implemented'.format(config['optimizer']))
     return optimizer
 
 
 def choose_scheduler(config, optimizer):
-    if config['lr_scheduler'] is None:
-        return None
-    elif config['lr_scheduler'] == 'step':
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer,
-            step_size=config['lr_step'],
-            gamma=config['lr_gamma'],
+    if config['lr_scheduler'] is None: return None
+    if config['lr_scheduler'] == 'cosine':
+        return optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config['nEpochs'], eta_min=config['optimizer']['adam']['lr'] / 100
         )
-        return scheduler
-    elif config['lr_scheduler'] == 'cosine':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=config['lr_T_max'],
-            eta_min=config['lr_eta_min'],
-        )
-        return scheduler
-    elif config['lr_scheduler'] == 'linear':
-        scheduler = LinearDecayLR(
-            optimizer,
-            config['nEpochs'],
-            int(config['nEpochs'] / 4),
-        )
-    else:
-        raise NotImplementedError('Scheduler {} is not implemented'.format(config['lr_scheduler']))
+    raise NotImplementedError('Scheduler {} is not implemented'.format(config['lr_scheduler']))
 
 
 def choose_metric(config):
@@ -175,271 +76,219 @@ def choose_metric(config):
     return metric_scoring
 
 
-# ================================================================
-#  Sanity-check utility for DataLoaders
-# ================================================================
-
-
-def sanity_check_loaders(fake_loader_dict,
-                         real_loader_dict,
-                         num_batches=2,
-                         max_paths_to_show=2):
+def comprehensive_sampler_check(
+        real_loaders,
+        fake_loaders,
+        real_method_names,
+        fake_method_names,
+        real_weights,
+        fake_weights,
+        full_batch_size
+):
     """
-    Sequential version of the sanity check.
-    Iterates through each loader one by one to verify it can produce data.
+    Simulates the training loop's data fetching to test performance and correctness.
+    Ensures all dataloaders are used and combined batches are correctly formed.
     """
-    print("\n==================== SEQUENTIAL SANITY CHECK ====================")
-    start_time = time.time()
-    all_loaders = {**fake_loader_dict, **real_loader_dict}
-    total_loaders = len(all_loaders)
+    print("\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
+    if not fake_loaders:
+        print("❌ No fake loaders provided. Aborting check.")
+        return
 
-    for i, (method_name, loader) in enumerate(all_loaders.items()):
-        is_fake = method_name in fake_loader_dict
-        print(f"\n--- [{i + 1}/{total_loaders}] Checking loader: {method_name} ({'fake' if is_fake else 'real'}) ---")
+    num_iterations = len(fake_loaders)
+    half_batch_size = full_batch_size // 2
+    print(f"Running for {num_iterations} iterations to ensure all {len(fake_loaders)} fake loaders are likely sampled.")
+    print(f"Expecting combined batches of size {full_batch_size} ({half_batch_size} real + {half_batch_size} fake).\n")
 
-        try:
-            it = iter(loader)
-            for batch_num in range(num_batches):
-                batch_start_time = time.time()
-                batch = next(it)
-                batch_load_time = time.time() - batch_start_time
+    # Mimic the state maintained by the Trainer
+    real_method_iters = {}
+    fake_method_iters = {}
 
-                # --- Perform checks for the first batch only for brevity ---
-                if batch_num == 0:
-                    label_counter = Counter(batch['label'].tolist())
-                    img_shape = tuple(batch['image'].shape)
+    # Tracking for the report
+    seen_real_methods = set()
+    seen_fake_methods = set()
+    batch_times = []
 
-                    print(f"  ✅ Batch {batch_num + 1}/{num_batches} loaded in {batch_load_time:.2f}s")
-                    print(f"     Image shape: {img_shape}")
-                    print(f"     Label counts: {dict(label_counter)}")
-                else:
-                    print(f"  ✅ Batch {batch_num + 1}/{num_batches} loaded in {batch_load_time:.2f}s")
+    overall_start_time = time.time()
 
-        except Exception as e:
-            print(f"  ❌ FAILED to load from {method_name}. Error: {repr(e)}")
-            # Optional: decide if you want to stop on failure or continue
-            # raise e  # Uncomment to stop immediately
+    pbar = tqdm(range(num_iterations), desc="Testing Sampler")
+    for i in pbar:
+        iteration_start_time = time.time()
 
-    total_time = time.time() - start_time
-    print(f"\n============ END SANITY CHECK – took {total_time:.2f}s ============\n")
+        # 1. Sample and fetch a FAKE half-batch
+        chosen_fake_method = random.choices(fake_method_names, weights=fake_weights, k=1)[0]
+        fake_data_dict = _get_next_batch(chosen_fake_method, fake_loaders, fake_method_iters)
+        seen_fake_methods.add(chosen_fake_method)
 
+        # 2. Sample and fetch a REAL half-batch
+        chosen_real_method = random.choices(real_method_names, weights=real_weights, k=1)[0]
+        real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
+        seen_real_methods.add(chosen_real_method)
 
-def quick_single_process_check(loader):
-    print("\n--- single-process probe ---")
-    start = time.time()
-    sp_loader = torch.utils.data.DataLoader(
-        loader.dataset,  # same dataset/DataPipe
-        batch_size=loader.batch_size,
-        num_workers=0,  # ← no subprocesses
-        collate_fn=loader.collate_fn
-    )
-    try:
-        batch = next(iter(sp_loader))
-        print("✅  got batch:", {k: v.shape if torch.is_tensor(v) else type(v)
-                                for k, v in batch.items()})
-        print("⏱️  took {:.3f} seconds".format(time.time() - start))
-    except Exception as e:
-        print("❌  raised:", repr(e))
-        raise
+        # 3. Combine into a single batch dictionary
+        combined_data_dict = {}
+        for key in fake_data_dict.keys():
+            if torch.is_tensor(fake_data_dict[key]):
+                combined_data_dict[key] = torch.cat((fake_data_dict[key], real_data_dict[key]), dim=0)
+            elif isinstance(fake_data_dict[key], list):
+                combined_data_dict[key] = fake_data_dict[key] + real_data_dict[key]
+            else:
+                combined_data_dict[key] = fake_data_dict[key]
 
+        # 4. Perform checks on the combined batch
+        image_shape = combined_data_dict['image'].shape
+        assert image_shape[0] == full_batch_size, f"Expected batch size {full_batch_size}, but got {image_shape[0]}"
 
-def check_label_in_paths(video_infos, split_name):
-    bad_videos = []
-    for v in video_infos:
-        lbl_tag = f"/{v.label}/"  # "/real/" or "/fake/"
-        # every path should contain this tag
-        if any(lbl_tag not in p for p in v.frame_paths):
-            bad_videos.append(f"{v.method}/{v.video_id}")
+        label_counts = Counter(combined_data_dict['label'].tolist())
+        assert label_counts[
+                   0] == half_batch_size, f"Expected {half_batch_size} real samples, but got {label_counts.get(0, 0)}"
+        assert label_counts[
+                   1] == half_batch_size, f"Expected {half_batch_size} fake samples, but got {label_counts.get(1, 0)}"
 
-    if bad_videos:
-        print(f"[{split_name}] ❌  {len(bad_videos)} videos failed label-in-path check")
-        # show first few for inspection
-        for vid in bad_videos[:5]:
-            print("   →", vid)
-    else:
-        print(f"[{split_name}] ✅  all {len(video_infos)} videos have consistent paths")
+        iteration_time = time.time() - iteration_start_time
+        batch_times.append(iteration_time)
+
+        pbar.set_description(
+            f"Batch {i + 1}/{num_iterations} | Last: {iteration_time:.2f}s | Real: {chosen_real_method} | Fake: {chosen_fake_method}")
+
+    overall_time = time.time() - overall_start_time
+
+    print("\n-------------------- CHECK COMPLETE: REPORT --------------------")
+    print(f"Total time for {num_iterations} batches: {overall_time:.2f} seconds.")
+    if batch_times:
+        print(f"Batch creation time (sec):")
+        print(f"  - Average: {np.mean(batch_times):.3f}")
+        print(f"  - Min:     {np.min(batch_times):.3f}")
+        print(f"  - Max:     {np.max(batch_times):.3f}")
+
+    # Coverage Report
+    print("\nLoader Coverage:")
+    all_fakes_seen = set(fake_loaders.keys()) == seen_fake_methods
+    print(f"  - Fake Methods: {'✅' if all_fakes_seen else '❌'} Seen {len(seen_fake_methods)}/{len(fake_loaders)}")
+    if not all_fakes_seen:
+        missing = set(fake_loaders.keys()) - seen_fake_methods
+        print(f"    - Missing: {missing}")
+
+    all_reals_seen = set(real_loaders.keys()) == seen_real_methods
+    print(f"  - Real Sources: {'✅' if all_reals_seen else '❌'} Seen {len(seen_real_methods)}/{len(real_loaders)}")
+    if not all_reals_seen:
+        missing = set(real_loaders.keys()) - seen_real_methods
+        print(f"    - Missing: {missing}")
+
+    print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
 
 
 def main():
-    print("We are in Before:", os.getcwd())
     os.chdir('../')
-    print("We are in:", os.getcwd())
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
     with open('./training/config/train_config.yaml', 'r') as f:
-        config2 = yaml.safe_load(f)
-    config.update(config2)
+        config.update(yaml.safe_load(f))
     config['local_rank'] = args.local_rank
-    if config['dry_run']:
-        config['nEpochs'] = 0
-        config['save_feat'] = False
-    # If arguments are provided, they will overwrite the yaml settings
-    if args.train_dataset:
-        config['train_dataset'] = args.train_dataset
-    if args.test_dataset:
-        config['test_dataset'] = args.test_dataset
+    if args.train_dataset: config['train_dataset'] = args.train_dataset
+    if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
-    config['save_feat'] = args.save_feat
-    if config['lmdb']:
-        config['dataset_json_folder'] = 'preprocessing/dataset_json_v3'
+
     # create logger
     logger_path = os.path.join(
-        config['log_dir'],
-        config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        config['log_dir'], config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     )
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info('Save log to {}'.format(logger_path))
     config['ddp'] = args.ddp
-    # print configuration
-    logger.info("--------------- Configuration ---------------")
-    params_string = "Parameters: \n"
-    for key, value in config.items():
-        params_string += "{}: {}".format(key, value) + "\n"
-    logger.info(params_string)
 
-    config_path = "./training/config/dataloader_config.yml"
-    with open(config_path, 'r') as f:
+    with open("./training/config/dataloader_config.yml", 'r') as f:
         data_config = yaml.safe_load(f)
 
-    # init seed
     init_seed(config)
 
-    # set cudnn benchmark if needed
-    if config['cudnn']:
-        cudnn.benchmark = True
+    if config['cudnn']: cudnn.benchmark = True
     if config['ddp']:
-        # dist.init_process_group(backend='gloo')
-        dist.init_process_group(
-            backend='nccl',
-            timeout=timedelta(minutes=30)
-        )
+        dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
-    # Split the dataset
-    # Load train/val splits using prepare_video_splits
+
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
-    check_label_in_paths(train_videos, "train")
-    check_label_in_paths(val_videos, "val")
+    # --- 50/50 BATCH SETUP ---
+    if config['train_batchSize'] % 2 != 0:
+        raise ValueError(f"train_batchSize must be even for 50/50 split, but got {config['train_batchSize']}")
+    half_batch_size = config['train_batchSize'] // 2
+    logger.info(f"Using 50/50 real/fake split. Half-batch size: {half_batch_size}.")
 
-    method_loaders, test_method_loaders = create_method_aware_dataloaders(
-        train_videos, val_videos, config, data_config
+    all_train_loaders, test_method_loaders = create_method_aware_dataloaders(
+        train_videos, val_videos, config, data_config, train_batch_size=half_batch_size
     )
 
-    # we need to separate the real sources from the fake methods
-    real_sources = data_config['methods']['use_real_sources']
-    real_source_loaders = {}
-    for real_source in real_sources:
-        if real_source in method_loaders:
-            real_source_loaders[real_source] = method_loaders[real_source]
-            del method_loaders[real_source]
+    real_source_names = data_config['methods']['use_real_sources']
+    real_loaders, fake_loaders = {}, {}
+    for name, loader in all_train_loaders.items():
+        (real_loaders if name in real_source_names else fake_loaders)[name] = loader
 
-    # quick_single_process_check(method_loaders['fomm'])  # or any loader
-    # breakpoint()
+    logger.info(f"Created {len(real_loaders)} real loaders and {len(fake_loaders)} fake loaders.")
 
-    # print the names of the loaders
-    print("\n--- Fake Method Loaders ---")
-    for method_name in method_loaders.keys():
-        print(f"  - {method_name} (fake method)")
+    real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
+    for v in train_videos:
+        (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
 
-    print("\n--- Real Source Loaders ---")
-    for method_name in real_source_loaders.keys():
-        print(f"  - {method_name} (real source)")
+    total_real_videos = sum(real_video_counts.values())
+    total_fake_videos = sum(fake_video_counts.values())
 
-    # after you created method_loaders and real_source_loaders
-    sanity_check_loaders(method_loaders, real_source_loaders,
-                         num_batches=2,  # scan first 2 batches per loader
-                         max_paths_to_show=2)  # print 2 example paths
+    if total_real_videos != total_fake_videos and total_real_videos > 0 and total_fake_videos > 0:
+        logger.warning(
+            f"Mismatch after balancing: {total_real_videos} real vs {total_fake_videos} fake. Balance not perfect."
+        )
 
-    breakpoint()
+    real_method_names = list(real_loaders.keys())
+    real_weights = [real_video_counts[m] / total_real_videos for m in
+                    real_method_names] if total_real_videos > 0 else []
 
-    # num_fake_videos = sum(len(dl.dataset) for dl in method_loaders.values())
-    # num_real_videos = sum(len(dl.dataset) for dl in real_source_loaders.values())
+    fake_method_names = list(fake_loaders.keys())
+    fake_weights = [fake_video_counts[m] / total_fake_videos for m in
+                    fake_method_names] if total_fake_videos > 0 else []
 
-    # Count videos per fake method
-    video_counts = defaultdict(int)
-    for v in train_videos:  # train_videos is List[VideoInfo]
-        video_counts[v.method] += 1
-    total_videos = len(train_videos)
+    total_train_videos = len(train_videos)
+    epoch_len = math.ceil(total_train_videos / config['train_batchSize'])
+    logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
 
-    # Compute weights for random method choice
-    method_names = list(method_loaders.keys())
-    weights = [video_counts[m] / total_videos for m in method_names]
+    # --- Call the new sanity check ---
+    comprehensive_sampler_check(
+        real_loaders=real_loaders,
+        fake_loaders=fake_loaders,
+        real_method_names=real_method_names,
+        fake_method_names=fake_method_names,
+        real_weights=real_weights,
+        fake_weights=fake_weights,
+        full_batch_size=config['train_batchSize']
+    )
 
-    # Compute epoch length: number of steps to roughly see all videos once
-    batch_size = data_config['dataloader_params']['batch_size']
-    epoch_len = math.ceil(total_videos / batch_size)
+    logger.info("Sanity check complete. Halting execution as planned.")
+    return  # Stop the script here after the check
 
-    print(f"Total videos: {total_videos}, batch size: {batch_size}, epoch_len: {epoch_len}")
-
-    # Training Loop for Method-Aware
-    # to cycle through methods:
-    method_names = list(method_loaders.keys())
-    random.shuffle(method_names)
-    print(f"Training on methods in this order: {method_names[:5]}...")
-
-    # For a balanced approach, we create a weighted sampler over `method_names`
-    method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
-    total_videos = sum(method_sizes.values())
-    weights = [method_sizes[m] / total_videos for m in method_names]
-
-    print("\n--- Example: Method-Aware BALANCED Training Loop ---")
-    # In each step, you'd pick a method based on weights and get a batch from it
-    # This requires creating iterators for each dataloader.
-    # method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
-
-    # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config, val_videos)
-
-    # prepare the model (detector)
-    model_class = DETECTOR[config['model_name']]
-    model = model_class(config)
-
-    # prepare the optimizer
+    # prepare model, optimizer, scheduler, metric, trainer
+    model = DETECTOR[config['model_name']](config)
     optimizer = choose_optimizer(model, config)
-
-    # prepare the scheduler
     scheduler = choose_scheduler(config, optimizer)
-
-    # prepare the metric
     metric_scoring = choose_metric(config)
-
-    # prepare the trainer
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
 
-    # Define the path to your pretrained checkpoint
-    checkpoint_path = './training/weights/effort_clip_L14_trainOn_FaceForensic.pth'
-    # Check if a path is provided and then load the checkpoint
-    if checkpoint_path:
-        trainer.load_ckpt(checkpoint_path)
+    if config.get('checkpoint_path'):
+        trainer.load_ckpt(config['checkpoint_path'])
 
     # start training
-    for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
-        trainer.model.epoch = epoch
-        best_metric = trainer.train_epoch(
-            method_names=method_names,  # A list of all the methods
-            weights=weights,
-            epoch=epoch,  # A dictionary of methods as keys and dataloaders iterators as values
-            dataloader_dict=method_loaders,  # A dictionary of methods as keys and dataloaders as values
-            epoch_len=epoch_len,  # The number of steps in an epoch
-            train_set=train_set,  # The class dataset of test
-            test_set=test_set,  # The class dataset of test
-            test_data_loaders=test_method_loaders,  # Usual dataloader for the test
+    for epoch in range(config['start_epoch'], config['nEpochs']):
+        trainer.train_epoch(
+            real_loaders=real_loaders,
+            fake_loaders=fake_loaders,
+            real_method_names=real_method_names,
+            fake_method_names=fake_method_names,
+            real_weights=real_weights,
+            fake_weights=fake_weights,
+            epoch=epoch,
+            epoch_len=epoch_len,
+            test_data_loaders=test_method_loaders,
         )
-        if best_metric is not None:
-            logger.info(
-                f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")
-    logger.info("Stop Training on best Testing metric {}".format(parse_metric_for_print(best_metric)))
-    # update
-    if 'svdd' in config['model_name']:
-        model.update_R(epoch)
-    if scheduler is not None:
-        scheduler.step()
-
-    # close the tensorboard writers
-    for writer in trainer.writers.values():
-        writer.close()
+        if scheduler is not None: scheduler.step()
 
 
 if __name__ == '__main__':

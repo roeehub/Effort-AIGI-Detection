@@ -86,6 +86,77 @@ def extract_target_id(label: str, method: str, vid_folder: str) -> int | None:
     return ids[-1]  # default → REG
 
 
+def _balance_and_subset_videos(
+        videos: List[VideoInfo],
+        subset_percentage: float,
+        real_source_names: List[str]
+) -> List[VideoInfo]:
+    """Balances the number of real and fake videos and applies subset percentage."""
+    if subset_percentage >= 1.0:
+        print("[balance] `data_subset_percentage` >= 1.0, skipping balancing.")
+        return videos
+
+    print(f"[balance] Balancing dataset with subset percentage: {subset_percentage:.2f}")
+
+    # 1. Categorize videos by label and then by method/source
+    reals_by_source = defaultdict(list)
+    fakes_by_method = defaultdict(list)
+    for v in videos:
+        if v.method in real_source_names:
+            reals_by_source[v.method].append(v)
+        else:
+            fakes_by_method[v.method].append(v)
+
+    num_total_reals = sum(len(vids) for vids in reals_by_source.values())
+    num_total_fakes = sum(len(vids) for vids in fakes_by_method.values())
+
+    if num_total_reals == 0 or num_total_fakes == 0:
+        print("[balance] WARN: One class has 0 videos. Cannot balance.")
+        return videos
+
+    print(f"[balance] Initial counts: {num_total_reals} real, {num_total_fakes} fake videos.")
+
+    # 2. Determine smaller class and target number of videos
+    smaller_class_size = min(num_total_reals, num_total_fakes)
+    target_videos_per_class = max(1, int(smaller_class_size * subset_percentage))
+    print(f"[balance] Target videos per class: {target_videos_per_class}")
+
+    # 3. Subsample REAL videos proportionally from each source
+    final_real_videos = []
+    if num_total_reals > 0:
+        for source, source_videos in reals_by_source.items():
+            proportion = len(source_videos) / num_total_reals
+            num_to_take = round(proportion * target_videos_per_class)
+            random.shuffle(source_videos)
+            final_real_videos.extend(source_videos[:int(num_to_take)])
+
+    # 4. Subsample FAKE videos proportionally from each method
+    final_fake_videos = []
+    if num_total_fakes > 0:
+        for method, method_videos in fakes_by_method.items():
+            proportion = len(method_videos) / num_total_fakes
+            num_to_take = round(proportion * target_videos_per_class)
+            random.shuffle(method_videos)
+            final_fake_videos.extend(method_videos[:int(num_to_take)])
+
+    # 5. Adjust counts to be exactly equal (due to rounding)
+    while len(final_real_videos) > target_videos_per_class:
+        final_real_videos.pop()
+    while len(final_fake_videos) > target_videos_per_class:
+        final_fake_videos.pop()
+
+    final_target = min(len(final_real_videos), len(final_fake_videos))
+    final_real_videos = final_real_videos[:final_target]
+    final_fake_videos = final_fake_videos[:final_target]
+
+    balanced_videos = final_real_videos + final_fake_videos
+    random.shuffle(balanced_videos)
+
+    print(f"[balance] Final balanced counts: {len(final_real_videos)} real, {len(final_fake_videos)} fake videos.")
+
+    return balanced_videos
+
+
 # ---------------------------------------------------------------------------
 # 3 Main entry
 # ---------------------------------------------------------------------------
@@ -128,10 +199,10 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         try:
             label, method, vid = parts[-4], parts[-3], parts[-2]
             if label not in {"real", "fake"}:
-                print(f"[WARN] Skipping invalid label: {label} in {p}")
+                # print(f"[WARN] Skipping invalid label: {label} in {p}")
                 continue
         except Exception:
-            print(f"[WARN] Skipping problematic path: {p}")
+            # print(f"[WARN] Skipping problematic path: {p}")
             continue
         if method not in allowed:
             # print(f"[WARN] Skipping path with disallowed method: {method} in {p}")
@@ -155,36 +226,27 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
 
     # ------------------------------------------------------------------ #
-    # 3 Optional per-method subset (for fast debugging)                  #
-    # ------------------------------------------------------------------ #
-    if SUBSET < 1.0:
-        per_method = defaultdict(list)
-        for v in videos:
-            per_method[v.method].append(v)
-        selected = []
-        for m, lst in per_method.items():
-            random.shuffle(lst)
-            keep = max(1, int(len(lst) * SUBSET))
-            selected.extend(lst[:keep])
-        print(f"Subset active ({SUBSET * 100:.0f} %) → {len(selected):,} videos")
-    else:
-        selected = videos
-
-    # ------------------------------------------------------------------ #
-    # 4 GroupShuffleSplit (identity-aware, video-balanced)               #
+    # 3 GroupShuffleSplit (identity-aware, video-balanced)               #
     # ------------------------------------------------------------------ #
     gss = GroupShuffleSplit(n_splits=1,
                             test_size=VAL_RATIO,
                             random_state=SEED)
-    indices = list(range(len(selected)))
-    groups = [v.identity for v in selected]
+    indices = list(range(len(videos)))
+    groups = [v.identity for v in videos]
     train_idx, val_idx = next(gss.split(indices, groups=groups))
 
-    train_videos = [selected[i] for i in train_idx]
-    val_videos = [selected[i] for i in val_idx]
+    train_videos_unbalanced = [videos[i] for i in train_idx]
+    val_videos = [videos[i] for i in val_idx]
+
+    # --- APPLY BALANCING AND SUBSETTING TO TRAIN SPLIT ---
+    train_videos = _balance_and_subset_videos(
+        videos=train_videos_unbalanced,
+        subset_percentage=SUBSET,
+        real_source_names=cfg['methods']['use_real_sources']
+    )
 
     # sanity check
-    actual_ratio = len(val_videos) / len(selected)
+    actual_ratio = len(val_videos) / len(videos)
     if abs(actual_ratio - VAL_RATIO) > 0.005:
         print(f"[NOTE] Val ratio {actual_ratio:.3f} differs >0.5 % from "
               f"target {VAL_RATIO:.3f}")

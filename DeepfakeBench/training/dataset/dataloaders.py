@@ -3,11 +3,13 @@
 import os
 import sys
 
+
 def add_relative_path(levels_up):
     path = os.path.abspath(__file__)
     for _ in range(levels_up):
         path = os.path.dirname(path)
     sys.path.append(path)
+
 
 add_relative_path(1)  # go 1 levels up (..)
 import torch  # noqa
@@ -82,10 +84,9 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
         label = 0 if video_info.label == 'real' else 1
 
         # The dataloader expects a batch of these tuples. We return one instance.
-        # We only return the first successfully processed frame's data.
         # Note: Your collate_fn expects (image, label, landmark, mask, path)
-        # We provide placeholders for landmark and mask as they are not used in this simplified loader.
-        return video_tensor, label, None, None, video_info.frame_paths
+        # We provide placeholders for landmark and mask. Path is the video_id.
+        return video_tensor, label, None, None, f"{video_info.method}/{video_info.video_id}"
 
     except Exception as e:
         # print(f"[WARN] Skipping video {video_info.method}/{video_info.video_id} due to error: {e}")
@@ -105,52 +106,36 @@ def collate_fn(batch):
     data_dict = {
         'image': images,
         'label': labels,
-        'landmark': None,  # Or handle properly if you need them
-        'mask': None,  # Or handle properly if you need them
+        'landmark': None,
+        'mask': None,
         'path': list(paths)
     }
     return data_dict
 
 
 def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
-                                    data_config: dict):
+                                    data_config: dict, train_batch_size: int):
     """
     Creates separate dataloaders for train (per-method) and val (per-dataset).
     """
-    # --- 1. Create Training DataLoaders (per fake method + combined real) ---
+    # --- 1. Create Training DataLoaders (per fake method AND per real source) ---
     train_loaders = {}
     videos_by_method = defaultdict(list)
     for v in train_videos:
         videos_by_method[v.method].append(v)
 
-    # Combine all real videos into one group
-    real_sources = data_config['methods']['use_real_sources']
-    all_real_videos = list(
-        chain.from_iterable(videos_by_method[src] for src in real_sources if src in videos_by_method))
+    # The set of all methods we are interested in for training
+    # (includes both real sources and fake methods)
+    all_train_methods = data_config['methods']['use_real_sources'] + data_config['methods']['use_fake_methods']
 
-    # Create a loader for the combined real videos
-    if all_real_videos:
-        pipe = IterableWrapper(all_real_videos).shuffle()
-        pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
-        pipe = Filter(pipe, lambda x: x is not None)
-        train_loaders['real'] = DataLoader(
-            pipe,
-            batch_size=data_config['dataloader_params']['batch_size'],
-            num_workers=data_config['dataloader_params']['num_workers'],
-            collate_fn=collate_fn,
-            persistent_workers=True
-        )
-
-    # Create loaders for each fake method
-    fake_methods = data_config['methods']['use_fake_methods']
-    for method in fake_methods:
-        if method in videos_by_method:
+    for method in all_train_methods:
+        if method in videos_by_method and videos_by_method[method]:
             pipe = IterableWrapper(videos_by_method[method]).shuffle()
             pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
             pipe = Filter(pipe, lambda x: x is not None)
             train_loaders[method] = DataLoader(
                 pipe,
-                batch_size=data_config['dataloader_params']['batch_size'],
+                batch_size=train_batch_size,  # Use the passed half-batch size
                 num_workers=data_config['dataloader_params']['num_workers'],
                 collate_fn=collate_fn,
                 persistent_workers=True
@@ -161,7 +146,7 @@ def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: l
     videos_by_dataset = defaultdict(list)
     for v in val_videos:
         # This is a simple way to guess dataset from method name, adjust if needed
-        dataset_name = v.method.split('_')[0]  # e.g., 'fsgan_some_variant' -> 'fsgan'
+        dataset_name = v.method.split('_')[0]
         if v.method in FFpp_pool: dataset_name = 'FaceForensics++'
         videos_by_dataset[dataset_name].append(v)
 
