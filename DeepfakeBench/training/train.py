@@ -1,6 +1,7 @@
 import argparse
 import random
 import datetime
+import time
 import yaml  # noqa
 from datetime import timedelta
 from collections import Counter
@@ -272,6 +273,7 @@ def sanity_check_loaders(fake_loader_dict,
 
 def quick_single_process_check(loader):
     print("\n--- single-process probe ---")
+    start = time.time()
     sp_loader = torch.utils.data.DataLoader(
         loader.dataset,  # same dataset/DataPipe
         batch_size=loader.batch_size,
@@ -282,6 +284,7 @@ def quick_single_process_check(loader):
         batch = next(iter(sp_loader))
         print("✅  got batch:", {k: v.shape if torch.is_tensor(v) else type(v)
                                 for k, v in batch.items()})
+        print("⏱️  took {:.3f} seconds".format(time.time() - start))
     except Exception as e:
         print("❌  raised:", repr(e))
         raise
