@@ -338,6 +338,15 @@ def main():
     # quick_single_process_check(method_loaders['fomm'])  # or any loader
     # breakpoint()
 
+    # print the names of the loaders
+    print("\n--- Method Loaders ---")
+    for method_name, loader in method_loaders.items():
+        print(f"{method_name}: {len(loader.dataset)} videos")
+
+    print("\n--- Real Source Loaders ---")
+    for method_name, loader in real_source_loaders.items():
+        print(f"{method_name}: {len(loader.dataset)} videos")
+
     # after you created method_loaders and real_source_loaders
     sanity_check_loaders(method_loaders, real_source_loaders,
                          num_batches=2,  # scan first 2 batches per loader
