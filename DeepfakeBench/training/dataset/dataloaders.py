@@ -1,5 +1,15 @@
 # --- dataloaders.py ---
 
+import os
+import sys
+
+def add_relative_path(levels_up):
+    path = os.path.abspath(__file__)
+    for _ in range(levels_up):
+        path = os.path.dirname(path)
+    sys.path.append(path)
+
+add_relative_path(1)  # go 1 levels up (..)
 import torch  # noqa
 from torch.utils.data import DataLoader, IterDataPipe  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
@@ -10,7 +20,7 @@ from torchvision import transforms as T  # noqa
 import numpy as np  # noqa
 import albumentations as A  # noqa
 from collections import defaultdict
-from DeepfakeBench.training.prepare_splits import VideoInfo
+from prepare_splits import VideoInfo  # noqa , we import VideoInfo from prepare_splits.py which is 1 level up
 from itertools import chain  # noqa
 
 
