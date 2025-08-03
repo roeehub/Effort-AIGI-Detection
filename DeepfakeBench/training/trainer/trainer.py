@@ -19,6 +19,7 @@ import wandb  # noqa
 from collections import defaultdict
 from dataset.dataloaders import load_and_process_video, collate_fn  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
+import functools
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -228,9 +229,14 @@ class Trainer(object):
 
             # Use the same data pipeline logic from dataloaders.py
             pipe = IterableWrapper(self.val_videos)
-            # Partially apply the processing function with config and mode='test'
-            processing_func = lambda v: load_and_process_video(v, self.config, 'test')
+            processing_func = functools.partial(
+                load_and_process_video,
+                config=self.config,
+                mode='test'
+            )
+
             pipe = Mapper(pipe, processing_func)
+
             pipe = Filter(pipe, lambda x: x is not None)
 
             self.unified_val_loader = torch.utils.data.DataLoader(
