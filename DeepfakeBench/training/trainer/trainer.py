@@ -223,6 +223,8 @@ class Trainer(object):
         pbar = tqdm(val_method_loaders.items(), desc="Validating (Slow but Stable)")
 
         # Iterate through each method's DataLoader one by one.
+        method_labels = defaultdict(list)
+        method_preds = defaultdict(list)
         for method, loader in pbar:
             for data_dict in loader:
                 # Move tensors to the correct device
@@ -244,6 +246,10 @@ class Trainer(object):
 
                 all_labels.extend(data_dict['label'].cpu().numpy())
                 all_preds.extend(video_probs.cpu().numpy())
+                
+                method_labels[method].extend(data_dict['label'].cpu().numpy())
+                method_preds[method].extend(video_probs.cpu().numpy())
+                
 
         if not all_labels:
             self.logger.error("Validation failed: No data was processed after iterating all loaders.")
@@ -257,6 +263,14 @@ class Trainer(object):
             if name not in ['pred', 'label']:
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
+        
+        method_metrics = {}
+        for method in method_preds.keys():
+            method_metrics[method] = get_test_metrics(np.array(method_preds[method]), np.array(method_labels[method]))
+            for name, value in method_metrics[method].items():
+                if name not in ['pred', 'label']:
+                    wandb_log_dict[f'val/{method}/{name}'] = value
+                    self.logger.info(f"Method {method} val {name}: {value:.4f}")
 
         # Check for new best model and save
         current_metric = overall_metrics.get(self.metric_scoring)
