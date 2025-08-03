@@ -24,3 +24,7 @@ my_data/
 
 # checkpoints
 *.pth
+
+# all .DS_Store
+.DS_Store
+.idea/
