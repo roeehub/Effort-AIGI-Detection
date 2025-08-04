@@ -37,6 +37,9 @@ parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', de
 parser.add_argument("--ddp", action='store_true', default=False)
 parser.add_argument('--local_rank', type=int, default=0)
 parser.add_argument('--run_sanity_check', action='store_true', default=False, help="Run the comprehensive sampler check and exit.")
+parser.add_argument('--dataloader_config', type=str, default='./training/config/dataloader_config.yml',
+                    help='Path to the dataloader configuration file')
+
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -207,7 +210,8 @@ def main():
     if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
 
-    with open("./training/config/dataloader_config.yml", 'r') as f:
+    dataloader_config_path = args.dataloader_config
+    with open(dataloader_config_path, 'r') as f:
         data_config = yaml.safe_load(f)
 
     config.update(data_config) # Merge data_config into config
@@ -238,7 +242,7 @@ def main():
         logger.addFilter(RankFilter(0))
 
     logger.info("------- Configuration & Data Loading -------")
-    train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
+    train_videos, val_videos, _ = prepare_video_splits(dataloader_config_path)
 
     train_batch_size = data_config['dataloader_params']['batch_size']
     if train_batch_size % 2 != 0:

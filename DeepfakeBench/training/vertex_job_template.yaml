@@ -1,0 +1,32 @@
+# Vertex AI CustomJob template
+# Usage: launch_experiment.sh --job-name=myrun-01 --region=us-central1 …
+display_name: "{{JOB_NAME}}"
+job_spec:
+  scheduling:
+    timeout: 86400s           # 24 h hard cut-off
+    restart_job_on_worker_restart: true
+  worker_pool_specs:
+  - machine_spec:
+      machine_type: n1-standard-8         # 8 vCPU / 32 GB RAM
+      accelerator_type: NVIDIA_A100_40GB  # overridden by --gpu flag
+      accelerator_count: 1
+    replica_count: 1
+    container_spec:
+      image_uri: "{{IMAGE_URI}}"
+      command: ["/bin/bash", "/workspace/entrypoint.sh"]
+      args: []
+#      args: ["--config", "DeepfakeBench/training/config/train_config.yaml"]
+      env:
+      - name: WANDB_API_KEY
+        value: "{{WANDB_API_KEY}}"
+      - name: WANDB_PROJECT
+        value: "{{WANDB_PROJECT}}"
+      - name: WANDB_ENTITY
+        value: "{{WANDB_ENTITY}}"
+      - name: JOB_MODE
+        value: "{{JOB_MODE}}"           # train | sweep | vertex_hpt
+      # Hyper-params for Vertex HPT arrive as HP_* env-vars
+    disk_spec:
+      boot_disk_type: pd-ssd
+      boot_disk_size_gb: 200
+  service_account: "{{SERVICE_ACCOUNT}}"
