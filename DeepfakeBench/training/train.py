@@ -18,6 +18,8 @@ from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
 import numpy as np  # noqa
 import wandb  # noqa
+from google.cloud import storage  # noqa
+from google.api_core import exceptions  # noqa
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
@@ -29,15 +31,16 @@ from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # n
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
-                    default='./training/config/detector/effort.yaml',
+                    default='./config/detector/effort.yaml',
                     help='path to detector YAML file')
 parser.add_argument("--train_dataset", nargs="+")
 parser.add_argument("--test_dataset", nargs="+")
 parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
 parser.add_argument("--ddp", action='store_true', default=False)
 parser.add_argument('--local_rank', type=int, default=0)
-parser.add_argument('--run_sanity_check', action='store_true', default=False, help="Run the comprehensive sampler check and exit.")
-parser.add_argument('--dataloader_config', type=str, default='./training/config/dataloader_config.yml',
+parser.add_argument('--run_sanity_check', action='store_true', default=False,
+                    help="Run the comprehensive sampler check and exit.")
+parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
                     help='Path to the dataloader configuration file')
 
 args = parser.parse_args()
@@ -198,12 +201,96 @@ def comprehensive_sampler_check(
     print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
 
 
+def download_checkpoint_from_gcs(config, logger):
+    """
+    Downloads a base checkpoint from a GCS bucket if specified in the config.
+
+    This function checks for 'base_checkpoint_bucket_path' in the config.
+    If present, it downloads the file to the local path specified by
+    'base_checkpoint_output_path' and 'base_checkpoint_name'.
+
+    It handles GCS authentication automatically in a Vertex AI environment.
+
+    Args:
+        config (dict): The main configuration dictionary.
+        logger: The logger instance for logging messages.
+
+    Returns:
+        str: The local path to the downloaded checkpoint file if successful,
+             otherwise None.
+    """
+    gcs_path = config.get('base_checkpoint_bucket_path')
+    local_dir = config.get('base_checkpoint_output_path')
+    file_name = config.get('base_checkpoint_name')
+
+    # first check if the checkpoint already exists in the local directory
+    if local_dir and file_name:
+        local_destination_path = os.path.join(local_dir, file_name)
+        if os.path.exists(local_destination_path):
+            logger.info(f"Base checkpoint already exists at {local_destination_path}. Skipping download.")
+            return local_destination_path
+
+    if not all([gcs_path, local_dir, file_name]):
+        logger.info("Base checkpoint download not configured. Skipping.")
+        return None
+
+    if not gcs_path.startswith('gs://'):
+        logger.error(f"Invalid GCS path: '{gcs_path}'. Must start with 'gs://'.")
+        return None
+
+    local_destination_path = os.path.join(local_dir, file_name)
+
+    logger.info("--- GCS Checkpoint Download ---")
+    logger.info(f"Attempting to download base checkpoint from GCS.")
+    logger.info(f"  Source: {gcs_path}")
+    logger.info(f"  Destination: {local_destination_path}")
+
+    try:
+        # Parse the GCS path
+        path_parts = gcs_path.replace('gs://', '').split('/', 1)
+        bucket_name = path_parts[0]
+        blob_name = path_parts[1]
+
+        # Create the local directory if it doesn't exist
+        os.makedirs(local_dir, exist_ok=True)
+
+        # In a Vertex AI/GCP environment, the client authenticates automatically
+        # using the service account associated with the job.
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        if not blob.exists():
+            logger.error(f"FAILED: Checkpoint file not found at {gcs_path}")
+            return None
+
+        logger.info("Checkpoint found. Starting download...")
+        start_time = time.time()
+        blob.download_to_filename(local_destination_path)
+        elapsed_time = time.time() - start_time
+        logger.info(f"✅ SUCCESS: Downloaded checkpoint in {elapsed_time:.2f}s.")
+        return local_destination_path
+
+    except exceptions.Forbidden as e:
+        logger.error(
+            "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
+            f"account has 'Storage Object Viewer' role on bucket '{bucket_name}'.")
+        logger.error(f"  Details: {e}")
+        return None
+    except exceptions.NotFound as e:
+        logger.error(f"FAILED: GCS bucket or path not found. Check your config.")
+        logger.error(f"  Details: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"FAILED: An unexpected error occurred during download: {e}")
+        return None
+
+
 def main():
-    os.chdir('../')
-    # parse options and load config
+    # Load all configurations
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
-    with open('./training/config/train_config.yaml', 'r') as f:
+    with open('./config/train_config.yaml', 'r') as f:
         config.update(yaml.safe_load(f))
     config['local_rank'] = args.local_rank
     if args.train_dataset: config['train_dataset'] = args.train_dataset
@@ -213,22 +300,12 @@ def main():
     dataloader_config_path = args.dataloader_config
     with open(dataloader_config_path, 'r') as f:
         data_config = yaml.safe_load(f)
+    config.update(data_config)
 
-    config.update(data_config) # Merge data_config into config
-
-    # --- NEW: W&B Initialization ---
-    # W&B will automatically read entity/project from environment variables
-    # (WANDB_ENTITY, WANDB_PROJECT) or your local wandb configuration.
+    # W&B and Logger Initialization
     run_name = f"{config['model_name']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
-    wandb_run = wandb.init(
-        name=run_name,
-        config=config,
-        # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
-        # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
-    )
-
-    # create logger and path
-    logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
+    wandb_run = wandb.init(name=run_name, config=config)
+    logger_path = os.path.join(wandb_run.dir, 'logs')
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info(f'Save log to {logger_path}')
@@ -241,9 +318,17 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
+    # --- NEW: Download Base Checkpoint from GCS ---
+    # This function will download a base model from GCS if configured.
+    # If successful, it returns the local path to the checkpoint.
+    # We then set config['checkpoint_path'] so the trainer can load it.
+    downloaded_ckpt_path = download_checkpoint_from_gcs(config, logger)
+    if downloaded_ckpt_path:
+        config['checkpoint_path'] = downloaded_ckpt_path
+    # --- End of New Section ---
+
     logger.info("------- Configuration & Data Loading -------")
     train_videos, val_videos, _ = prepare_video_splits(dataloader_config_path)
-
     train_batch_size = data_config['dataloader_params']['batch_size']
     if train_batch_size % 2 != 0:
         raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
@@ -257,19 +342,10 @@ def main():
     real_loaders, fake_loaders = {}, {}
     for name, loader in all_train_loaders.items():
         (real_loaders if name in real_source_names else fake_loaders)[name] = loader
-
     logger.info(
         f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
 
-    if args.run_sanity_check:
-        logger.info("--- Running Sanity Check ---")
-        # You can still run the check if you want by passing the argument
-        comprehensive_sampler_check(...)  # Call the function if needed
-        logger.info("Sanity check complete. Halting execution as planned.")
-        wandb_run.finish()
-        return
-
-    # prepare model, optimizer, scheduler, metric, trainer
+    # Prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
     optimizer = choose_optimizer(model, config)
     scheduler = choose_scheduler(config, optimizer)
