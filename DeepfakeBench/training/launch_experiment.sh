@@ -1,71 +1,80 @@
 #!/usr/bin/env bash
 # launch_experiment.sh
-# Helper: fills template, checks quota, falls back to next region if needed.
+# Final version: Specifies a dedicated service account for the job.
 set -euo pipefail
 
-# ─── default params ────────────────────────────────────────────────────────────
-REGIONS=(us-central1 us-east4 europe-west4 asia-northeast1)
+# --- Default parameters ---
+REGIONS=(us-central1 us-east4 europe-west4)
 GPU_TYPE="NVIDIA_A100_40GB"
 GPU_COUNT=1
-JOB_MODE="train"
-JOB_NAME="effort-run-$(date +%Y%m%d-%H%M%S)"
+JOB_NAME="test-run-$(date +%Y%m%d-%H%M%S)"
 YAML_TEMPLATE="vertex_job_template.yaml"
+TEMP_YAML_CONFIG="/tmp/vertex_job_config_$$_${JOB_NAME}.yaml"
 
-# ─── CLI flags ────────────────────────────────────────────────────────────────
+# --- Cleanup Function ---
+trap 'rm -f "$TEMP_YAML_CONFIG"' EXIT
+
+# --- CLI flags ---
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --region)   REGIONS=("$2"); shift 2;;
-    --gpu)      GPU_TYPE="$2"; shift 2;;
     --job-name) JOB_NAME="$2"; shift 2;;
-    --mode)     JOB_MODE="$2"; shift 2;;
+    --gpu)      GPU_TYPE="$2"; shift 2;;
     *)          echo "Unknown flag $1"; exit 1;;
   esac
 done
 
-# ─── env & sanity checks ───────────────────────────────────────────────────────
+# --- Environment and Sanity Checks ---
+PROJECT_ID="$(gcloud config get-value project)"
 IMAGE_URI="us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest"
-SERVICE_ACCOUNT="$(gcloud config get-value account)"
-WANDB_API_KEY="${WANDB_API_KEY:-}"
-WANDB_PROJECT="${WANDB_PROJECT:-}"
-WANDB_ENTITY="${WANDB_ENTITY:-}"
 
-[[ -z "$WANDB_API_KEY" ]] && { echo "[launcher] WANDB_API_KEY env-var not set"; exit 1; }
-[[ -z "$WANDB_PROJECT" ]] && { echo "[launcher] WANDB_PROJECT env-var not set"; exit 1; }
-[[ -z "$WANDB_ENTITY"  ]] && { echo "[launcher] WANDB_ENTITY  env-var not set"; exit 1; }
+# !! IMPORTANT !!
+# This now points to the dedicated SERVICE ACCOUNT, not your user account.
+VERTEX_JOB_SERVICE_ACCOUNT="vertex-job-runner-train-cvit2@train-cvit2.iam.gserviceaccount.com"
 
-export IMAGE_URI JOB_NAME JOB_MODE GPU_TYPE SERVICE_ACCOUNT WANDB_API_KEY WANDB_PROJECT WANDB_ENTITY
-
-# ─── cost map (USD/h) ──────────────────────────────────────────────────────────
-GPU_RATE=""
+# --- Map user-friendly GPU names to the required API identifiers ---
 case "$GPU_TYPE" in
-  NVIDIA_A100_40GB) GPU_RATE="2.45" ;;
-  NVIDIA_A100_80GB) GPU_RATE="4.12" ;;
-  NVIDIA_H100_80GB) GPU_RATE="4.70" ;;
-  *)                GPU_RATE=""      ;;  # unknown type
+  "NVIDIA_A100_40GB") API_GPU_TYPE="NVIDIA_TESLA_A100" ;;
+  "NVIDIA_A100_80GB") API_GPU_TYPE="NVIDIA_A100_80GB" ;;
+  "NVIDIA_H100_80GB") API_GPU_TYPE="NVIDIA_H100_80GB" ;;
+  *) echo "[launcher] ERROR: Unrecognized GPU type '$GPU_TYPE'."; exit 1 ;;
 esac
 
-# ─── iterate regions until quota available ─────────────────────────────────────
+[[ -z "$PROJECT_ID" ]] && { echo "[launcher] ERROR: gcloud project not set."; exit 1; }
+[[ ! -f "$YAML_TEMPLATE" ]] && { echo "[launcher] ERROR: Template file '$YAML_TEMPLATE' not found."; exit 1; }
+if grep -q "YOUR_BUCKET_NAME_HERE" "$YAML_TEMPLATE"; then
+  echo "[launcher] ERROR: You must replace 'gs://YOUR_BUCKET_NAME_HERE' in '$YAML_TEMPLATE' with your actual GCS bucket path."
+  exit 1
+fi
+
+# --- Main Loop ---
 for REGION in "${REGIONS[@]}"; do
-  echo "[launcher] Trying region $REGION ..."
-  if gcloud ai locations describe "$REGION" --format="value(locationId)" >/dev/null 2>&1; then
-    # Check concurrent-job quota (simplified)
-    AVAIL=$(gcloud ai regions describe "$REGION" \
-              --format="value(quotas[metric=custom-jobs-concurrent-capacity].available)")
-    if (( AVAIL > 0 )); then
-      echo "[launcher]  $AVAIL job slots free – launching here."
-      envsubst < "$YAML_TEMPLATE" | \
-        gcloud ai custom-jobs create --region "$REGION" --quiet --file=-
-      if [[ -n "$GPU_RATE" ]]; then
-        echo "[launcher] 🚀 Estimated cost/hour: \$${GPU_RATE}"
-      else
-        echo "[launcher] (cost rate for $GPU_TYPE not in map)"
-      fi
-      exit 0
-    else
-      echo "[launcher]  No slots in $REGION."
-    fi
+  echo "[launcher] Attempting to launch in region: $REGION ..."
+
+  # Use sed to replace placeholders, including the correct service account.
+  sed -e "s|{{JOB_NAME}}|${JOB_NAME}|g" \
+      -e "s|{{IMAGE_URI}}|${IMAGE_URI}|g" \
+      -e "s|{{GPU_TYPE}}|${API_GPU_TYPE}|g" \
+      -e "s|{{GPU_COUNT}}|${GPU_COUNT}|g" \
+      -e "s|{{SERVICE_ACCOUNT}}|${VERTEX_JOB_SERVICE_ACCOUNT}|g" \
+      "$YAML_TEMPLATE" > "$TEMP_YAML_CONFIG"
+
+  # The final, correct command structure.
+  if gcloud ai custom-jobs create \
+        --project="$PROJECT_ID" \
+        --region="$REGION" \
+        --display-name="$JOB_NAME" \
+        --config="$TEMP_YAML_CONFIG" \
+        --quiet ; then
+
+    JOB_ID=$(gcloud ai custom-jobs list --project="$PROJECT_ID" --region="$REGION" --filter="displayName=$JOB_NAME" --sort-by=~creationTime --limit=1 --format="value(name)")
+    echo "[launcher] ✅ SUCCESS! Job '$JOB_NAME' launched in region $REGION."
+    echo "[launcher] View job at: https://console.cloud.google.com/vertex-ai/locations/$REGION/training/$JOB_ID?project=$PROJECT_ID"
+    exit 0
+  else
+    echo "[launcher] ❌ FAILED in $REGION. Trying next region..."
+    echo "----------------------------------------------------------------------"
   fi
 done
 
-echo "[launcher] ERROR: No region had free CustomJob quota." >&2
+echo "[launcher] 🔥 FINAL ERROR: Failed to launch job in all specified regions." >&2
 exit 1
