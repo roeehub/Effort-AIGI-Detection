@@ -20,6 +20,7 @@ import numpy as np  # noqa
 import wandb  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
+from google.cloud.storage import Bucket  # noqa
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
@@ -201,84 +202,218 @@ def comprehensive_sampler_check(
     print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
 
 
-def download_checkpoint_from_gcs(config, logger):
+# def download_checkpoint_from_gcs(config, logger):
+#     """
+#     Downloads a base checkpoint from a GCS bucket if specified in the config.
+#
+#     This function checks for 'base_checkpoint_bucket_path' in the config.
+#     If present, it downloads the file to the local path specified by
+#     'base_checkpoint_output_path' and 'base_checkpoint_name'.
+#
+#     It handles GCS authentication automatically in a Vertex AI environment.
+#
+#     Args:
+#         config (dict): The main configuration dictionary.
+#         logger: The logger instance for logging messages.
+#
+#     Returns:
+#         str: The local path to the downloaded checkpoint file if successful,
+#              otherwise None.
+#     """
+#     gcs_path = config.get('base_checkpoint_bucket_path')
+#     local_dir = config.get('base_checkpoint_output_path')
+#     file_name = config.get('base_checkpoint_name')
+#
+#     # first check if the checkpoint already exists in the local directory
+#     if local_dir and file_name:
+#         local_destination_path = os.path.join(local_dir, file_name)
+#         if os.path.exists(local_destination_path):
+#             logger.info(f"Base checkpoint already exists at {local_destination_path}. Skipping download.")
+#             return local_destination_path
+#
+#     if not all([gcs_path, local_dir, file_name]):
+#         logger.info("Base checkpoint download not configured. Skipping.")
+#         return None
+#
+#     if not gcs_path.startswith('gs://'):
+#         logger.error(f"Invalid GCS path: '{gcs_path}'. Must start with 'gs://'.")
+#         return None
+#
+#     local_destination_path = os.path.join(local_dir, file_name)
+#
+#     logger.info("--- GCS Checkpoint Download ---")
+#     logger.info(f"Attempting to download base checkpoint from GCS.")
+#     logger.info(f"  Source: {gcs_path}")
+#     logger.info(f"  Destination: {local_destination_path}")
+#
+#     try:
+#         # Parse the GCS path
+#         path_parts = gcs_path.replace('gs://', '').split('/', 1)
+#         bucket_name = path_parts[0]
+#         blob_name = path_parts[1]
+#
+#         # Create the local directory if it doesn't exist
+#         os.makedirs(local_dir, exist_ok=True)
+#
+#         # In a Vertex AI/GCP environment, the client authenticates automatically
+#         # using the service account associated with the job.
+#         storage_client = storage.Client()
+#         bucket = storage_client.bucket(bucket_name)
+#         blob = bucket.blob(blob_name)
+#
+#         if not blob.exists():
+#             logger.error(f"FAILED: Checkpoint file not found at {gcs_path}")
+#             return None
+#
+#         logger.info("Checkpoint found. Starting download...")
+#         start_time = time.time()
+#         blob.download_to_filename(local_destination_path)
+#         elapsed_time = time.time() - start_time
+#         logger.info(f"✅ SUCCESS: Downloaded checkpoint in {elapsed_time:.2f}s.")
+#         return local_destination_path
+#
+#     except exceptions.Forbidden as e:
+#         logger.error(
+#             "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
+#             f"account has 'Storage Object Viewer' role on bucket '{bucket_name}'.")
+#         logger.error(f"  Details: {e}")
+#         return None
+#     except exceptions.NotFound as e:
+#         logger.error(f"FAILED: GCS bucket or path not found. Check your config.")
+#         logger.error(f"  Details: {e}")
+#         return None
+#     except Exception as e:
+#         logger.error(f"FAILED: An unexpected error occurred during download: {e}")
+#         return None
+#
+
+def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -> bool:
     """
-    Downloads a base checkpoint from a GCS bucket if specified in the config.
+    Downloads a single blob or a directory of blobs from GCS.
 
-    This function checks for 'base_checkpoint_bucket_path' in the config.
-    If present, it downloads the file to the local path specified by
-    'base_checkpoint_output_path' and 'base_checkpoint_name'.
+    Args:
+        bucket (storage.Bucket): The GCS bucket object.
+        gcs_path (str): The path to the object or directory in GCS.
+        local_path (str): The local path to download to.
+        logger: The logger instance.
 
-    It handles GCS authentication automatically in a Vertex AI environment.
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    if gcs_path.endswith('/'):  # It's a directory
+        prefix = gcs_path.split(bucket.name + '/', 1)[1]
+        blobs = bucket.list_blobs(prefix=prefix)
+        downloaded = False
+        for blob in blobs:
+            if blob.name.endswith('/'):  # Skip "directory" blobs
+                continue
+            destination_file_name = os.path.join(local_path, os.path.relpath(blob.name, prefix))
+            os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
+            try:
+                blob.download_to_filename(destination_file_name)
+                downloaded = True
+            except Exception as e:
+                logger.error(f"Failed to download {blob.name}: {e}")
+                return False
+        if not downloaded:
+            logger.error(f"Directory {gcs_path} is empty or does not exist.")
+            return False
+        return True
+    else:  # It's a single file
+        blob_name = gcs_path.split(bucket.name + '/', 1)[1]
+        blob = bucket.blob(blob_name)
+        if not blob.exists():
+            logger.error(f"File not found at {gcs_path}")
+            return False
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        blob.download_to_filename(local_path)
+        return True
+
+
+def download_assets_from_gcs(config, logger):
+    """
+    Downloads specified assets (checkpoints, models) from a GCS bucket.
+
+    This function reads a list of assets from the config, where each asset has
+    a GCS path and a desired local path. It handles both individual files and
+    entire directories.
 
     Args:
         config (dict): The main configuration dictionary.
         logger: The logger instance for logging messages.
 
     Returns:
-        str: The local path to the downloaded checkpoint file if successful,
-             otherwise None.
+        dict: A dictionary mapping asset keys to their local paths if successful,
+              otherwise None.
     """
-    gcs_path = config.get('base_checkpoint_bucket_path')
-    local_dir = config.get('base_checkpoint_output_path')
-    file_name = config.get('base_checkpoint_name')
-
-    # first check if the checkpoint already exists in the local directory
-    if local_dir and file_name:
-        local_destination_path = os.path.join(local_dir, file_name)
-        if os.path.exists(local_destination_path):
-            logger.info(f"Base checkpoint already exists at {local_destination_path}. Skipping download.")
-            return local_destination_path
-
-    if not all([gcs_path, local_dir, file_name]):
-        logger.info("Base checkpoint download not configured. Skipping.")
+    assets_to_download = config.get('gcs_assets')
+    if not assets_to_download:
+        logger.info("No GCS assets configured for download. Skipping.")
         return None
 
-    if not gcs_path.startswith('gs://'):
-        logger.error(f"Invalid GCS path: '{gcs_path}'. Must start with 'gs://'.")
-        return None
+    local_paths = {}
 
-    local_destination_path = os.path.join(local_dir, file_name)
+    # First, check if all assets already exist locally
+    all_exist = True
+    for key, asset_info in assets_to_download.items():
+        local_path = asset_info.get('local_path')
+        if not local_path or not os.path.exists(local_path):
+            all_exist = False
+            break
+    if all_exist:
+        logger.info("All GCS assets already exist locally. Skipping downloads.")
+        for key, asset_info in assets_to_download.items():
+            local_paths[key] = asset_info.get('local_path')
+        return local_paths
 
-    logger.info("--- GCS Checkpoint Download ---")
-    logger.info(f"Attempting to download base checkpoint from GCS.")
-    logger.info(f"  Source: {gcs_path}")
-    logger.info(f"  Destination: {local_destination_path}")
-
+    logger.info("--- GCS Asset Download ---")
     try:
-        # Parse the GCS path
-        path_parts = gcs_path.replace('gs://', '').split('/', 1)
-        bucket_name = path_parts[0]
-        blob_name = path_parts[1]
-
-        # Create the local directory if it doesn't exist
-        os.makedirs(local_dir, exist_ok=True)
-
-        # In a Vertex AI/GCP environment, the client authenticates automatically
-        # using the service account associated with the job.
         storage_client = storage.Client()
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
-
-        if not blob.exists():
-            logger.error(f"FAILED: Checkpoint file not found at {gcs_path}")
-            return None
-
-        logger.info("Checkpoint found. Starting download...")
         start_time = time.time()
-        blob.download_to_filename(local_destination_path)
+
+        for key, asset_info in assets_to_download.items():
+            gcs_path = asset_info.get('gcs_path')
+            local_path = asset_info.get('local_path')
+
+            if not gcs_path or not local_path:
+                logger.error(f"Asset '{key}' is missing 'gcs_path' or 'local_path' in config.")
+                return None
+
+            if not gcs_path.startswith('gs://'):
+                logger.error(f"Invalid GCS path for asset '{key}': '{gcs_path}'. Must start with 'gs://'.")
+                return None
+
+            # Check if this specific asset already exists
+            if os.path.exists(local_path):
+                logger.info(f"Asset '{key}' already exists at {local_path}. Skipping.")
+                local_paths[key] = local_path
+                continue
+
+            logger.info(f"Downloading asset '{key}'...")
+            logger.info(f"  Source: {gcs_path}")
+            logger.info(f"  Destination: {local_path}")
+
+            bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
+            bucket = storage_client.bucket(bucket_name)
+
+            if not download_gcs_asset(bucket, gcs_path, local_path, logger):
+                raise RuntimeError(f"Failed to download asset '{key}'.")
+
+            local_paths[key] = local_path
+            logger.info(f"✅ SUCCESS: Downloaded '{key}'.")
+
         elapsed_time = time.time() - start_time
-        logger.info(f"✅ SUCCESS: Downloaded checkpoint in {elapsed_time:.2f}s.")
-        return local_destination_path
+        logger.info(f"✅ SUCCESS: All GCS assets downloaded in {elapsed_time:.2f}s.")
+        return local_paths
 
     except exceptions.Forbidden as e:
         logger.error(
             "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
-            f"account has 'Storage Object Viewer' role on bucket '{bucket_name}'.")
+            "account has 'Storage Object Viewer' role on the relevant buckets.")
         logger.error(f"  Details: {e}")
         return None
     except exceptions.NotFound as e:
-        logger.error(f"FAILED: GCS bucket or path not found. Check your config.")
+        logger.error("FAILED: GCS bucket or path not found. Check your config.")
         logger.error(f"  Details: {e}")
         return None
     except Exception as e:
@@ -318,14 +453,11 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
-    # --- NEW: Download Base Checkpoint from GCS ---
+    # --- Download Base Checkpoint from GCS ---
     # This function will download a base model from GCS if configured.
-    # If successful, it returns the local path to the checkpoint.
-    # We then set config['checkpoint_path'] so the trainer can load it.
-    downloaded_ckpt_path = download_checkpoint_from_gcs(config, logger)
-    if downloaded_ckpt_path:
-        config['checkpoint_path'] = downloaded_ckpt_path
-    # --- End of New Section ---
+    # It will also download the CLIP backbone.
+    download_assets_from_gcs(config, logger)
+
 
     logger.info("------- Configuration & Data Loading -------")
     train_videos, val_videos, _ = prepare_video_splits(dataloader_config_path)
@@ -377,7 +509,7 @@ def main():
     eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
 
     if config.get('checkpoint_path'):
-        trainer.load_ckpt(config['checkpoint_path'])
+        trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
 
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
