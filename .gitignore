@@ -28,3 +28,5 @@ my_data/
 # all .DS_Store
 .DS_Store
 .idea/
+
+frame_manifest.json

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # launch_experiment.sh
-# Final version: Specifies a dedicated service account for the job.
+# Final version: Handles the complete YAML template with all environment variables.
 set -euo pipefail
 
 # --- Default parameters ---
@@ -8,6 +8,7 @@ REGIONS=(us-central1 us-east4 europe-west4)
 GPU_TYPE="NVIDIA_A100_40GB"
 GPU_COUNT=1
 JOB_NAME="test-run-$(date +%Y%m%d-%H%M%S)"
+JOB_MODE="train" # Default job mode
 YAML_TEMPLATE="vertex_job_template.yaml"
 TEMP_YAML_CONFIG="/tmp/vertex_job_config_$$_${JOB_NAME}.yaml"
 
@@ -19,6 +20,7 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --job-name) JOB_NAME="$2"; shift 2;;
     --gpu)      GPU_TYPE="$2"; shift 2;;
+    --mode)     JOB_MODE="$2"; shift 2;; # Allow overriding job mode
     *)          echo "Unknown flag $1"; exit 1;;
   esac
 done
@@ -26,10 +28,10 @@ done
 # --- Environment and Sanity Checks ---
 PROJECT_ID="$(gcloud config get-value project)"
 IMAGE_URI="us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest"
-
-# !! IMPORTANT !!
-# This now points to the dedicated SERVICE ACCOUNT, not your user account.
-VERTEX_JOB_SERVICE_ACCOUNT="vertex-job-runner-train-cvit2@train-cvit2.iam.gserviceaccount.com"
+VERTEX_JOB_SERVICE_ACCOUNT="vertex-job-runner-train-cvit2@${PROJECT_ID}.iam.gserviceaccount.com"
+WANDB_API_KEY="${WANDB_API_KEY:-}"
+WANDB_PROJECT="${WANDB_PROJECT:-}"
+WANDB_ENTITY="${WANDB_ENTITY:-}"
 
 # --- Map user-friendly GPU names to the required API identifiers ---
 case "$GPU_TYPE" in
@@ -50,15 +52,19 @@ fi
 for REGION in "${REGIONS[@]}"; do
   echo "[launcher] Attempting to launch in region: $REGION ..."
 
-  # Use sed to replace placeholders, including the correct service account.
+  # This 'sed' command is now updated to handle all your environment variables.
   sed -e "s|{{JOB_NAME}}|${JOB_NAME}|g" \
       -e "s|{{IMAGE_URI}}|${IMAGE_URI}|g" \
       -e "s|{{GPU_TYPE}}|${API_GPU_TYPE}|g" \
       -e "s|{{GPU_COUNT}}|${GPU_COUNT}|g" \
       -e "s|{{SERVICE_ACCOUNT}}|${VERTEX_JOB_SERVICE_ACCOUNT}|g" \
+      -e "s|{{WANDB_API_KEY}}|${WANDB_API_KEY}|g" \
+      -e "s|{{WANDB_PROJECT}}|${WANDB_PROJECT}|g" \
+      -e "s|{{WANDB_ENTITY}}|${WANDB_ENTITY}|g" \
+      -e "s|{{JOB_MODE}}|${JOB_MODE}|g" \
       "$YAML_TEMPLATE" > "$TEMP_YAML_CONFIG"
 
-  # The final, correct command structure.
+  # The command structure remains the same and is known to work.
   if gcloud ai custom-jobs create \
         --project="$PROJECT_ID" \
         --region="$REGION" \

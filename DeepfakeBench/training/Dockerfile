@@ -6,21 +6,13 @@
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 # --- Environment ---
-# Set non-interactive frontend for package installations
 ENV DEBIAN_FRONTEND=noninteractive \
-    # Standard for Python logging in containers
     PYTHONUNBUFFERED=1 \
-    # Disable the pip progress bar for cleaner build logs
     PIP_PROGRESS_BAR=off \
-    # Ensures wandb waits for network before failing (useful on vertex init)
     WANDB__SERVICE_WAIT=300
 
 # --- System packages, Python 3.10, and Build Tools ---
-# Install Python, pip, and essential build tools in a single layer.
-# - build-essential, cmake: For compiling packages like dlib.
-# - libgl1: A common runtime dependency for opencv-python.
-# - git, curl, ca-certificates: General utilities.
-# Finally, clean up the apt cache to reduce image size.
+# This layer is stable and will be cached.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.10 \
@@ -37,36 +29,31 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # --- Create a symlink for `python` command ---
-# Makes commands like `python -m pip` work without needing `python3.10`
 RUN ln -s /usr/bin/python3.10 /usr/bin/python
 
 # Set the working directory for subsequent commands
 WORKDIR /workspace
 
 # --- Install Python Dependencies ---
-# Use --no-cache-dir to keep the image lean by not storing the pip cache.
+# STEP 1: Copy ONLY the requirements file. This is the key to caching.
+# The following RUN command will only be re-executed if this file changes.
+COPY requirements.txt .
 
-# 1. Upgrade pip to the latest version.
-RUN python -m pip install --no-cache-dir --upgrade pip
-
-# 2. Install PyTorch and Torchvision first.
-# This uses versions confirmed to be available for your base image and CUDA version.
-# Separating this step improves layer caching.
-RUN python -m pip install --no-cache-dir \
-    torch==2.0.1 torchvision==0.15.2 \
-    --index-url https://download.pytorch.org/whl/cu121
-
-# 3. Copy and install the rest of your application's dependencies.
-# Make sure this requirements.txt has had torch, torchvision, and nvidia-* packages removed.
-COPY requirements.txt /tmp/requirements.txt
-RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt
+# STEP 2: Install all dependencies in a single, cached layer.
+# We combine these commands to reduce the number of layers.
+RUN python -m pip install --no-cache-dir --upgrade pip && \
+    python -m pip install --no-cache-dir \
+        torch==2.1.1 torchvision==0.16.1 \
+        --index-url https://download.pytorch.org/whl/cu121 && \
+    python -m pip install --no-cache-dir -r requirements.txt
 
 # --- Copy Application Code ---
-# Copy your code last, so that code edits don’t invalidate the dependency layers,
-# leading to faster rebuilds during development.
-COPY . /workspace/
+# STEP 3: Now that slow dependencies are installed, copy the application code.
+# Changes to your scripts (.py, .sh) will only invalidate the cache from this point on.
+COPY . .
+
 
 # --- Container Entrypoint ---
-# This setup remains from your original file, allowing flexible command execution.
+# This final step is very fast to build.
 ENTRYPOINT ["/bin/bash", "/workspace/entrypoint.sh"]
 CMD ["train"]

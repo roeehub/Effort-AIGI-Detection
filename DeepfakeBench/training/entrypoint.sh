@@ -8,10 +8,10 @@
 set -euo pipefail
 
 JOB_MODE="${JOB_MODE:-train}"   # train | sweep | vertex_hpt
-MAIN_SCRIPT="DeepfakeBench/training/train.py"
+MAIN_SCRIPT="train.py"
 
 echo "[entrypoint] JOB_MODE=$JOB_MODE"
-echo "[entrypoint] Hostname: $(hostname) | CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+echo "[entrypoint] Hostname: $(hostname) | CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-"not set"}"
 
 case "$JOB_MODE" in
   train)
@@ -37,7 +37,7 @@ case "$JOB_MODE" in
         python -u "$MAIN_SCRIPT" "${PARAMS[@]}" "$@"
         ;;
   *)
-        echo "[entrypoint] ERROR: Unknown JOB_MODE '$JOB_MODE'"
+        echo "[entrypoint] ERROR: Unknown JOB_MODE '$JOB_MODE'."
         exit 1
         ;;
 esac
