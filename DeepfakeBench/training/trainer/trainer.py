@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 
@@ -218,32 +219,52 @@ class Trainer(object):
     def test_epoch(self, epoch, val_method_loaders):
         self.setEval()
 
+        val_iters = {name: iter(loader) for name, loader in val_method_loaders.items()}
+
+        # --- Calculate total batches based on total number of videos and batch size ---
+        total_videos = len(self.val_videos)
+        batch_size = self.config['test_batchSize']
+        # The number of batches is the total videos divided by batch size, rounded up.
+        # We add a check for total_videos > 0 to avoid division by zero if val set is empty.
+        total_batches = math.ceil(total_videos / batch_size) if total_videos > 0 else 0
+
+        pbar = tqdm(total=total_batches, desc="Validating (Interleaved)")
+
         all_preds, all_labels = [], []
-        # The 'desc' provides a description for the progress bar.
-        pbar = tqdm(val_method_loaders.items(), desc="Validating (Slow but Stable)")
+        # --- Loop until all iterators are exhausted ---
+        while val_iters:
+            # Iterate over a copy of keys, as we will modify the dict
+            for method in list(val_iters.keys()):
+                try:
+                    # --- NEW: Get the next batch from the current method's iterator ---
+                    data_dict = next(val_iters[method])
 
-        # Iterate through each method's DataLoader one by one.
-        for method, loader in pbar:
-            for data_dict in loader:
-                # Move tensors to the correct device
-                for key, value in data_dict.items():
-                    if isinstance(value, torch.Tensor):
-                        data_dict[key] = value.to(self.model.device)
+                    # Move tensors to the correct device
+                    for key, value in data_dict.items():
+                        if isinstance(value, torch.Tensor):
+                            data_dict[key] = value.to(self.model.device)
 
-                # Skip empty batches
-                if data_dict['image'].shape[0] == 0: continue
-                # Skip batches with incorrect dimensions
-                if data_dict['image'].dim() != 5: continue
+                    # skip empty batches or invalid shapes
+                    if data_dict['image'].shape[0] == 0: continue
+                    if data_dict['image'].dim() != 5: continue
 
-                B, T = data_dict['image'].shape[:2]
+                    B, T = data_dict['image'].shape[:2]
+                    predictions = self.model(data_dict, inference=True)
+                    video_probs = predictions['prob'].view(B, T).mean(dim=1)
 
-                predictions = self.model(data_dict, inference=True)
+                    all_labels.extend(data_dict['label'].cpu().numpy())
+                    all_preds.extend(video_probs.cpu().numpy())
 
-                # Calculate video-level probability by averaging frame scores
-                video_probs = predictions['prob'].view(B, T).mean(dim=1)
+                    # (Future) Here you can accumulate per-method metrics:
+                    # per_method_results[method].append(...)
 
-                all_labels.extend(data_dict['label'].cpu().numpy())
-                all_preds.extend(video_probs.cpu().numpy())
+                    pbar.update(1)
+
+                except StopIteration:
+                    # This loader is finished, remove it ---
+                    del val_iters[method]
+
+        pbar.close()
 
         if not all_labels:
             self.logger.error("Validation failed: No data was processed after iterating all loaders.")
