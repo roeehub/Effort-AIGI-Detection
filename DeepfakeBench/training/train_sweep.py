@@ -18,7 +18,9 @@ from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
 import numpy as np  # noqa
 import wandb  # noqa
-
+from google.cloud import storage  # noqa
+from google.api_core import exceptions  # noqa
+from google.cloud.storage import Bucket  # noqa
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
 from metrics.utils import parse_metric_for_print
@@ -80,22 +82,32 @@ sweep_configuration = {
             'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
         },
         'train_batchSize': {
-            'values': [32, 64, 128] # Reduced 256 to avoid potential OOM issues
+            'values': [2, 4, 8, 16] # Reduced 256 to avoid potential OOM issues
         }
-    }
-}
+}}
 # --- END NEW SECTION ---
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
-                    default='./training/config/detector/effort.yaml',
+                    default='./config/detector/effort.yaml',
                     help='path to detector YAML file')
 parser.add_argument("--train_dataset", nargs="+")
 parser.add_argument("--test_dataset", nargs="+")
 parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
 parser.add_argument("--ddp", action='store_true', default=False)
 parser.add_argument('--local_rank', type=int, default=0)
-parser.add_argument('--run_sanity_check', action='store_true', default=False, help="Run the comprehensive sampler check and exit.")
+parser.add_argument('--run_sanity_check', action='store_true', default=False,
+                    help="Run the comprehensive sampler check and exit.")
+parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
+                    help='Path to the dataloader configuration file')
+
+# --- NEW: Arguments for W&B sweep agent ---
+parser.add_argument('--sweep_id', type=str, default=None,
+                    help='W&B sweep ID to join. If not provided, the script will create a new sweep.')
+parser.add_argument('--runs_per_agent', type=int, default=1,
+                    help='Number of runs this agent should execute for the sweep.')
+# --- END NEW SECTION ---
+
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -255,13 +267,230 @@ def comprehensive_sampler_check(
     print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
 
 
+# def download_checkpoint_from_gcs(config, logger):
+#     """
+#     Downloads a base checkpoint from a GCS bucket if specified in the config.
+#
+#     This function checks for 'base_checkpoint_bucket_path' in the config.
+#     If present, it downloads the file to the local path specified by
+#     'base_checkpoint_output_path' and 'base_checkpoint_name'.
+#
+#     It handles GCS authentication automatically in a Vertex AI environment.
+#
+#     Args:
+#         config (dict): The main configuration dictionary.
+#         logger: The logger instance for logging messages.
+#
+#     Returns:
+#         str: The local path to the downloaded checkpoint file if successful,
+#              otherwise None.
+#     """
+#     gcs_path = config.get('base_checkpoint_bucket_path')
+#     local_dir = config.get('base_checkpoint_output_path')
+#     file_name = config.get('base_checkpoint_name')
+#
+#     # first check if the checkpoint already exists in the local directory
+#     if local_dir and file_name:
+#         local_destination_path = os.path.join(local_dir, file_name)
+#         if os.path.exists(local_destination_path):
+#             logger.info(f"Base checkpoint already exists at {local_destination_path}. Skipping download.")
+#             return local_destination_path
+#
+#     if not all([gcs_path, local_dir, file_name]):
+#         logger.info("Base checkpoint download not configured. Skipping.")
+#         return None
+#
+#     if not gcs_path.startswith('gs://'):
+#         logger.error(f"Invalid GCS path: '{gcs_path}'. Must start with 'gs://'.")
+#         return None
+#
+#     local_destination_path = os.path.join(local_dir, file_name)
+#
+#     logger.info("--- GCS Checkpoint Download ---")
+#     logger.info(f"Attempting to download base checkpoint from GCS.")
+#     logger.info(f"  Source: {gcs_path}")
+#     logger.info(f"  Destination: {local_destination_path}")
+#
+#     try:
+#         # Parse the GCS path
+#         path_parts = gcs_path.replace('gs://', '').split('/', 1)
+#         bucket_name = path_parts[0]
+#         blob_name = path_parts[1]
+#
+#         # Create the local directory if it doesn't exist
+#         os.makedirs(local_dir, exist_ok=True)
+#
+#         # In a Vertex AI/GCP environment, the client authenticates automatically
+#         # using the service account associated with the job.
+#         storage_client = storage.Client()
+#         bucket = storage_client.bucket(bucket_name)
+#         blob = bucket.blob(blob_name)
+#
+#         if not blob.exists():
+#             logger.error(f"FAILED: Checkpoint file not found at {gcs_path}")
+#             return None
+#
+#         logger.info("Checkpoint found. Starting download...")
+#         start_time = time.time()
+#         blob.download_to_filename(local_destination_path)
+#         elapsed_time = time.time() - start_time
+#         logger.info(f"✅ SUCCESS: Downloaded checkpoint in {elapsed_time:.2f}s.")
+#         return local_destination_path
+#
+#     except exceptions.Forbidden as e:
+#         logger.error(
+#             "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
+#             f"account has 'Storage Object Viewer' role on bucket '{bucket_name}'.")
+#         logger.error(f"  Details: {e}")
+#         return None
+#     except exceptions.NotFound as e:
+#         logger.error(f"FAILED: GCS bucket or path not found. Check your config.")
+#         logger.error(f"  Details: {e}")
+#         return None
+#     except Exception as e:
+#         logger.error(f"FAILED: An unexpected error occurred during download: {e}")
+#         return None
+#
+
+def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -> bool:
+    """
+    Downloads a single blob or a directory of blobs from GCS.
+
+    Args:
+        bucket (storage.Bucket): The GCS bucket object.
+        gcs_path (str): The path to the object or directory in GCS.
+        local_path (str): The local path to download to.
+        logger: The logger instance.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
+    if gcs_path.endswith('/'):  # It's a directory
+        prefix = gcs_path.split(bucket.name + '/', 1)[1]
+        blobs = bucket.list_blobs(prefix=prefix)
+        downloaded = False
+        for blob in blobs:
+            if blob.name.endswith('/'):  # Skip "directory" blobs
+                continue
+            destination_file_name = os.path.join(local_path, os.path.relpath(blob.name, prefix))
+            os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
+            try:
+                blob.download_to_filename(destination_file_name)
+                downloaded = True
+            except Exception as e:
+                logger.error(f"Failed to download {blob.name}: {e}")
+                return False
+        if not downloaded:
+            logger.error(f"Directory {gcs_path} is empty or does not exist.")
+            return False
+        return True
+    else:  # It's a single file
+        blob_name = gcs_path.split(bucket.name + '/', 1)[1]
+        blob = bucket.blob(blob_name)
+        if not blob.exists():
+            logger.error(f"File not found at {gcs_path}")
+            return False
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        blob.download_to_filename(local_path)
+        return True
+
+
+def download_assets_from_gcs(config, logger):
+    """
+    Downloads specified assets (checkpoints, models) from a GCS bucket.
+
+    This function reads a list of assets from the config, where each asset has
+    a GCS path and a desired local path. It handles both individual files and
+    entire directories.
+
+    Args:
+        config (dict): The main configuration dictionary.
+        logger: The logger instance for logging messages.
+
+    Returns:
+        dict: A dictionary mapping asset keys to their local paths if successful,
+              otherwise None.
+    """
+    assets_to_download = config.get('gcs_assets')
+    if not assets_to_download:
+        logger.info("No GCS assets configured for download. Skipping.")
+        return None
+
+    local_paths = {}
+
+    # First, check if all assets already exist locally
+    all_exist = True
+    for key, asset_info in assets_to_download.items():
+        local_path = asset_info.get('local_path')
+        if not local_path or not os.path.exists(local_path):
+            all_exist = False
+            break
+    if all_exist:
+        logger.info("All GCS assets already exist locally. Skipping downloads.")
+        for key, asset_info in assets_to_download.items():
+            local_paths[key] = asset_info.get('local_path')
+        return local_paths
+
+    logger.info("--- GCS Asset Download ---")
+    try:
+        storage_client = storage.Client()
+        start_time = time.time()
+
+        for key, asset_info in assets_to_download.items():
+            gcs_path = asset_info.get('gcs_path')
+            local_path = asset_info.get('local_path')
+
+            if not gcs_path or not local_path:
+                logger.error(f"Asset '{key}' is missing 'gcs_path' or 'local_path' in config.")
+                return None
+
+            if not gcs_path.startswith('gs://'):
+                logger.error(f"Invalid GCS path for asset '{key}': '{gcs_path}'. Must start with 'gs://'.")
+                return None
+
+            # Check if this specific asset already exists
+            if os.path.exists(local_path):
+                logger.info(f"Asset '{key}' already exists at {local_path}. Skipping.")
+                local_paths[key] = local_path
+                continue
+
+            logger.info(f"Downloading asset '{key}'...")
+            logger.info(f"  Source: {gcs_path}")
+            logger.info(f"  Destination: {local_path}")
+
+            bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
+            bucket = storage_client.bucket(bucket_name)
+
+            if not download_gcs_asset(bucket, gcs_path, local_path, logger):
+                raise RuntimeError(f"Failed to download asset '{key}'.")
+
+            local_paths[key] = local_path
+            logger.info(f"✅ SUCCESS: Downloaded '{key}'.")
+
+        elapsed_time = time.time() - start_time
+        logger.info(f"✅ SUCCESS: All GCS assets downloaded in {elapsed_time:.2f}s.")
+        return local_paths
+
+    except exceptions.Forbidden as e:
+        logger.error(
+            "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
+            "account has 'Storage Object Viewer' role on the relevant buckets.")
+        logger.error(f"  Details: {e}")
+        return None
+    except exceptions.NotFound as e:
+        logger.error("FAILED: GCS bucket or path not found. Check your config.")
+        logger.error(f"  Details: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"FAILED: An unexpected error occurred during download: {e}")
+        return None
+
+
 def main():
-    os.chdir('/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training')
-    os.chdir('../')
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
-    with open('./training/config/train_config.yaml', 'r') as f:
+    with open('./config/train_config.yaml', 'r') as f:
         config.update(yaml.safe_load(f))
         
     # --- NEW: W&B Initialization ---
@@ -270,7 +499,6 @@ def main():
     run_name = f"{config['model_name']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
     wandb_run = wandb.init(
         name=run_name,
-        config=config,
         mode="online",
         # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
         # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
@@ -294,7 +522,6 @@ def main():
     data_config['dataloader_params']['batch_size'] = wandb.config.train_batchSize
     config.update(data_config) # Merge data_config into config
 
-    
 
     # create logger and path
     logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
@@ -400,7 +627,24 @@ if __name__ == '__main__':
     )
     # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
     # `count` specifies how many runs to execute.
-    wandb.agent(sweep_id, function=main, count=20) # Running 20 trials
+    # wandb.agent(sweep_id, function=main, count=1) # Running 20 trials
+    if args.sweep_id:
+        # If a sweep_id is provided, this script acts as an agent
+        print(f"Joining W&B sweep '{args.sweep_id}' as an agent, running {args.runs_per_agent} trials.")
+        wandb.agent(args.sweep_id, function=main, count=args.runs_per_agent)
+    else:
+        # If no sweep_id is provided, create a new sweep
+        print("No sweep_id provided. Creating a new W&B sweep.")
+        sweep_id = wandb.sweep(
+            sweep=sweep_configuration,
+            project="Effort-AIGI-Detection-Project" # Replace with your project name
+        )
+        print(f"New W&B sweep created with ID: {sweep_id}")
+        print("\nTo run agents for this sweep, use the following command (replace YOUR_SWEEP_ID):")
+        print(f"  python your_script_name.py --sweep_id {sweep_id} --runs_per_agent 4")
+        print("\nOr in a GCP job, pass these as --args.")
+        # Optionally, you could start one agent immediately after creating:
+        # wandb.agent(sweep_id, function=main, count=args.runs_per_agent)
     # main()
     end = time.time()
     elapsed = end - start
