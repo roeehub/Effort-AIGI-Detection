@@ -19,6 +19,7 @@ import torch.distributed as dist  # noqa
 import numpy as np  # noqa
 import wandb  # noqa
 
+
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
 from metrics.utils import parse_metric_for_print
@@ -196,6 +197,7 @@ def comprehensive_sampler_check(
 
 
 def main():
+    os.chdir('/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training')
     os.chdir('../')
     # parse options and load config
     with open(args.detector_path, 'r') as f:
@@ -219,6 +221,7 @@ def main():
     wandb_run = wandb.init(
         name=run_name,
         config=config,
+        mode="online",
         # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
         # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
     )

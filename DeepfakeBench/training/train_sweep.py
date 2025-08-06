@@ -1,55 +1,69 @@
-# author: Zhiyuan Yan
-# email: zhiyuanyan@link.cuhk.edu.cn
-# date: 2023-03-30
-# description: training code.
-from datetime import timedelta
-import datetime
-PRJ_NAME="Effort_" + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-
-import os
 import argparse
-from os.path import join
-import cv2
 import random
-
+import datetime
 import time
-import yaml
-from tqdm import tqdm
-import numpy as np
+import yaml  # noqa
+from datetime import timedelta
+import math
+import os
+from collections import defaultdict, Counter
+from tqdm import tqdm  # noqa
 
-from copy import deepcopy
-from PIL import Image as pil_image
-
-import torch
-import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.utils.data
-import torch.optim as optim
-from torch.utils.data.distributed import DistributedSampler
-import torch.distributed as dist
-
-from optimizor.SAM import SAM
-from optimizor.LinearLR import LinearDecayLR
+import torch  # noqa
+import torch.nn.parallel  # noqa
+import torch.backends.cudnn as cudnn  # noqa
+import torch.utils.data  # noqa
+import torch.optim as optim  # noqa
+from torch.utils.data.distributed import DistributedSampler  # noqa
+import torch.distributed as dist  # noqa
+import numpy as np  # noqa
+import wandb  # noqa
 
 from trainer.trainer import Trainer
-from detectors import DETECTOR
-from dataset import *
+from detectors import DETECTOR  # noqa
 from metrics.utils import parse_metric_for_print
 from logger import create_logger
-from PIL.ImageFilter import RankFilter
-from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
+from PIL.ImageFilter import RankFilter  # noqa
 from prepare_splits import prepare_video_splits
-from dataset.dataloaders import create_method_aware_dataloaders
+from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
 
-import wandb
+import argparse
+import random
+import datetime
+import time
+import yaml  # noqa
+from datetime import timedelta
+import math
+import os
+from collections import defaultdict, Counter
+from tqdm import tqdm  # noqa
 
-# --- Weights and Biases Sweep Configuration ---
-sweep_config = {
-    'method': 'random',
+import torch  # noqa
+import torch.nn.parallel  # noqa
+import torch.backends.cudnn as cudnn  # noqa
+import torch.utils.data  # noqa
+import torch.optim as optim  # noqa
+from torch.utils.data.distributed import DistributedSampler  # noqa
+import torch.distributed as dist  # noqa
+import numpy as np  # noqa
+import wandb  # noqa
+
+from trainer.trainer import Trainer
+from detectors import DETECTOR  # noqa
+from metrics.utils import parse_metric_for_print
+from logger import create_logger
+from PIL.ImageFilter import RankFilter  # noqa
+from prepare_splits import prepare_video_splits
+from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
+
+# --- NEW: W&B SWEEP CONFIGURATION ---
+# Define the hyperparameter sweep configuration
+sweep_configuration = {
+    'method': 'random',  # Can be 'grid', 'random', or 'bayes'
+    'name': 'Effort-AIGI-Detection-Sweep',
     'metric': {
-      'name': 'best_metric',
-      'goal': 'maximize'
+        'goal': 'maximize',
+        'name': 'val/best_metric'
     },
     'parameters': {
         'lr': {
@@ -59,19 +73,31 @@ sweep_config = {
         },
         'eps': {
             'distribution': 'uniform',
-            'min': 0.000000001,
-            'max': 0.00001
+            'min': 1e-9,
+            'max': 1e-5
         },
         'weight_decay': {
             'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
         },
         'train_batchSize': {
-            'values': [32, 64, 128, 256]
+            'values': [32, 64, 128] # Reduced 256 to avoid potential OOM issues
         }
     }
 }
+# --- END NEW SECTION ---
 
-sweep_id = wandb.sweep(sweep_config, project=PRJ_NAME) # Replace with your project name
+parser = argparse.ArgumentParser(description='Process some paths.')
+parser.add_argument('--detector_path', type=str,
+                    default='./training/config/detector/effort.yaml',
+                    help='path to detector YAML file')
+parser.add_argument("--train_dataset", nargs="+")
+parser.add_argument("--test_dataset", nargs="+")
+parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
+parser.add_argument("--ddp", action='store_true', default=False)
+parser.add_argument('--local_rank', type=int, default=0)
+parser.add_argument('--run_sanity_check', action='store_true', default=False, help="Run the comprehensive sampler check and exit.")
+args = parser.parse_args()
+torch.cuda.set_device(args.local_rank)
 
 
 def init_seed(config):
@@ -83,122 +109,28 @@ def init_seed(config):
         torch.cuda.manual_seed_all(config['manualSeed'])
 
 
-def prepare_training_data(config, train_videos):
-    # Only use the blending dataset class in training
-    train_set = DeepfakeAbstractBaseDataset(
-        config=config,
-        mode='train',
-        train_videos=train_videos
-    )
-    if config['ddp']:
-        sampler = DistributedSampler(train_set)
-        train_data_loader = \
-            torch.utils.data.DataLoader(
-                dataset=train_set,
-                batch_size=config['train_batchSize'],
-                num_workers=int(config['workers']),
-                collate_fn=train_set.collate_fn,
-                sampler=sampler
-            )
-    else:
-        train_data_loader = \
-            torch.utils.data.DataLoader(
-                dataset=train_set,
-                batch_size=config['train_batchSize'],
-                shuffle=True,
-                num_workers=int(config['workers']),
-                collate_fn=train_set.collate_fn,
-                )
-    return train_data_loader
-
-
-def prepare_testing_data(config, val_videos):
-    def get_test_data_loader(config, test_name, val_videos):
-        # update the config dictionary with the specific testing dataset
-        config = config.copy()  # create a copy of config to avoid altering the original one
-        config['test_dataset'] = test_name  # specify the current test dataset
-
-        test_set = DeepfakeAbstractBaseDataset(
-                config=config,
-                mode='test',
-                VideoInfo=val_videos,
-        )
-
-        test_data_loader = \
-            torch.utils.data.DataLoader(
-                dataset=test_set,
-                batch_size=config['test_batchSize'],
-                shuffle=False,
-                num_workers=int(config['workers']),
-                collate_fn=test_set.collate_fn,
-                drop_last = (test_name=='DeepFakeDetection'),
-            )
-
-        return test_data_loader
-
-    test_data_loaders = {}
-    for one_test_name in config['test_dataset']:
-        test_data_loaders[one_test_name] = get_test_data_loader(config, one_test_name, val_videos)
-    return test_data_loaders
-
-
 def choose_optimizer(model, config):
     opt_name = config['optimizer']['type']
-    if opt_name == 'sgd':
-        optimizer = optim.SGD(
-            params=model.parameters(),
-            lr=config['optimizer'][opt_name]['lr'],
-            momentum=config['optimizer'][opt_name]['momentum'],
-            weight_decay=config['optimizer'][opt_name]['weight_decay']
-        )
-        return optimizer
-    elif opt_name == 'adam':
+    if opt_name == 'adam':
         optimizer = optim.Adam(
-            params=model.parameters(),
-            lr=config['lr'],  # Using wandb config
-            weight_decay=config['weight_decay'],  # Using wandb config
-            betas=(config['optimizer'][opt_name]['beta1'], config['optimizer'][opt_name]['beta2']),
-            eps=config['eps'],  # Using wandb config
-            amsgrad=config['optimizer'][opt_name]['amsgrad'],
+            params=filter(lambda p: p.requires_grad, model.parameters()),
+            lr=config['optimizer'][opt_name]['lr'],
+            eps=config['optimizer'][opt_name]['eps'], # Added eps
+            weight_decay=config['optimizer'][opt_name]['weight_decay'],
         )
         return optimizer
-    elif opt_name == 'sam':
-        optimizer = SAM(
-            model.parameters(),
-            optim.SGD,
-            lr=config['lr'],  # Using wandb config
-            momentum=config['optimizer'][opt_name]['momentum'],
-        )
     else:
         raise NotImplementedError('Optimizer {} is not implemented'.format(config['optimizer']))
     return optimizer
 
 
 def choose_scheduler(config, optimizer):
-    if config['lr_scheduler'] is None:
-        return None
-    elif config['lr_scheduler'] == 'step':
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer,
-            step_size=config['lr_step'],
-            gamma=config['lr_gamma'],
+    if config['lr_scheduler'] is None: return None
+    if config['lr_scheduler'] == 'cosine':
+        return optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config['nEpochs'], eta_min=config['optimizer']['adam']['lr'] / 100
         )
-        return scheduler
-    elif config['lr_scheduler'] == 'cosine':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=config['lr_T_max'],
-            eta_min=config['lr_eta_min'],
-        )
-        return scheduler
-    elif config['lr_scheduler'] == 'linear':
-        scheduler = LinearDecayLR(
-            optimizer,
-            config['nEpochs'],
-            int(config['nEpochs']/4),
-        )
-    else:
-        raise NotImplementedError('Scheduler {} is not implemented'.format(config['lr_scheduler']))
+    raise NotImplementedError('Scheduler {} is not implemented'.format(config['lr_scheduler']))
 
 
 def choose_metric(config):
@@ -208,211 +140,269 @@ def choose_metric(config):
     return metric_scoring
 
 
+def comprehensive_sampler_check(
+        real_loaders,
+        fake_loaders,
+        real_method_names,
+        full_batch_size,
+        train_videos
+):
+    """
+    Performs a deterministic, one-by-one check of each fake method.
+    For each fake method, it attempts to load one batch and pairs it with a
+    random real source to verify data integrity.
+    """
+
+    def _get_next_batch(method, dataloader_dict, iter_dict):
+        """Gets the next batch, creating an iterator if one doesn't exist."""
+        if method not in iter_dict:
+            iter_dict[method] = iter(dataloader_dict[method])
+        try:
+            return next(iter_dict[method])
+        except StopIteration:
+            # Dataloader is exhausted.
+            return None
+
+    print("\n\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
+    if not fake_loaders or not real_loaders:
+        print("❌ No fake or real loaders provided. Aborting check.")
+        return
+
+    fake_method_names = sorted(list(fake_loaders.keys()))
+    num_fake_methods = len(fake_method_names)
+    half_batch_size = full_batch_size // 2
+    print(f"Deterministically checking {num_fake_methods} fake methods...")
+    print(f"Expecting half-batches of size {half_batch_size}.\n")
+
+    # Use persistent iterators to not re-test the same initial data
+    real_method_iters = {}
+    fake_method_iters = {}
+
+    # --- Tracking ---
+    # We use a simple dictionary to store the status of each fake method
+    fake_method_status = {}
+    real_source_usage = defaultdict(int)
+    batch_times = []
+
+    pbar = tqdm(fake_method_names, desc="Checking Methods")
+    for chosen_fake_method in pbar:
+        iteration_start_time = time.time()
+        pbar.set_postfix_str(f"Testing: {chosen_fake_method}")
+
+        # 1. Attempt to fetch a FAKE half-batch for the current method
+        fake_data_dict = _get_next_batch(chosen_fake_method, fake_loaders, fake_method_iters)
+
+        if not fake_data_dict or fake_data_dict['image'].shape[0] == 0:
+            fake_method_status[chosen_fake_method] = "❌ EMPTY (Corrupt data or paths)"
+            continue
+        if fake_data_dict['image'].shape[0] < half_batch_size:
+            fake_method_status[chosen_fake_method] = f"⚠️ PARTIAL (Not enough videos for a full batch)"
+            continue
+
+        # 2. Attempt to fetch a REAL half-batch to pair with it
+        if not real_method_names:
+            fake_method_status[chosen_fake_method] = "❌ SKIPPED (No real sources available)"
+            continue
+
+        chosen_real_method = random.choice(real_method_names)
+        real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
+
+        # If real source is exhausted, try to restart its iterator ONCE
+        if real_data_dict is None:
+            real_method_iters[chosen_real_method] = iter(real_loaders[chosen_real_method])
+            real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
+
+        if not real_data_dict or real_data_dict['image'].shape[0] == 0:
+            fake_method_status[chosen_fake_method] = f"❌ SKIPPED (Paired real source '{chosen_real_method}' is empty)"
+            continue
+        if real_data_dict['image'].shape[0] < half_batch_size:
+            fake_method_status[
+                chosen_fake_method] = f"❌ SKIPPED (Paired real source '{chosen_real_method}' gave partial batch)"
+            continue
+
+        # 3. If both are successful
+        fake_method_status[chosen_fake_method] = f"✅ OK (Paired with {chosen_real_method})"
+        real_source_usage[chosen_real_method] += 1
+        batch_times.append(time.time() - iteration_start_time)
+
+    print("\n-------------------- CHECK COMPLETE: DIAGNOSTIC REPORT --------------------")
+    total_time = sum(batch_times)
+    print(f"Total time for {len(batch_times)} successful pairs: {total_time:.2f} seconds.")
+    if batch_times:
+        print(f"Avg batch creation time: {np.mean(batch_times):.3f}s | Max: {np.max(batch_times):.3f}s")
+
+    print("\n--- Fake Methods Report ---")
+    video_counts = Counter(v.method for v in train_videos)
+    print(f"{'Method':<20} | {'Total Vids':>10} | Status & Details")
+    print("-" * 85)
+    for method in fake_method_names:
+        total_vids = video_counts.get(method, 0)
+        status = fake_method_status.get(method, "❔ NOT TESTED (Should not happen)")
+        print(f"{method:<20} | {total_vids:>10} | {status}")
+
+    print("\n--- Real Sources Usage Report ---")
+    print("How many times each real source was successfully used for pairing:")
+    for method in sorted(real_method_names):
+        count = real_source_usage.get(method, 0)
+        print(f"- {method:<20}: {count} times")
+
+    print("\nRecommendations:")
+    print("  - For '❌ EMPTY' methods, all videos are likely corrupt. Remove from `dataloader_config.yml`.")
+    print(
+        "  - For '⚠️ PARTIAL' methods, there aren't enough videos for one half-batch. Consider removing or adding more data.")
+    print(
+        "  - For '❌ SKIPPED' methods, the issue may be with the real sources, not the fake one. Check real source health.")
+    print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
+
+
 def main():
-    wandb.init() # Initialize a new wandb run
-
-    parser = argparse.ArgumentParser(description='Process some paths.')
-    parser.add_argument('--detector_path', type=str,
-                        default='./training/config/detector/effort.yaml',
-                        help='path to detector YAML file')
-    parser.add_argument("--train_dataset", nargs="+")
-    parser.add_argument("--test_dataset", nargs="+")
-    parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
-    parser.add_argument('--no-save_feat', dest='save_feat', action='store_false', default=True)
-    parser.add_argument("--ddp", action='store_true', default=False)
-    parser.add_argument('--local_rank', type=int, default=0)
-    args = parser.parse_args()
-    torch.cuda.set_device(args.local_rank)
-
-
-    print("We are in Before:",os.getcwd())
+    os.chdir('/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training')
     os.chdir('../')
-    print("We are in:",os.getcwd())
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
     with open('./training/config/train_config.yaml', 'r') as f:
-        config2 = yaml.safe_load(f)
-    config.update(config2)
-
-    # --- Update config with wandb hyperparameters ---
-    config.update(wandb.config)
-
-
-    config['local_rank']=args.local_rank
-    if config['dry_run']:
-        config['nEpochs'] = 0
-        config['save_feat']=False
-    # If arguments are provided, they will overwrite the yaml settings
-    if args.train_dataset:
-        config['train_dataset'] = args.train_dataset
-    if args.test_dataset:
-        config['test_dataset'] = args.test_dataset
+        config.update(yaml.safe_load(f))
+        
+    # --- NEW: W&B Initialization ---
+    # W&B will automatically read entity/project from environment variables
+    # (WANDB_ENTITY, WANDB_PROJECT) or your local wandb configuration.
+    run_name = f"{config['model_name']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
+    wandb_run = wandb.init(
+        name=run_name,
+        config=config,
+        mode="online",
+        # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
+        # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
+    )
+        
+    # Merge sweep hyperparameters into the main config dictionary
+    config['optimizer']['adam']['lr'] = wandb.config.lr
+    config['optimizer']['adam']['eps'] = wandb.config.eps
+    config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
+        
+    config['local_rank'] = args.local_rank
+    if args.train_dataset: config['train_dataset'] = args.train_dataset
+    if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
-    config['save_feat'] = args.save_feat
-    if config['lmdb']:
-        config['dataset_json_folder'] = 'preprocessing/dataset_json_v3'
-    # create logger
-    logger_path = os.path.join(
-                    config['log_dir'],
-                    config['model_name'] + '_' + datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-                )
-    os.makedirs(logger_path, exist_ok=True)
-    logger = create_logger(os.path.join(logger_path, 'training.log'))
-    logger.info('Save log to {}'.format(logger_path))
-    config['ddp']= args.ddp
-    # print configuration
-    logger.info("--------------- Configuration ---------------")
-    params_string = "Parameters: \n"
-    for key, value in config.items():
-        params_string += "{}: {}".format(key, value) + "\n"
-    logger.info(params_string)
 
-    config_path = "./training/config/dataloader_config.yml"
-    with open(config_path, 'r') as f:
+    with open("./training/config/dataloader_config.yml", 'r') as f:
         data_config = yaml.safe_load(f)
 
-    # init seed
+    config.update(data_config) # Merge data_config into config
+    # --- NEW: Use train_batchSize from sweep config ---
+    data_config['dataloader_params']['batch_size'] = wandb.config.train_batchSize
+    config.update(data_config) # Merge data_config into config
+
+    
+
+    # create logger and path
+    logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
+    os.makedirs(logger_path, exist_ok=True)
+    logger = create_logger(os.path.join(logger_path, 'training.log'))
+    logger.info(f'Save log to {logger_path}')
+    config['ddp'] = args.ddp
+
     init_seed(config)
 
-    # set cudnn benchmark if needed
-    if config['cudnn']:
-        cudnn.benchmark = True
+    if config['cudnn']: cudnn.benchmark = True
     if config['ddp']:
-        # dist.init_process_group(backend='gloo')
-        dist.init_process_group(
-            backend='nccl',
-            timeout=timedelta(minutes=30)
-        )
+        dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
-    # Split the dataset
-    # Load train/val splits using prepare_video_splits
+
+    logger.info("------- Configuration & Data Loading -------")
     train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
 
-    # Create a dataset object to include all the instances of the dataset to load
-    train_set = DeepfakeAbstractBaseDataset(
-        config=config,
-        mode='train',
-        VideoInfo=train_videos,
+    train_batch_size = data_config['dataloader_params']['batch_size']
+    if train_batch_size % 2 != 0:
+        raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
+    half_batch_size = train_batch_size // 2
+
+    all_train_loaders, val_method_loaders = create_method_aware_dataloaders(
+        train_videos, val_videos, config, data_config, train_batch_size=half_batch_size
     )
-    
-    test_set = DeepfakeAbstractBaseDataset(
-                config=config,
-                mode='test',
-                VideoInfo=val_videos,
-        )
 
-    # returns a method aware dataloader - A dictionary with keys as methods and values as their dataloader
-    method_loaders = create_method_aware_dataloaders(train_set, data_config)
+    real_source_names = data_config['methods']['use_real_sources']
+    real_loaders, fake_loaders = {}, {}
+    for name, loader in all_train_loaders.items():
+        (real_loaders if name in real_source_names else fake_loaders)[name] = loader
 
-    test_method_loaders = create_method_aware_dataloaders(test_set, data_config, config=config, test=True)
+    logger.info(
+        f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
 
-    # Training Loop for Method-Aware
-    # to cycle through methods:
-    method_names = list(method_loaders.keys())
-    random.shuffle(method_names)
-    print(f"Training on methods in this order: {method_names[:5]}...")
+    if args.run_sanity_check:
+        logger.info("--- Running Sanity Check ---")
+        # You can still run the check if you want by passing the argument
+        comprehensive_sampler_check(...)  # Call the function if needed
+        logger.info("Sanity check complete. Halting execution as planned.")
+        wandb_run.finish()
+        return
 
-
-    # For a balanced approach, we create a weighted sampler over `method_names`
-    method_sizes = {m: len(dl.dataset) for m, dl in method_loaders.items()}
-    total_videos = sum(method_sizes.values())
-    weights = [method_sizes[m] / total_videos for m in method_names]
-
-    print("\n--- Example: Method-Aware BALANCED Training Loop ---")
-    # In each step, you'd pick a method based on weights and get a batch from it
-    # This requires creating iterators for each dataloader.
-    # method_iters = {name: iter(loader) for name, loader in method_loaders.items()}
-
-
-
-    # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config, val_videos)
-
-    # prepare the model (detector)
-    model_class = DETECTOR[config['model_name']]
-    model = model_class(config)
-
-    # prepare the optimizer
+    # prepare model, optimizer, scheduler, metric, trainer
+    model = DETECTOR[config['model_name']](config)
     optimizer = choose_optimizer(model, config)
-
-    # prepare the scheduler
     scheduler = choose_scheduler(config, optimizer)
-
-    # prepare the metric
     metric_scoring = choose_metric(config)
+    trainer = Trainer(
+        config, model, optimizer, scheduler, logger, metric_scoring,
+        wandb_run=wandb_run, val_videos=val_videos
+    )
 
-    # prepare the trainer
-    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
+    # --- Training Loop Setup ---
+    real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
+    for v in train_videos:
+        (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
 
+    total_real_videos = sum(real_video_counts.values())
+    total_fake_videos = sum(fake_video_counts.values())
 
-    # Define the path to your pretrained checkpoint
-    checkpoint_path = './training/weights/effort_clip_L14_trainOn_FaceForensic.pth'
-    # Check if a path is provided and then load the checkpoint
-    if checkpoint_path:
-        trainer.load_ckpt(checkpoint_path)
+    real_weights = [real_video_counts[m] / total_real_videos for m in
+                    real_source_names] if total_real_videos > 0 else []
+    fake_method_names = list(fake_loaders.keys())
+    fake_weights = [fake_video_counts[m] / total_fake_videos for m in
+                    fake_method_names] if total_fake_videos > 0 else []
 
+    total_train_videos = len(train_videos)
+    epoch_len = math.ceil(total_train_videos / train_batch_size) if total_train_videos > 0 else 0
+    logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
 
+    # NEW: Get evaluation frequency from config
+    eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
+
+    if config.get('checkpoint_path'):
+        trainer.load_ckpt(config['checkpoint_path'])
 
     # start training
-    for epoch in range(config['start_epoch'], config['nEpochs'] + 1):
-        trainer.model.epoch = epoch
-        best_metrics_all_time = trainer.train_epoch(
-                    method_names=method_names,            # A list of all the methods
-                    weights=weights,
-                    epoch=epoch,                          # A dictionary of methods as keys and dataloaders iterators as values
-                    dataloader_dict=method_loaders,       # A dictionary of methods as keys and dataloaders as values
-                    train_set=train_set,                  # The class dataset of test
-                    test_set=test_set,                    # The class dataset of test
-                    test_data_loaders=test_method_loaders,# Usual dataloader for the test
-                )
-        # Check if a test was run and metrics were returned
-        if best_metrics_all_time is not None:
-            
-            # --- Prepare metrics for wandb logging ---
-            log_metrics = {"epoch": epoch}
+    for epoch in range(config['start_epoch'], config['nEpochs']):
+        trainer.train_epoch(
+            real_loaders=real_loaders,
+            fake_loaders=fake_loaders,
+            real_method_names=real_source_names,
+            fake_method_names=fake_method_names,
+            real_weights=real_weights,
+            fake_weights=fake_weights,
+            epoch=epoch,
+            epoch_len=epoch_len,
+            val_method_loaders=val_method_loaders,
+            evaluation_frequency=eval_freq
+        )
+        if scheduler is not None: scheduler.step()
 
-            primary_metric_name = config['metric_scoring']
-            avg_primary_metric_value = "N/A"
-
-            # Iterate through all datasets' best metrics (e.g., 'avg', 'FF-DF', 'Celeb-DF-v2')
-            for dataset_key, metrics_dict in best_metrics_all_time.items():
-                # metrics_dict is a dict like {'auc': 0.95, 'acc': 0.88}
-                for metric_name, value in metrics_dict.items():
-                    if isinstance(value, (int, float)):  # Log only numerical values, not the 'dataset_dict'
-                        # Create a descriptive key, e.g., "avg/auc" or "FF-DF/eer"
-                        log_metrics[f"{dataset_key}/{metric_name}"] = value
-
-            # The sweep agent needs one specific metric to optimize.
-            # We'll use the average score of the primary metric (e.g., avg_auc).
-            if 'avg' in best_metrics_all_time and primary_metric_name in best_metrics_all_time['avg']:
-                avg_primary_metric_value = best_metrics_all_time['avg'][primary_metric_name]
-                # This is the single value that the wandb sweep will track and optimize.
-                # It matches the 'metric' defined in your sweep_config.
-                log_metrics['best_metric'] = avg_primary_metric_value
-            
-            # Log all prepared metrics to wandb for this step
-            wandb.log(log_metrics)
-            wandb.log({'best_metric': avg_primary_metric_value})
-            
-            # The logger can now show the primary average metric for this epoch
-            logger.info(f"===> Epoch[{epoch}] end with testing avg {primary_metric_name}: {avg_primary_metric_value}!")
-
-    # This final log message shows the best score achieved across all epochs for this run
-    if 'avg' in best_metrics_all_time and config['metric_scoring'] in best_metrics_all_time['avg']:
-        final_best_score = best_metrics_all_time['avg'][config['metric_scoring']]
-        logger.info(f"Stop Training. Best testing avg {config['metric_scoring']} for this run: {final_best_score}")
-    # update
-    if 'svdd' in config['model_name']:
-        model.update_R(epoch)
-    if scheduler is not None:
-        scheduler.step()
-
-    # close the tensorboard writers
-    for writer in trainer.writers.values():
-        writer.close()
-
+    wandb_run.finish()
+    logger.info("Training complete.")
 
 
 if __name__ == '__main__':
-    wandb.agent(sweep_id, function=main, count=60)
+    start = time.time()
+    sweep_id = wandb.sweep(
+        sweep=sweep_configuration,
+        project="Effort-AIGI-Detection-Project" # Replace with your project name
+    )
+    # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
+    # `count` specifies how many runs to execute.
+    wandb.agent(sweep_id, function=main, count=20) # Running 20 trials
+    # main()
+    end = time.time()
+    elapsed = end - start
+    print(f"Total training time in mn: {elapsed / 60:.2f} minutes")
+    print("Training complete.")

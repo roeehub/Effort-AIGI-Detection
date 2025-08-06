@@ -55,3 +55,30 @@ weight_decay: 0.1
 local_rank: 0
 ddp: False
 Listing frame objects on GCS (first run – may take a minute)…
+Found 670,809 frame files – caching manifest
+[WARN] excluding all videos from method 'hyperreenact'
+Discovered 20,603 videos across 32 methods
+Split complete ▶ train 18,543 | val 2,060
+
+/home/roee/repos/Effort-AIGI-Detection/effortvenv/lib/python3.10/site-packages/torch/utils/data/datapipes/utils/common.py:22: UserWarning: Lambda function is not supported for pickle, please use regular python function or functools.partial instead.
+  warnings.warn(
+Training on methods in this order: ['faceswap', 'mcnet', 'StyleGANXL', 'facedancer', 'one_shot_free']...
+
+--- Example: Method-Aware BALANCED Training Loop ---
+/home/roee/repos/Effort-AIGI-Detection/effortvenv/lib/python3.10/site-packages/torch/utils/data/dataloader.py:557: UserWarning: This DataLoader will create 8 worker processes in total. Our suggested max number of worker in current system is 4, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+The CLIP is in:  /home/roee/repos/Effort-AIGI-Detection/DeepfakeBench
+2025-07-27 17:30:12,351 - INFO - Model found in ./training/weights/effort_clip_L14_trainOn_FaceForensic.pth
+2025-07-27 17:30:12,357 - INFO - ===> Epoch[0] start!
+2025-07-27 17:30:12,401 - INFO - data_dict saved to ./logs/effort_2025-07-27-17-24-13/train/DF40/data_dict_train.pickle
+EPOCH: 1:   0%|                                                                                                                                                            | 0/330 [00:00<?, ?it/s]2025-07-27 17:30:55,830 - INFO - Iter: 0    training-loss, overall: 0.6024251580238342    training-loss, real_loss: 0.5028980374336243    training-loss, fake_loss: 0.6090602874755859
+2025-07-27 17:30:55,831 - INFO - Iter: 0    training-metric, acc: 0.75    training-metric, auc: 0.8    training-metric, eer: 0.0    training-metric, ap: 0.9866269841269841
+EPOCH: 1:   1%|█▎                                                                                                                                                | 3/330 [02:06<3:42:59, 40.91s/it]/home/roee/repos/Effort-AIGI-Detection/effortvenv/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:990: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+EPOCH: 1:   1%|█▊                                                                                                                                                | 4/330 [02:49<3:47:42, 41.91s/it]/home/roee/repos/Effort-AIGI-Detection/effortvenv/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:990: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+EPOCH: 1:   2%|██▋                                                                                                                                               | 6/330 [04:14<3:49:17, 42.46s/it]/home/roee/repos/Effort-AIGI-Detection/effortvenv/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:990: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+EPOCH: 1:   5%|███████                                                                                                                                          | 16/330 [10:29<3:19:33, 38.13s/it]/home/roee/repos/Effort-AIGI-Detection/effortvenv/lib/python3.10/site-packages/sklearn/metrics/_ranking.py:990: UndefinedMetricWarning: No negative samples in y_true, false positive value should be meaningless
+  warnings.warn(
+EPOCH: 1:   5%|███████▍                                                                                                                                         | 17/330 [11:05<3:15:43, 37.52s/it][34m[1mwandb[0m: Ctrl + C detected. Stopping sweep.

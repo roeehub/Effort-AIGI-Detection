@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+import shutil
 
 current_file_path = os.path.abspath(__file__)
 parent_dir = os.path.dirname(os.path.dirname(current_file_path))
@@ -20,6 +22,7 @@ from collections import defaultdict
 from dataset.dataloaders import load_and_process_video, collate_fn  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
 import functools
+import gc
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -104,6 +107,21 @@ class Trainer(object):
             artifact = wandb.Artifact(f'{self.wandb_run.name}-best-model', type='model')
             artifact.add_file(save_path)
             self.wandb_run.log_artifact(artifact)
+            
+            # Wait for the checkpoint to be uploaded to the W&B cloud
+            time.sleep(5)
+            try:
+                os.remove(save_path)
+                self.logger.info(f"Deleted local checkpoint: {save_path}")
+            except Exception as e:
+                self.logger.warning(f"Failed to delete local checkpoint: {e}")
+            # Clean W&B staging cache (optional but safe)
+            wandb_cache_dir = os.path.expanduser("~/.local/share/wandb/artifacts/staging/")
+            try:
+                shutil.rmtree(wandb_cache_dir)
+                self.logger.info(f"Cleaned W&B staging cache: {wandb_cache_dir}")
+            except Exception as e:
+                self.logger.warning(f"Failed to clean W&B staging cache: {e}")
 
     def train_step(self, data_dict):
         # --- Use autocast for the forward pass ---
@@ -144,7 +162,7 @@ class Trainer(object):
             epoch,
             epoch_len,
             val_method_loaders=None,
-            evaluation_frequency=1  # NEW: frequency parameter
+            evaluation_frequency=1  # NEW: frequency parameter 
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         # NEW: Calculate test step based on frequency
@@ -206,8 +224,8 @@ class Trainer(object):
                     log_dict[f'metric/train/{name}'] = value
 
                 self.wandb_run.log(log_dict)
-                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
-
+                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")        
+            
             step_cnt += 1
             if (iteration + 1) % test_step == 0:
                 if val_method_loaders is not None and self.config['local_rank'] == 0:
@@ -221,7 +239,8 @@ class Trainer(object):
         all_preds, all_labels = [], []
         # The 'desc' provides a description for the progress bar.
         pbar = tqdm(val_method_loaders.items(), desc="Validating (Slow but Stable)")
-
+        
+        
         # Iterate through each method's DataLoader one by one.
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
@@ -247,6 +266,7 @@ class Trainer(object):
                 all_labels.extend(data_dict['label'].cpu().numpy())
                 all_preds.extend(video_probs.cpu().numpy())
                 
+                # Add probabilities and labels by method
                 method_labels[method].extend(data_dict['label'].cpu().numpy())
                 method_preds[method].extend(video_probs.cpu().numpy())
                 
@@ -264,11 +284,12 @@ class Trainer(object):
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
         
+        # Metrics Per Method
         method_metrics = {}
         for method in method_preds.keys():
             method_metrics[method] = get_test_metrics(np.array(method_preds[method]), np.array(method_labels[method]))
             for name, value in method_metrics[method].items():
-                if name not in ['pred', 'label']:
+                if name in ['acc']:
                     wandb_log_dict[f'val/{method}/{name}'] = value
                     self.logger.info(f"Method {method} val {name}: {value:.4f}")
 
@@ -286,5 +307,12 @@ class Trainer(object):
 
         if self.wandb_run:
             self.wandb_run.log(wandb_log_dict)
+        
+        ##################### ADAM CHANGED ###########################
+        # Explicitly delete large variables and collect garbage
+        del all_preds, all_labels, method_labels, method_preds, overall_metrics, method_metrics
+        gc.collect()
+        torch.cuda.empty_cache()
+        ##################### ADAM CHANGED ###########################
 
         self.logger.info("===> Evaluation Done!")
