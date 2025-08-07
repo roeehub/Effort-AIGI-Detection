@@ -466,7 +466,9 @@ def main():
     # --- Download Base Checkpoint from GCS ---
     # This function will download a base model from GCS if configured.
     # It will also download the CLIP backbone.
+    logger.info("------- Downloading Base Checkpoint & Assets -------")
     download_assets_from_gcs(config, logger)
+    logger.info("Base checkpoint and assets downloaded successfully.")
 
 
     logger.info("------- Configuration & Data Loading -------")

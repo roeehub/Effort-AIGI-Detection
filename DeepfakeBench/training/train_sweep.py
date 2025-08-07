@@ -82,7 +82,7 @@ sweep_configuration = {
             'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
         },
         'train_batchSize': {
-            'values': [2, 4, 8, 16] # Reduced 256 to avoid potential OOM issues
+            'values': [4, 8, 16] # Reduced 256 to avoid potential OOM issues
         }
 }}
 # --- END NEW SECTION ---
@@ -100,6 +100,13 @@ parser.add_argument('--run_sanity_check', action='store_true', default=False,
                     help="Run the comprehensive sampler check and exit.")
 parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
                     help='Path to the dataloader configuration file')
+
+# --- NEW: Arguments for W&B sweep agent ---
+parser.add_argument('--sweep_id', type=str, default=None,
+                    help='W&B sweep ID to join. If not provided, the script will create a new sweep.')
+parser.add_argument('--runs_per_agent', type=int, default=4,
+                    help='Number of runs this agent should execute for the sweep.')
+# --- END NEW SECTION ---
 
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
@@ -507,7 +514,7 @@ def main():
     if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
 
-    with open("./training/config/dataloader_config.yml", 'r') as f:
+    with open("./config/dataloader_config.yml", 'r') as f:
         data_config = yaml.safe_load(f)
 
     config.update(data_config) # Merge data_config into config
@@ -530,8 +537,12 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
+    logger.info("------- Downloading Base Checkpoint & Assets -------")
+    download_assets_from_gcs(config, logger)
+    logger.info("Base checkpoint and assets downloaded successfully.")
+
     logger.info("------- Configuration & Data Loading -------")
-    train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
+    train_videos, val_videos, _ = prepare_video_splits('./config/dataloader_config.yml')
 
     train_batch_size = data_config['dataloader_params']['batch_size']
     if train_batch_size % 2 != 0:
@@ -550,13 +561,13 @@ def main():
     logger.info(
         f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
 
-    if args.run_sanity_check:
-        logger.info("--- Running Sanity Check ---")
-        # You can still run the check if you want by passing the argument
-        comprehensive_sampler_check(...)  # Call the function if needed
-        logger.info("Sanity check complete. Halting execution as planned.")
-        wandb_run.finish()
-        return
+    # if args.run_sanity_check:
+    #     logger.info("--- Running Sanity Check ---")
+    #     # You can still run the check if you want by passing the argument
+    #     comprehensive_sampler_check(...)  # Call the function if needed
+    #     logger.info("Sanity check complete. Halting execution as planned.")
+    #     wandb_run.finish()
+    #     return
 
     # prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
@@ -614,13 +625,35 @@ def main():
 
 if __name__ == '__main__':
     start = time.time()
-    sweep_id = wandb.sweep(
-        sweep=sweep_configuration,
-        project="Effort-AIGI-Detection-Project" # Replace with your project name
-    )
+    project = "Sweep-Effort"
+    # sweep_id = wandb.sweep(
+    #     sweep=sweep_configuration,
+    #     project=project # Replace with your project name
+    # )
+
+    args.sweep_id = "w4ie48av"
+
+
     # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
     # `count` specifies how many runs to execute.
-    wandb.agent(sweep_id, function=main, count=4) # Running 20 trials
+    # wandb.agent(sweep_id, function=main, count=1) # Running 20 trials
+    if args.sweep_id:
+        # If a sweep_id is provided, this script acts as an agent
+        print(f"Joining W&B sweep '{args.sweep_id}' as an agent, running {args.runs_per_agent} trials.")
+        wandb.agent(args.sweep_id, function=main, count=args.runs_per_agent)
+    else:
+        # If no sweep_id is provided, create a new sweep
+        print("No sweep_id provided. Creating a new W&B sweep.")
+        sweep_id = wandb.sweep(
+            sweep=sweep_configuration,
+            project="Effort-AIGI-Detection-Project" # Replace with your project name
+        )
+        print(f"New W&B sweep created with ID: {sweep_id}")
+        print("\nTo run agents for this sweep, use the following command (replace YOUR_SWEEP_ID):")
+        print(f"  python your_script_name.py --sweep_id {sweep_id} --runs_per_agent 4")
+        print("\nOr in a GCP job, pass these as --args.")
+        # Optionally, you could start one agent immediately after creating:
+        # wandb.agent(sweep_id, function=main, count=args.runs_per_agent)
     # main()
     end = time.time()
     elapsed = end - start
