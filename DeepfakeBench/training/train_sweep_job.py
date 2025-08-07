@@ -61,7 +61,7 @@ from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # n
 # --- NEW: W&B SWEEP CONFIGURATION ---
 # Define the hyperparameter sweep configuration
 sweep_configuration = {
-    'method': 'random',  # Can be 'grid', 'random', or 'bayes'
+    'method': 'bayes',  # Can be 'grid', 'random', or 'bayes'
     'name': 'Effort-AIGI-Detection-Sweep',
     'metric': {
         'goal': 'maximize',
@@ -625,14 +625,23 @@ def main():
 
 if __name__ == '__main__':
     start = time.time()
-    sweep_id = wandb.sweep(
-        sweep=sweep_configuration,
-        project="Effort-AIGI-Detection-Project" # Replace with your project name
-    )
+    
+    parser = argparse.ArgumentParser(description='Process some paths.')
+    # ... existing arguments ...
+    parser.add_argument('--init_sweep', action='store_true', help='Initialize a W&B sweep and exit.')
+    
+    args = parser.parse_args()
+    if args.init_sweep:
+        sweep_id = wandb.sweep(
+            sweep=sweep_configuration,
+            project="Effort-AIGI-Detection-Project" # Replace with your project name
+        )
+        print(f"W&B Sweep ID: {sweep_id}")
+        exit() # Exit after initializing the sweep
     # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
     # `count` specifies how many runs to execute.
-    wandb.agent(sweep_id, function=main, count=4) # Running 20 trials
-    # main()
+    # wandb.agent(sweep_id, function=main, count=4) # Running 20 trials
+    main()
     end = time.time()
     elapsed = end - start
     print(f"Total training time in mn: {elapsed / 60:.2f} minutes")
