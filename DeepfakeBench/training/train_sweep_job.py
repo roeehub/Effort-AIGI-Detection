@@ -100,7 +100,7 @@ parser.add_argument('--run_sanity_check', action='store_true', default=False,
                     help="Run the comprehensive sampler check and exit.")
 parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
                     help='Path to the dataloader configuration file')
-
+parser.add_argument('--init_sweep', action='store_true', help='Initialize a W&B sweep and exit.')
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -625,12 +625,7 @@ def main():
 
 if __name__ == '__main__':
     start = time.time()
-    
-    parser = argparse.ArgumentParser(description='Process some paths.')
-    # ... existing arguments ...
-    parser.add_argument('--init_sweep', action='store_true', help='Initialize a W&B sweep and exit.')
-    
-    args = parser.parse_args()
+ 
     if args.init_sweep:
         sweep_id = wandb.sweep(
             sweep=sweep_configuration,
