@@ -423,6 +423,9 @@ def download_assets_from_gcs(config, logger):
 
 
 def main():
+    ##################### ADAM CHANGED ###################
+    os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
+    ##################### ADAM CHANGED ###################
     # Load all configurations
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)

@@ -82,7 +82,9 @@ sweep_configuration = {
             'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
         },
         'train_batchSize': {
-            'values': [2, 4, 8, 16] # Reduced 256 to avoid potential OOM issues
+            # 'values': [2,
+            # 4, 8, 16] # Reduced 256 to avoid potential OOM issues
+            'values': [2, 4] # Reduced 256 to avoid potential OOM issues
         }
 }}
 # --- END NEW SECTION ---
@@ -480,6 +482,9 @@ def download_assets_from_gcs(config, logger):
 
 
 def main():
+    ##################### ADAM CHANGED ###################
+    os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
+    ##################### ADAM CHANGED ###################
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -507,7 +512,8 @@ def main():
     if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
 
-    with open("./training/config/dataloader_config.yml", 'r') as f:
+    dataloader_config_path = args.dataloader_config
+    with open(dataloader_config_path, 'r') as f:
         data_config = yaml.safe_load(f)
 
     config.update(data_config) # Merge data_config into config
@@ -518,6 +524,7 @@ def main():
 
     # create logger and path
     logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
+
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info(f'Save log to {logger_path}')
@@ -530,9 +537,14 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
-    logger.info("------- Configuration & Data Loading -------")
-    train_videos, val_videos, _ = prepare_video_splits('./training/config/dataloader_config.yml')
+    # --- Download Base Checkpoint from GCS ---
+    # This function will download a base model from GCS if configured.
+    # It will also download the CLIP backbone.
+    download_assets_from_gcs(config, logger)
 
+
+    logger.info("------- Configuration & Data Loading -------")
+    train_videos, val_videos, _ = prepare_video_splits(dataloader_config_path)
     train_batch_size = data_config['dataloader_params']['batch_size']
     if train_batch_size % 2 != 0:
         raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
@@ -546,7 +558,6 @@ def main():
     real_loaders, fake_loaders = {}, {}
     for name, loader in all_train_loaders.items():
         (real_loaders if name in real_source_names else fake_loaders)[name] = loader
-
     logger.info(
         f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
 
@@ -558,7 +569,7 @@ def main():
         wandb_run.finish()
         return
 
-    # prepare model, optimizer, scheduler, metric, trainer
+    # Prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
     optimizer = choose_optimizer(model, config)
     scheduler = choose_scheduler(config, optimizer)
@@ -589,8 +600,8 @@ def main():
     # NEW: Get evaluation frequency from config
     eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
 
-    if config.get('checkpoint_path'):
-        trainer.load_ckpt(config['checkpoint_path'])
+    if config['gcs_assets']['base_checkpoint']['local_path']:
+        trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
 
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):

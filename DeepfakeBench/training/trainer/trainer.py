@@ -181,6 +181,7 @@ class Trainer(object):
         step_cnt = epoch * epoch_len
         pbar = tqdm(range(epoch_len), desc=f"EPOCH: {epoch + 1}/{self.config['nEpochs']}")
         
+        
         for iteration in pbar:
             self.setTrain()
 
@@ -237,13 +238,13 @@ class Trainer(object):
             
             
             
-            
-            
             step_cnt += 1
             if (iteration + 1) % test_step == 0:
                 if val_method_loaders is not None and self.config['local_rank'] == 0:
                     self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
                     self.test_epoch(epoch, val_method_loaders)
+            
+            
 
     @torch.no_grad()
     def test_epoch(self, epoch, val_method_loaders):
@@ -264,7 +265,6 @@ class Trainer(object):
         method_preds = defaultdict(list)
 
         all_preds, all_labels = [], []
-        
         
         # --- Loop until all iterators are exhausted ---
         while val_iters:
