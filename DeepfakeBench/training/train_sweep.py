@@ -101,13 +101,6 @@ parser.add_argument('--run_sanity_check', action='store_true', default=False,
 parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
                     help='Path to the dataloader configuration file')
 
-# --- NEW: Arguments for W&B sweep agent ---
-parser.add_argument('--sweep_id', type=str, default=None,
-                    help='W&B sweep ID to join. If not provided, the script will create a new sweep.')
-parser.add_argument('--runs_per_agent', type=int, default=1,
-                    help='Number of runs this agent should execute for the sweep.')
-# --- END NEW SECTION ---
-
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -627,24 +620,7 @@ if __name__ == '__main__':
     )
     # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
     # `count` specifies how many runs to execute.
-    # wandb.agent(sweep_id, function=main, count=1) # Running 20 trials
-    if args.sweep_id:
-        # If a sweep_id is provided, this script acts as an agent
-        print(f"Joining W&B sweep '{args.sweep_id}' as an agent, running {args.runs_per_agent} trials.")
-        wandb.agent(args.sweep_id, function=main, count=args.runs_per_agent)
-    else:
-        # If no sweep_id is provided, create a new sweep
-        print("No sweep_id provided. Creating a new W&B sweep.")
-        sweep_id = wandb.sweep(
-            sweep=sweep_configuration,
-            project="Effort-AIGI-Detection-Project" # Replace with your project name
-        )
-        print(f"New W&B sweep created with ID: {sweep_id}")
-        print("\nTo run agents for this sweep, use the following command (replace YOUR_SWEEP_ID):")
-        print(f"  python your_script_name.py --sweep_id {sweep_id} --runs_per_agent 4")
-        print("\nOr in a GCP job, pass these as --args.")
-        # Optionally, you could start one agent immediately after creating:
-        # wandb.agent(sweep_id, function=main, count=args.runs_per_agent)
+    wandb.agent(sweep_id, function=main, count=4) # Running 20 trials
     # main()
     end = time.time()
     elapsed = end - start
