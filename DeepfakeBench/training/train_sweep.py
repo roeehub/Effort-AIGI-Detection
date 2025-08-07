@@ -82,9 +82,8 @@ sweep_configuration = {
             'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
         },
         'train_batchSize': {
-            # 'values': [2,
-            # 4, 8, 16] # Reduced 256 to avoid potential OOM issues
-            'values': [2, 4] # Reduced 256 to avoid potential OOM issues
+            # 'values': [1, 2, 4, 8, 16] # Reduced 256 to avoid potential OOM issues
+            'values': [2] # Reduced 256 to avoid potential OOM issues
         }
 }}
 # --- END NEW SECTION ---
@@ -482,9 +481,9 @@ def download_assets_from_gcs(config, logger):
 
 
 def main():
-    ##################### ADAM CHANGED ###################
-    os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
-    ##################### ADAM CHANGED ###################
+    # ##################### ADAM CHANGED ###################
+    # os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
+    # ##################### ADAM CHANGED ###################
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -600,9 +599,11 @@ def main():
     # NEW: Get evaluation frequency from config
     eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
 
+
+
     if config['gcs_assets']['base_checkpoint']['local_path']:
         trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
-
+    
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
         trainer.train_epoch(
