@@ -8,7 +8,7 @@
 set -euo pipefail
 
 JOB_MODE="${JOB_MODE:-train}"   # train | sweep | vertex_hpt
-MAIN_SCRIPT="train_sweep_job.py"
+MAIN_SCRIPT="train_sweep.py"
 
 echo "[entrypoint] JOB_MODE=$JOB_MODE"
 echo "[entrypoint] Hostname: $(hostname) | CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-"not set"}"

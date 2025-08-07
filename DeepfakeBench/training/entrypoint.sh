@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # entrypoint.sh
 # Thin wrapper so the same image can:
-#   • run a single training job
-#   • host a W&B sweep agent
-#   • execute a Vertex HPT trial (env vars HP_* → CLI flags)
+# • run a single training job
+# • host a W&B sweep agent
+# • execute a Vertex HPT trial (env vars HP_* → CLI flags)
 
 set -euo pipefail
 
@@ -14,29 +14,30 @@ echo "[entrypoint] JOB_MODE=$JOB_MODE"
 echo "[entrypoint] Hostname: $(hostname) | CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-"not set"}"
 
 case "$JOB_MODE" in
-  train)
+    train)
         echo "[entrypoint] Starting single training run..."
         python -u "$MAIN_SCRIPT" "$@"
         ;;
-  sweep)
+    sweep)
         if [[ -z "${SWEEP_ID:-}" ]]; then
             echo "[entrypoint] ERROR: SWEEP_ID env-var not set"
             exit 1
         fi
         echo "[entrypoint] Launching W&B sweep agent for $SWEEP_ID"
-        wandb agent "$SWEEP_ID"
+        # The key change: add --count 4 here
+        wandb agent "$SWEEP_ID" --count 5 # Each agent runs 4 trials
         ;;
-  vertex_hpt)
+    vertex_hpt)
         echo "[entrypoint] Running Vertex HPT trial…"
         # Convert any HP_* env-vars to --<key> <value> CLI flags
         PARAMS=()
-        for v in $(compgen -e | grep '^HP_'); do
-            key=$(echo "$v" | sed 's/^HP_//' | tr '[:upper:]' '[:lower:]')
-            PARAMS+=("--$key" "${!v}")
+        for v in $(printenv | grep "^HP_" | sed "s/^HP_//"); do
+            PARAMS+=("--${v%=*}")
+            PARAMS+=("${v#*=}")
         done
         python -u "$MAIN_SCRIPT" "${PARAMS[@]}" "$@"
         ;;
-  *)
+    *)
         echo "[entrypoint] ERROR: Unknown JOB_MODE '$JOB_MODE'."
         exit 1
         ;;
