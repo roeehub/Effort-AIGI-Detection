@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# launch_experiment.sh
+# launch_experiment_jobs.sh
 # Final version: Handles the complete YAML template with all environment variables.
 set -euo pipefail
 
@@ -8,7 +8,7 @@ REGIONS=(us-central1 us-east4 europe-west4)
 GPU_TYPE="NVIDIA_A100_40GB"
 GPU_COUNT=1
 JOB_NAME="test-run-$(date +%Y%m%d-%H%M%S)" # Unique job name
-YAML_TEMPLATE="vertex_job_template.yaml" # Assuming your template file is named this
+YAML_TEMPLATE="vertex_job_template_job.yaml" # Assuming your template file is named this
 TEMP_YAML_CONFIG="/tmp/vertex_job_config_$$_${JOB_NAME}.yaml"
 
 # --- NEW: Add SWEEP_ID and default JOB_MODE ---
