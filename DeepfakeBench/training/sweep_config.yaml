@@ -1,0 +1,18 @@
+method: bayes # Changed to bayes for Bayesian Optimization
+name: Effort-AIGI-Detection-Bayesian-Sweep
+metric:
+    goal: maximize
+    name: val/best_metric
+parameters:
+    lr:
+        distribution: uniform
+        min: 0.00001
+        max: 0.01
+    eps:
+        distribution: uniform
+        min: 1e-9
+        max: 1e-5
+    weight_decay:
+        values: [0.00001, 0.0001, 0.001, 0.01, 0.1]
+    train_batchSize:
+        values: [1, 2, 4]

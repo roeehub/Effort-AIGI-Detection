@@ -54,7 +54,7 @@ class Trainer(object):
         self.wandb_run = wandb_run
         self.val_videos = val_videos  # Store the validation videos
         self.unified_val_loader = None  # To cache the efficient loader
-        self.best_model_artifact = None # NEW: Add this to track the artifact
+        self.best_model_artifact = None  # NEW: Add this to track the artifact
 
         # NEW: Track best metric for model saving
         self.best_val_metric = -1.0
@@ -108,15 +108,15 @@ class Trainer(object):
         if self.wandb_run:
             artifact = wandb.Artifact(f'{self.wandb_run.name}-best-model', type='model')
             artifact.add_file(save_path)
-            
+
             # --- NEW: Prepare the list of aliases ---
-            final_aliases = ['latest'] # Always include the 'latest' tag
+            final_aliases = ['latest']  # Always include the 'latest' tag
             if aliases:
                 # Add the custom aliases you passed in
                 final_aliases.extend(aliases)
-                
+
             self.wandb_run.log_artifact(artifact, aliases=final_aliases)
-            
+
             # Wait for the checkpoint to be uploaded to the W&B cloud
             time.sleep(5)
             try:
@@ -171,7 +171,7 @@ class Trainer(object):
             epoch,
             epoch_len,
             val_method_loaders=None,
-            evaluation_frequency=1  # NEW: frequency parameter 
+            evaluation_frequency=1  # NEW: frequency parameter
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         # NEW: Calculate test step based on frequency
@@ -180,7 +180,7 @@ class Trainer(object):
 
         step_cnt = epoch * epoch_len
         pbar = tqdm(range(epoch_len), desc=f"EPOCH: {epoch + 1}/{self.config['nEpochs']}")
-        
+
         for iteration in pbar:
             self.setTrain()
 
@@ -233,12 +233,8 @@ class Trainer(object):
                     log_dict[f'metric/train/{name}'] = value
 
                 self.wandb_run.log(log_dict)
-                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")        
-            
-            
-            
-            
-            
+                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
+
             step_cnt += 1
             if (iteration + 1) % test_step == 0:
                 if val_method_loaders is not None and self.config['local_rank'] == 0:
@@ -264,8 +260,7 @@ class Trainer(object):
         method_preds = defaultdict(list)
 
         all_preds, all_labels = [], []
-        
-        
+
         # --- Loop until all iterators are exhausted ---
         while val_iters:
             # Iterate over a copy of keys, as we will modify the dict
@@ -289,7 +284,7 @@ class Trainer(object):
 
                     all_labels.extend(data_dict['label'].cpu().numpy())
                     all_preds.extend(video_probs.cpu().numpy())
-                    
+
                     # Add probabilities and labels by method
                     method_labels[method].extend(data_dict['label'].cpu().numpy())
                     method_preds[method].extend(video_probs.cpu().numpy())
@@ -317,7 +312,7 @@ class Trainer(object):
             if name not in ['pred', 'label']:
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
-        
+
         # Metrics Per Method
         method_metrics = {}
         for method in method_preds.keys():
@@ -335,11 +330,11 @@ class Trainer(object):
             self.logger.info(f"🎉 New best model found! Metric ({self.metric_scoring}): {current_metric:.4f}")
             if self.config['save_ckpt']:
                 # --- NEW: Create the custom alias ---
-                auc_metric = overall_metrics.get('auc', 0.0) # Default to 0.0 if not found
+                auc_metric = overall_metrics.get('auc', 0.0)  # Default to 0.0 if not found
                 # Format the string as requested
                 custom_alias = f"AUC_{auc_metric:.4f}"
                 self.save_ckpt(epoch + 1, aliases=[custom_alias])
-                
+
                 # --- NEW: Logic to delete the previous artifact ---
                 # 1. Store the previous artifact to be deleted
                 old_artifact = self.best_model_artifact
@@ -353,14 +348,15 @@ class Trainer(object):
                         self.logger.info(f"Deleting previous best model artifact: {old_artifact.name}")
                         old_artifact.delete(delete_aliases=True)
                     except Exception as e:
-                        self.logger.warning(f"Failed to delete old artifact. It may need to be manually removed. Error: {e}")
+                        self.logger.warning(
+                            f"Failed to delete old artifact. It may need to be manually removed. Error: {e}")
 
         wandb_log_dict['val/best_metric'] = self.best_val_metric
         wandb_log_dict['val/best_epoch'] = self.best_val_epoch
 
         if self.wandb_run:
             self.wandb_run.log(wandb_log_dict)
-        
+
         # Explicitly delete large variables and collect garbage
         del all_preds, all_labels, method_labels, method_preds, overall_metrics, method_metrics
         gc.collect()

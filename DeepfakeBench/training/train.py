@@ -69,7 +69,7 @@ def choose_optimizer(model, config):
         return optimizer
     else:
         raise NotImplementedError('Optimizer {} is not implemented'.format(config['optimizer']))
-    return optimizer
+    return optimizer  # noqa
 
 
 def choose_scheduler(config, optimizer):
@@ -423,6 +423,10 @@ def download_assets_from_gcs(config, logger):
 
 
 def main():
+    ##################### ADAM CHANGED ###################
+    if os.path.exists("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training"):
+        os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
+    ##################### ADAM CHANGED ###################
     # Load all configurations
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -447,7 +451,7 @@ def main():
         # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
     )
     config.update(wandb.config)
-    
+
     # create logger and path
     logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
 

@@ -30,3 +30,9 @@ my_data/
 .idea/
 
 frame_manifest.json
+
+
+wandb/
+
+weights/models--openai--clip-vit-large-patch14/
+../../effortvenv/
