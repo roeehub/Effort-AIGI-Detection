@@ -1,0 +1,35 @@
+# .dockerignore
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE / Editor specific
+.idea/
+.vscode/
+*.swp
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Cloud / Local Config
+.gcloud/
+credentials.json
+
+# Logs & Outputs
+*.log
+wandb/
+vertex-output/

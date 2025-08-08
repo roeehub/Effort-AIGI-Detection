@@ -31,6 +31,7 @@ class EffortDetector(nn.Module):
     def __init__(self, config=None):
         super(EffortDetector, self).__init__()
         self.config = config
+        self.clip_backbone_path = config['gcs_assets']['clip_backbone']['local_path']
         self.backbone = self.build_backbone(config)  # Initialize Backbone model
         self.head = nn.Linear(1024, 2)
         self.loss_func = nn.CrossEntropyLoss()
@@ -47,7 +48,7 @@ class EffortDetector(nn.Module):
         # ViT-L/14 224*224
         print("The CLIP is in: ", os.getcwd())
         clip_model = CLIPModel.from_pretrained(
-            "/home/roee/repos/Effort-AIGI-Detection/models--openai--clip-vit-large-patch14",
+            self.clip_backbone_path,  # Path to the downloaded CLIP model
             local_files_only=True)  # the path of this folder in your disk (download from the above link)
         # clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14", cache_dir="./clip-vit-large-patch14")
 

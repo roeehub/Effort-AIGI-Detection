@@ -1,5 +1,8 @@
+import math
 import os
 import sys
+import time
+import shutil
 
 current_file_path = os.path.abspath(__file__)
 parent_dir = os.path.dirname(os.path.dirname(current_file_path))
@@ -20,6 +23,7 @@ from collections import defaultdict
 from dataset.dataloaders import load_and_process_video, collate_fn  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
 import functools
+import gc
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -50,6 +54,7 @@ class Trainer(object):
         self.wandb_run = wandb_run
         self.val_videos = val_videos  # Store the validation videos
         self.unified_val_loader = None  # To cache the efficient loader
+        self.best_model_artifact = None # NEW: Add this to track the artifact
 
         # NEW: Track best metric for model saving
         self.best_val_metric = -1.0
@@ -91,7 +96,7 @@ class Trainer(object):
         else:
             raise FileNotFoundError(f"=> no model found at '{model_path}'")
 
-    def save_ckpt(self, epoch):
+    def save_ckpt(self, epoch, aliases=None):
         save_dir = os.path.join(self.log_dir, "checkpoints")
         os.makedirs(save_dir, exist_ok=True)
         ckpt_name = f"ckpt_best.pth"
@@ -103,7 +108,29 @@ class Trainer(object):
         if self.wandb_run:
             artifact = wandb.Artifact(f'{self.wandb_run.name}-best-model', type='model')
             artifact.add_file(save_path)
-            self.wandb_run.log_artifact(artifact)
+            
+            # --- NEW: Prepare the list of aliases ---
+            final_aliases = ['latest'] # Always include the 'latest' tag
+            if aliases:
+                # Add the custom aliases you passed in
+                final_aliases.extend(aliases)
+                
+            self.wandb_run.log_artifact(artifact, aliases=final_aliases)
+            
+            # Wait for the checkpoint to be uploaded to the W&B cloud
+            time.sleep(5)
+            try:
+                os.remove(save_path)
+                self.logger.info(f"Deleted local checkpoint: {save_path}")
+            except Exception as e:
+                self.logger.warning(f"Failed to delete local checkpoint: {e}")
+            # Clean W&B staging cache (optional but safe)
+            wandb_cache_dir = os.path.expanduser("~/.local/share/wandb/artifacts/staging/")
+            try:
+                shutil.rmtree(wandb_cache_dir)
+                self.logger.info(f"Cleaned W&B staging cache: {wandb_cache_dir}")
+            except Exception as e:
+                self.logger.warning(f"Failed to clean W&B staging cache: {e}")
 
     def train_step(self, data_dict):
         # --- Use autocast for the forward pass ---
@@ -144,7 +171,7 @@ class Trainer(object):
             epoch,
             epoch_len,
             val_method_loaders=None,
-            evaluation_frequency=1  # NEW: frequency parameter
+            evaluation_frequency=1  # NEW: frequency parameter 
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         # NEW: Calculate test step based on frequency
@@ -153,7 +180,7 @@ class Trainer(object):
 
         step_cnt = epoch * epoch_len
         pbar = tqdm(range(epoch_len), desc=f"EPOCH: {epoch + 1}/{self.config['nEpochs']}")
-
+        
         for iteration in pbar:
             self.setTrain()
 
@@ -206,8 +233,12 @@ class Trainer(object):
                     log_dict[f'metric/train/{name}'] = value
 
                 self.wandb_run.log(log_dict)
-                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
-
+                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")        
+            
+            
+            
+            
+            
             step_cnt += 1
             if (iteration + 1) % test_step == 0:
                 if val_method_loaders is not None and self.config['local_rank'] == 0:
@@ -218,32 +249,61 @@ class Trainer(object):
     def test_epoch(self, epoch, val_method_loaders):
         self.setEval()
 
-        all_preds, all_labels = [], []
-        # The 'desc' provides a description for the progress bar.
-        pbar = tqdm(val_method_loaders.items(), desc="Validating (Slow but Stable)")
+        val_iters = {name: iter(loader) for name, loader in val_method_loaders.items()}
 
+        # --- Calculate total batches based on total number of videos and batch size ---
+        total_videos = len(self.val_videos)
+        batch_size = self.config['test_batchSize']
+        # The number of batches is the total videos divided by batch size, rounded up.
+        # We add a check for total_videos > 0 to avoid division by zero if val set is empty.
+        total_batches = math.ceil(total_videos / batch_size) if total_videos > 0 else 0
+
+        pbar = tqdm(total=total_batches, desc="Validating (Interleaved)")
         # Iterate through each method's DataLoader one by one.
-        for method, loader in pbar:
-            for data_dict in loader:
-                # Move tensors to the correct device
-                for key, value in data_dict.items():
-                    if isinstance(value, torch.Tensor):
-                        data_dict[key] = value.to(self.model.device)
+        method_labels = defaultdict(list)
+        method_preds = defaultdict(list)
 
-                # Skip empty batches
-                if data_dict['image'].shape[0] == 0: continue
-                # Skip batches with incorrect dimensions
-                if data_dict['image'].dim() != 5: continue
+        all_preds, all_labels = [], []
+        
+        
+        # --- Loop until all iterators are exhausted ---
+        while val_iters:
+            # Iterate over a copy of keys, as we will modify the dict
+            for method in list(val_iters.keys()):
+                try:
+                    # --- NEW: Get the next batch from the current method's iterator ---
+                    data_dict = next(val_iters[method])
 
-                B, T = data_dict['image'].shape[:2]
+                    # Move tensors to the correct device
+                    for key, value in data_dict.items():
+                        if isinstance(value, torch.Tensor):
+                            data_dict[key] = value.to(self.model.device)
 
-                predictions = self.model(data_dict, inference=True)
+                    # skip empty batches or invalid shapes
+                    if data_dict['image'].shape[0] == 0: continue
+                    if data_dict['image'].dim() != 5: continue
 
-                # Calculate video-level probability by averaging frame scores
-                video_probs = predictions['prob'].view(B, T).mean(dim=1)
+                    B, T = data_dict['image'].shape[:2]
+                    predictions = self.model(data_dict, inference=True)
+                    video_probs = predictions['prob'].view(B, T).mean(dim=1)
 
-                all_labels.extend(data_dict['label'].cpu().numpy())
-                all_preds.extend(video_probs.cpu().numpy())
+                    all_labels.extend(data_dict['label'].cpu().numpy())
+                    all_preds.extend(video_probs.cpu().numpy())
+                    
+                    # Add probabilities and labels by method
+                    method_labels[method].extend(data_dict['label'].cpu().numpy())
+                    method_preds[method].extend(video_probs.cpu().numpy())
+
+                    # (Future) Here you can accumulate per-method metrics:
+                    # per_method_results[method].append(...)
+
+                    pbar.update(1)
+
+                except StopIteration:
+                    # This loader is finished, remove it ---
+                    del val_iters[method]
+
+        pbar.close()
 
         if not all_labels:
             self.logger.error("Validation failed: No data was processed after iterating all loaders.")
@@ -257,6 +317,15 @@ class Trainer(object):
             if name not in ['pred', 'label']:
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
+        
+        # Metrics Per Method
+        method_metrics = {}
+        for method in method_preds.keys():
+            method_metrics[method] = get_test_metrics(np.array(method_preds[method]), np.array(method_labels[method]))
+            for name, value in method_metrics[method].items():
+                if name in ['acc']:
+                    wandb_log_dict[f'val/{method}/{name}'] = value
+                    self.logger.info(f"Method {method} val {name}: {value:.4f}")
 
         # Check for new best model and save
         current_metric = overall_metrics.get(self.metric_scoring)
@@ -265,12 +334,36 @@ class Trainer(object):
             self.best_val_epoch = epoch + 1
             self.logger.info(f"🎉 New best model found! Metric ({self.metric_scoring}): {current_metric:.4f}")
             if self.config['save_ckpt']:
-                self.save_ckpt(epoch + 1)
+                # --- NEW: Create the custom alias ---
+                auc_metric = overall_metrics.get('auc', 0.0) # Default to 0.0 if not found
+                # Format the string as requested
+                custom_alias = f"AUC_{auc_metric:.4f}"
+                self.save_ckpt(epoch + 1, aliases=[custom_alias])
+                
+                # --- NEW: Logic to delete the previous artifact ---
+                # 1. Store the previous artifact to be deleted
+                old_artifact = self.best_model_artifact
+
+                # 2. Save the new artifact and get its object reference
+                self.best_model_artifact = self.save_ckpt(epoch + 1, aliases=[custom_alias])
+
+                # 3. If there was an old artifact from this run, delete it now
+                if old_artifact:
+                    try:
+                        self.logger.info(f"Deleting previous best model artifact: {old_artifact.name}")
+                        old_artifact.delete(delete_aliases=True)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to delete old artifact. It may need to be manually removed. Error: {e}")
 
         wandb_log_dict['val/best_metric'] = self.best_val_metric
         wandb_log_dict['val/best_epoch'] = self.best_val_epoch
 
         if self.wandb_run:
             self.wandb_run.log(wandb_log_dict)
+        
+        # Explicitly delete large variables and collect garbage
+        del all_preds, all_labels, method_labels, method_preds, overall_metrics, method_metrics
+        gc.collect()
+        torch.cuda.empty_cache()
 
         self.logger.info("===> Evaluation Done!")
