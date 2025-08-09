@@ -82,9 +82,9 @@ sweep_configuration = {
             'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
         },
         'train_batchSize': {
-            'values': [1, 2, 4] # Reduced 256 to avoid potential OOM issues
+            'values': [1, 2, 4]  # Reduced 256 to avoid potential OOM issues
         }
-}}
+    }}
 # --- END NEW SECTION ---
 
 parser = argparse.ArgumentParser(description='Process some paths.')
@@ -120,7 +120,7 @@ def choose_optimizer(model, config):
         optimizer = optim.Adam(
             params=filter(lambda p: p.requires_grad, model.parameters()),
             lr=config['optimizer'][opt_name]['lr'],
-            eps=config['optimizer'][opt_name]['eps'], # Added eps
+            eps=config['optimizer'][opt_name]['eps'],  # Added eps
             weight_decay=config['optimizer'][opt_name]['weight_decay'],
         )
         return optimizer
@@ -144,206 +144,6 @@ def choose_metric(config):
         raise NotImplementedError('metric {} is not implemented'.format(metric_scoring))
     return metric_scoring
 
-
-def comprehensive_sampler_check(
-        real_loaders,
-        fake_loaders,
-        real_method_names,
-        full_batch_size,
-        train_videos
-):
-    """
-    Performs a deterministic, one-by-one check of each fake method.
-    For each fake method, it attempts to load one batch and pairs it with a
-    random real source to verify data integrity.
-    """
-
-    def _get_next_batch(method, dataloader_dict, iter_dict):
-        """Gets the next batch, creating an iterator if one doesn't exist."""
-        if method not in iter_dict:
-            iter_dict[method] = iter(dataloader_dict[method])
-        try:
-            return next(iter_dict[method])
-        except StopIteration:
-            # Dataloader is exhausted.
-            return None
-
-    print("\n\n==================== COMPREHENSIVE SAMPLER CHECK ====================")
-    if not fake_loaders or not real_loaders:
-        print("❌ No fake or real loaders provided. Aborting check.")
-        return
-
-    fake_method_names = sorted(list(fake_loaders.keys()))
-    num_fake_methods = len(fake_method_names)
-    half_batch_size = full_batch_size // 2
-    print(f"Deterministically checking {num_fake_methods} fake methods...")
-    print(f"Expecting half-batches of size {half_batch_size}.\n")
-
-    # Use persistent iterators to not re-test the same initial data
-    real_method_iters = {}
-    fake_method_iters = {}
-
-    # --- Tracking ---
-    # We use a simple dictionary to store the status of each fake method
-    fake_method_status = {}
-    real_source_usage = defaultdict(int)
-    batch_times = []
-
-    pbar = tqdm(fake_method_names, desc="Checking Methods")
-    for chosen_fake_method in pbar:
-        iteration_start_time = time.time()
-        pbar.set_postfix_str(f"Testing: {chosen_fake_method}")
-
-        # 1. Attempt to fetch a FAKE half-batch for the current method
-        fake_data_dict = _get_next_batch(chosen_fake_method, fake_loaders, fake_method_iters)
-
-        if not fake_data_dict or fake_data_dict['image'].shape[0] == 0:
-            fake_method_status[chosen_fake_method] = "❌ EMPTY (Corrupt data or paths)"
-            continue
-        if fake_data_dict['image'].shape[0] < half_batch_size:
-            fake_method_status[chosen_fake_method] = f"⚠️ PARTIAL (Not enough videos for a full batch)"
-            continue
-
-        # 2. Attempt to fetch a REAL half-batch to pair with it
-        if not real_method_names:
-            fake_method_status[chosen_fake_method] = "❌ SKIPPED (No real sources available)"
-            continue
-
-        chosen_real_method = random.choice(real_method_names)
-        real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
-
-        # If real source is exhausted, try to restart its iterator ONCE
-        if real_data_dict is None:
-            real_method_iters[chosen_real_method] = iter(real_loaders[chosen_real_method])
-            real_data_dict = _get_next_batch(chosen_real_method, real_loaders, real_method_iters)
-
-        if not real_data_dict or real_data_dict['image'].shape[0] == 0:
-            fake_method_status[chosen_fake_method] = f"❌ SKIPPED (Paired real source '{chosen_real_method}' is empty)"
-            continue
-        if real_data_dict['image'].shape[0] < half_batch_size:
-            fake_method_status[
-                chosen_fake_method] = f"❌ SKIPPED (Paired real source '{chosen_real_method}' gave partial batch)"
-            continue
-
-        # 3. If both are successful
-        fake_method_status[chosen_fake_method] = f"✅ OK (Paired with {chosen_real_method})"
-        real_source_usage[chosen_real_method] += 1
-        batch_times.append(time.time() - iteration_start_time)
-
-    print("\n-------------------- CHECK COMPLETE: DIAGNOSTIC REPORT --------------------")
-    total_time = sum(batch_times)
-    print(f"Total time for {len(batch_times)} successful pairs: {total_time:.2f} seconds.")
-    if batch_times:
-        print(f"Avg batch creation time: {np.mean(batch_times):.3f}s | Max: {np.max(batch_times):.3f}s")
-
-    print("\n--- Fake Methods Report ---")
-    video_counts = Counter(v.method for v in train_videos)
-    print(f"{'Method':<20} | {'Total Vids':>10} | Status & Details")
-    print("-" * 85)
-    for method in fake_method_names:
-        total_vids = video_counts.get(method, 0)
-        status = fake_method_status.get(method, "❔ NOT TESTED (Should not happen)")
-        print(f"{method:<20} | {total_vids:>10} | {status}")
-
-    print("\n--- Real Sources Usage Report ---")
-    print("How many times each real source was successfully used for pairing:")
-    for method in sorted(real_method_names):
-        count = real_source_usage.get(method, 0)
-        print(f"- {method:<20}: {count} times")
-
-    print("\nRecommendations:")
-    print("  - For '❌ EMPTY' methods, all videos are likely corrupt. Remove from `dataloader_config.yml`.")
-    print(
-        "  - For '⚠️ PARTIAL' methods, there aren't enough videos for one half-batch. Consider removing or adding more data.")
-    print(
-        "  - For '❌ SKIPPED' methods, the issue may be with the real sources, not the fake one. Check real source health.")
-    print("================== END COMPREHENSIVE SAMPLER CHECK ==================\n")
-
-
-# def download_checkpoint_from_gcs(config, logger):
-#     """
-#     Downloads a base checkpoint from a GCS bucket if specified in the config.
-#
-#     This function checks for 'base_checkpoint_bucket_path' in the config.
-#     If present, it downloads the file to the local path specified by
-#     'base_checkpoint_output_path' and 'base_checkpoint_name'.
-#
-#     It handles GCS authentication automatically in a Vertex AI environment.
-#
-#     Args:
-#         config (dict): The main configuration dictionary.
-#         logger: The logger instance for logging messages.
-#
-#     Returns:
-#         str: The local path to the downloaded checkpoint file if successful,
-#              otherwise None.
-#     """
-#     gcs_path = config.get('base_checkpoint_bucket_path')
-#     local_dir = config.get('base_checkpoint_output_path')
-#     file_name = config.get('base_checkpoint_name')
-#
-#     # first check if the checkpoint already exists in the local directory
-#     if local_dir and file_name:
-#         local_destination_path = os.path.join(local_dir, file_name)
-#         if os.path.exists(local_destination_path):
-#             logger.info(f"Base checkpoint already exists at {local_destination_path}. Skipping download.")
-#             return local_destination_path
-#
-#     if not all([gcs_path, local_dir, file_name]):
-#         logger.info("Base checkpoint download not configured. Skipping.")
-#         return None
-#
-#     if not gcs_path.startswith('gs://'):
-#         logger.error(f"Invalid GCS path: '{gcs_path}'. Must start with 'gs://'.")
-#         return None
-#
-#     local_destination_path = os.path.join(local_dir, file_name)
-#
-#     logger.info("--- GCS Checkpoint Download ---")
-#     logger.info(f"Attempting to download base checkpoint from GCS.")
-#     logger.info(f"  Source: {gcs_path}")
-#     logger.info(f"  Destination: {local_destination_path}")
-#
-#     try:
-#         # Parse the GCS path
-#         path_parts = gcs_path.replace('gs://', '').split('/', 1)
-#         bucket_name = path_parts[0]
-#         blob_name = path_parts[1]
-#
-#         # Create the local directory if it doesn't exist
-#         os.makedirs(local_dir, exist_ok=True)
-#
-#         # In a Vertex AI/GCP environment, the client authenticates automatically
-#         # using the service account associated with the job.
-#         storage_client = storage.Client()
-#         bucket = storage_client.bucket(bucket_name)
-#         blob = bucket.blob(blob_name)
-#
-#         if not blob.exists():
-#             logger.error(f"FAILED: Checkpoint file not found at {gcs_path}")
-#             return None
-#
-#         logger.info("Checkpoint found. Starting download...")
-#         start_time = time.time()
-#         blob.download_to_filename(local_destination_path)
-#         elapsed_time = time.time() - start_time
-#         logger.info(f"✅ SUCCESS: Downloaded checkpoint in {elapsed_time:.2f}s.")
-#         return local_destination_path
-#
-#     except exceptions.Forbidden as e:
-#         logger.error(
-#             "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
-#             f"account has 'Storage Object Viewer' role on bucket '{bucket_name}'.")
-#         logger.error(f"  Details: {e}")
-#         return None
-#     except exceptions.NotFound as e:
-#         logger.error(f"FAILED: GCS bucket or path not found. Check your config.")
-#         logger.error(f"  Details: {e}")
-#         return None
-#     except Exception as e:
-#         logger.error(f"FAILED: An unexpected error occurred during download: {e}")
-#         return None
-#
 
 def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -> bool:
     """
@@ -488,7 +288,7 @@ def main():
         config = yaml.safe_load(f)
     with open('./config/train_config.yaml', 'r') as f:
         config.update(yaml.safe_load(f))
-        
+
     # --- NEW: W&B Initialization ---
     # W&B will automatically read entity/project from environment variables
     # (WANDB_ENTITY, WANDB_PROJECT) or your local wandb configuration.
@@ -499,12 +299,12 @@ def main():
         # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
         # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
     )
-        
+
     # Merge sweep hyperparameters into the main config dictionary
     config['optimizer']['adam']['lr'] = wandb.config.lr
     config['optimizer']['adam']['eps'] = wandb.config.eps
     config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
-        
+
     config['local_rank'] = args.local_rank
     if args.train_dataset: config['train_dataset'] = args.train_dataset
     if args.test_dataset: config['test_dataset'] = args.test_dataset
@@ -514,11 +314,10 @@ def main():
     with open(dataloader_config_path, 'r') as f:
         data_config = yaml.safe_load(f)
 
-    config.update(data_config) # Merge data_config into config
+    config.update(data_config)  # Merge data_config into config
     # --- NEW: Use train_batchSize from sweep config ---
     data_config['dataloader_params']['batch_size'] = wandb.config.train_batchSize
-    config.update(data_config) # Merge data_config into config
-
+    config.update(data_config)  # Merge data_config into config
 
     # create logger and path
     logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
@@ -540,7 +339,6 @@ def main():
     # It will also download the CLIP backbone.
     download_assets_from_gcs(config, logger)
 
-
     logger.info("------- Configuration & Data Loading -------")
     train_videos, val_videos, _ = prepare_video_splits(dataloader_config_path)
     train_batch_size = data_config['dataloader_params']['batch_size']
@@ -558,14 +356,6 @@ def main():
         (real_loaders if name in real_source_names else fake_loaders)[name] = loader
     logger.info(
         f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
-
-    if args.run_sanity_check:
-        logger.info("--- Running Sanity Check ---")
-        # You can still run the check if you want by passing the argument
-        comprehensive_sampler_check(...)  # Call the function if needed
-        logger.info("Sanity check complete. Halting execution as planned.")
-        wandb_run.finish()
-        return
 
     # Prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
@@ -598,11 +388,9 @@ def main():
     # NEW: Get evaluation frequency from config
     eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
 
-
-
     if config['gcs_assets']['base_checkpoint']['local_path']:
         trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
-    
+
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
         trainer.train_epoch(
@@ -625,14 +413,14 @@ def main():
 
 if __name__ == '__main__':
     start = time.time()
- 
+
     if args.init_sweep:
         sweep_id = wandb.sweep(
             sweep=sweep_configuration,
-            project="Effort-AIGI-Detection-Project" # Replace with your project name
+            project="Effort-AIGI-Detection-Project"  # Replace with your project name
         )
         print(f"W&B Sweep ID: {sweep_id}")
-        exit() # Exit after initializing the sweep
+        exit()  # Exit after initializing the sweep
     # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
     # `count` specifies how many runs to execute.
     # wandb.agent(sweep_id, function=main, count=4) # Running 20 trials

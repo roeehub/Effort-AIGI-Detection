@@ -55,5 +55,5 @@ COPY . .
 
 # --- Container Entrypoint ---
 # This final step is very fast to build.
-ENTRYPOINT ["/bin/bash", "/workspace/entrypoint_parallel_jobs.sh"]
-CMD ["train"]
+RUN chmod +x /workspace/entrypoint.sh
+ENTRYPOINT ["/bin/bash", "/workspace/entrypoint.sh"]

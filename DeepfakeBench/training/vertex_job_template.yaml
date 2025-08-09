@@ -1,44 +1,52 @@
-# vertex_job_template.yaml
-# The root of this file IS the content of the 'jobSpec' object.
-# All keys are in the required camelCase format.
+# vertex_job_template.yaml  (jobSpec root)
 
-# This is a required field for Vertex AI to store job outputs.
-# IMPORTANT: Make sure this bucket exists and the service account has access.
 baseOutputDirectory:
   outputUriPrefix: gs://training-job-outputs/vertex-output/{{JOB_NAME}}
 
-# This is where we define job behavior, like timeouts.
 scheduling:
-  timeout: 86400s           # 24h hard cut-off
-  restartJobOnWorkerRestart: true # This was 'restart_job_on_worker_restart'
+  timeout: 86400s
+  restartJobOnWorkerRestart: true
 
-# The spec for our machine and container.
 workerPoolSpecs:
   - machineSpec:
-      # The machine type compatible with A100s
       machineType: a2-highgpu-1g
-      acceleratorType: "{{GPU_TYPE}}"
-      acceleratorCount: {{GPU_COUNT}}
+      acceleratorType: "{{GPU_TYPE}}"      # e.g. NVIDIA_TESLA_A100
+      acceleratorCount: {{GPU_COUNT}}      # e.g. 1
     replicaCount: 1
-    # This was 'disk_spec' in your original file.
     diskSpec:
       bootDiskType: pd-ssd
       bootDiskSizeGb: 200
     containerSpec:
       imageUri: "{{IMAGE_URI}}"
-      # The command and args for your container.
       command: ["/bin/bash", "/workspace/entrypoint.sh"]
+      # If you want to drive via flags, launcher can inject a YAML list here.
+      # Examples:
+      # args: ["--mode","sweep","--sweep-id","{{SWEEP_ID}}","--count","{{SWEEP_COUNT}}"]
+      # args: ["--mode","train","--main-script","{{MAIN_SCRIPT}}","--","--epochs","5"]
       args: []
-      # This is the section for your environment variables.
       env:
-      - name: WANDB_API_KEY
-        value: "{{WANDB_API_KEY}}"
-      - name: WANDB_PROJECT
-        value: "{{WANDB_PROJECT}}"
-      - name: WANDB_ENTITY
-        value: "{{WANDB_ENTITY}}"
-      - name: JOB_MODE
-        value: "{{JOB_MODE}}"
+        # W&B auth & project
+        - name: WANDB_API_KEY
+          value: "{{WANDB_API_KEY}}"
+        - name: WANDB_ENTITY
+          value: "{{WANDB_ENTITY}}"
+        - name: WANDB_PROJECT
+          value: "{{WANDB_PROJECT}}"
 
-# The dedicated service account for running the job.
+        # Execution mode (env fallback if args not used)
+        - name: JOB_MODE               # train | sweep | vertex_hpt
+          value: "{{JOB_MODE}}"
+        - name: SWEEP_ID               # required for sweep mode
+          value: "{{SWEEP_ID}}"
+        - name: SWEEP_COUNT            # trials per agent (entrypoint default=5)
+          value: "{{SWEEP_COUNT}}"
+        - name: MAIN_SCRIPT            # entrypoint default=train_sweep.py
+          value: "{{MAIN_SCRIPT}}"
+
+        # Quality-of-life
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+
 serviceAccount: "{{SERVICE_ACCOUNT}}"
