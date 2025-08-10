@@ -21,17 +21,12 @@ import wandb  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
 from google.cloud.storage import Bucket  # noqa
-from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
-from metrics.utils import parse_metric_for_print
-from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
-from prepare_splits import prepare_video_splits
 from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
 
 import argparse
 import random
-import datetime
 import time
 import yaml  # noqa
 from datetime import timedelta
@@ -52,40 +47,10 @@ import wandb  # noqa
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
-from metrics.utils import parse_metric_for_print
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
 from prepare_splits import prepare_video_splits
 from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
-
-# --- NEW: W&B SWEEP CONFIGURATION ---
-# Define the hyperparameter sweep configuration
-sweep_configuration = {
-    'method': 'bayes',  # Can be 'grid', 'random', or 'bayes'
-    'name': 'Effort-AIGI-Detection-Sweep',
-    'metric': {
-        'goal': 'maximize',
-        'name': 'val/best_metric'
-    },
-    'parameters': {
-        'lr': {
-            'distribution': 'uniform',
-            'min': 0.00001,
-            'max': 0.01
-        },
-        'eps': {
-            'distribution': 'uniform',
-            'min': 1e-9,
-            'max': 1e-5
-        },
-        'weight_decay': {
-            'values': [0.00001, 0.0001, 0.001, 0.01, 0.1]
-        },
-        'train_batchSize': {
-            'values': [1, 2, 4]  # Reduced 256 to avoid potential OOM issues
-        }
-    }}
-# --- END NEW SECTION ---
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
@@ -100,8 +65,7 @@ parser.add_argument('--run_sanity_check', action='store_true', default=False,
                     help="Run the comprehensive sampler check and exit.")
 parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
                     help='Path to the dataloader configuration file')
-parser.add_argument('--init_sweep', action='store_true', help='Initialize a W&B sweep and exit.')
-args = parser.parse_args()
+args, _ = parser.parse_known_args()
 torch.cuda.set_device(args.local_rank)
 
 
@@ -279,6 +243,8 @@ def download_assets_from_gcs(config, logger):
         return None
 
 
+# train_sweep.py - function replacement
+
 def main():
     # ##################### ADAM CHANGED ###################
     # os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
@@ -289,58 +255,164 @@ def main():
     with open('./config/train_config.yaml', 'r') as f:
         config.update(yaml.safe_load(f))
 
-    # --- NEW: W&B Initialization ---
-    # W&B will automatically read entity/project from environment variables
-    # (WANDB_ENTITY, WANDB_PROJECT) or your local wandb configuration.
-    run_name = f"{config['model_name']}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
-    wandb_run = wandb.init(
-        name=run_name,
-        mode="online",
-        # project="your_project_name", # Optional: Or set WANDB_PROJECT env var
-        # entity="your_entity", # Optional: Or set WANDB_ENTITY env var
-    )
-
-    # Merge sweep hyperparameters into the main config dictionary
-    config['optimizer']['adam']['lr'] = wandb.config.lr
-    config['optimizer']['adam']['eps'] = wandb.config.eps
-    config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
-
-    config['local_rank'] = args.local_rank
-    if args.train_dataset: config['train_dataset'] = args.train_dataset
-    if args.test_dataset: config['test_dataset'] = args.test_dataset
-    config['save_ckpt'] = args.save_ckpt
-
     dataloader_config_path = args.dataloader_config
     with open(dataloader_config_path, 'r') as f:
         data_config = yaml.safe_load(f)
 
-    config.update(data_config)  # Merge data_config into config
-    # --- NEW: Use train_batchSize from sweep config ---
+    # --- W&B Initialization ---
+    # The agent provides the config for the run
+    wandb_run = wandb.init(
+        mode="online",
+    )
+
+    # --- MODIFIED: Map more hyperparameters from the sweep config ---
+    # The single source of truth is now wandb.config, provided by the agent.
+
+    # --- 1. Optimizer params (Search Space) ---
+    config['optimizer']['adam']['lr'] = wandb.config.learning_rate
+    config['optimizer']['adam']['eps'] = wandb.config.optimizer_eps
+    config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
+    config['nEpochs'] = wandb.config.nEpochs
+
+    # --- 2. Data and Dataloader params (Search Space) ---
     data_config['dataloader_params']['batch_size'] = wandb.config.train_batchSize
-    config.update(data_config)  # Merge data_config into config
+    data_config['data_params']['num_frames_per_video'] = wandb.config.num_frames_per_video
+    data_config['data_params']['val_split_ratio'] = wandb.config.val_split_ratio
+    data_config['data_params']['evaluation_frequency'] = wandb.config.evaluation_frequency
 
-    # create logger and path
-    logger_path = os.path.join(wandb_run.dir, 'logs')  # Save logs inside wandb folder
+    # --- 3. Data and Dataloader params (Fixed Context) ---
+    data_config['data_params']['seed'] = wandb.config.seed
+    data_config['data_params']['data_subset_percentage'] = wandb.config.data_subset_percentage
+    data_config['dataloader_params']['test_batch_size'] = wandb.config.test_batch_size
+    data_config['dataloader_params']['num_workers'] = wandb.config.num_workers
+    data_config['dataloader_params']['prefetch_factor'] = wandb.config.prefetch_factor
 
+    # Update the main config with the now-populated data_config
+    config.update(data_config)
+
+    # Log a curated snapshot of the config for filtering in W&B
+    curated_config_log = {
+        'metric_scoring': config.get('metric_scoring'),
+        'nEpochs': config.get('nEpochs'),
+        'model_name': config.get('model_name'),
+        'data_params': data_config.get('data_params'),
+        'dataloader_params': data_config.get('dataloader_params'),
+        'gcs_base_checkpoint': config.get('gcs_assets', {}).get('base_checkpoint', {}).get('gcs_path', 'N/A'),
+    }
+    wandb.config.update(curated_config_log, allow_val_change=True)
+
+    # Construct and set an informative run name
+    model_name = config.get('model_name', 'model')
+    batch_size = wandb.config.train_batchSize
+    lr = wandb.config.learning_rate
+    wd = wandb.config.weight_decay
+    eps = wandb.config.optimizer_eps
+    num_frames = wandb.config.num_frames_per_video
+    subset_pct = wandb.config.data_subset_percentage
+    # subset_pct = int(data_config.get('data_params', {}).get('data_subset_percentage', 1.0) * 100)
+    run_name = (
+        f"{model_name}"
+        f"_b{batch_size}"
+        f"_lr{lr:.0e}"
+        f"_wd{wd:.0e}"
+        f"_eps{eps:.0e}"
+        f"_frames{num_frames}"
+        f"_subset{subset_pct}"
+    ).replace("+", "")
+    wandb.run.name = run_name
+
+    # Standard setup
+    config['local_rank'] = args.local_rank
+    if args.train_dataset: config['train_dataset'] = args.train_dataset
+    if args.test_dataset: config['test_dataset'] = args.test_dataset
+    config['save_ckpt'] = args.save_ckpt
+    logger_path = os.path.join(wandb_run.dir, 'logs')
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info(f'Save log to {logger_path}')
     config['ddp'] = args.ddp
-
     init_seed(config)
-
     if config['cudnn']: cudnn.benchmark = True
     if config['ddp']:
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
-    # --- Download Base Checkpoint from GCS ---
-    # This function will download a base model from GCS if configured.
-    # It will also download the CLIP backbone.
+    # Download assets from GCS
     download_assets_from_gcs(config, logger)
 
     logger.info("------- Configuration & Data Loading -------")
-    train_videos, val_videos, _ = prepare_video_splits(dataloader_config_path)
+    # MODIFIED: Capture the fourth return value: `data_split_stats`
+    train_videos, val_videos, _, data_split_stats = prepare_video_splits(dataloader_config_path)
+
+    # Count "external_youtube_avspeech" in train and validation sets
+    train_avspeech_count = sum(1 for v in train_videos if v.method == "external_youtube_avspeech")
+    val_avspeech_count = sum(1 for v in val_videos if v.method == "external_youtube_avspeech")
+
+    logger.info(f"Count of 'external_youtube_avspeech' in train set: {train_avspeech_count}")
+    logger.info(f"Count of 'external_youtube_avspeech' in val set: {val_avspeech_count}")
+
+    # --- Create and log the comprehensive run overview ---
+    real_methods = data_config.get('methods', {}).get('use_real_sources', [])
+    fake_methods = data_config.get('methods', {}).get('use_fake_methods', [])
+    overview_text = f"""
+        ### Run Overview
+        - **Model:** `{config.get('model_name', 'N/A')}`
+        - **Base Checkpoint:** `{wandb.config.gcs_base_checkpoint}`
+        - **Run ID:** `{wandb.run.id}`
+
+        ### Data Split Details
+        - **Discovered:** `{data_split_stats.get('discovered_videos'):,}` videos from `{data_split_stats.get('discovered_methods')}` methods.
+        - **Subset:** Using `{wandb.config.data_params.get('data_subset_percentage'):.1%}` of data (`{data_split_stats.get('subset_video_count'):,}` videos).
+        - **Unbalanced Split:** Train: `{data_split_stats.get('unbalanced_train_count'):,}` | Val: `{data_split_stats.get('unbalanced_val_count'):,}`
+        - **Final Balanced Split:** Train: `{data_split_stats.get('balanced_train_count'):,}` | Val: `{data_split_stats.get('balanced_val_count'):,}`
+
+        ### Datasets Used
+        - **Real Sources ({len(real_methods)}):** `{', '.join(real_methods)}`
+        - **Fake Methods ({len(fake_methods)}):** `{', '.join(fake_methods)}`
+
+        ### Sweep Hyperparameters
+        - **Batch Size:** `{wandb.config.train_batchSize}`
+        - **Learning Rate:** `{wandb.config.learning_rate:.1e}`
+        - **Weight Decay:** `{wandb.config.weight_decay:.1e}`
+        - **Epsilon:** `{wandb.config.optimizer_eps:.1e}`
+        - **Frames per Video:** `{wandb.config.num_frames_per_video}`
+        - **Total Epochs:** `{config.get('nEpochs', 'N/A')}`
+        - **Eval Frequency:** `{wandb.config.evaluation_frequency}` per epoch
+        """
+    wandb.run.summary["run_overview"] = overview_text.strip()
+
+    # --- Log detailed dataset balance statistics ---
+    real_source_names = data_config['methods']['use_real_sources']
+
+    # Calculate per-method counts for the balanced training set
+    train_counts = Counter(v.method for v in train_videos)
+    train_real_count = sum(count for method, count in train_counts.items() if method in real_source_names)
+    train_fake_count = sum(count for method, count in train_counts.items() if method not in real_source_names)
+
+    # Create a W&B Table for detailed counts
+    data_table = wandb.Table(columns=["Set", "Type", "Method", "Count"])
+    for method, count in train_counts.items():
+        data_type = "real" if method in real_source_names else "fake"
+        data_table.add_data("train", data_type, method, count)
+
+    # Also get validation counts and add them to the table
+    val_counts = Counter(v.method for v in val_videos)
+    val_real_count = sum(count for method, count in val_counts.items() if method in real_source_names)
+    val_fake_count = sum(count for method, count in val_counts.items() if method not in real_source_names)
+    for method, count in val_counts.items():
+        data_type = "real" if method in real_source_names else "fake"
+        data_table.add_data("val", data_type, method, count)
+
+    # Log the table and scalar metrics
+    wandb.log({
+        "data/method_counts": data_table,
+        "data/num_real_train": train_real_count,
+        "data/num_fake_train": train_fake_count,
+        "data/num_real_val": val_real_count,
+        "data/num_fake_val": val_fake_count,
+    })
+    logger.info("Logged detailed dataset balance statistics to W&B.")
+
     train_batch_size = data_config['dataloader_params']['batch_size']
     if train_batch_size % 2 != 0:
         raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
@@ -350,12 +422,21 @@ def main():
         train_videos, val_videos, config, data_config, train_batch_size=half_batch_size
     )
 
+    # The LazyDataLoaderManager is passed directly to the trainer.
+    # We derive the method names for sampling from the manager's keys,
+    # and the manager will handle on-demand loading of both real and fake batches.
     real_source_names = data_config['methods']['use_real_sources']
-    real_loaders, fake_loaders = {}, {}
-    for name, loader in all_train_loaders.items():
-        (real_loaders if name in real_source_names else fake_loaders)[name] = loader
+    all_method_names = all_train_loaders.keys()
+
+    real_method_names = [m for m in all_method_names if m in real_source_names]
+    fake_method_names = [m for m in all_method_names if m not in real_source_names]
+
+    # The manager is used to retrieve both real and fake loaders as needed.
+    real_loaders = all_train_loaders
+    fake_loaders = all_train_loaders
+
     logger.info(
-        f"Created {len(real_loaders)} real loaders, {len(fake_loaders)} fake loaders, and {len(val_method_loaders)} validation loaders.")
+        f"Created manager for {len(real_method_names)} real methods, {len(fake_method_names)} fake methods, and {len(val_method_loaders.keys())} validation loaders.")
 
     # Prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
@@ -376,8 +457,7 @@ def main():
     total_fake_videos = sum(fake_video_counts.values())
 
     real_weights = [real_video_counts[m] / total_real_videos for m in
-                    real_source_names] if total_real_videos > 0 else []
-    fake_method_names = list(fake_loaders.keys())
+                    real_method_names] if total_real_videos > 0 else []
     fake_weights = [fake_video_counts[m] / total_fake_videos for m in
                     fake_method_names] if total_fake_videos > 0 else []
 
@@ -385,8 +465,7 @@ def main():
     epoch_len = math.ceil(total_train_videos / train_batch_size) if total_train_videos > 0 else 0
     logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
 
-    # NEW: Get evaluation frequency from config
-    eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
+    eval_freq = wandb.config.evaluation_frequency
 
     if config['gcs_assets']['base_checkpoint']['local_path']:
         trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
@@ -396,7 +475,7 @@ def main():
         trainer.train_epoch(
             real_loaders=real_loaders,
             fake_loaders=fake_loaders,
-            real_method_names=real_source_names,
+            real_method_names=real_method_names,
             fake_method_names=fake_method_names,
             real_weights=real_weights,
             fake_weights=fake_weights,
@@ -413,17 +492,8 @@ def main():
 
 if __name__ == '__main__':
     start = time.time()
-
-    if args.init_sweep:
-        sweep_id = wandb.sweep(
-            sweep=sweep_configuration,
-            project="Effort-AIGI-Detection-Project"  # Replace with your project name
-        )
-        print(f"W&B Sweep ID: {sweep_id}")
-        exit()  # Exit after initializing the sweep
-    # Start the sweep agent. It will call `run_training` for each set of hyperparameters.
-    # `count` specifies how many runs to execute.
-    # wandb.agent(sweep_id, function=main, count=4) # Running 20 trials
+    # The W&B agent will call the main function directly.
+    # No need for sweep initialization logic here.
     main()
     end = time.time()
     elapsed = end - start

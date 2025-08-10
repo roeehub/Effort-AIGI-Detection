@@ -1,26 +1,52 @@
+# --- Weights & Biases Sweep Configuration ---
+
 method: bayes
-name: Effort-AIGI-Detection-Bayesian-Sweep
+name: Sweep-v4-focused
 metric:
-  name: val/best_metric
+  name: val/auc
   goal: maximize
 
-program: train_sweep.py           # <— tell the agent what to run
-command:                          # <— standard, simple invocation
-  - ${env}
-  - python
-  - ${program}
-  - ${args}
+program: train_sweep.py
 
 parameters:
-  lr:
-    distribution: uniform
-    min: 0.00001
-    max: 0.01
-  eps:
-    distribution: uniform
-    min: 1e-9
-    max: 1e-5
+  # Most impactful: keep LR tight around the known good 2e-4
+  learning_rate:
+    distribution: log_uniform_values
+    min: 0.00001   # 1e-5
+    max: 0.00050   # 5e-4
+
+  # Regularization: small grid is enough
   weight_decay:
-    values: [0.00001, 0.0001, 0.001, 0.01, 0.1]
+    values: [ 0.0, 0.00001, 0.0001, 0.001 ]
+
+  # Keep batch moderate to reduce interaction with LR during the sweep
   train_batchSize:
-    values: [2, 4, 8]  # times 8 it's [16, 32, 64], 32 was the existing value
+    value: 4  # videos per batch (=> 32 frames per batch with 8 frames/video)
+
+  # As in the paper: 8 train frames; use 32 only at inference
+  num_frames_per_video:
+    value: 8
+
+  # Fix split so trials are comparable
+  val_split_ratio:
+    value: 0.2
+
+  evaluation_frequency:
+    value: 1
+
+  nEpochs:
+    value: 20  # Number of epochs per trial
+
+  # ---- Fixed parameters (constant across trials) ----
+  optimizer_eps:
+    value: 0.00000001  # 1e-8
+  data_subset_percentage:
+    value: 1.0
+  seed:
+    value: 737
+  test_batch_size:
+    value: 4
+  num_workers:
+    value: 1
+  prefetch_factor:
+    value: 2

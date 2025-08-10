@@ -21,9 +21,12 @@ from PIL import Image  # noqa
 from torchvision import transforms as T  # noqa
 import numpy as np  # noqa
 import albumentations as A  # noqa
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from prepare_splits import VideoInfo  # noqa , we import VideoInfo from prepare_splits.py which is 1 level up
 from itertools import chain  # noqa
+
+# --- New controllable parameter for max data loaders in memory ---
+MAX_LOADERS_IN_MEMORY = 13
 
 
 # This data augmentation function is fine, we can keep it.
@@ -113,52 +116,119 @@ def collate_fn(batch):
     return data_dict
 
 
+# --- New Class for managing data loaders in a memory-efficient way ---
+class LazyDataLoaderManager:
+    """
+    Manages a dictionary of DataLoader objects, but only keeps a fixed number
+    in memory at a time. Loaders are created on-demand and the oldest one is
+    evicted when the memory capacity is reached.
+    """
+
+    def __init__(self, videos_by_method, config, data_config, batch_size, mode, max_loaders):
+        self.videos_by_method = videos_by_method
+        self.config = config
+        self.data_config = data_config
+        self.batch_size = batch_size
+        self.mode = mode
+        self.max_loaders = max_loaders
+        self.active_loaders = OrderedDict()
+        self.all_methods = list(self.videos_by_method.keys())
+
+    def _create_loader(self, method):
+        """Creates a DataLoader for a specific method."""
+        videos = self.videos_by_method[method]
+        is_train = self.mode == 'train'
+
+        pipe = IterableWrapper(videos).shuffle() if is_train else IterableWrapper(videos)
+        pipe = Mapper(pipe, lambda v: load_and_process_video(v, self.config, self.mode))
+        pipe = Filter(pipe, lambda x: x is not None)
+
+        loader = DataLoader(
+            pipe,
+            batch_size=self.batch_size,
+            num_workers=self.data_config['dataloader_params']['num_workers'],
+            collate_fn=collate_fn,
+            persistent_workers=is_train,
+            prefetch_factor=self.data_config['dataloader_params']['prefetch_factor'] if is_train else 1
+        )
+        return loader
+
+    def __len__(self):
+        """Returns the total number of methods this manager can handle."""
+        return len(self.all_methods)
+
+    def keys(self):
+        """Returns all possible method keys, not just active ones."""
+        return self.all_methods
+
+    def __getitem__(self, method):
+        """
+        Returns a DataLoader. If not in memory, it may create it,
+        potentially evicting the oldest loader if at capacity.
+        """
+        if method not in self.all_methods:
+            raise KeyError(f"Method '{method}' is not a valid method.")
+
+        if method in self.active_loaders:
+            # Move to end to mark as recently used
+            self.active_loaders.move_to_end(method)
+            return self.active_loaders[method]
+
+        if len(self.active_loaders) >= self.max_loaders:
+            # Evict the first item (oldest)
+            oldest_method, oldest_loader = self.active_loaders.popitem(last=False)
+            print(f"INFO: Evicting data loader for method '{oldest_method}' to free up memory.")
+            del oldest_loader  # Help garbage collector
+
+        # Load the new data loader
+        print(f"INFO: Activating data loader for method '{method}'.")
+        new_loader = self._create_loader(method)
+        self.active_loaders[method] = new_loader
+        return new_loader
+
+    def keys(self):
+        """Returns all possible method keys, not just active ones."""
+        return self.all_methods
+
+    def __contains__(self, method):
+        """Checks if a method is available, even if not active."""
+        return method in self.all_methods
+
+
 def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
                                     data_config: dict, train_batch_size: int):
     """
-    Creates separate dataloaders for train (per-method) and val (per-method).
+    Creates separate, memory-efficient, rotating dataloader managers for
+    train (per-method) and val (per-method).
     """
-    # --- 1. Create Training DataLoaders (per fake method AND per real source) ---
-    train_loaders = {}
+    # --- 1. Prepare Training Data by Method ---
     videos_by_method_train = defaultdict(list)
     for v in train_videos:
         videos_by_method_train[v.method].append(v)
 
-    all_train_methods = data_config['methods']['use_real_sources'] + data_config['methods']['use_fake_methods']
+    # --- 2. Create a Lazy Manager for Training Loaders ---
+    train_loaders_manager = LazyDataLoaderManager(
+        videos_by_method=videos_by_method_train,
+        config=config,
+        data_config=data_config,
+        batch_size=train_batch_size,
+        mode='train',
+        max_loaders=MAX_LOADERS_IN_MEMORY
+    )
 
-    for method in all_train_methods:
-        if method in videos_by_method_train and videos_by_method_train[method]:
-            pipe = IterableWrapper(videos_by_method_train[method]).shuffle()
-            pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
-            pipe = Filter(pipe, lambda x: x is not None)
-            train_loaders[method] = DataLoader(
-                pipe,
-                batch_size=train_batch_size,
-                num_workers=data_config['dataloader_params']['num_workers'],
-                collate_fn=collate_fn,
-                persistent_workers=True,
-                prefetch_factor=data_config['dataloader_params']['prefetch_factor']
-            )
-
-    # --- 2. Create Validation DataLoaders (per method, both real and fake) ---
-    val_loaders = {}
+    # --- 3. Prepare Validation Data by Method ---
     videos_by_method_val = defaultdict(list)
     for v in val_videos:
         videos_by_method_val[v.method].append(v)
 
-    for name, videos in videos_by_method_val.items():
-        # --- FIX: Check if the list of videos is empty BEFORE creating the loader ---
-        if not videos: continue
-        pipe = IterableWrapper(videos)  # No shuffle for validation
-        pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'test'))
-        pipe = Filter(pipe, lambda x: x is not None)
-        val_loaders[name] = DataLoader(
-            pipe,
-            batch_size=config['test_batchSize'],
-            num_workers=data_config['dataloader_params']['num_workers'],
-            collate_fn=collate_fn,
-            persistent_workers=True,
-            prefetch_factor=data_config['dataloader_params']['prefetch_factor']
-        )
+    # --- 4. Create a Lazy Manager for Validation Loaders ---
+    val_loaders_manager = LazyDataLoaderManager(
+        videos_by_method=videos_by_method_val,
+        config=config,
+        data_config=data_config,
+        batch_size=config['test_batchSize'],
+        mode='test',
+        max_loaders=MAX_LOADERS_IN_MEMORY
+    )
 
-    return train_loaders, val_loaders
+    return train_loaders_manager, val_loaders_manager

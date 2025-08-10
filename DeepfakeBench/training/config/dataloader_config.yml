@@ -21,6 +21,7 @@ methods:
     - "FaceForensics++"
     - "Celeb-real"
     - "YouTube-real"
+    - "external_youtube_avspeech"
   use_fake_methods:
     - "simswap"
     - "one_shot_free"

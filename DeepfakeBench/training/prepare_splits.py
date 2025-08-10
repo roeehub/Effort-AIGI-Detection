@@ -133,7 +133,17 @@ def _balance_video_list(
 # 3 Main entry
 # ---------------------------------------------------------------------------
 def prepare_video_splits(cfg_path: str = "config.yaml"
-                         ) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
+                         ) -> Tuple[List[VideoInfo], List[VideoInfo], dict, dict]:
+    """
+    Prepares video splits for training and validation.
+
+    Returns:
+        Tuple containing:
+        - train_videos (List[VideoInfo]): The balanced list of training videos.
+        - val_videos (List[VideoInfo]): The balanced list of validation videos.
+        - cfg (dict): The loaded configuration.
+        - stats (dict): A dictionary with statistics about the data preparation process.
+    """
     cfg = yaml.safe_load(open(cfg_path))
     BUCKET = f"gs://{cfg['gcp']['bucket_name']}"
     SEED = cfg['data_params']['seed']
@@ -141,6 +151,9 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     SUBSET = cfg['data_params']['data_subset_percentage']
     allowed = set(cfg['methods']['use_real_sources']
                   + cfg['methods']['use_fake_methods'])
+
+    # NEW: Dictionary to hold statistics
+    stats = {}
 
     random.seed(SEED)
     manifest_path = Path(__file__).with_name("frame_manifest.json")
@@ -162,6 +175,11 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         print(f"Found {len(frame_paths):,} frame files – caching manifest")
         manifest_path.write_text(json.dumps(frame_paths))
 
+    # Count and print the number of frames from the specified method
+    avspeech_count = sum(1 for p in frame_paths if "external_youtube_avspeech" in p)
+    print(f"[manifest] Found {avspeech_count:,} frames from 'external_youtube_avspeech'")
+    stats['total_frames_in_manifest'] = len(frame_paths)
+
     # ------------------------------------------------------------------ #
     # 2) Group frames → VideoInfo objects                                #
     # ------------------------------------------------------------------ #
@@ -171,6 +189,7 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         try:
             label, method, vid = parts[-4], parts[-3], parts[-2]
             if label not in {"real", "fake"}:
+                print(f"[WARN] Invalid label '{label}' in path '{p}'. Skipping.")
                 continue
         except Exception:
             continue
@@ -193,6 +212,9 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         videos.append(VideoInfo(label, method, vid, fr, tid))
 
     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
+    stats['discovered_videos'] = len(videos)
+    stats['discovered_methods'] = len(allowed)
+    stats['subset_video_count'] = len(videos)  # Default value
 
     # ------------------------------------------------------------------ #
     # 3. (NEW) Apply subset percentage to the ENTIRE dataset FIRST       #
@@ -207,12 +229,14 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
             subset_indices, _ = next(subset_splitter.split(X=videos, groups=all_identities))
             videos = [videos[i] for i in subset_indices]
             print(f"[subset] Dataset reduced to {len(videos):,} videos.")
+            stats['subset_video_count'] = len(videos)
         except ValueError as e:
             print(f"[subset] WARN: Could not create a subset while respecting groups. Error: {e}")
             print("[subset] Using a random sample instead. This may cause minor identity leakage in the subset.")
             random.shuffle(videos)
             subset_size = int(len(videos) * SUBSET)
             videos = videos[:subset_size]
+            stats['subset_video_count'] = len(videos)
 
     # ------------------------------------------------------------------ #
     # 4. Stratified GroupShuffleSplit (on the potentially smaller dataset)#
@@ -245,6 +269,8 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     train_videos_unbalanced = [videos[i] for i in train_idx]
     val_videos_unbalanced = [videos[i] for i in val_idx]
     print(f"Split complete (unbalanced) ▶ train {len(train_videos_unbalanced):,} | val {len(val_videos_unbalanced):,}")
+    stats['unbalanced_train_count'] = len(train_videos_unbalanced)
+    stats['unbalanced_val_count'] = len(val_videos_unbalanced)
 
     # ------------------------------------------------------------------ #
     # 5. (NEW) Balance BOTH the training and validation sets             #
@@ -262,10 +288,12 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
     )
 
     print(f"\nFinal balanced split ▶ train {len(train_videos):,} | val {len(val_videos):,}")
+    stats['balanced_train_count'] = len(train_videos)
+    stats['balanced_val_count'] = len(val_videos)
 
     random.shuffle(train_videos)
     random.shuffle(val_videos)
-    return train_videos, val_videos, cfg
+    return train_videos, val_videos, cfg, stats
 
 
 if __name__ == "__main__":

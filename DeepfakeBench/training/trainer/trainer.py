@@ -2,7 +2,6 @@ import math
 import os
 import sys
 import time
-import shutil
 
 current_file_path = os.path.abspath(__file__)
 parent_dir = os.path.dirname(os.path.dirname(current_file_path))
@@ -22,7 +21,8 @@ import wandb  # noqa
 from collections import defaultdict
 from dataset.dataloaders import load_and_process_video, collate_fn  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
-import functools
+from google.cloud import storage  # noqa
+from google.api_core import exceptions  # noqa
 import gc
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
@@ -54,9 +54,11 @@ class Trainer(object):
         self.wandb_run = wandb_run
         self.val_videos = val_videos  # Store the validation videos
         self.unified_val_loader = None  # To cache the efficient loader
-        self.best_model_artifact = None  # NEW: Add this to track the artifact
 
-        # NEW: Track best metric for model saving
+        # --- MODIFIED: Track GCS path instead of W&B artifact ---
+        self.best_model_gcs_path = None  # Track the GCS path of the best model
+
+        # Track the best metric for model saving
         self.best_val_metric = -1.0
         self.best_val_epoch = -1
 
@@ -84,6 +86,48 @@ class Trainer(object):
     def setEval(self):
         self.model.eval()
 
+    # --- Helper function to upload a file to GCS ---
+    def _upload_to_gcs(self, local_path, gcs_path):
+        """Uploads a local file to a GCS path."""
+        try:
+            storage_client = storage.Client()
+            bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
+            blob_name = gcs_path.split(f'gs://{bucket_name}/', 1)[1]
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+
+            self.logger.info(f"Uploading checkpoint to GCS: {gcs_path}")
+            blob.upload_from_filename(local_path)
+            self.logger.info(f"✅ SUCCESS: Uploaded to {gcs_path}")
+            return True
+        except exceptions.GoogleAPICallError as e:
+            self.logger.error(f"FAILED to upload to GCS. Check permissions. Error: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred during GCS upload: {e}")
+            return False
+
+    # --- Helper function to delete a file from GCS ---
+    def _delete_from_gcs(self, gcs_path):
+        """Deletes a blob from a given GCS path."""
+        if not gcs_path:
+            return
+        try:
+            storage_client = storage.Client()
+            bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
+            blob_name = gcs_path.split(f'gs://{bucket_name}/', 1)[1]
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+
+            if blob.exists():
+                self.logger.info(f"Deleting old GCS checkpoint: {gcs_path}")
+                blob.delete()
+                self.logger.info(f"✅ SUCCESS: Deleted {gcs_path}")
+            else:
+                self.logger.warning(f"Attempted to delete non-existent GCS blob: {gcs_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to delete GCS blob {gcs_path}. Error: {e}")
+
     def load_ckpt(self, model_path):
         if os.path.isfile(model_path):
             saved = torch.load(model_path, map_location='cpu')
@@ -96,41 +140,50 @@ class Trainer(object):
         else:
             raise FileNotFoundError(f"=> no model found at '{model_path}'")
 
-    def save_ckpt(self, epoch, aliases=None):
-        save_dir = os.path.join(self.log_dir, "checkpoints")
-        os.makedirs(save_dir, exist_ok=True)
-        ckpt_name = f"ckpt_best.pth"
-        save_path = os.path.join(save_dir, ckpt_name)
+    # --- MODIFIED: save_ckpt now uploads to GCS and returns the path ---
+    def save_ckpt(self, epoch, auc, eer):
+        """
+        Saves the model checkpoint locally, uploads it to GCS, and then cleans up.
+        Returns the GCS path of the uploaded file.
+        """
+        gcs_config = self.config.get('checkpointing')
+        if not gcs_config or not gcs_config.get('gcs_prefix'):
+            self.logger.warning("GCS checkpointing not configured. Skipping upload.")
+            return None
+
+        # Create a descriptive checkpoint name
+        model_name = self.config.get('model_name', 'model')
+        date_str = time.strftime("%Y%m%d")
+        ckpt_name = f"ckpt_{model_name}_{date_str}_ep{epoch}_auc{auc:.4f}_eer{eer:.4f}.pth"
+
+        # Save temporarily to local disk (within the W&B run directory)
+        local_save_dir = os.path.join(self.log_dir, "checkpoints")
+        os.makedirs(local_save_dir, exist_ok=True)
+        local_save_path = os.path.join(local_save_dir, ckpt_name)
+
         model_state = self.model.module.state_dict() if self.config['ddp'] else self.model.state_dict()
-        torch.save(model_state, save_path)
-        self.logger.info(f"Saved best model checkpoint at epoch {epoch} to {save_path}")
-        # NEW: Also save as a W&B artifact
-        if self.wandb_run:
-            artifact = wandb.Artifact(f'{self.wandb_run.name}-best-model', type='model')
-            artifact.add_file(save_path)
+        torch.save(model_state, local_save_path)
 
-            # --- NEW: Prepare the list of aliases ---
-            final_aliases = ['latest']  # Always include the 'latest' tag
-            if aliases:
-                # Add the custom aliases you passed in
-                final_aliases.extend(aliases)
+        # Construct the full GCS path, including the run ID for organization
+        gcs_prefix = gcs_config['gcs_prefix']
+        if not gcs_prefix.endswith('/'):
+            gcs_prefix += '/'
+        run_id = self.wandb_run.id if self.wandb_run else "local_run"
+        full_gcs_path = os.path.join(gcs_prefix, run_id, ckpt_name)
 
-            self.wandb_run.log_artifact(artifact, aliases=final_aliases)
+        # Upload to GCS
+        upload_success = self._upload_to_gcs(local_save_path, full_gcs_path)
 
-            # Wait for the checkpoint to be uploaded to the W&B cloud
-            time.sleep(5)
-            try:
-                os.remove(save_path)
-                self.logger.info(f"Deleted local checkpoint: {save_path}")
-            except Exception as e:
-                self.logger.warning(f"Failed to delete local checkpoint: {e}")
-            # Clean W&B staging cache (optional but safe)
-            wandb_cache_dir = os.path.expanduser("~/.local/share/wandb/artifacts/staging/")
-            try:
-                shutil.rmtree(wandb_cache_dir)
-                self.logger.info(f"Cleaned W&B staging cache: {wandb_cache_dir}")
-            except Exception as e:
-                self.logger.warning(f"Failed to clean W&B staging cache: {e}")
+        # Clean up the local file
+        try:
+            os.remove(local_save_path)
+        except OSError as e:
+            self.logger.warning(f"Could not delete local temporary checkpoint: {e}")
+
+        if upload_success:
+            return full_gcs_path
+        else:
+            return None
 
     def train_step(self, data_dict):
         # --- Use autocast for the forward pass ---
@@ -174,7 +227,7 @@ class Trainer(object):
             evaluation_frequency=1  # NEW: frequency parameter
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
-        # NEW: Calculate test step based on frequency
+        # Calculate test step based on frequency
         test_step = epoch_len // evaluation_frequency if evaluation_frequency > 0 else epoch_len
         if test_step == 0: test_step = 1  # Ensure we test at least once if epoch is short
 
@@ -218,11 +271,11 @@ class Trainer(object):
 
             losses, predictions = self.train_step(data_dict)
 
-            # --- NEW: W&B Logging for Training Step ---
+            # --- W&B Logging for Training Step ---
             if self.wandb_run and self.config['local_rank'] == 0:
                 log_dict = {"train/step": step_cnt, "epoch": epoch + 1}
                 for name, value in losses.items():
-                    log_dict[f'loss/train/{name}'] = value.item()
+                    log_dict[f'train/loss/{name}'] = value.item()
 
                 if type(self.model) is DDP:
                     batch_metrics = self.model.module.get_train_metrics(data_dict, predictions)
@@ -230,7 +283,7 @@ class Trainer(object):
                     batch_metrics = self.model.get_train_metrics(data_dict, predictions)
 
                 for name, value in batch_metrics.items():
-                    log_dict[f'metric/train/{name}'] = value
+                    log_dict[f'train/metric/{name}'] = value
 
                 self.wandb_run.log(log_dict)
                 pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
@@ -245,7 +298,7 @@ class Trainer(object):
     def test_epoch(self, epoch, val_method_loaders):
         self.setEval()
 
-        val_iters = {name: iter(loader) for name, loader in val_method_loaders.items()}
+        val_iters = {name: iter(val_method_loaders[name]) for name in val_method_loaders.keys()}
 
         # --- Calculate total batches based on total number of videos and batch size ---
         total_videos = len(self.val_videos)
@@ -319,8 +372,25 @@ class Trainer(object):
             method_metrics[method] = get_test_metrics(np.array(method_preds[method]), np.array(method_labels[method]))
             for name, value in method_metrics[method].items():
                 if name in ['acc']:
-                    wandb_log_dict[f'val/{method}/{name}'] = value
+                    wandb_log_dict[f'val/method/{method}/{name}'] = value
                     self.logger.info(f"Method {method} val {name}: {value:.4f}")
+
+        # --- NEW: Create and log a W&B Table for side-by-side comparison ---
+        if self.wandb_run:
+            columns = ["epoch", "method", "acc", "auc", "eer", "n_samples"]
+            table_data = []
+            for method, metrics in method_metrics.items():
+                table_data.append([
+                    epoch + 1,
+                    method,
+                    metrics.get('acc'),
+                    metrics.get('auc'),
+                    metrics.get('eer'),
+                    len(method_labels[method])  # Get the sample count for the method
+                ])
+
+            # Add the created table to the dictionary that will be logged
+            wandb_log_dict["val/method_table"] = wandb.Table(columns=columns, data=table_data)
 
         # Check for new best model and save
         current_metric = overall_metrics.get(self.metric_scoring)
@@ -328,28 +398,48 @@ class Trainer(object):
             self.best_val_metric = current_metric
             self.best_val_epoch = epoch + 1
             self.logger.info(f"🎉 New best model found! Metric ({self.metric_scoring}): {current_metric:.4f}")
+
+            best_auc = overall_metrics.get('auc', 0.0)
+            best_eer = overall_metrics.get('eer', 1.0)
+            best_acc = overall_metrics.get('acc', 0.0)
+
             if self.config['save_ckpt']:
-                # --- NEW: Create the custom alias ---
-                auc_metric = overall_metrics.get('auc', 0.0)  # Default to 0.0 if not found
-                # Format the string as requested
-                custom_alias = f"AUC_{auc_metric:.4f}"
-                self.save_ckpt(epoch + 1, aliases=[custom_alias])
+                # --- MODIFIED: Save to GCS and prune the old one ---
 
-                # --- NEW: Logic to delete the previous artifact ---
-                # 1. Store the previous artifact to be deleted
-                old_artifact = self.best_model_artifact
+                # Store the path of the previous best model to delete it after the new one succeeds
+                old_gcs_path = self.best_model_gcs_path
 
-                # 2. Save the new artifact and get its object reference
-                self.best_model_artifact = self.save_ckpt(epoch + 1, aliases=[custom_alias])
+                # Upload the new best model to GCS
+                new_gcs_path = self.save_ckpt(
+                    epoch=epoch + 1,
+                    auc=best_auc,
+                    eer=best_eer
+                )
 
-                # 3. If there was an old artifact from this run, delete it now
-                if old_artifact:
-                    try:
-                        self.logger.info(f"Deleting previous best model artifact: {old_artifact.name}")
-                        old_artifact.delete(delete_aliases=True)
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Failed to delete old artifact. It may need to be manually removed. Error: {e}")
+                if new_gcs_path:
+                    # If upload was successful, update the best path and delete the old one
+                    self.best_model_gcs_path = new_gcs_path
+                    if old_gcs_path:
+                        self._delete_from_gcs(old_gcs_path)
+
+                    # Log the GCS path to W&B
+                    if self.wandb_run:
+                        self.wandb_run.summary['best_ckpt_gcs'] = new_gcs_path
+                        wandb_log_dict['checkpoint/gcs_path'] = new_gcs_path  # Log at current step
+
+                        # Also update the bottom line summary
+                        self.wandb_run.summary['bottom_line'] = (
+                            f"best_epoch={self.best_val_epoch} AUC={best_auc:.4f} "
+                            f"EER={best_eer:.4f} ACC={best_acc:.4f} ckpt=GCS"
+                        )
+
+            # Update W&B summary fields for easy sorting
+            if self.wandb_run:
+                self.wandb_run.summary['best/epoch'] = self.best_val_epoch
+                self.wandb_run.summary['best/metric'] = self.best_val_metric
+                self.wandb_run.summary['best/auc'] = best_auc
+                self.wandb_run.summary['best/eer'] = best_eer
+                self.wandb_run.summary['best/acc'] = best_acc
 
         wandb_log_dict['val/best_metric'] = self.best_val_metric
         wandb_log_dict['val/best_epoch'] = self.best_val_epoch

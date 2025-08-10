@@ -15,6 +15,14 @@ gcs_assets:
     gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
     local_path: "./weights/models--openai--clip-vit-large-patch14/"
 
+
+checkpointing:
+  # The base GCS path where checkpoints will be stored.
+  # The trainer will automatically append the W&B run ID to this path.
+  # IMPORTANT: Make sure the service account for your training job has
+  # 'Storage Object Admin' permissions on this bucket/prefix.
+  gcs_prefix: "gs://training-job-outputs/best_checkpoints/"
+
 # label settings
 label_dict:
   # DFD
