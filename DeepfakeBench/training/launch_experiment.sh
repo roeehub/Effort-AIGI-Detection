@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# launch_experiment_jobs.sh
+# launch_experiment.sh
 # Final version: Handles the complete YAML template with all environment variables.
 set -euo pipefail
 
---- Default parameters ---
+# --- Default parameters ---
 REGIONS=(us-central1 us-east4 europe-west4)
 GPU_TYPE="NVIDIA_A100_40GB"
 GPU_COUNT=1
