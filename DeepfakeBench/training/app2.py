@@ -184,26 +184,29 @@ def startup_event() -> None:
         logger.exception("Failed to load or merge YAML configuration files.")
         raise
 
-    # 4) --- NEW: Handle custom checkpoint from environment variables ---
-    custom_gcs_bucket = os.getenv("GCS_BUCKET")
-    custom_checkpoint_path = os.getenv("CHECKPOINT_PATH")
+    # 4) --- CORRECTED: Handle custom checkpoint from a single environment variable ---
+    custom_checkpoint_gcs_path = os.getenv("CHECKPOINT_GCS_PATH")
 
-    if custom_gcs_bucket and custom_checkpoint_path:
-        logger.info("Custom checkpoint specified via environment variables.")
-        full_gcs_path = f"gs://{custom_gcs_bucket}/{custom_checkpoint_path}"
+    if custom_checkpoint_gcs_path:
+        logger.info("Custom checkpoint specified via environment variable.")
+
+        # Validate the GCS path format
+        if not custom_checkpoint_gcs_path.startswith("gs://"):
+            logger.error(f"Invalid CHECKPOINT_GCS_PATH: '{custom_checkpoint_gcs_path}'. Must start with 'gs://'.")
+            raise RuntimeError("Invalid GCS path format for custom checkpoint.")
 
         # Define a local path for the custom checkpoint to be saved to
-        local_filename = Path(custom_checkpoint_path).name
+        local_filename = Path(custom_checkpoint_gcs_path.split("gs://", 1)[1]).name
         custom_weights_dir = repo_base / "weights" / "custom"
         custom_weights_dir.mkdir(parents=True, exist_ok=True)
         new_weights_path = custom_weights_dir / local_filename
 
-        logger.info(f"  GCS Path: {full_gcs_path}")
+        logger.info(f"  GCS Path: {custom_checkpoint_gcs_path}")
         logger.info(f"  Local Path: {new_weights_path}")
 
         # Add this custom checkpoint to the asset download list
         config.setdefault('gcs_assets', {})['custom_checkpoint'] = {
-            'gcs_path': full_gcs_path,
+            'gcs_path': custom_checkpoint_gcs_path,  # Use the full path directly
             'local_path': str(new_weights_path)
         }
 
