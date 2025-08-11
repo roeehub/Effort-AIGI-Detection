@@ -273,6 +273,7 @@ def main():
     config['optimizer']['adam']['eps'] = wandb.config.optimizer_eps
     config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
     config['nEpochs'] = wandb.config.nEpochs
+    config['lambda_reg'] = wandb.config.lambda_reg  # Pass the sweep value to the main config
 
     # --- 2. Data and Dataloader params (Search Space) ---
     data_config['dataloader_params']['batch_size'] = wandb.config.train_batchSize
@@ -286,6 +287,12 @@ def main():
     data_config['dataloader_params']['test_batch_size'] = wandb.config.test_batch_size
     data_config['dataloader_params']['num_workers'] = wandb.config.num_workers
     data_config['dataloader_params']['prefetch_factor'] = wandb.config.prefetch_factor
+
+    # Compensating. usually num_frames_per_video is 8.
+    if data_config['data_params']['num_frames_per_video'] == 4:
+        data_config['dataloader_params']['batch_size'] = data_config['dataloader_params']['batch_size'] * 2
+    if data_config['data_params']['num_frames_per_video'] == 2:
+        data_config['dataloader_params']['batch_size'] = data_config['dataloader_params']['batch_size'] * 4
 
     # Update the main config with the now-populated data_config
     config.update(data_config)

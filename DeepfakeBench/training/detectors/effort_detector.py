@@ -2,26 +2,26 @@ import os
 import math
 import datetime
 import logging
-import numpy as np
-from sklearn import metrics
+import numpy as np  # noqa
+from sklearn import metrics  # noqa
 from typing import Union
 from collections import defaultdict
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.nn import DataParallel
+import torch  # noqa
+import torch.nn as nn  # noqa
+import torch.nn.functional as F  # noqa
+import torch.optim as optim  # noqa
+from torch.nn import DataParallel  # noqa
 
-from metrics.base_metrics_class import calculate_metrics_for_train
+from metrics.base_metrics_class import calculate_metrics_for_train  # noqa
 
 from .base_detector import AbstractDetector
-from detectors import DETECTOR
-from networks import BACKBONE
-from loss import LOSSFUNC
+from detectors import DETECTOR  # noqa
+from networks import BACKBONE  # noqa
+from loss import LOSSFUNC  # noqa
 
-import loralib as lora
-from transformers import AutoProcessor, CLIPModel, ViTModel, ViTConfig
+import loralib as lora  # noqa
+from transformers import AutoProcessor, CLIPModel, ViTModel, ViTConfig  # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class EffortDetector(nn.Module):
     def __init__(self, config=None):
         super(EffortDetector, self).__init__()
         self.config = config
+        self.lambda_reg = config.get('lambda_reg', 1.0)  # Default to 1.0 if not in config
         self.clip_backbone_path = config['gcs_assets']['clip_backbone']['local_path']
         self.backbone = self.build_backbone(config)  # Initialize Backbone model
         self.head = nn.Linear(1024, 2)
@@ -112,6 +113,48 @@ class EffortDetector(nn.Module):
         loss2 /= len(weight_sum_dict.keys())
         return loss2
 
+    # def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
+    #     label = data_dict['label']
+    #     pred = pred_dict['cls']
+    #
+    #     # Check if the batch was originally 5D by comparing label and pred batch sizes
+    #     # If len(pred) > len(label), it means we reshaped a video batch
+    #     if pred.shape[0] > label.shape[0]:
+    #         B = label.shape[0]
+    #         # Calculate T (number of frames) from the discrepancy
+    #         T = pred.shape[0] // B
+    #         # Repeat each label T times to match the reshaped predictions
+    #         label = label.repeat_interleave(T)
+    #
+    #     # The rest of the loss calculation logic remains the same
+    #     # It now works correctly for both 4D and 5D original inputs
+    #
+    #     # Compute overall loss using all samples
+    #     loss = self.loss_func(pred, label)
+    #
+    #     # Create masks for real and fake classes
+    #     mask_real = label == 0
+    #     mask_fake = label == 1
+    #
+    #     # Compute loss for real class
+    #     if mask_real.sum() > 0:
+    #         loss_real = self.loss_func(pred[mask_real], label[mask_real])
+    #     else:
+    #         loss_real = torch.tensor(0.0, device=pred.device)
+    #
+    #     # Compute loss for fake class
+    #     if mask_fake.sum() > 0:
+    #         loss_fake = self.loss_func(pred[mask_fake], label[mask_fake])
+    #     else:
+    #         loss_fake = torch.tensor(0.0, device=pred.device)
+    #
+    #     loss_dict = {
+    #         'overall': loss,
+    #         'real_loss': loss_real,
+    #         'fake_loss': loss_fake,
+    #     }
+    #     return loss_dict
+
     def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
         label = data_dict['label']
         pred = pred_dict['cls']
@@ -130,6 +173,27 @@ class EffortDetector(nn.Module):
 
         # Compute overall loss using all samples
         loss = self.loss_func(pred, label)
+
+        # ======================================================================
+        # == RESTORED REGULARIZATION BLOCK TO PREVENT OVERFITTING ==
+        # This block enforces structural and magnitude constraints on the weight
+        # updates, which is critical for stable fine-tuning.
+        # ======================================================================
+        if self.training:
+            # Regularization term
+            lambda_reg = self.lambda_reg  # Default to 1.0 if not in config
+            reg_term = 0.0
+            num_reg = 0
+            for module in self.backbone.modules():
+                if isinstance(module, SVDResidualLinear):
+                    reg_term += module.compute_orthogonal_loss()
+                    reg_term += module.compute_keepsv_loss()
+                    num_reg += 1
+
+            # Add the averaged regularization term to the main loss
+            if num_reg > 0:
+                loss += lambda_reg * reg_term / num_reg
+        # ======================================================================
 
         # Create masks for real and fake classes
         mask_real = label == 0

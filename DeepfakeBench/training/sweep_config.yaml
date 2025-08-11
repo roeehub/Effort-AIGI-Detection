@@ -1,7 +1,7 @@
 # --- Weights & Biases Sweep Configuration ---
 
 method: bayes
-name: Sweep-v4-focused
+name: Sweep-v5-loss
 metric:
   name: val/auc
   goal: maximize
@@ -9,44 +9,44 @@ metric:
 program: train_sweep.py
 
 parameters:
-  # Most impactful: keep LR tight around the known good 2e-4
+  # --- Tier 1: Core Fine-Tuning Parameters ---
   learning_rate:
     distribution: log_uniform_values
-    min: 0.00001   # 1e-5
-    max: 0.00050   # 5e-4
-
-  # Regularization: small grid is enough
+    min: 1.0e-5
+    max: 5.0e-4
   weight_decay:
-    values: [ 0.0, 0.00001, 0.0001, 0.001 ]
-
-  # Keep batch moderate to reduce interaction with LR during the sweep
-  train_batchSize:
-    value: 4  # videos per batch (=> 32 frames per batch with 8 frames/video)
-
-  # As in the paper: 8 train frames; use 32 only at inference
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-3
+  lambda_reg:
+    distribution: uniform
+    min: 0.5
+    max: 5.0
   num_frames_per_video:
-    value: 8
+    values: [2, 4, 8]
 
-  # Fix split so trials are comparable
-  val_split_ratio:
-    value: 0.2
-
-  evaluation_frequency:
-    value: 1
-
-  nEpochs:
-    value: 20  # Number of epochs per trial
-
-  # ---- Fixed parameters (constant across trials) ----
-  optimizer_eps:
-    value: 0.00000001  # 1e-8
-  data_subset_percentage:
-    value: 1.0
-  seed:
-    value: 737
+  # --- Tier 2: Fixed Parameters for this Sweep ---
+  train_batchSize:
+    value: 4  # per video. final calculation will be 32 frames per batch (8 frames/video * 4 videos/batch),
+              # if num_frames_per_video is 4, number of videos will be 8, so total frames per batch will be 32
   test_batch_size:
     value: 4
+  nEpochs:
+    value: 50 # Train long enough, but rely on best validation metric for checkpointing if needed
+  optimizer_eps:
+    value: 1.0e-8 # Standard default, no need to tune
+
+  # --- Tier 3: Fixed Contextual Parameters (Do Not Change) ---
+  seed:
+    value: 737
+  data_subset_percentage:
+    value: 1.0
   num_workers:
     value: 1
   prefetch_factor:
     value: 2
+  val_split_ratio:
+    value: 0.2
+  evaluation_frequency:
+    value: 1 # Evaluate every epoch
+
