@@ -270,9 +270,12 @@ async def check_frame(
             prob = preds["prob"].squeeze().cpu().item()
             pred_label = "FAKE" if prob >= 0.5 else "REAL"
 
+    except HTTPException:
+        # Re-raise the exception to let FastAPI handle it correctly.
+        raise
     except Exception as e:
         logger.exception("Inference failed for frame.")
-        # Re-raise as HTTPException to be caught by FastAPI's error handling
+        # Re-raise as a generic 500 error for unexpected failures.
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Model inference failed.") from e
 
     logger.info("Frame inference result: label=%s, fake_prob=%.4f", pred_label, prob)
@@ -303,12 +306,19 @@ async def check_video(
         )
 
         if video_tensor is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Video could not be processed (no faces found).")
+            # Raise a 400 error with a clear, user-friendly message.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Video could not be processed. This can happen if the video is too short or if a face cannot be consistently detected."
+            )
 
         with torch.inference_mode():
             preds = request.app.state.model({'image': video_tensor.to(device)}, inference=True)
             frame_probs = preds["prob"].cpu().numpy().tolist()
 
+    except HTTPException:
+        # Re-raise the exception to let FastAPI handle it correctly.
+        raise
     except Exception as e:
         logger.exception("Video processing or inference failed.")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Video processing or inference failed.") from e
@@ -367,12 +377,19 @@ async def check_video_from_gcp(
         )
 
         if video_tensor is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Video could not be processed (no faces found).")
+            # Raise a 400 error with a clear, user-friendly message.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Video could not be processed. This can happen if the video is too short or if a face cannot be consistently detected."
+            )
 
         with torch.inference_mode():
             preds = request.app.state.model({'image': video_tensor.to(device)}, inference=True)
             frame_probs = preds["prob"].cpu().numpy().tolist()
 
+    except HTTPException:
+        # Re-raise to let FastAPI handle it.
+        raise
     except exceptions.NotFound:
         logger.error(f"GCS object not found: gs://{gcs_full_path}")
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"File not found in GCS at path: {gcs_full_path}")
