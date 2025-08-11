@@ -16,7 +16,7 @@ SWEEP_ID=""                        # required for 'sweep' mode
 
 PROJECT=""                         # --project for gcloud
 REGIONS="us-central1,us-east4,europe-west4"
-YAML_TEMPLATE="training/vertex_job_template.yaml"
+YAML_TEMPLATE="./vertex_job_template.yaml"
 
 IMAGE_URI=""                       # required (or set in your env)
 GPU_TYPE="NVIDIA_TESLA_A100"       # matches a2-highgpu-1g
