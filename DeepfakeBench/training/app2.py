@@ -33,6 +33,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEBUG_FRAME_DIR = "./debug_frames"
 
 
+# run video_preprocessor_get_dlib_predictors() to initialize the dlib predictor
+video_preprocessor._get_dlib_predictors()
+
+
 # ──────────────────────────────────────────
 # GCS Asset Downloading Utilities
 # ──────────────────────────────────────────
