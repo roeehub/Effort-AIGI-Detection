@@ -1,7 +1,7 @@
 import os
 import logging
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 import tempfile
 import shutil
 import time
@@ -10,12 +10,11 @@ import cv2  # noqa
 import numpy as np  # noqa
 import torch  # noqa
 import yaml  # noqa
-from fastapi import FastAPI, UploadFile, File, HTTPException, status, Request  # noqa
+from fastapi import FastAPI, UploadFile, File, HTTPException, status, Request, Query  # noqa
 from fastapi.responses import JSONResponse  # noqa
 from pydantic import BaseModel  # noqa
 from torch import nn  # noqa
 
-# --- New Imports ---
 import video_preprocessor
 from detectors import DETECTOR, EffortDetector  # noqa
 from google.cloud import storage  # noqa
@@ -130,7 +129,7 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
 # ──────────────────────────────────────────
 # FastAPI app
 # ──────────────────────────────────────────
-app = FastAPI(title="Effort-AIGI Detector API", version="0.3.0")
+app = FastAPI(title="Effort-AIGI Detector API", version="0.4.0")
 
 
 # --- API Models ---
@@ -150,21 +149,25 @@ class GCSVideoRequest(BaseModel):
 
 
 # ──────────────────────────────────────────
-# Startup: Load Model & Assert CUDA
+# Startup: Load Model(s) & Assert CUDA
 # ──────────────────────────────────────────
 @app.on_event("startup")
 def startup_event() -> None:
+    # 0) Initialize state
+    app.state.models = {}
+    app.state.loaded_weights_paths = {}
+
     # 1) CUDA Check
     if not torch.cuda.is_available():
         logger.error("CUDA is not available. This service requires a GPU.")
         raise RuntimeError("CUDA is required for this service")
     logger.info("CUDA is available. Using device: %s", device)
 
-    # 2) Define paths to configs and default weights
+    # 2) Define paths and check for required config files
     repo_base = Path(".")
     cfg_path = repo_base / "config/detector/effort.yaml"
     train_cfg_path = repo_base / "config/train_config.yaml"
-    weights_path = repo_base / "weights/effort_clip_L14_trainOn_FaceForensic.pth"
+    base_weights_path = repo_base / "weights/effort_clip_L14_trainOn_FaceForensic.pth"
 
     if not all([cfg_path.exists(), train_cfg_path.exists()]):
         raise RuntimeError("A required config file (effort.yaml or train_config.yaml) was not found.")
@@ -182,6 +185,7 @@ def startup_event() -> None:
 
     # 4) Handle custom checkpoint from environment variable
     custom_checkpoint_gcs_path = os.getenv("CHECKPOINT_GCS_PATH")
+    custom_weights_path = None
     if custom_checkpoint_gcs_path:
         logger.info("Custom checkpoint specified via environment variable.")
         if not custom_checkpoint_gcs_path.startswith("gs://"):
@@ -190,37 +194,69 @@ def startup_event() -> None:
         local_filename = Path(custom_checkpoint_gcs_path.split("gs://", 1)[1]).name
         custom_weights_dir = repo_base / "weights" / "custom"
         custom_weights_dir.mkdir(parents=True, exist_ok=True)
-        weights_path = custom_weights_dir / local_filename
+        custom_weights_path = custom_weights_dir / local_filename
 
-        logger.info(f"  GCS Path: {custom_checkpoint_gcs_path}")
-        logger.info(f"  Local Path: {weights_path}")
+        logger.info(f"  Custom GCS Path: {custom_checkpoint_gcs_path}")
+        logger.info(f"  Custom Local Path: {custom_weights_path}")
 
         config.setdefault('gcs_assets', {})['custom_checkpoint'] = {
             'gcs_path': custom_checkpoint_gcs_path,
-            'local_path': str(weights_path)
+            'local_path': str(custom_weights_path)
         }
-        logger.info("Overriding default weights with custom checkpoint.")
     else:
-        logger.info("Using default base checkpoint.")
+        logger.info("No custom checkpoint specified. Only the base model will be loaded.")
 
-    # 5) Download GCS Assets
+    # 5) Download all configured GCS Assets
     if not download_assets_from_gcs(config, logger):
-        raise RuntimeError("Failed to prepare model assets from GCS.")
+        raise RuntimeError("Failed to prepare one or more model assets from GCS.")
 
-    # 6) Final check and store loaded weights path for logging
-    if not Path(weights_path).exists():
-        raise RuntimeError(f"Model weights file does not exist after GCS download attempt: {weights_path}")
-    app.state.loaded_weights_path = str(weights_path)
-
-    # 7) Load Model
+    # 6) Load Base Model
+    logger.info("--- Loading Base Model ---")
+    if not base_weights_path.exists():
+        raise RuntimeError(f"Base model weights file not found: {base_weights_path}")
     try:
-        app.state.model = load_detector(config, str(weights_path))
-        logger.info(f"Detector model loaded successfully from: {app.state.loaded_weights_path}")
-    except Exception:
-        logger.exception("Failed to load detector model")
-        raise
+        app.state.models['base'] = load_detector(config, str(base_weights_path))
+        app.state.loaded_weights_paths['base'] = str(base_weights_path)
+        logger.info(f"✅ SUCCESS: Base detector model loaded from: {base_weights_path}")
+    except Exception as e:
+        logger.exception("Failed to load BASE detector model")
+        raise e
 
-    logger.info("Startup complete.")
+    # 7) Load Custom Model (if configured)
+    if custom_checkpoint_gcs_path and custom_weights_path:
+        logger.info("--- Loading Custom Model ---")
+        if not custom_weights_path.exists():
+            raise RuntimeError(
+                f"Custom model weights file does not exist after GCS download attempt: {custom_weights_path}")
+        try:
+            app.state.models['custom'] = load_detector(config, str(custom_weights_path))
+            app.state.loaded_weights_paths['custom'] = str(custom_weights_path)
+            logger.info(f"✅ SUCCESS: Custom detector model loaded from: {custom_weights_path}")
+        except Exception as e:
+            logger.exception("Failed to load CUSTOM detector model")
+            raise e
+
+    logger.info("Startup complete. Available models: %s", list(app.state.models.keys()))
+
+
+# --- Utility function to get model for endpoints ---
+def get_model_for_request(request: Request, model_type: str) -> nn.Module:
+    """Gets the requested model from app state and handles errors."""
+    if model_type not in ["base", "custom"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid 'model_type'. Choose 'base' or 'custom'."
+        )
+    if model_type == "custom" and "custom" not in request.app.state.models:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Custom model is not available. It must be configured via CHECKPOINT_GCS_PATH at startup."
+        )
+
+    model = request.app.state.models.get(model_type)
+    weights_path = request.app.state.loaded_weights_paths.get(model_type)
+    logger.info(f"Using '{model_type}' model for inference: {weights_path}")
+    return model
 
 
 # ──────────────────────────────────────────
@@ -238,13 +274,14 @@ def ping() -> dict:
 async def check_frame(
         request: Request,
         file: UploadFile = File(...),
+        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         debug: bool = False
 ) -> InferResponse:
     if file.content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only JPEG or PNG images are accepted")
 
     try:
-        logger.info(f"Using model for inference: {request.app.state.loaded_weights_path}")
+        model = get_model_for_request(request, model_type)
         raw = await file.read()
         img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         if img_bgr is None:
@@ -266,16 +303,14 @@ async def check_frame(
         image_tensor = transform(rgb_face).unsqueeze(0).to(device)
 
         with torch.inference_mode():
-            preds = request.app.state.model({'image': image_tensor}, inference=True)
+            preds = model({'image': image_tensor}, inference=True)
             prob = preds["prob"].squeeze().cpu().item()
             pred_label = "FAKE" if prob >= 0.5 else "REAL"
 
     except HTTPException:
-        # Re-raise the exception to let FastAPI handle it correctly.
         raise
     except Exception as e:
         logger.exception("Inference failed for frame.")
-        # Re-raise as a generic 500 error for unexpected failures.
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Model inference failed.") from e
 
     logger.info("Frame inference result: label=%s, fake_prob=%.4f", pred_label, prob)
@@ -286,6 +321,7 @@ async def check_frame(
 async def check_video(
         request: Request,
         file: UploadFile = File(...),
+        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         return_probs: bool = True,
         debug: bool = False
 ) -> VideoInferResponse:
@@ -295,7 +331,7 @@ async def check_video(
 
     tmp_dir = tempfile.mkdtemp(prefix="effort-aigi-")
     try:
-        logger.info(f"Using model for inference: {request.app.state.loaded_weights_path}")
+        model = get_model_for_request(request, model_type)
         tmp_path = Path(tmp_dir) / file.filename
         with tmp_path.open("wb") as fp:
             shutil.copyfileobj(file.file, fp)
@@ -306,18 +342,16 @@ async def check_video(
         )
 
         if video_tensor is None:
-            # Raise a 400 error with a clear, user-friendly message.
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Video could not be processed. This can happen if the video is too short or if a face cannot be consistently detected."
             )
 
         with torch.inference_mode():
-            preds = request.app.state.model({'image': video_tensor.to(device)}, inference=True)
+            preds = model({'image': video_tensor.to(device)}, inference=True)
             frame_probs = preds["prob"].cpu().numpy().tolist()
 
     except HTTPException:
-        # Re-raise the exception to let FastAPI handle it correctly.
         raise
     except Exception as e:
         logger.exception("Video processing or inference failed.")
@@ -342,13 +376,13 @@ async def check_video(
 async def check_video_from_gcp(
         request_body: GCSVideoRequest,
         request: Request,
+        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         return_probs: bool = True,
         debug: bool = False
 ) -> VideoInferResponse:
     gcs_full_path = request_body.gcs_path
     logger.info(f"Received request to process video from GCS: {gcs_full_path}")
 
-    # Parse bucket and blob name from path like "bucket-name/path/to/video.mp4"
     try:
         bucket_name, blob_name = gcs_full_path.split('/', 1)
     except ValueError:
@@ -357,12 +391,11 @@ async def check_video_from_gcp(
 
     tmp_dir = tempfile.mkdtemp(prefix="effort-aigi-gcs-")
     try:
-        logger.info(f"Using model for inference: {request.app.state.loaded_weights_path}")
+        model = get_model_for_request(request, model_type)
         storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
 
-        # Define local path and download
         local_filename = Path(blob_name).name
         tmp_path = Path(tmp_dir) / local_filename
 
@@ -370,25 +403,22 @@ async def check_video_from_gcp(
         blob.download_to_filename(tmp_path)
         logger.info("Download complete.")
 
-        # Process the downloaded video
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
             str(tmp_path), debug_save_path=debug_path
         )
 
         if video_tensor is None:
-            # Raise a 400 error with a clear, user-friendly message.
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Video could not be processed. This can happen if the video is too short or if a face cannot be consistently detected."
             )
 
         with torch.inference_mode():
-            preds = request.app.state.model({'image': video_tensor.to(device)}, inference=True)
+            preds = model({'image': video_tensor.to(device)}, inference=True)
             frame_probs = preds["prob"].cpu().numpy().tolist()
 
     except HTTPException:
-        # Re-raise to let FastAPI handle it.
         raise
     except exceptions.NotFound:
         logger.error(f"GCS object not found: gs://{gcs_full_path}")
