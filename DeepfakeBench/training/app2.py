@@ -161,16 +161,16 @@ def startup_event() -> None:
         raise RuntimeError("CUDA is required for this service")
     logger.info("CUDA is available. Using device: %s", device)
 
-    # 2) Define paths to model and config files
+    # 2) Define paths to configs and default weights
     repo_base = Path("/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training")
     cfg_path = repo_base / "config/detector/effort.yaml"
-    # --- MODIFICATION: Add path to the config with GCS asset info ---
     train_cfg_path = repo_base / "config/train_config.yaml"
-    weights_path = repo_base / "weights/effort_clip_L14_trainOn_FaceForensic.pth"
+    weights_path = repo_base / "weights/effort_clip_L14_trainOn_FaceForensic.pth"  # Default
 
-    if not all([cfg_path.exists(), train_cfg_path.exists(), weights_path.exists()]):
-        logger.error("Missing one or more required files: effort.yaml, train_config.yaml, or model weights.")
-        raise RuntimeError("A required model or configuration file was not found.")
+    # Check for required config files
+    if not all([cfg_path.exists(), train_cfg_path.exists()]):
+        logger.error("Missing one or more required config files: effort.yaml or train_config.yaml.")
+        raise RuntimeError("A required configuration file was not found.")
 
     # 3) Load and merge configurations
     try:
@@ -184,17 +184,52 @@ def startup_event() -> None:
         logger.exception("Failed to load or merge YAML configuration files.")
         raise
 
-    # 4) --- NEW: Download GCS Assets ---
-    # This ensures the CLIP backbone model is available locally before the detector is initialized.
+    # 4) --- NEW: Handle custom checkpoint from environment variables ---
+    custom_gcs_bucket = os.getenv("GCS_BUCKET")
+    custom_checkpoint_path = os.getenv("CHECKPOINT_PATH")
+
+    if custom_gcs_bucket and custom_checkpoint_path:
+        logger.info("Custom checkpoint specified via environment variables.")
+        full_gcs_path = f"gs://{custom_gcs_bucket}/{custom_checkpoint_path}"
+
+        # Define a local path for the custom checkpoint to be saved to
+        local_filename = Path(custom_checkpoint_path).name
+        custom_weights_dir = repo_base / "weights" / "custom"
+        custom_weights_dir.mkdir(parents=True, exist_ok=True)
+        new_weights_path = custom_weights_dir / local_filename
+
+        logger.info(f"  GCS Path: {full_gcs_path}")
+        logger.info(f"  Local Path: {new_weights_path}")
+
+        # Add this custom checkpoint to the asset download list
+        config.setdefault('gcs_assets', {})['custom_checkpoint'] = {
+            'gcs_path': full_gcs_path,
+            'local_path': str(new_weights_path)
+        }
+
+        # Update the main weights_path variable to use the custom one
+        weights_path = new_weights_path
+        logger.info("Overriding default weights with custom checkpoint.")
+    else:
+        logger.info("Using default base checkpoint.")
+        if not weights_path.exists():
+            logger.warning(
+                f"Default weight file not found at {weights_path}. The API will fail if it's not defined as a GCS asset in the config.")
+
+    # 5) Download all required GCS Assets
     if not download_assets_from_gcs(config, logger):
         logger.error("Could not download required GCS assets. See logs for details.")
         raise RuntimeError("Failed to prepare model assets from GCS.")
 
-    # 5) Load PyTorch model
+    # 6) Final check that the target weights file exists before loading
+    if not Path(weights_path).exists():
+        logger.error(f"Target weights file does not exist after GCS download attempt: {weights_path}")
+        raise RuntimeError("Model weights file is missing.")
+
+    # 7) Load the PyTorch model
     try:
-        # Pass the merged 'config' dictionary to the loader
         app.state.model = load_detector(config, str(weights_path))
-        logger.info("Detector model loaded successfully.")
+        logger.info(f"Detector model loaded successfully from: {weights_path}")
     except Exception:
         logger.exception("Failed to load detector model")
         raise
