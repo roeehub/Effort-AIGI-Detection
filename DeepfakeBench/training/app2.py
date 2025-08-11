@@ -21,6 +21,11 @@ import video_preprocessor
 # Assuming detectors.py contains the model class and DETECTOR registry.
 from detectors import DETECTOR, EffortDetector  # noqa
 
+# --- ADDED IMPORTS for GCS Asset Handling ---
+from google.cloud import storage  # noqa
+from google.api_core import exceptions  # noqa
+from google.cloud.storage import Bucket  # noqa
+
 # ──────────────────────────────────────────
 # Logging
 # ──────────────────────────────────────────
@@ -34,13 +39,90 @@ DEBUG_FRAME_DIR = "./debug_frames"
 
 
 # ──────────────────────────────────────────
-# Model Loading (Moved from infer.py for self-containment)
+# GCS Asset Downloading Utilities (Copied from train_sweep.py)
 # ──────────────────────────────────────────
-def load_detector(detector_cfg: str, weights: str) -> nn.Module:
+def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -> bool:
+    """Downloads a single blob or a directory of blobs from GCS."""
+    if gcs_path.endswith('/'):  # It's a directory
+        prefix = gcs_path.split(bucket.name + '/', 1)[1]
+        blobs = bucket.list_blobs(prefix=prefix)
+        downloaded = False
+        for blob in blobs:
+            if blob.name.endswith('/'): continue
+            destination_file_name = os.path.join(local_path, os.path.relpath(blob.name, prefix))
+            os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
+            try:
+                blob.download_to_filename(destination_file_name)
+                downloaded = True
+            except Exception as e:
+                logger.error(f"Failed to download {blob.name}: {e}")
+                return False
+        if not downloaded:
+            logger.error(f"Directory {gcs_path} is empty or does not exist.")
+            return False
+        return True
+    else:  # It's a single file
+        blob_name = gcs_path.split(bucket.name + '/', 1)[1]
+        blob = bucket.blob(blob_name)
+        if not blob.exists():
+            logger.error(f"File not found at {gcs_path}")
+            return False
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        blob.download_to_filename(local_path)
+        return True
+
+
+def download_assets_from_gcs(config, logger):
+    """Downloads specified assets (checkpoints, models) from a GCS bucket."""
+    assets_to_download = config.get('gcs_assets')
+    if not assets_to_download:
+        logger.info("No GCS assets configured for download. Skipping.")
+        return None
+    local_paths = {}
+    all_exist = all(os.path.exists(asset.get('local_path', '')) for asset in assets_to_download.values())
+    if all_exist:
+        logger.info("All GCS assets already exist locally. Skipping downloads.")
+        return {key: asset['local_path'] for key, asset in assets_to_download.items()}
+    logger.info("--- GCS Asset Download ---")
+    try:
+        storage_client = storage.Client()
+        start_time = time.time()
+        for key, asset_info in assets_to_download.items():
+            gcs_path, local_path = asset_info.get('gcs_path'), asset_info.get('local_path')
+            if not gcs_path or not local_path:
+                logger.error(f"Asset '{key}' is missing 'gcs_path' or 'local_path'.")
+                return None
+            if not gcs_path.startswith('gs://'):
+                logger.error(f"Invalid GCS path for asset '{key}': '{gcs_path}'.")
+                return None
+            if os.path.exists(local_path):
+                logger.info(f"Asset '{key}' already exists at {local_path}. Skipping.")
+                local_paths[key] = local_path
+                continue
+            logger.info(f"Downloading asset '{key}': {gcs_path} -> {local_path}")
+            bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
+            bucket = storage_client.bucket(bucket_name)
+            if not download_gcs_asset(bucket, gcs_path, local_path, logger):
+                raise RuntimeError(f"Failed to download asset '{key}'.")
+            local_paths[key] = local_path
+            logger.info(f"✅ SUCCESS: Downloaded '{key}'.")
+        logger.info(f"✅ SUCCESS: All GCS assets downloaded in {time.time() - start_time:.2f}s.")
+        return local_paths
+    except (exceptions.Forbidden, exceptions.NotFound) as e:
+        logger.error(f"FAILED: GCP access error for assets. Ensure permissions/paths are correct. Details: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"FAILED: An unexpected error occurred during GCS download: {e}")
+        return None
+
+
+# ──────────────────────────────────────────
+# Model Loading (Now uses a merged config)
+# ──────────────────────────────────────────
+def load_detector(cfg: dict, weights: str) -> nn.Module:
     """Loads the EffortDetector model from config and weights."""
-    with open(detector_cfg, "r") as f:
-        cfg = yaml.safe_load(f)
     model_cls = DETECTOR[cfg["model_name"]]
+    # The config 'cfg' now contains the 'gcs_assets' key required by the model
     model = model_cls(cfg).to(device)
     ckpt = torch.load(weights, map_location=device)
     state = ckpt.get("state_dict", ckpt)
@@ -53,7 +135,7 @@ def load_detector(detector_cfg: str, weights: str) -> nn.Module:
 # ──────────────────────────────────────────
 # FastAPI app
 # ──────────────────────────────────────────
-app = FastAPI(title="Effort-AIGI Detector API", version="0.2.0")
+app = FastAPI(title="Effort-AIGI Detector API", version="0.2.1")  # Version bump
 
 
 # --- API Response Models ---
@@ -79,30 +161,44 @@ def startup_event() -> None:
         raise RuntimeError("CUDA is required for this service")
     logger.info("CUDA is available. Using device: %s", device)
 
-    # 2) Define paths to model files
-    # These paths should be configured via environment variables or a config file in a real app
-    cfg_path = Path("/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/config/detector/effort.yaml")
-    weights_path = Path(
-        "/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/weights/effort_clip_L14_trainOn_FaceForensic.pth")
+    # 2) Define paths to model and config files
+    repo_base = Path("/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training")
+    cfg_path = repo_base / "config/detector/effort.yaml"
+    # --- MODIFICATION: Add path to the config with GCS asset info ---
+    train_cfg_path = repo_base / "config/train_config.yaml"
+    weights_path = repo_base / "weights/effort_clip_L14_trainOn_FaceForensic.pth"
 
-    # The dlib landmark model path is now configured inside video_preprocessor.py
-    # We no longer need to load it here.
+    if not all([cfg_path.exists(), train_cfg_path.exists(), weights_path.exists()]):
+        logger.error("Missing one or more required files: effort.yaml, train_config.yaml, or model weights.")
+        raise RuntimeError("A required model or configuration file was not found.")
 
-    if not cfg_path.exists() or not weights_path.exists():
-        logger.error("Missing model config or weights file(s).")
-        raise RuntimeError("One or more model files not found")
-
-    # 3) Load PyTorch model
+    # 3) Load and merge configurations
     try:
-        # The 'load_detector' function is now part of this file.
-        app.state.model = load_detector(str(cfg_path), str(weights_path))
+        with open(cfg_path, "r") as f:
+            config = yaml.safe_load(f)
+        with open(train_cfg_path, "r") as f:
+            train_config = yaml.safe_load(f)
+        config.update(train_config)
+        logger.info("Successfully loaded and merged configuration files.")
+    except Exception:
+        logger.exception("Failed to load or merge YAML configuration files.")
+        raise
+
+    # 4) --- NEW: Download GCS Assets ---
+    # This ensures the CLIP backbone model is available locally before the detector is initialized.
+    if not download_assets_from_gcs(config, logger):
+        logger.error("Could not download required GCS assets. See logs for details.")
+        raise RuntimeError("Failed to prepare model assets from GCS.")
+
+    # 5) Load PyTorch model
+    try:
+        # Pass the merged 'config' dictionary to the loader
+        app.state.model = load_detector(config, str(weights_path))
         logger.info("Detector model loaded successfully.")
     except Exception:
         logger.exception("Failed to load detector model")
         raise
 
-    # 4) Dlib loading is now handled by the video_preprocessor module on-demand.
-    #    This keeps the app's startup clean and centralizes preprocessing logic.
     logger.info("Startup complete. Dlib models will be loaded by the preprocessor on first use.")
 
 
@@ -149,14 +245,13 @@ async def check_frame(
 
     try:
         with torch.inference_mode():
-            # ... (inference logic is the same) ...
             preds = app.state.model({'image': image_tensor}, inference=True)
             prob = preds["prob"].squeeze().cpu().item()
             pred_label = "FAKE" if prob >= 0.5 else "REAL"
 
-    except Exception:
-        # ... (error handling is the same) ...
-        raise
+    except Exception as e:
+        logger.exception("Inference failed for frame.")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Model inference failed.") from e
 
     logger.info("Frame inference result: label=%s, fake_prob=%.4f", pred_label, prob)
     return InferResponse(pred_label=pred_label, fake_prob=prob)
@@ -192,13 +287,13 @@ async def check_video(
                                 "Video could not be processed. It may not contain enough frames with detectable faces.")
 
         with torch.inference_mode():
-            # ... (inference logic is the same) ...
             preds = app.state.model({'image': video_tensor.to(device)}, inference=True)
             frame_probs = preds["prob"].cpu().numpy().tolist()
 
     except Exception as e:
-        # ... (error handling is the same) ...
-        raise
+        logger.exception("Video processing or inference failed.")
+        # Re-raise as HTTPException to be caught by FastAPI's error handling
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Video processing or inference failed.") from e
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
