@@ -4,6 +4,14 @@ dataset_root_rgb: './datasets'
 lmdb_dir:  'I:\transform_2_lmdb'
 dataset_json_folder: '/Youtu_Pangu_Security_Public/youtu-pangu-public/zhiyuanyan/DeepfakeBenchv2/preprocessing/dataset_json'
 
+gcs_assets: 
+  base_checkpoint:
+    gcs_path: "gs://base-checkpoints/effort-aigi/effort_clip_L14_trainOn_FaceForensic.pth"
+    local_path: "./weights/effort_clip_L14_trainOn_FaceForensic.pth"
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
+    local_path: "./weights/models--openai--clip-vit-large-patch14/"
+
 # label settings
 label_dict:
   # DFD
