@@ -32,11 +32,6 @@ logger = logging.getLogger("effort-aigi-api")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEBUG_FRAME_DIR = "./debug_frames"
 
-
-# run video_preprocessor_get_dlib_predictors() to initialize the dlib predictor
-video_preprocessor._get_dlib_predictors()
-
-
 # ──────────────────────────────────────────
 # GCS Asset Downloading Utilities
 # ──────────────────────────────────────────
@@ -239,6 +234,14 @@ def startup_event() -> None:
         except Exception as e:
             logger.exception("Failed to load CUSTOM detector model")
             raise e
+
+    # 8) load dlib predictors
+    try:
+        video_preprocessor._get_dlib_predictors()
+        logger.info("✅ SUCCESS: Dlib predictors loaded successfully.")
+    except Exception as e:
+        logger.exception("Failed to load Dlib predictors")
+        raise RuntimeError("Failed to load Dlib predictors") from e
 
     logger.info("Startup complete. Available models: %s", list(app.state.models.keys()))
 
