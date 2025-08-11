@@ -48,7 +48,7 @@ ALIGN_SCALE = 1.3  # Scale factor for the face crop, as used in the original dem
 MODEL_IMG_SIZE = 224  # The input image size for the model (CLIP is 224x224)
 
 # --- Frame Sampling Settings for Video ---
-NUM_SAMPLES = 8  # Number of frames to sample from the video (T in model input)
+NUM_SAMPLES = 32  # Number of frames to sample from the video (T in model input)
 
 # --- Model Input Settings (for CLIP-based EffortDetector) ---
 MODEL_NORM_MEAN = [0.48145466, 0.4578275, 0.40821073]
