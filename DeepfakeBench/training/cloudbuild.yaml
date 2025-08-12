@@ -1,30 +1,43 @@
 steps:
-# 1. Pull the latest image to be used as a cache source
+# Step 1: Read the version number from the VERSION file into a temporary file called 'version_tag'.
+# This makes the version number accessible to all subsequent steps in the build workspace.
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+#  args: ['-c', 'cat VERSION > /workspace/version_tag']
+
+# Step 2: Pull the latest image to be used as a cache source.
+# This helps speed up the build process.
 - name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
   args:
   - '-c'
   - 'docker pull us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest || exit 0'
 
-# 2. Build the new image, using the pulled image as a cache and tagging it TWICE
+# Step 3: Build the new Docker image.
+# It tags the image twice: once with the unique version from the VERSION file,
+# and once with ':latest' to be used as a cache for the *next* build.
 - name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
   timeout: 1800s
   args:
-  - 'build'
-  - '--cache-from'
-  - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
-  # Tag with the unique commit hash
-  - '--tag'
-  - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:${SHORT_SHA}'
-  # Also tag with :latest so the cache works for the *next* build
-  - '--tag'
-  - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
-  - '.'
+    - '-c'
+    - |
+      docker build \
+        --cache-from us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest \
+        -t us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.0.0 \
+        -t us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest \
+        .
 
-# 3. Push BOTH newly built tags to the registry
+# Step 4: Define which images to push to the Artifact Registry.
+# We push both the uniquely tagged image and the :latest tag.
 images:
-- 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:${SHORT_SHA}'
 - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
+- 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:$${_VERSION_TAG}'
+  # Note: The _VERSION_TAG will be substituted from the workspace file.
+  # This substitution requires us to add it to the 'substitutions' section below.
+#
+#substitutions:
+#  _VERSION_TAG: 'default-tag' # A default value is required.
 
 options:
   machineType: 'E2_HIGHCPU_8'
