@@ -6,19 +6,24 @@ steps:
   - '-c'
   - 'docker pull us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest || exit 0'
 
-# 2. Build the new image, using the pulled image as a cache
+# 2. Build the new image, using the pulled image as a cache and tagging it TWICE
 - name: 'gcr.io/cloud-builders/docker'
-  timeout: 1800s # 30 minutes for this step alone
+  timeout: 1800s
   args:
   - 'build'
   - '--cache-from'
   - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
+  # Tag with the unique commit hash
+  - '--tag'
+  - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:${SHORT_SHA}'
+  # Also tag with :latest so the cache works for the *next* build
   - '--tag'
   - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
   - '.'
 
-# 3. Push the newly built image to the registry
+# 3. Push BOTH newly built tags to the registry
 images:
+- 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:${SHORT_SHA}'
 - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
 
 options:
