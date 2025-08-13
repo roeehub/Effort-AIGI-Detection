@@ -32,6 +32,7 @@ logger = logging.getLogger("effort-aigi-api")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEBUG_FRAME_DIR = "./debug_frames"
 
+
 # ──────────────────────────────────────────
 # GCS Asset Downloading Utilities
 # ──────────────────────────────────────────
@@ -128,7 +129,7 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
 # ──────────────────────────────────────────
 # FastAPI app
 # ──────────────────────────────────────────
-app = FastAPI(title="Effort-AIGI Detector API", version="0.4.0")
+app = FastAPI(title="Effort-AIGI Detector API", version="0.6.0")
 
 
 # --- API Models ---
@@ -235,13 +236,27 @@ def startup_event() -> None:
             logger.exception("Failed to load CUSTOM detector model")
             raise e
 
-    # 8) load dlib predictors
+    # 8) Load Face Preprocessor Models
     try:
-        video_preprocessor._get_dlib_predictors()
+        video_preprocessor.initialize_dlib_predictors()
         logger.info("✅ SUCCESS: Dlib predictors loaded successfully.")
     except Exception as e:
         logger.exception("Failed to load Dlib predictors")
         raise RuntimeError("Failed to load Dlib predictors") from e
+
+    try:
+        video_preprocessor.initialize_yolo_model()
+        logger.info("✅ SUCCESS: YOLO face detector loaded successfully.")
+    except Exception as e:
+        logger.exception("Failed to load YOLO model")
+        raise RuntimeError("Failed to load YOLO model") from e
+
+    try:
+        video_preprocessor.initialize_haar_cascades()
+        logger.info("✅ SUCCESS: OpenCV Haar Cascade for eyes loaded successfully.")
+    except Exception as e:
+        logger.exception("Failed to load Haar Cascades")
+        raise RuntimeError("Failed to load Haar Cascades") from e
 
     logger.info("Startup complete. Available models: %s", list(app.state.models.keys()))
 
@@ -282,10 +297,13 @@ async def check_frame(
         request: Request,
         file: UploadFile = File(...),
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        pre_method: str = Query("dlib", description="Face detection method: 'dlib', 'yolo', or 'yolo_haar'"),
         debug: bool = False
 ) -> InferResponse:
     if file.content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only JPEG or PNG images are accepted")
+    if pre_method not in {"dlib", "yolo", "yolo_haar"}:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid 'pre_method'. Choose 'dlib', 'yolo', or 'yolo_haar'.")
 
     try:
         model = get_model_for_request(request, model_type)
@@ -294,19 +312,26 @@ async def check_frame(
         if img_bgr is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot decode image")
 
-        aligned_face_bgr = video_preprocessor.extract_aligned_face(img_bgr)
-        if aligned_face_bgr is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Could not find a face in the image")
+        if pre_method == "dlib":
+            processed_face_bgr = video_preprocessor.extract_aligned_face(img_bgr)
+        elif pre_method == "yolo":
+            processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr)
+        else:  # yolo_haar
+            processed_face_bgr = video_preprocessor.extract_yolo_haar_face(img_bgr)
+
+        if processed_face_bgr is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                f"Could not find a face in the image using the '{pre_method}' method")
 
         if debug:
             os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
             timestamp = int(time.time() * 1000)
             save_path = os.path.join(DEBUG_FRAME_DIR, f"frame_{timestamp}.jpg")
-            cv2.imwrite(save_path, aligned_face_bgr)
+            cv2.imwrite(save_path, processed_face_bgr)
             logger.info(f"Debug frame saved to: {save_path}")
 
         transform = video_preprocessor._get_transform()
-        rgb_face = cv2.cvtColor(aligned_face_bgr, cv2.COLOR_BGR2RGB)
+        rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
         image_tensor = transform(rgb_face).unsqueeze(0).to(device)
 
         with torch.inference_mode():
@@ -329,12 +354,15 @@ async def check_video(
         request: Request,
         file: UploadFile = File(...),
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        pre_method: str = Query("yolo", description="Face detection method: 'dlib', 'yolo', or 'yolo_haar'"),
         return_probs: bool = True,
         debug: bool = False
 ) -> VideoInferResponse:
     ext = Path(file.filename).suffix.lower()
     if ext not in {".mp4", ".mov", ".mkv", ".avi", ".webm"}:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, f"Unsupported video format {ext!r}")
+    if pre_method not in {"dlib", "yolo", "yolo_haar"}:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid 'pre_method'. Choose 'dlib', 'yolo', or 'yolo_haar'.")
 
     tmp_dir = tempfile.mkdtemp(prefix="effort-aigi-")
     try:
@@ -345,7 +373,7 @@ async def check_video(
 
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
-            str(tmp_path), debug_save_path=debug_path
+            str(tmp_path), pre_method=pre_method, debug_save_path=debug_path
         )
 
         if video_tensor is None:
@@ -384,11 +412,14 @@ async def check_video_from_gcp(
         request_body: GCSVideoRequest,
         request: Request,
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        pre_method: str = Query("dlib", description="Face detection method: 'dlib', 'yolo', or 'yolo_haar'"),
         return_probs: bool = True,
         debug: bool = False
 ) -> VideoInferResponse:
     gcs_full_path = request_body.gcs_path
     logger.info(f"Received request to process video from GCS: {gcs_full_path}")
+    if pre_method not in {"dlib", "yolo", "yolo_haar"}:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid 'pre_method'. Choose 'dlib', 'yolo', or 'yolo_haar'.")
 
     try:
         bucket_name, blob_name = gcs_full_path.split('/', 1)
@@ -412,7 +443,7 @@ async def check_video_from_gcp(
 
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
-            str(tmp_path), debug_save_path=debug_path
+            str(tmp_path), pre_method=pre_method, debug_save_path=debug_path
         )
 
         if video_tensor is None:
