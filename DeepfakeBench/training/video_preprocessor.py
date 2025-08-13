@@ -3,33 +3,19 @@ video_preprocessor.py
 ================================================
 A modular library to preprocess images and videos for the EffortDetector model.
 
-This module implements the "Path A" strategy: prioritizing accuracy by using
-the same dlib-based face alignment and cropping logic as the original model's
-training and demonstration code.
-
-It exposes two main functions for use in an application:
-1. `extract_aligned_face(frame_bgr)`:
-   - Processes a single image frame (NumPy array).
-   - Detects the largest face, aligns it using 81 facial landmarks, and
-     crops it to the model's required 224x224 size.
-   - Returns a cropped face image (NumPy array) or None.
-
-2. `preprocess_video_for_effort_model(video_path)`:
-   - Processes a full video file.
-   - Samples frames from the video, finds an aligned face in each one,
-     and stacks them into a single 5D tensor ([1, T, C, H, W]).
-   - This tensor is ready for a single, efficient forward pass in the model.
-   - Returns the tensor or None if the video is invalid.
-
-To run this script, you will need:
-- The dlib landmark model: `shape_predictor_81_face_landmarks.dat`
-- pip install opencv-python dlib scikit-image numpy torch torchvision
+This module implements three face detection/cropping strategies:
+- 'dlib': Dlib-based landmark alignment. Highest accuracy, heaviest dependency.
+- 'yolo': YOLOv8-based simple square crop. Robust and fast detection.
+- 'yolo_haar': A hybrid method using YOLO for face detection and a lightweight
+  OpenCV Haar Cascade for eye-based alignment. Good balance of speed and
+  accuracy.
 """
 from __future__ import annotations
 import sys
 import os
 from typing import List, Optional, Tuple
 from pathlib import Path
+from urllib.request import urlretrieve
 
 import cv2  # noqa
 import numpy as np  # noqa
@@ -37,113 +23,194 @@ import torch  # noqa
 import torchvision.transforms as T  # noqa
 import dlib  # noqa
 from skimage import transform as trans  # noqa
+from ultralytics import YOLO  # noqa
 
 # ──────────────────────────
 # 📍 Global Configuration
 # ──────────────────────────
-# --- Dlib Face Alignment Settings (from original `infer.py`) ---
-# ⚠️ IMPORTANT: You must download this file and provide the correct path.
+MODEL_IMG_SIZE = 224
+
+# --- Dlib Settings ---
 DLIB_LANDMARK_MODEL_PATH = "shape_predictor_81_face_landmarks.dat"
-ALIGN_SCALE = 1.3  # Scale factor for the face crop, as used in the original demo
-MODEL_IMG_SIZE = 224  # The input image size for the model (CLIP is 224x224)
+
+# --- YOLO Settings ---
+YOLO_MODEL_PATH = "yolov8s-face.pt"
+YOLO_BBOX_MARGIN = 20
+YOLO_CONF_THRESHOLD = 0.20
+
+# --- Haar Cascade Settings ---
+# Path is resolved automatically from cv2 library
 
 # --- Frame Sampling Settings for Video ---
-NUM_SAMPLES = 32  # Number of frames to sample from the video (T in model input)
+NUM_SAMPLES = 32
 
-# --- Model Input Settings (for CLIP-based EffortDetector) ---
+# --- Model Input Settings ---
 MODEL_NORM_MEAN = [0.48145466, 0.4578275, 0.40821073]
 MODEL_NORM_STD = [0.26862954, 0.26130258, 0.27577711]
 
 # --- Global Caches ---
 _dlib_cache = {}
+_yolo_cache = {}
+_haar_cache = {}
 _transform_cache = {}
 
 
 # ──────────────────────────
-# 🖼️ Core Face Detection & Alignment Logic (Ported from `infer.py`)
+# 🚀 Model Initializers (called once at startup)
 # ──────────────────────────
 
-def _get_dlib_predictors():
-    """Initializes and caches dlib models to avoid reloading."""
+def initialize_dlib_predictors():
+    """Initializes and caches dlib models."""
     global _dlib_cache
     if "face_detector" not in _dlib_cache:
         if not os.path.exists(DLIB_LANDMARK_MODEL_PATH):
-            raise FileNotFoundError(
-                f"Dlib landmark model not found at: {DLIB_LANDMARK_MODEL_PATH}\n"
-                "Please download 'shape_predictor_81_face_landmarks.dat' and place it "
-                "in the correct directory or update the path in video_preprocessor.py."
-            )
-        print("[*] Initializing Dlib models (this happens only once)...")
+            raise FileNotFoundError(f"Dlib landmark model not found: {DLIB_LANDMARK_MODEL_PATH}")
+        print("[*] Initializing Dlib models...")
         _dlib_cache["face_detector"] = dlib.get_frontal_face_detector()
         _dlib_cache["landmark_predictor"] = dlib.shape_predictor(DLIB_LANDMARK_MODEL_PATH)
     return _dlib_cache["face_detector"], _dlib_cache["landmark_predictor"]
 
 
-def _get_keypts(image_rgb: np.ndarray, face: dlib.rectangle, predictor: dlib.shape_predictor) -> np.ndarray:
-    """Gets the 5 key landmarks (eyes, nose, mouth) for alignment."""
-    shape = predictor(image_rgb, face)
-    # Original indices from `infer.py`: left eye, right eye, nose, left mouth, right mouth
-    lmk_idxs = [37, 44, 30, 49, 55]
-    return np.array([[shape.part(i).x, shape.part(i).y] for i in lmk_idxs], dtype=np.float32)
+def initialize_yolo_model():
+    """Initializes and caches the YOLO model, downloading weights if needed."""
+    global _yolo_cache
+    if "model" not in _yolo_cache:
+        model_path = Path(YOLO_MODEL_PATH)
+        if not model_path.exists():
+            print(f"[*] YOLO model not found at '{model_path}'. Downloading...")
+            try:
+                url = "https://github.com/akanametov/yolo-face/releases/download/v8.0/yolov8s-face.pt"
+                urlretrieve(url, model_path)
+            except Exception as e:
+                raise IOError(f"Failed to download YOLO model. Details: {e}")
+        print("[*] Initializing YOLO model...")
+        _yolo_cache["model"] = YOLO(str(model_path))
+    return _yolo_cache["model"]
 
 
-def _align_and_crop_face_from_landmarks(
-        img_rgb: np.ndarray,
-        landmark: np.ndarray,
-        outsize: Tuple[int, int] = (MODEL_IMG_SIZE, MODEL_IMG_SIZE),
-        scale: float = ALIGN_SCALE
-) -> np.ndarray:
-    """
-    Performs similarity transform to align and crop the face.
-    This is a direct port of `img_align_crop` from the original `infer.py`.
-    """
-    # Reference landmarks for a 112x112 image, which are then scaled
-    dst = np.array([
-        [30.2946, 51.6963], [65.5318, 51.5014], [48.0252, 71.7366],
-        [33.5493, 92.3655], [62.7299, 92.2041],
-    ], dtype=np.float32)
-    dst[:, 0] += 8.0
-
-    dst = (dst * outsize[0] / 112.0)
-
-    # Estimate the transformation matrix and warp the image
-    tform = trans.SimilarityTransform()
-    tform.estimate(landmark, dst)
-    M = tform.params[0:2, :]
-    warped = cv2.warpAffine(img_rgb, M, (outsize[1], outsize[0]), borderValue=0.0)
-    return warped
+def initialize_haar_cascades():
+    """Initializes and caches the OpenCV Haar Cascade for eye detection."""
+    global _haar_cache
+    if "eye_cascade" not in _haar_cache:
+        haar_xml_path = os.path.join(cv2.data.haarcascades, 'haarcascade_eye.xml')
+        if not os.path.exists(haar_xml_path):
+            raise FileNotFoundError(f"Could not find Haar Cascade file: {haar_xml_path}")
+        print("[*] Initializing OpenCV Haar Cascade for eyes...")
+        _haar_cache["eye_cascade"] = cv2.CascadeClassifier(haar_xml_path)
+    return _haar_cache["eye_cascade"]
 
 
+# ──────────────────────────
+# 🖼️ Core Face Detection & Cropping Logic
+# ──────────────────────────
+
+# --- Method 1: Dlib ---
 def extract_aligned_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
-    """
-    Detects, aligns, and crops one face from a BGR frame.
-
-    This is the primary function for processing a single image.
-
-    Args:
-        frame_bgr: An image frame in BGR format (from cv2.imread or cv2.VideoCapture).
-
-    Returns:
-        A 224x224 cropped & aligned face image in BGR format, or None if no face is found.
-    """
-    face_detector, landmark_predictor = _get_dlib_predictors()
+    """Detects, aligns, and crops one face from a BGR frame using dlib."""
+    face_detector, landmark_predictor = initialize_dlib_predictors()
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     faces = face_detector(frame_rgb, 1)
+    if not faces: return None
 
-    if not faces:
-        return None
-
-    # Take the largest face, same as the original logic
     face = max(faces, key=lambda r: r.width() * r.height())
-    keypoints = _get_keypts(frame_rgb, face, landmark_predictor)
+    shape = landmark_predictor(frame_rgb, face)
+    lmk_idxs = [37, 44, 30, 49, 55]
+    keypoints = np.array([[shape.part(i).x, shape.part(i).y] for i in lmk_idxs], dtype=np.float32)
 
-    # The original demo uses a scale of 1.3, but the alignment function itself
-    # doesn't use it directly, it's baked into the `img_align_crop` logic.
-    # The `extract_aligned_face_dlib` in infer.py uses a different alignment method.
-    # Let's use the most faithful one from `img_align_crop`.
-    aligned_face_rgb = _align_and_crop_face_from_landmarks(frame_rgb, keypoints, scale=ALIGN_SCALE)
+    dst = np.array([[30.2946, 51.6963], [65.5318, 51.5014], [48.0252, 71.7366],
+                    [33.5493, 92.3655], [62.7299, 92.2041]], dtype=np.float32)
+    dst[:, 0] += 8.0
+    dst = (dst * MODEL_IMG_SIZE / 112.0)
+    tform = trans.SimilarityTransform()
+    tform.estimate(keypoints, dst)
+    M = tform.params[0:2, :]
+    warped_rgb = cv2.warpAffine(frame_rgb, M, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), borderValue=0.0)
+    return cv2.cvtColor(warped_rgb, cv2.COLOR_RGB2BGR)
 
-    return cv2.cvtColor(aligned_face_rgb, cv2.COLOR_RGB2BGR)
+
+def _get_yolo_face_box(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+    """Internal helper to get the largest face box from YOLO."""
+    model = initialize_yolo_model()
+    h, w = frame_bgr.shape[:2]
+    results = model.predict(frame_bgr, conf=YOLO_CONF_THRESHOLD, iou=0.4, verbose=False)
+    if not results or results[0].boxes.shape[0] == 0: return None
+
+    boxes = results[0].boxes.xyxy.cpu().numpy()
+    areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    x0, y0, x1, y1 = boxes[np.argmax(areas)]
+
+    x0 = max(0, x0 - YOLO_BBOX_MARGIN)
+    y0 = max(0, y0 - YOLO_BBOX_MARGIN)
+    x1 = min(w, x1 + YOLO_BBOX_MARGIN)
+    y1 = min(h, y1 + YOLO_BBOX_MARGIN)
+    return np.array([x0, y0, x1, y1])
+
+
+# --- Method 2: YOLO (Simple Crop) ---
+def extract_yolo_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+    """Detects and crops one face using YOLOv8 with a simple square crop."""
+    box = _get_yolo_face_box(frame_bgr)
+    if box is None: return None
+    x0, y0, x1, y1 = box.astype(int)
+    h, w = frame_bgr.shape[:2]
+
+    width, height = x1 - x0, y1 - y0
+    center_x, center_y = x0 + width / 2, y0 + height / 2
+    side_length = max(width, height)
+    sq_x0 = max(0, int(center_x - side_length / 2))
+    sq_y0 = max(0, int(center_y - side_length / 2))
+    sq_x1 = min(w, int(center_x + side_length / 2))
+    sq_y1 = min(h, int(center_y + side_length / 2))
+
+    cropped_face = frame_bgr[sq_y0:sq_y1, sq_x0:sq_x1]
+    if cropped_face.size == 0: return None
+    return cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
+
+
+# --- Method 3: YOLO + Haar (Best-Effort Alignment) ---
+def extract_yolo_haar_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+    """Detects with YOLO, aligns with Haar Cascades if possible, then crops."""
+    h, w = frame_bgr.shape[:2]
+    eye_cascade = initialize_haar_cascades()
+
+    box = _get_yolo_face_box(frame_bgr)
+    if box is None: return None
+    x0, y0, x1, y1 = box
+
+    # Attempt to find eyes for alignment within the upper part of the face box
+    roi_y0, roi_y1 = int(y0), int(y0 + (y1 - y0) * 0.6)
+    roi_x0, roi_x1 = int(x0), int(x1)
+    roi = frame_bgr[roi_y0:roi_y1, roi_x0:roi_x1]
+
+    final_crop = None
+    if roi.size > 0:
+        roi_gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        eyes = eye_cascade.detectMultiScale(roi_gray, scaleFactor=1.1, minNeighbors=5, minSize=(20, 20))
+    else:
+        eyes = []
+
+    # If alignment is possible (2 eyes found), rotate the whole image
+    if len(eyes) == 2:
+        eye_centers = sorted([(ex + ew // 2, ey + eh // 2) for ex, ey, ew, eh in eyes], key=lambda p: p[0])
+        left_eye_roi, right_eye_roi = eye_centers
+
+        angle = np.degrees(np.arctan2(right_eye_roi[1] - left_eye_roi[1], right_eye_roi[0] - left_eye_roi[0]))
+
+        face_center = (x0 + (x1 - x0) / 2, y0 + (y1 - y0) / 2)
+        M = cv2.getRotationMatrix2D(face_center, angle, 1.0)
+        rotated_frame = cv2.warpAffine(frame_bgr, M, (w, h), flags=cv2.INTER_CUBIC, borderValue=(0, 0, 0))
+
+        width, height = x1 - x0, y1 - y0
+        side = max(width, height)
+        sq_x0 = max(0, int(face_center[0] - side / 2))
+        sq_y0 = max(0, int(face_center[1] - side / 2))
+        final_crop = rotated_frame[sq_y0:int(sq_y0 + side), sq_x0:int(sq_x0 + side)]
+
+    # Fallback: If alignment failed, use the simple square crop on the original image
+    if final_crop is None or final_crop.size == 0:
+        return extract_yolo_face(frame_bgr)
+
+    return cv2.resize(final_crop, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
 
 
 # ──────────────────────────
@@ -152,17 +219,13 @@ def extract_aligned_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 
 def _find_and_prepare_faces(
         video_path: str,
+        pre_method: str,
         debug_save_path: Optional[str] = None
 ) -> Optional[List[np.ndarray]]:
-    """
-    Internal helper to sample a video and return a list of aligned face images.
-    If debug_save_path is provided, it saves the processed frames.
-    """
-    # --- ADDITION: Create debug directory if needed ---
+    """Internal helper to sample a video and return a list of processed face images."""
     if debug_save_path:
         os.makedirs(debug_save_path, exist_ok=True)
-        print(f"[*] Debug mode ON. Saving aligned faces to: {debug_save_path}")
-    # --- END ADDITION ---
+        print(f"[*] Debug mode ON. Saving processed faces to: {debug_save_path}")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -171,12 +234,10 @@ def _find_and_prepare_faces(
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if total_frames < NUM_SAMPLES:
-        print(f"[*] Video rejected: Not enough frames ({total_frames}) for sampling ({NUM_SAMPLES}).")
         cap.release()
         return None
 
-    collected_faces = []
-    segment_len = total_frames / NUM_SAMPLES
+    collected_faces, segment_len = [], total_frames / NUM_SAMPLES
     search_points = [0.5, 0.25, 0.75, 0.1, 0.9]
 
     for i in range(NUM_SAMPLES):
@@ -189,24 +250,24 @@ def _find_and_prepare_faces(
             ret, frame = cap.read()
             if not ret: continue
 
-            cropped_face_bgr = extract_aligned_face(frame)
+            if pre_method == 'dlib':
+                face = extract_aligned_face(frame)
+            elif pre_method == 'yolo':
+                face = extract_yolo_face(frame)
+            else:  # yolo_haar
+                face = extract_yolo_haar_face(frame)
 
-            if cropped_face_bgr is not None:
-                collected_faces.append(cropped_face_bgr)
+            if face is not None:
+                collected_faces.append(face)
                 found_in_segment = True
-
-                # --- ADDITION: Save the debug frame ---
                 if debug_save_path:
-                    video_name = Path(video_path).stem
-                    save_name = f"{video_name}_seg{i + 1}_frame{frame_idx}.jpg"
-                    cv2.imwrite(os.path.join(debug_save_path, save_name), cropped_face_bgr)
-                # --- END ADDITION ---
-
+                    save_name = f"{Path(video_path).stem}_seg{i + 1}_frame{frame_idx}_{pre_method}.jpg"
+                    cv2.imwrite(os.path.join(debug_save_path, save_name), face)
                 break
 
         if not found_in_segment:
             cap.release()
-            print(f"[*] Preprocessing failed: Could not find a valid face in segment {i + 1}.")
+            print(f"[*] Preprocessing failed: No valid face in segment {i + 1} using '{pre_method}'.")
             return None
 
     cap.release()
@@ -225,41 +286,21 @@ def _get_transform():
 
 def preprocess_video_for_effort_model(
         video_path: str,
+        pre_method: str,
         debug_save_path: Optional[str] = None
 ) -> Optional[torch.Tensor]:
-    """
-    Preprocesses a video clip for the EffortDetector model.
+    """Preprocesses a video clip for the EffortDetector model."""
+    print(f"[*] Starting video preprocessing for: {os.path.basename(video_path)} using '{pre_method}' method.")
 
-    Args:
-        video_path: The path to the video clip.
-        debug_save_path: If set, saves aligned faces to this directory.
-
-    Returns:
-        A torch.Tensor of shape [1, T, C, H, W] or None.
-    """
-    print(f"[*] Starting video preprocessing for: {os.path.basename(video_path)}")
-
-    # 1. Sample video and get a list of cropped/aligned face images
-    selected_faces = _find_and_prepare_faces(video_path, debug_save_path=debug_save_path)
-
+    selected_faces = _find_and_prepare_faces(video_path, pre_method, debug_save_path=debug_save_path)
     if not selected_faces:
         print(f"[*] Video rejected: Failed to sample {NUM_SAMPLES} valid faces.")
         return None
 
-    print(f"[*] Successfully sampled and aligned {len(selected_faces)} faces. Now creating tensor.")
-
-    # 2. Get the transformation pipeline
+    print(f"[*] Successfully processed {len(selected_faces)} faces. Creating tensor.")
     transform = _get_transform()
+    tensor_frames = [transform(cv2.cvtColor(face, cv2.COLOR_BGR2RGB)) for face in selected_faces]
 
-    # 3. Process each face image and stack into a tensor
-    tensor_frames = []
-    for face_img_bgr in selected_faces:
-        rgb_face = cv2.cvtColor(face_img_bgr, cv2.COLOR_BGR2RGB)
-        tensor_frame = transform(rgb_face)
-        tensor_frames.append(tensor_frame)
-
-    video_tensor = torch.stack(tensor_frames, dim=0)
-    final_tensor = video_tensor.unsqueeze(0)
-
+    final_tensor = torch.stack(tensor_frames, dim=0).unsqueeze(0)
     print(f"[*] Preprocessing complete. Final tensor shape: {final_tensor.shape}")
     return final_tensor
