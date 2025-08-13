@@ -36,3 +36,11 @@ wandb/
 
 weights/models--openai--clip-vit-large-patch14/
 ../../effortvenv/
+
+# Local workspace configs
+DeepfakeBench/training/Effort-AIGI-Detection.code-workspace
+
+# Python cache
+__pycache__/
+*.pyceffortvenv/
+DeepfakeBench/training/wandb/
