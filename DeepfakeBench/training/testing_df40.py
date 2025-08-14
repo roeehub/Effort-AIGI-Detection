@@ -11,6 +11,11 @@ from tqdm import tqdm  # noqa
 
 from collections import OrderedDict
 
+################## ADAM CHANGED #################
+import psutil
+################## ADAM CHANGED #################
+
+
 import torch  # noqa
 import torch.nn.parallel  # noqa
 import torch.backends.cudnn as cudnn  # noqa
@@ -552,16 +557,25 @@ def test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scor
     method_labels = defaultdict(list)
     method_preds = defaultdict(list)
 
-    all_preds, all_labels = [], []
-
+    # all_preds, all_labels = [], []
+    
+    
     # --- Loop until all iterators are exhausted ---
     while test_iters:
         # Iterate over a copy of keys, as we will modify the dict
         for method in list(test_iters.keys()):
+            ################## ADAM CHANGED #################
+            # Check system RAM usage
+            mem_gb = psutil.virtual_memory().used / (1024 ** 3)  # Convert bytes → GB
+            if mem_gb >= 50:
+                print("Reached 30 GB !!!!!!!!!!")
+                import pdb; pdb.set_trace()  # Breakpoint if RAM >= 30GB
+            ################## ADAM CHANGED #################
             try:
                 # --- NEW: Get the next batch from the current method's iterator ---
                 data_dict = next(test_iters[method])
-
+                
+                
                 # Move tensors to the correct device
                 for key, value in data_dict.items():
                     if isinstance(value, torch.Tensor):
@@ -575,8 +589,8 @@ def test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scor
                 predictions = model(data_dict, inference=True)
                 video_probs = predictions['prob'].view(B, T).mean(dim=1)
 
-                all_labels.extend(data_dict['label'].cpu().numpy())
-                all_preds.extend(video_probs.cpu().numpy())
+                # all_labels.extend(data_dict['label'].cpu().numpy())
+                # all_preds.extend(video_probs.cpu().numpy())
 
                 # Add probabilities and labels by method
                 method_labels[method].extend(data_dict['label'].cpu().numpy())
@@ -586,6 +600,8 @@ def test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scor
                 # per_method_results[method].append(...)
 
                 pbar.update(1)
+                gc.collect()
+                torch.cuda.empty_cache()
 
             except StopIteration:
                 # This loader is finished, remove it ---
@@ -598,6 +614,8 @@ def test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scor
         return
 
     logger.info("--- Calculating overall validation performance ---")
+    all_labels = list(np.concatenate([np.array(v) for v in method_labels.values()]))
+    all_preds  = list(np.concatenate([np.array(v) for v in method_preds.values()]))
     overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
 
     wandb_log_dict = {}
@@ -615,37 +633,6 @@ def test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scor
                 wandb_log_dict[f'test/{method}/{name}'] = value
                 logger.info(f"Method {method} val {name}: {value:.4f}")
 
-    # # Check for new best model and save
-    # current_metric = overall_metrics.get(metric_scoring)
-    # if current_metric is not None and current_metric > best_val_metric:
-    #     best_val_metric = current_metric
-    #     # best_val_epoch = epoch + 1
-    #     logger.info(f"🎉 New best model found! Metric ({metric_scoring}): {current_metric:.4f}")
-    #     if config['save_ckpt']:
-    #         # --- NEW: Create the custom alias ---
-    #         auc_metric = overall_metrics.get('auc', 0.0) # Default to 0.0 if not found
-    #         # Format the string as requested
-    #         custom_alias = f"AUC_{auc_metric:.4f}"
-    #         # save_ckpt(epoch + 1, aliases=[custom_alias])
-            
-    #         # --- NEW: Logic to delete the previous artifact ---
-    #         # 1. Store the previous artifact to be deleted
-    #         # old_artifact = best_model_artifact
-
-    #         # 2. Save the new artifact and get its object reference
-    #         # best_model_artifact = save_ckpt(epoch + 1, aliases=[custom_alias])
-
-    #         # 3. If there was an old artifact from this run, delete it now
-            # if old_artifact:
-            #     try:
-            #         logger.info(f"Deleting previous best model artifact: {old_artifact.name}")
-            #         old_artifact.delete(delete_aliases=True)
-            #     except Exception as e:
-            #         logger.warning(f"Failed to delete old artifact. It may need to be manually removed. Error: {e}")
-
-    # wandb_log_dict['val/best_metric'] = best_val_metric
-    # wandb_log_dict['val/best_epoch'] = best_val_epoch
-
     if wandb_run:
         wandb_run.log(wandb_log_dict)
 
@@ -655,19 +642,19 @@ def test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scor
     torch.cuda.empty_cache()
 
     logger.info("===> Evaluation Done!")
-sweep_config = {
-    'method': 'grid',  # Specifies a grid search
-    'metric': {
-        'name': 'test/overall/auc',  # The metric to optimize/track
-        'goal': 'maximize'  # The goal for the metric (maximize AUC)
-    },
-    'parameters': {
-        # Define the hyperparameter to sweep over and its values
-        'frame_num_test': {
-            'values': [8, 16, 32]
-        }
-    }
-}
+# sweep_config = {
+#     'method': 'grid',  # Specifies a grid search
+#     'metric': {
+#         'name': 'test/overall/auc',  # The metric to optimize/track
+#         'goal': 'maximize'  # The goal for the metric (maximize AUC)
+#     },
+#     'parameters': {
+#         # Define the hyperparameter to sweep over and its values
+#         'frame_num_test': {
+#             'values': [8, 16, 32]
+#         }
+#     }
+# }
 
 
 def main():
@@ -749,55 +736,13 @@ def main():
 
     model.to(device)
     model.device = device
-    # optimizer = choose_optimizer(model, config)
-    # scheduler = choose_scheduler(config, optimizer)
     metric_scoring = choose_metric(config)
-    # trainer = Trainer(
-    #     config, model, optimizer, scheduler, logger, metric_scoring,
-    #     wandb_run=wandb_run, val_videos=val_videos
-    # )
-
-    # # --- Training Loop Setup ---
-    # real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
-    # for v in train_videos:
-    #     (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
-
-    # total_real_videos = sum(real_video_counts.values())
-    # total_fake_videos = sum(fake_video_counts.values())
-
-    # real_weights = [real_video_counts[m] / total_real_videos for m in
-    #                 real_source_names] if total_real_videos > 0 else []
-    # fake_method_names = list(fake_loaders.keys())
-    # fake_weights = [fake_video_counts[m] / total_fake_videos for m in
-    #                 fake_method_names] if total_fake_videos > 0 else []
-
-    # total_train_videos = len(train_videos)
-    # epoch_len = math.ceil(total_train_videos / train_batch_size) if total_train_videos > 0 else 0
-    # logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
-
-    # # NEW: Get evaluation frequency from config
-    # eval_freq = data_config['data_params'].get('evaluation_frequency', 1)
+    
 
     if config['gcs_assets']['base_checkpoint']['local_path']:
         load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'], model, logger)
 
     test_epoch(model,test_method_loaders, config, logger, wandb_run, metric_scoring=metric_scoring)
-
-    # # start training
-    # for epoch in range(config['start_epoch'], config['nEpochs']):
-    #     trainer.train_epoch(
-    #         real_loaders=real_loaders,
-    #         fake_loaders=fake_loaders,
-    #         real_method_names=real_source_names,
-    #         fake_method_names=fake_method_names,
-    #         real_weights=real_weights,
-    #         fake_weights=fake_weights,
-    #         epoch=epoch,
-    #         epoch_len=epoch_len,
-    #         val_method_loaders=val_method_loaders,
-    #         evaluation_frequency=eval_freq
-    #     )
-    #     if scheduler is not None: scheduler.step()
 
     wandb_run.finish()
     logger.info("Training complete.")

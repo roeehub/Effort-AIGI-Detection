@@ -44,3 +44,17 @@ DeepfakeBench/training/Effort-AIGI-Detection.code-workspace
 __pycache__/
 *.pyceffortvenv/
 DeepfakeBench/training/wandb/
+
+
+# Python virtual environment
+effortvenv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS junk
+.DS_Store
+
+# Other local files
+partial_manifest.json
