@@ -16,6 +16,7 @@ from modules.utilities import (
 )
 from modules.cluster_analysis import find_closest_centroid
 import os
+import sys
 
 FACE_SWAPPER = None
 THREAD_LOCK = threading.Lock()
@@ -121,6 +122,7 @@ def process_frame(source_face: Face, temp_frame: Frame) -> Frame:
             temp_frame = swap_face(source_face, target_face, temp_frame)
         else:
             logging.error("Face detection failed for target or source.")
+            sys.exit("Swapping Failed")
     return temp_frame
 
 
