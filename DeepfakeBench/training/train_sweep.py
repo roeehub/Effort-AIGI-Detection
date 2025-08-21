@@ -310,7 +310,7 @@ def main():
 
     # Construct and set an informative run name
     model_name = config.get('model_name', 'model')
-    batch_size = wandb.config.train_batchSize
+    batch_size = data_config['dataloader_params']['batch_size']
     lr = wandb.config.learning_rate
     wd = wandb.config.weight_decay
     eps = wandb.config.optimizer_eps
@@ -476,6 +476,17 @@ def main():
 
     if config['gcs_assets']['base_checkpoint']['local_path']:
         trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
+
+    # --- Initial Validation before Training ---
+    logger.info("--- Performing initial validation on the base model before training ---")
+    if config['local_rank'] == 0:
+        # Ensure there are validation loaders to test on.
+        # test_epoch is safe to call with empty loaders, but this check is cleaner.
+        if val_method_loaders and len(val_method_loaders.keys()) > 0:
+            trainer.test_epoch(epoch=-1, val_method_loaders=val_method_loaders)
+            logger.info("--- Initial validation complete. Starting training. ---")
+        else:
+            logger.warning("No validation loaders found. Skipping initial validation.")
 
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):

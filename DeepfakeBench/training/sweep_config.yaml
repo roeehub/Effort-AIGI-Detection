@@ -12,7 +12,7 @@ parameters:
   # --- Tier 1: Core Fine-Tuning Parameters ---
   learning_rate:
     distribution: log_uniform_values
-    min: 1.0e-5
+    min: 5.0e-6
     max: 5.0e-4
   weight_decay:
     distribution: log_uniform_values
@@ -20,8 +20,8 @@ parameters:
     max: 1.0e-3
   lambda_reg:
     distribution: uniform
-    min: 0.5
-    max: 5.0
+    min: 2.0
+    max: 6.0
   num_frames_per_video:
     values: [2, 4, 8]
 
@@ -32,7 +32,7 @@ parameters:
   test_batch_size:
     value: 4
   nEpochs:
-    value: 50 # Train long enough, but rely on best validation metric for checkpointing if needed
+    value: 3 # Train long enough, but rely on best validation metric for checkpointing if needed
   optimizer_eps:
     value: 1.0e-8 # Standard default, no need to tune
 

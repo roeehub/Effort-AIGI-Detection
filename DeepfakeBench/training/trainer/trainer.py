@@ -55,6 +55,16 @@ class Trainer(object):
         self.val_videos = val_videos  # Store the validation videos
         self.unified_val_loader = None  # To cache the efficient loader
 
+        # --- Comprehensive checkpoint tracking ---
+        # List of dicts: [{'metric': float, 'epoch': int, 'gcs_path': str, ...}, ...]
+        self.top_n_checkpoints = []
+        self.top_n_size = 5  # Track top 5 models
+        # One-time save for the very first "best" model found
+        self.first_best_gcs_path = None
+        self.fifth_best_gcs_path = None  # Track the fifth best model
+        self.top_n_saved_count = 0
+        # --- END ---
+
         # --- MODIFIED: Track GCS path instead of W&B artifact ---
         self.best_model_gcs_path = None  # Track the GCS path of the best model
 
@@ -140,10 +150,9 @@ class Trainer(object):
         else:
             raise FileNotFoundError(f"=> no model found at '{model_path}'")
 
-    # --- MODIFIED: save_ckpt now uploads to GCS and returns the path ---
-    def save_ckpt(self, epoch, auc, eer):
+    def save_ckpt(self, epoch, auc, eer, ckpt_prefix='ckpt'):
         """
-        Saves the model checkpoint locally, uploads it to GCS, and then cleans up.
+        Saves model checkpoint locally, uploads to GCS with a prefix, and cleans up.
         Returns the GCS path of the uploaded file.
         """
         gcs_config = self.config.get('checkpointing')
@@ -151,12 +160,10 @@ class Trainer(object):
             self.logger.warning("GCS checkpointing not configured. Skipping upload.")
             return None
 
-        # Create a descriptive checkpoint name
         model_name = self.config.get('model_name', 'model')
         date_str = time.strftime("%Y%m%d")
-        ckpt_name = f"ckpt_{model_name}_{date_str}_ep{epoch}_auc{auc:.4f}_eer{eer:.4f}.pth"
+        ckpt_name = f"{ckpt_prefix}_{model_name}_{date_str}_ep{epoch}_auc{auc:.4f}_eer{eer:.4f}.pth"
 
-        # Save temporarily to local disk (within the W&B run directory)
         local_save_dir = os.path.join(self.log_dir, "checkpoints")
         os.makedirs(local_save_dir, exist_ok=True)
         local_save_path = os.path.join(local_save_dir, ckpt_name)
@@ -164,26 +171,20 @@ class Trainer(object):
         model_state = self.model.module.state_dict() if self.config['ddp'] else self.model.state_dict()
         torch.save(model_state, local_save_path)
 
-        # Construct the full GCS path, including the run ID for organization
         gcs_prefix = gcs_config['gcs_prefix']
         if not gcs_prefix.endswith('/'):
             gcs_prefix += '/'
         run_id = self.wandb_run.id if self.wandb_run else "local_run"
         full_gcs_path = os.path.join(gcs_prefix, run_id, ckpt_name)
 
-        # Upload to GCS
         upload_success = self._upload_to_gcs(local_save_path, full_gcs_path)
 
-        # Clean up the local file
         try:
             os.remove(local_save_path)
         except OSError as e:
             self.logger.warning(f"Could not delete local temporary checkpoint: {e}")
 
-        if upload_success:
-            return full_gcs_path
-        else:
-            return None
+        return full_gcs_path if upload_success else None
 
     def train_step(self, data_dict):
         # --- Use autocast for the forward pass ---
@@ -313,6 +314,7 @@ class Trainer(object):
         method_preds = defaultdict(list)
 
         all_preds, all_labels = [], []
+        all_losses = []
 
         # --- Loop until all iterators are exhausted ---
         while val_iters:
@@ -334,6 +336,14 @@ class Trainer(object):
                     B, T = data_dict['image'].shape[:2]
                     predictions = self.model(data_dict, inference=True)
                     video_probs = predictions['prob'].view(B, T).mean(dim=1)
+
+                    # --- Calculate and store validation loss for the batch ---
+                    if type(self.model) is DDP:
+                        losses = self.model.module.get_losses(data_dict, predictions)
+                    else:
+                        losses = self.model.get_losses(data_dict, predictions)
+                    all_losses.append(losses['overall'].item())
+                    # ---
 
                     all_labels.extend(data_dict['label'].cpu().numpy())
                     all_preds.extend(video_probs.cpu().numpy())
@@ -361,6 +371,14 @@ class Trainer(object):
         overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
 
         wandb_log_dict = {"val/epoch": epoch + 1}
+
+        # --- Calculate and log average validation loss ---
+        if all_losses:
+            avg_val_loss = np.mean(all_losses)
+            wandb_log_dict['val/overall/loss'] = avg_val_loss
+            self.logger.info(f"Overall val loss: {avg_val_loss:.4f}")
+        # ---
+
         for name, value in overall_metrics.items():
             if name not in ['pred', 'label']:
                 wandb_log_dict[f'val/overall/{name}'] = value
@@ -392,64 +410,87 @@ class Trainer(object):
             # Add the created table to the dictionary that will be logged
             wandb_log_dict["val/method_table"] = wandb.Table(columns=columns, data=table_data)
 
-        # Check for new best model and save
+        # --- Advanced Checkpoint Saving and Pruning Logic ---
         current_metric = overall_metrics.get(self.metric_scoring)
-        if current_metric is not None and current_metric > self.best_val_metric:
-            self.best_val_metric = current_metric
-            self.best_val_epoch = epoch + 1
-            self.logger.info(f"🎉 New best model found! Metric ({self.metric_scoring}): {current_metric:.4f}")
+        if current_metric is not None and self.config['save_ckpt']:
 
-            best_auc = overall_metrics.get('auc', 0.0)
-            best_eer = overall_metrics.get('eer', 1.0)
-            best_acc = overall_metrics.get('acc', 0.0)
+            # 1. Handle the "First Best" checkpoint (one-time save)
+            if self.first_best_gcs_path is None and current_metric > self.best_val_metric:
+                self.logger.info(f"🎉 Saving FIRST best model! Metric ({self.metric_scoring}): {current_metric:.4f}")
+                new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
+                                              eer=overall_metrics.get('eer'), ckpt_prefix='first_best')
+                if new_gcs_path:
+                    self.first_best_gcs_path = new_gcs_path
+                    if self.wandb_run:
+                        self.wandb_run.summary['first_best_ckpt_gcs'] = new_gcs_path
+                        self.wandb_run.summary['first_best_metric'] = current_metric
 
-            if self.config['save_ckpt']:
-                # --- MODIFIED: Save to GCS and prune the old one ---
+            # 2. Manage the Top-N checkpoint list
+            is_top_n = len(self.top_n_checkpoints) < self.top_n_size or current_metric > self.top_n_checkpoints[-1][
+                'metric']
 
-                # Store the path of the previous best model to delete it after the new one succeeds
-                old_gcs_path = self.best_model_gcs_path
+            if is_top_n:
+                self.logger.info(
+                    f"🏆 New Top-{self.top_n_size} performance! Metric ({self.metric_scoring}): {current_metric:.4f}")
 
-                # Upload the new best model to GCS
-                new_gcs_path = self.save_ckpt(
-                    epoch=epoch + 1,
-                    auc=best_auc,
-                    eer=best_eer
-                )
+                # Determine the prefix: default, or 'fifth_best' for the special one-time save
+                ckpt_prefix = 'top_n'
+                if self.top_n_saved_count == 4 and self.fifth_best_gcs_path is None:
+                    self.logger.info("This is the 5th unique top model. Saving with 'fifth_best' prefix.")
+                    ckpt_prefix = 'fifth_best'
+
+                new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
+                                              eer=overall_metrics.get('eer'), ckpt_prefix=ckpt_prefix)
 
                 if new_gcs_path:
-                    # If upload was successful, update the best path and delete the old one
-                    self.best_model_gcs_path = new_gcs_path
-                    if old_gcs_path:
-                        self._delete_from_gcs(old_gcs_path)
+                    # Increment counter only on successful save of a new top-N model
+                    self.top_n_saved_count += 1
 
-                    # Log the GCS path to W&B
-                    if self.wandb_run:
-                        self.wandb_run.summary['best_ckpt_gcs'] = new_gcs_path
-                        wandb_log_dict['checkpoint/gcs_path'] = new_gcs_path  # Log at current step
+                    # If this was the special 5th save, lock it in
+                    if ckpt_prefix == 'fifth_best':
+                        self.fifth_best_gcs_path = new_gcs_path
+                        if self.wandb_run:
+                            self.wandb_run.summary['fifth_best_ckpt_gcs'] = new_gcs_path
+                            self.wandb_run.summary['fifth_best_metric'] = current_metric
 
-                        # Also update the bottom line summary
-                        self.wandb_run.summary['bottom_line'] = (
-                            f"best_epoch={self.best_val_epoch} AUC={best_auc:.4f} "
-                            f"EER={best_eer:.4f} ACC={best_acc:.4f} ckpt=GCS"
-                        )
+                    # Add new checkpoint to the list and sort
+                    self.top_n_checkpoints.append(
+                        {'metric': current_metric, 'epoch': epoch + 1, 'gcs_path': new_gcs_path})
+                    self.top_n_checkpoints.sort(key=lambda x: x['metric'], reverse=True)
 
-            # Update W&B summary fields for easy sorting
-            if self.wandb_run:
-                self.wandb_run.summary['best/epoch'] = self.best_val_epoch
-                self.wandb_run.summary['best/metric'] = self.best_val_metric
-                self.wandb_run.summary['best/auc'] = best_auc
-                self.wandb_run.summary['best/eer'] = best_eer
-                self.wandb_run.summary['best/acc'] = best_acc
+                    # Prune the list if it's too long
+                    if len(self.top_n_checkpoints) > self.top_n_size:
+                        worst_ckpt = self.top_n_checkpoints.pop()
+                        self.logger.info(
+                            f"Pruning checkpoint from epoch {worst_ckpt['epoch']} as it's no longer in the top {self.top_n_size}.")
+                        self._delete_from_gcs(worst_ckpt['gcs_path'])
+
+            # 3. Update overall best metric and W&B summary (based on the current best in the list)
+            if self.top_n_checkpoints and self.top_n_checkpoints[0]['metric'] > self.best_val_metric:
+                overall_best = self.top_n_checkpoints[0]
+                self.best_val_metric = overall_best['metric']
+                self.best_val_epoch = overall_best['epoch']
+
+                if self.wandb_run:
+                    self.wandb_run.summary['overall_best_ckpt_gcs'] = self.top_n_checkpoints[0]['gcs_path']
+                    self.wandb_run.summary['best/epoch'] = self.best_val_epoch
+                    self.wandb_run.summary['best/metric'] = self.best_val_metric
+                    # Use full metrics from the best checkpoint dict
+                    best_ckpt_info = self.top_n_checkpoints[0]
+                    best_auc = get_test_metrics(np.array(all_preds), np.array(all_labels))['auc']
+                    best_eer = get_test_metrics(np.array(all_preds), np.array(all_labels))['eer']
+                    best_acc = get_test_metrics(np.array(all_preds), np.array(all_labels))['acc']
+
+                    self.wandb_run.summary['best/auc'] = best_auc
+                    self.wandb_run.summary['best/eer'] = best_eer
+                    self.wandb_run.summary['best/acc'] = best_acc
+                    self.wandb_run.summary[
+                        'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={best_auc:.4f} EER={best_eer:.4f} ACC={best_acc:.4f} ckpt=GCS"
 
         wandb_log_dict['val/best_metric'] = self.best_val_metric
         wandb_log_dict['val/best_epoch'] = self.best_val_epoch
-
-        if self.wandb_run:
-            self.wandb_run.log(wandb_log_dict)
-
-        # Explicitly delete large variables and collect garbage
-        del all_preds, all_labels, method_labels, method_preds, overall_metrics, method_metrics
+        if self.wandb_run: self.wandb_run.log(wandb_log_dict)
+        del all_preds, all_labels, method_labels, method_preds, overall_metrics, all_losses
         gc.collect()
         torch.cuda.empty_cache()
-
         self.logger.info("===> Evaluation Done!")

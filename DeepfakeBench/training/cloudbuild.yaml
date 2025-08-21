@@ -24,7 +24,7 @@ steps:
     - |
       docker build \
         --cache-from us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest \
-        -t us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.0.0 \
+        -t us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.0.3 \
         -t us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest \
         .
 
@@ -32,7 +32,7 @@ steps:
 # We push both the uniquely tagged image and the :latest tag.
 images:
 - 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:latest'
-- 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.0.0'
+- 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.0.3'
   # Note: The _VERSION_TAG will be substituted from the workspace file.
   # This substitution requires us to add it to the 'substitutions' section below.
 #
