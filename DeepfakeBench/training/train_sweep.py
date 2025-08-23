@@ -1,14 +1,7 @@
-import argparse
-import random
-import datetime
-import time
-import yaml  # noqa
-from datetime import timedelta
-import math
-import os
-from collections import defaultdict, Counter
-from tqdm import tqdm  # noqa
+from venv import logger
 
+import yaml  # noqa
+from tqdm import tqdm  # noqa
 import torch  # noqa
 import torch.nn.parallel  # noqa
 import torch.backends.cudnn as cudnn  # noqa
@@ -23,7 +16,7 @@ from google.api_core import exceptions  # noqa
 from google.cloud.storage import Bucket  # noqa
 from detectors import DETECTOR  # noqa
 from PIL.ImageFilter import RankFilter  # noqa
-from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
+from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
 
 import argparse
 import random
@@ -50,7 +43,7 @@ from detectors import DETECTOR  # noqa
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
 from prepare_splits import prepare_video_splits
-from dataset.dataloaders import create_method_aware_dataloaders, collate_fn  # noqa
+from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
@@ -65,6 +58,9 @@ parser.add_argument('--run_sanity_check', action='store_true', default=False,
                     help="Run the comprehensive sampler check and exit.")
 parser.add_argument('--dataloader_config', type=str, default='./config/dataloader_config.yml',
                     help='Path to the dataloader configuration file')
+parser.add_argument('--param-config', type=str, default=None,
+                    help='YAML for single-run; omit to run sweep mode.')
+
 args, _ = parser.parse_known_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -243,12 +239,7 @@ def download_assets_from_gcs(config, logger):
         return None
 
 
-# train_sweep.py - function replacement
-
 def main():
-    # ##################### ADAM CHANGED ###################
-    # os.chdir("/home/roee/repos/Effort-AIGI-Detection/DeepfakeBench/training")
-    # ##################### ADAM CHANGED ###################
     # parse options and load config
     with open(args.detector_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -261,23 +252,35 @@ def main():
 
     # --- W&B Initialization ---
     # The agent provides the config for the run
+    single_cfg = None
+    if args.param_config:
+        with open(args.param_config, "r") as f:
+            single_cfg = yaml.safe_load(f) or {}
+
     wandb_run = wandb.init(
         mode="online",
+        config=single_cfg  # None -> sweep agent supplies config; dict -> single run
     )
 
-    # --- MODIFIED: Map more hyperparameters from the sweep config ---
-    # The single source of truth is now wandb.config, provided by the agent.
-
     # --- 1. Optimizer params (Search Space) ---
+    config['load_base_checkpoint'] = wandb.config.load_base_checkpoint
     config['optimizer']['adam']['lr'] = wandb.config.learning_rate
     config['optimizer']['adam']['eps'] = wandb.config.optimizer_eps
     config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
     config['nEpochs'] = wandb.config.nEpochs
     config['lambda_reg'] = wandb.config.lambda_reg  # Pass the sweep value to the main config
+    config['rank'] = wandb.config.rank
+    config['early_stopping'] = {
+        'enabled': wandb.config.get('early_stopping_enabled', False),
+        'patience': wandb.config.get('early_stopping_patience', 3),
+        'min_delta': wandb.config.get('early_stopping_min_delta', 0.0001)
+    }
 
     # --- 2. Data and Dataloader params (Search Space) ---
-    data_config['dataloader_params']['batch_size'] = wandb.config.train_batchSize
-    data_config['data_params']['num_frames_per_video'] = wandb.config.num_frames_per_video
+    data_config['dataloader_params']['strategy'] = wandb.config.dataloader_strategy
+    data_config['dataloader_params']['frames_per_batch'] = wandb.config.frames_per_batch
+    data_config['dataloader_params']['videos_per_batch'] = wandb.config.videos_per_batch
+    data_config['dataloader_params']['frames_per_video'] = wandb.config.frames_per_video
     data_config['data_params']['val_split_ratio'] = wandb.config.val_split_ratio
     data_config['data_params']['evaluation_frequency'] = wandb.config.evaluation_frequency
 
@@ -287,12 +290,6 @@ def main():
     data_config['dataloader_params']['test_batch_size'] = wandb.config.test_batch_size
     data_config['dataloader_params']['num_workers'] = wandb.config.num_workers
     data_config['dataloader_params']['prefetch_factor'] = wandb.config.prefetch_factor
-
-    # Compensating. usually num_frames_per_video is 8.
-    if data_config['data_params']['num_frames_per_video'] == 4:
-        data_config['dataloader_params']['batch_size'] = data_config['dataloader_params']['batch_size'] * 2
-    if data_config['data_params']['num_frames_per_video'] == 2:
-        data_config['dataloader_params']['batch_size'] = data_config['dataloader_params']['batch_size'] * 4
 
     # Update the main config with the now-populated data_config
     config.update(data_config)
@@ -310,21 +307,24 @@ def main():
 
     # Construct and set an informative run name
     model_name = config.get('model_name', 'model')
-    batch_size = data_config['dataloader_params']['batch_size']
+    strategy = wandb.config.dataloader_strategy
+    if strategy == 'frame_level':
+        batch_info = f"frames{wandb.config.frames_per_batch}"
+    else:  # video_level or per_method
+        batch_info = f"vids{wandb.config.videos_per_batch}x{wandb.config.frames_per_video}f"
     lr = wandb.config.learning_rate
     wd = wandb.config.weight_decay
     eps = wandb.config.optimizer_eps
-    num_frames = wandb.config.num_frames_per_video
+    local_rank = wandb.config.rank
+    # num_frames = wandb.config.num_frames_per_video -- This was causing an error, seems it was renamed.
     subset_pct = wandb.config.data_subset_percentage
-    # subset_pct = int(data_config.get('data_params', {}).get('data_subset_percentage', 1.0) * 100)
     run_name = (
         f"{model_name}"
-        f"_b{batch_size}"
+        f"_{strategy}"
+        f"_{batch_info}"
         f"_lr{lr:.0e}"
         f"_wd{wd:.0e}"
-        f"_eps{eps:.0e}"
-        f"_frames{num_frames}"
-        f"_subset{subset_pct}"
+        f"_r{local_rank}"
     ).replace("+", "")
     wandb.run.name = run_name
 
@@ -348,15 +348,12 @@ def main():
     download_assets_from_gcs(config, logger)
 
     logger.info("------- Configuration & Data Loading -------")
-    # MODIFIED: Capture the fourth return value: `data_split_stats`
-    train_videos, val_videos, _, data_split_stats = prepare_video_splits(dataloader_config_path)
+    train_videos, val_videos, data_split_stats = prepare_video_splits(data_config)
 
-    # Count "external_youtube_avspeech" in train and validation sets
-    train_avspeech_count = sum(1 for v in train_videos if v.method == "external_youtube_avspeech")
-    val_avspeech_count = sum(1 for v in val_videos if v.method == "external_youtube_avspeech")
-
-    logger.info(f"Count of 'external_youtube_avspeech' in train set: {train_avspeech_count}")
-    logger.info(f"Count of 'external_youtube_avspeech' in val set: {val_avspeech_count}")
+    # --- Create Dataloaders using the new factory function ---
+    train_loader, val_method_loaders = create_dataloaders(
+        train_videos, val_videos, config, data_config
+    )
 
     # --- Create and log the comprehensive run overview ---
     real_methods = data_config.get('methods', {}).get('use_real_sources', [])
@@ -378,11 +375,13 @@ def main():
         - **Fake Methods ({len(fake_methods)}):** `{', '.join(fake_methods)}`
 
         ### Sweep Hyperparameters
-        - **Batch Size:** `{wandb.config.train_batchSize}`
+        - **Dataloader Strategy:** `{wandb.config.dataloader_strategy}`
+        - **Frames per Video:** `{wandb.config.frames_per_video}`
+        - **Videos per Batch:** `{wandb.config.videos_per_batch}`
+        - **Frames per Batch:** `{wandb.config.frames_per_batch}`
         - **Learning Rate:** `{wandb.config.learning_rate:.1e}`
         - **Weight Decay:** `{wandb.config.weight_decay:.1e}`
         - **Epsilon:** `{wandb.config.optimizer_eps:.1e}`
-        - **Frames per Video:** `{wandb.config.num_frames_per_video}`
         - **Total Epochs:** `{config.get('nEpochs', 'N/A')}`
         - **Eval Frequency:** `{wandb.config.evaluation_frequency}` per epoch
         """
@@ -420,31 +419,6 @@ def main():
     })
     logger.info("Logged detailed dataset balance statistics to W&B.")
 
-    train_batch_size = data_config['dataloader_params']['batch_size']
-    if train_batch_size % 2 != 0:
-        raise ValueError(f"train_batchSize must be even for 50/50 split, but got {train_batch_size}")
-    half_batch_size = train_batch_size // 2
-
-    all_train_loaders, val_method_loaders = create_method_aware_dataloaders(
-        train_videos, val_videos, config, data_config, train_batch_size=half_batch_size
-    )
-
-    # The LazyDataLoaderManager is passed directly to the trainer.
-    # We derive the method names for sampling from the manager's keys,
-    # and the manager will handle on-demand loading of both real and fake batches.
-    real_source_names = data_config['methods']['use_real_sources']
-    all_method_names = all_train_loaders.keys()
-
-    real_method_names = [m for m in all_method_names if m in real_source_names]
-    fake_method_names = [m for m in all_method_names if m not in real_source_names]
-
-    # The manager is used to retrieve both real and fake loaders as needed.
-    real_loaders = all_train_loaders
-    fake_loaders = all_train_loaders
-
-    logger.info(
-        f"Created manager for {len(real_method_names)} real methods, {len(fake_method_names)} fake methods, and {len(val_method_loaders.keys())} validation loaders.")
-
     # Prepare model, optimizer, scheduler, metric, trainer
     model = DETECTOR[config['model_name']](config)
     optimizer = choose_optimizer(model, config)
@@ -455,54 +429,48 @@ def main():
         wandb_run=wandb_run, val_videos=val_videos
     )
 
-    # --- Training Loop Setup ---
-    real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
-    for v in train_videos:
-        (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
-
-    total_real_videos = sum(real_video_counts.values())
-    total_fake_videos = sum(fake_video_counts.values())
-
-    real_weights = [real_video_counts[m] / total_real_videos for m in
-                    real_method_names] if total_real_videos > 0 else []
-    fake_weights = [fake_video_counts[m] / total_fake_videos for m in
-                    fake_method_names] if total_fake_videos > 0 else []
-
-    total_train_videos = len(train_videos)
-    epoch_len = math.ceil(total_train_videos / train_batch_size) if total_train_videos > 0 else 0
-    logger.info(f"Total balanced training videos: {total_train_videos}, epoch length: {epoch_len} steps")
-
-    eval_freq = wandb.config.evaluation_frequency
-
-    if config['gcs_assets']['base_checkpoint']['local_path']:
-        trainer.load_ckpt(config['gcs_assets']['base_checkpoint']['local_path'])
-
-    # --- Initial Validation before Training ---
-    logger.info("--- Performing initial validation on the base model before training ---")
-    if config['local_rank'] == 0:
-        # Ensure there are validation loaders to test on.
-        # test_epoch is safe to call with empty loaders, but this check is cleaner.
-        if val_method_loaders and len(val_method_loaders.keys()) > 0:
-            trainer.test_epoch(epoch=-1, val_method_loaders=val_method_loaders)
-            logger.info("--- Initial validation complete. Starting training. ---")
+    if config.get('load_base_checkpoint', False):
+        checkpoint_path = config.get('gcs_assets', {}).get('base_checkpoint', {}).get('local_path')
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            logger.info(f"--- Loading base checkpoint from {checkpoint_path} as requested by config. ---")
+            trainer.load_ckpt(checkpoint_path)
         else:
-            logger.warning("No validation loaders found. Skipping initial validation.")
+            logger.warning(
+                f"Configuration 'load_base_checkpoint' is True, but no valid checkpoint was found at '{checkpoint_path}'. "
+                "The model will start from the base CLIP weights."
+            )
+    else:
+        logger.info(
+            "--- Configuration 'load_base_checkpoint' is False. "
+            "Skipping checkpoint load. The model will start from the base CLIP weights. ---"
+        )
+
+    # # --- Initial Validation before Training ---
+    # logger.info("--- Performing initial validation on the base model before training ---")
+    # if config['local_rank'] == 0:
+    #     # Ensure there are validation loaders to test on.
+    #     # test_epoch is safe to call with empty loaders, but this check is cleaner.
+    #     if val_method_loaders and len(val_method_loaders.keys()) > 0:
+    #         trainer.test_epoch(epoch=-1, val_method_loaders=val_method_loaders)
+    #         logger.info("--- Initial validation complete. Starting training. ---")
+    #     else:
+    #         logger.warning("No validation loaders found. Skipping initial validation.")
 
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
         trainer.train_epoch(
-            real_loaders=real_loaders,
-            fake_loaders=fake_loaders,
-            real_method_names=real_method_names,
-            fake_method_names=fake_method_names,
-            real_weights=real_weights,
-            fake_weights=fake_weights,
+            train_loader=train_loader,
             epoch=epoch,
-            epoch_len=epoch_len,
             val_method_loaders=val_method_loaders,
-            evaluation_frequency=eval_freq
+            train_videos=train_videos  # Pass the video list for epoch_len calculation
         )
-        if scheduler is not None: scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
+
+        if trainer.early_stop_triggered:
+            logger.info(f"Gracefully terminating training at epoch {epoch + 1} due to early stopping.")
+            wandb.log({"train/status": "Early Stopped"})  # Log final status
+            break
 
     wandb_run.finish()
     logger.info("Training complete.")

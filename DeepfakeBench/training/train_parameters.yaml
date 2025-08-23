@@ -1,0 +1,36 @@
+# --- train_parameters.yaml ---
+
+# Core Effort/Optimizer Hyperparameters (Matched to Paper)
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 1023
+
+# Training Schedule
+nEpochs: 20
+early_stopping_enabled: true
+early_stopping_patience: 4
+early_stopping_min_delta: 0.001
+
+# --- NEW DATALOADER CONFIGURATION ---
+dataloader_strategy: frame_level # <-- Strategy for the baseline is 'frame_level'
+
+# --- Parameters for different strategies ---
+# For 'frame_level' training:
+frames_per_batch: 64  # Total frames per batch. Clean and simple.
+
+# For 'video_level' training (values for a future experiment):
+videos_per_batch: 8   # Number of videos in a batch.
+frames_per_video: 8   # Number of frames to sample from each video.
+# Total frames per batch would be 8 * 8 = 64.
+
+# --- Fixed Context ---
+test_batch_size: 8 # For validation, this is videos per batch. Can stay as is.
+val_split_ratio: 0.1
+evaluation_frequency: 1
+seed: 737
+data_subset_percentage: 0.05 # Use 5% of data for faster iteration. Change to 1.0 for full data.
+num_workers: 12
+prefetch_factor: 3
+load_base_checkpoint: false

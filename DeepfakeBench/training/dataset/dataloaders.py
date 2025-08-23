@@ -24,9 +24,10 @@ import albumentations as A  # noqa
 from collections import defaultdict, OrderedDict
 from prepare_splits import VideoInfo  # noqa , we import VideoInfo from prepare_splits.py which is 1 level up
 from itertools import chain  # noqa
+from concurrent.futures import ThreadPoolExecutor
 
 # --- New controllable parameter for max data loaders in memory ---
-MAX_LOADERS_IN_MEMORY = 13
+MAX_LOADERS_IN_MEMORY = 15
 
 
 # This data augmentation function is fine, we can keep it.
@@ -43,6 +44,80 @@ def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
     return Image.fromarray(transformed['image'])
 
 
+def load_and_process_frame(frame_info: tuple, config: dict, mode: str):
+    """
+    Loads and processes a single frame.
+    Input: A tuple (frame_path, label_id)
+    Returns None on failure.
+    """
+    frame_path, label_id = frame_info
+    resolution = config['resolution']
+
+    try:
+        with fsspec.open(frame_path, "rb") as f:
+            img = Image.open(f).convert("RGB")
+            img = img.resize((resolution, resolution), Image.BICUBIC)
+    except Exception:
+        return None  # Fail silently for a single frame
+
+    if mode == 'train' and config['use_data_augmentation']:
+        aug_seed = random.randint(0, 2 ** 32 - 1)
+        img = data_aug(img, augmentation_seed=aug_seed)
+
+    normalize_transform = T.Compose([
+        T.ToTensor(),
+        T.Normalize(mean=config['mean'], std=config['std'])
+    ])
+
+    image_tensor = normalize_transform(img)
+    # The output format must match collate_fn's expectation
+    return image_tensor, label_id, None, None, frame_path
+
+
+def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mode: str):
+    """
+    Loads and processes a BATCH of frames in parallel using a thread pool.
+    This is much more efficient for cloud storage as it overlaps I/O latency.
+    """
+    resolution = config['resolution']
+    use_aug = mode == 'train' and config['use_data_augmentation']
+
+    normalize_transform = T.Compose([
+        T.ToTensor(),
+        T.Normalize(mean=config['mean'], std=config['std'])
+    ])
+
+    def _load_single(frame_info):
+        """The work for a single thread."""
+        frame_path, label_id = frame_info
+        try:
+            with fsspec.open(frame_path, "rb") as f:
+                img = Image.open(f).convert("RGB")
+                img = img.resize((resolution, resolution), Image.BICUBIC)
+
+            if use_aug:
+                # Give each augmentation its own seed for variety within a batch
+                aug_seed = random.randint(0, 2 ** 32 - 1)
+                img = data_aug(img, augmentation_seed=aug_seed)
+
+            image_tensor = normalize_transform(img)
+            # The output format must match collate_fn's expectation
+            return image_tensor, label_id, None, None, frame_path
+        except Exception:
+            return None  # Fail silently for a single frame
+
+    # Use a ThreadPoolExecutor to fetch multiple frames concurrently within this single function call.
+    # The number of threads here (e.g., 8-16) is key. It allows one dataloader worker
+    # to perform multiple GCS requests in parallel.
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        results = list(executor.map(_load_single, frame_info_batch))
+
+    # The function should yield individual samples, not a list
+    for result in results:
+        if result is not None:
+            yield result
+
+
 def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
     """
     This function replaces `load_video_frames_as_dataset`.
@@ -51,7 +126,9 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
     before giving up on the video.
     It returns None on failure, so it can be filtered out.
     """
-    frame_num = config['frame_num'][mode]
+    dl_params = config.get('dataloader_params', {})
+    # The number of frames is now explicit and not dependent on mode
+    frame_num = dl_params.get('frames_per_video', 8)  # Default to 8 if not specified
     resolution = config['resolution']
     all_frame_paths = list(video_info.frame_paths)
 
@@ -133,6 +210,10 @@ class LazyDataLoaderManager:
         self.max_loaders = max_loaders
         self.active_loaders = OrderedDict()
         self.all_methods = list(self.videos_by_method.keys())
+        # hardcoded params for now, could be made configurable, this is used for validation at the moment, not training
+        # During validation we want to get metrics for all methods, so we have many loaders, so we limit this config
+        self.num_workers = 4
+        self.prefetch_factor = 2
 
     def _create_loader(self, method):
         """Creates a DataLoader for a specific method."""
@@ -146,10 +227,10 @@ class LazyDataLoaderManager:
         loader = DataLoader(
             pipe,
             batch_size=self.batch_size,
-            num_workers=self.data_config['dataloader_params']['num_workers'],
+            num_workers=self.num_workers,
             collate_fn=collate_fn,
             persistent_workers=is_train,
-            prefetch_factor=self.data_config['dataloader_params']['prefetch_factor'] if is_train else 1
+            prefetch_factor=self.prefetch_factor
         )
         return loader
 
@@ -195,35 +276,132 @@ class LazyDataLoaderManager:
         return method in self.all_methods
 
 
-def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
-                                    data_config: dict, train_batch_size: int):
-    """
-    Creates separate, memory-efficient, rotating dataloader managers for
-    train (per-method) and val (per-method).
-    """
-    # --- 1. Prepare Training Data by Method ---
-    videos_by_method_train = defaultdict(list)
+def _create_per_method_loaders(train_videos, val_videos, config, data_config):
+    """Creates the dataloaders for the 'per_method' strategy."""
+    # This is the original logic, refactored into a helper.
+    train_videos_by_method = defaultdict(list)
     for v in train_videos:
-        videos_by_method_train[v.method].append(v)
+        train_videos_by_method[v.method].append(v)
 
-    # --- 2. Create a Lazy Manager for Training Loaders ---
+    train_batch_size = data_config['dataloader_params']['batch_size'] // 2
+    if train_batch_size == 0:
+        train_batch_size = 1
+
     train_loaders_manager = LazyDataLoaderManager(
-        videos_by_method=videos_by_method_train,
-        config=config,
-        data_config=data_config,
-        batch_size=train_batch_size,
-        mode='train',
+        videos_by_method=train_videos_by_method, config=config,
+        data_config=data_config, batch_size=train_batch_size, mode='train',
         max_loaders=MAX_LOADERS_IN_MEMORY
     )
 
-    # --- 3. Prepare Validation Data by Method ---
-    videos_by_method_val = defaultdict(list)
+    val_videos_by_method = defaultdict(list)
     for v in val_videos:
-        videos_by_method_val[v.method].append(v)
+        val_videos_by_method[v.method].append(v)
 
-    # --- 4. Create a Lazy Manager for Validation Loaders ---
     val_loaders_manager = LazyDataLoaderManager(
-        videos_by_method=videos_by_method_val,
+        videos_by_method=val_videos_by_method, config=config,
+        data_config=data_config, batch_size=config['test_batchSize'], mode='test',
+        max_loaders=MAX_LOADERS_IN_MEMORY
+    )
+    return train_loaders_manager, val_loaders_manager
+
+
+def _create_random_video_loader(train_videos, config, data_config):
+    """Creates a single dataloader for the 'video_level' strategy."""
+    pipe = IterableWrapper(train_videos).shuffle()
+    pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
+    pipe = Filter(pipe, lambda x: x is not None)
+
+    dl_params = data_config.get('dataloader_params', {})
+    batch_size = dl_params.get('videos_per_batch', 8)
+
+    return DataLoader(
+        pipe,
+        batch_size=batch_size,
+        num_workers=data_config['dataloader_params']['num_workers'],
+        collate_fn=collate_fn,
+        persistent_workers=True,
+        prefetch_factor=data_config['dataloader_params']['prefetch_factor']
+    )
+
+
+def _create_random_frame_loader(train_videos: list[VideoInfo], config: dict, data_config: dict):
+    """
+    Creates a single, highly efficient dataloader for the 'frame_level' strategy.
+    This implementation batches I/O requests to overcome cloud storage latency.
+    """
+    dl_params = data_config.get('dataloader_params', {})
+    gpu_batch_size = dl_params.get('frames_per_batch', 64)
+    num_workers = dl_params.get('num_workers', 16)
+
+    # 1. Start with an iterable of the training videos.
+    pipe = IterableWrapper(train_videos)
+
+    # 2. Lazily flatten into a stream of frame tuples (path, label_id).
+    def video_to_frame_tuples(video: VideoInfo):
+        label_id = 0 if video.label == 'real' else 1
+        for frame_path in video.frame_paths:
+            yield (frame_path, label_id)
+
+    pipe = pipe.flatmap(video_to_frame_tuples)
+
+    # 3. Shuffle the stream of paths using a larger buffer for better randomness.
+    pipe = pipe.shuffle(buffer_size=50000)
+
+    # 4. *** KEY CHANGE ***: Batch the PATHS before mapping to the loading function.
+    # We create a batch of paths to be processed by a single worker.
+    # A larger io_batch_size is better. It should be a multiple of your GPU batch size.
+    io_batch_size = gpu_batch_size * 4
+    pipe = pipe.batch(io_batch_size)
+
+    # 5. Map the new BATCHED loading function. It will get a list of paths.
+    # `flatmap` is used because our new function yields multiple processed frames.
+    pipe = pipe.flatmap(lambda batch_of_paths: load_and_process_frame_batch(batch_of_paths, config, 'train'))
+
+    # The filter is no longer needed here, as the batch loader handles it.
+
+    return DataLoader(
+        pipe,
+        batch_size=gpu_batch_size,  # This is the final batch size for the GPU
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        persistent_workers=True,
+        prefetch_factor=data_config['dataloader_params']['prefetch_factor']
+    )
+
+
+def create_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
+                       data_config: dict):
+    """
+    Factory function to create dataloaders based on the specified strategy.
+    The validation loader is ALWAYS per-method for consistent evaluation.
+    """
+    strategy = data_config.get('dataloader_params', {}).get('strategy', 'per_method')
+    print(f"--- Creating dataloaders with strategy: '{strategy}' ---")
+
+    # --- 1. Create Training Loader based on strategy ---
+    if strategy == 'per_method':
+        # The per_method helper returns both train and val loaders
+        train_loader, val_loader = _create_per_method_loaders(train_videos, val_videos, config, data_config)
+        return train_loader, val_loader
+
+    elif strategy == 'video_level':
+        train_loader = _create_random_video_loader(train_videos, config, data_config)
+
+    elif strategy == 'frame_level':
+        # Adjust batch size for frame-level training if needed for GPU memory
+        # This is a good place for such logic. For now, we assume it's set correctly in the config.
+        train_loader = _create_random_frame_loader(train_videos, config, data_config)
+
+    else:
+        raise ValueError(f"Unknown dataloader strategy: '{strategy}'")
+
+    # --- 2. Create the Validation Loader (always per-method) ---
+    val_videos_by_method = defaultdict(list)
+    for v in val_videos:
+        val_videos_by_method[v.method].append(v)
+
+    val_loader = LazyDataLoaderManager(
+        videos_by_method=val_videos_by_method,
         config=config,
         data_config=data_config,
         batch_size=config['test_batchSize'],
@@ -231,4 +409,4 @@ def create_method_aware_dataloaders(train_videos: list[VideoInfo], val_videos: l
         max_loaders=MAX_LOADERS_IN_MEMORY
     )
 
-    return train_loaders_manager, val_loaders_manager
+    return train_loader, val_loader

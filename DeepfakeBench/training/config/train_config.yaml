@@ -23,6 +23,14 @@ checkpointing:
   # 'Storage Object Admin' permissions on this bucket/prefix.
   gcs_prefix: "gs://training-job-outputs/best_checkpoints/"
 
+
+early_stopping:
+  enabled: true
+  patience: 4
+  min_delta: 0.001
+  mode: max
+  monitor: val/auc
+
 # label settings
 label_dict:
   # DFD

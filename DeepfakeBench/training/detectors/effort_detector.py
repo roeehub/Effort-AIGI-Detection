@@ -32,6 +32,7 @@ class EffortDetector(nn.Module):
         super(EffortDetector, self).__init__()
         self.config = config
         self.lambda_reg = config.get('lambda_reg', 1.0)  # Default to 1.0 if not in config
+        self.rank = config.get('rank', 1023)
         self.clip_backbone_path = config['gcs_assets']['clip_backbone']['local_path']
         self.backbone = self.build_backbone(config)  # Initialize Backbone model
         self.head = nn.Linear(1024, 2)
@@ -55,7 +56,7 @@ class EffortDetector(nn.Module):
 
         # Apply SVD to self_attn layers only
         # ViT-L/14 224*224: 1024-1
-        clip_model.vision_model = apply_svd_residual_to_self_attn(clip_model.vision_model, r=1024 - 1)
+        clip_model.vision_model = apply_svd_residual_to_self_attn(clip_model.vision_model, r=self.rank)
 
         # for name, param in clip_model.vision_model.named_parameters():
         #    print('{}: {}'.format(name, param.requires_grad))

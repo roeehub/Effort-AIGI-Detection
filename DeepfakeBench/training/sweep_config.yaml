@@ -1,52 +1,76 @@
-# --- Weights & Biases Sweep Configuration ---
+# --- config/exploratory_sweep.yaml ---
+# A focused 7-run sweep to test key hypotheses about Effort on the DF40 dataset.
 
-method: bayes
-name: Sweep-v5-loss
+method: random  # Use random search within the defined discrete values.
+name: Sweep-Effort-Explore-v1
 metric:
-  name: val/auc
+  name: val/auc  # Or val/eer, depending on your primary metric
   goal: maximize
 
 program: train_sweep.py
 
 parameters:
-  # --- Tier 1: Core Fine-Tuning Parameters ---
+  # --- Hypothesis 1: Regularization Strength ---
+  # The baseline is 1.0. Does more strict enforcement of Effort's constraints help?
+  lambda_reg:
+    values: [1.0, 2.5, 4.0]
+
+  # --- Hypothesis 2: Residual Capacity ---
+  # The baseline is 1023 (k=1). Does DF40 need more trainable dimensions?
+  # k = 1024 - rank. k=1, k=5, k=10
+  rank:
+    values: [1023, 1019, 1014]
+
+  # --- Hypothesis 3: Data Sampling Strategy ---
+  # Is it better to see frames randomly, or grouped by video?
+  dataloader_strategy:
+    values: ["frame_level"]
+
+  # --- Core Hyperparameters (mostly fixed) ---
+  # Keep LR tight around the known good value.
   learning_rate:
     distribution: log_uniform_values
-    min: 5.0e-6
-    max: 5.0e-4
+    min: 8.0e-5
+    max: 2.0e-4
+  # This is a critical parameter from the paper. Do NOT sweep it in this initial exploration.
   weight_decay:
-    distribution: log_uniform_values
-    min: 1.0e-5
-    max: 1.0e-3
-  lambda_reg:
-    distribution: uniform
-    min: 2.0
-    max: 6.0
-  num_frames_per_video:
-    values: [2, 4, 8]
-
-  # --- Tier 2: Fixed Parameters for this Sweep ---
-  train_batchSize:
-    value: 4  # per video. final calculation will be 32 frames per batch (8 frames/video * 4 videos/batch),
-              # if num_frames_per_video is 4, number of videos will be 8, so total frames per batch will be 32
-  test_batch_size:
-    value: 4
-  nEpochs:
-    value: 3 # Train long enough, but rely on best validation metric for checkpointing if needed
+    value: 0.05
   optimizer_eps:
-    value: 1.0e-8 # Standard default, no need to tune
+    value: 1.0e-8
 
-  # --- Tier 3: Fixed Contextual Parameters (Do Not Change) ---
+  # --- Training Schedule ---
+  # Shorter run for faster results in this exploratory sweep.
+  nEpochs:
+    value: 10
+  early_stopping_enabled:
+    value: true
+  early_stopping_patience:
+    value: 3 # Slightly more aggressive for a shorter sweep
+  early_stopping_min_delta:
+    value: 0.001
+
+  # --- Data & Dataloader Parameters (Fixed) ---
+  frames_per_batch:
+    value: 64
+  videos_per_batch:
+    value: 8
+  frames_per_video:
+    value: 8
+
+  # --- Fixed Context ---
+  test_batch_size:
+    value: 16
+  val_split_ratio:
+    value: 0.1
+  evaluation_frequency:
+    value: 1
   seed:
     value: 737
   data_subset_percentage:
     value: 1.0
   num_workers:
-    value: 1
+    value: 2
   prefetch_factor:
     value: 2
-  val_split_ratio:
-    value: 0.2
-  evaluation_frequency:
-    value: 1 # Evaluate every epoch
-
+  load_base_checkpoint:
+    value: false

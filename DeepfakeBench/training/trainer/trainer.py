@@ -43,7 +43,7 @@ class Trainer(object):
             val_videos=None
     ):
         if config is None or model is None or optimizer is None or logger is None:
-            raise ValueError("config, model, optimizier, and logger must be implemented")
+            raise ValueError("config, model, optimizer, and logger must be implemented")
 
         self.config = config
         self.model = model
@@ -58,28 +58,30 @@ class Trainer(object):
         # --- Comprehensive checkpoint tracking ---
         # List of dicts: [{'metric': float, 'epoch': int, 'gcs_path': str, ...}, ...]
         self.top_n_checkpoints = []
-        self.top_n_size = 5  # Track top 5 models
-        # One-time save for the very first "best" model found
+        self.top_n_size = self.config.get('checkpointing', {}).get('top_n_size', 3)
         self.first_best_gcs_path = None
-        self.fifth_best_gcs_path = None  # Track the fifth best model
         self.top_n_saved_count = 0
-        # --- END ---
 
-        # --- MODIFIED: Track GCS path instead of W&B artifact ---
-        self.best_model_gcs_path = None  # Track the GCS path of the best model
-
-        # Track the best metric for model saving
         self.best_val_metric = -1.0
         self.best_val_epoch = -1
 
+        self.early_stopping_config = self.config.get('early_stopping', {})
+        self.early_stopping_enabled = self.early_stopping_config.get('enabled', False)
+        if self.early_stopping_enabled:
+            self.early_stopping_patience = self.early_stopping_config.get('patience', 3)
+            # What is the minimum change to be considered an improvement
+            self.early_stopping_min_delta = self.early_stopping_config.get('min_delta', 0.0001)
+            self.epochs_without_improvement = 0
+            self.logger.info(
+                f"✅ Early stopping enabled: patience={self.early_stopping_patience}, min_delta={self.early_stopping_min_delta}")
+        self.early_stop_triggered = False  # Flag to signal the main loop
+
         # Initialize AMP scaler for mixed precision training
         self.scaler = GradScaler()
-
         self.speed_up()
 
-        # Checkpoint saving directory is now managed by W&B
         self.log_dir = self.wandb_run.dir if self.wandb_run else './logs'
-
+        # These are now only used for 'per_method' strategy, but are initialized here
         self.real_method_iters = {}
         self.fake_method_iters = {}
 
@@ -96,7 +98,6 @@ class Trainer(object):
     def setEval(self):
         self.model.eval()
 
-    # --- Helper function to upload a file to GCS ---
     def _upload_to_gcs(self, local_path, gcs_path):
         """Uploads a local file to a GCS path."""
         try:
@@ -117,7 +118,6 @@ class Trainer(object):
             self.logger.error(f"An unexpected error occurred during GCS upload: {e}")
             return False
 
-    # --- Helper function to delete a file from GCS ---
     def _delete_from_gcs(self, gcs_path):
         """Deletes a blob from a given GCS path."""
         if not gcs_path:
@@ -172,10 +172,12 @@ class Trainer(object):
         torch.save(model_state, local_save_path)
 
         gcs_prefix = gcs_config['gcs_prefix']
+        # <<< NEW: Ensure prefix ends with a slash for robust path joining
         if not gcs_prefix.endswith('/'):
             gcs_prefix += '/'
         run_id = self.wandb_run.id if self.wandb_run else "local_run"
-        full_gcs_path = os.path.join(gcs_prefix, run_id, ckpt_name)
+        # <<< MODIFIED: Use os.path.join and then replace for cross-platform safety, though simple concatenation is fine for GCS.
+        full_gcs_path = gcs_prefix + f"{run_id}/{ckpt_name}"
 
         upload_success = self._upload_to_gcs(local_save_path, full_gcs_path)
 
@@ -187,7 +189,6 @@ class Trainer(object):
         return full_gcs_path if upload_success else None
 
     def train_step(self, data_dict):
-        # --- Use autocast for the forward pass ---
         with autocast():
             predictions = self.model(data_dict)
             if type(self.model) is DDP:
@@ -196,104 +197,168 @@ class Trainer(object):
                 losses = self.model.get_losses(data_dict, predictions)
 
         self.optimizer.zero_grad()
-
-        # --- Scale the loss and call backward and step via the scaler ---
         self.scaler.scale(losses['overall']).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
-
         return losses, predictions
 
-    def _next_batch_from_group(self, method, dataloader_dict, iter_dict):
-        it = iter_dict.get(method)
-        if it is None:
-            it = iter_dict[method] = iter(dataloader_dict[method])
+    def _next_batch_from_group(self, method_name, loaders, iters):
+        """
+        Gets the next batch from a specific method's dataloader.
+        Manages a dictionary of iterators, creating or resetting them as needed.
+
+        Args:
+            method_name (str): The method to get a batch from.
+            loaders (LazyDataLoaderManager): The manager holding all dataloader objects.
+            iters (dict): The dictionary holding the active iterators for this group (real or fake).
+
+        Returns:
+            dict: The data dictionary for the next batch.
+        """
+        # 1. If we've never created an iterator for this method, create one.
+        if method_name not in iters:
+            loader = loaders[method_name]
+            iters[method_name] = iter(loader)
+
+        # 2. Try to get the next batch from the existing iterator.
         try:
-            return next(it)
+            data_dict = next(iters[method_name])
+        # 3. If the iterator is exhausted, create a new one and get the first batch.
+        #    This allows us to loop over smaller datasets multiple times within one epoch.
         except StopIteration:
-            it = iter_dict[method] = iter(dataloader_dict[method])
-            return next(it)
+            loader = loaders[method_name]
+            iters[method_name] = iter(loader)
+            data_dict = next(iters[method_name])
+
+        return data_dict
+
+    def _train_per_method_step(self, real_loaders, fake_loaders, real_method_names, fake_method_names, real_weights,
+                               fake_weights):
+        """Helper to contain the logic for getting one 'per_method' batch."""
+        chosen_fake_method = random.choices(fake_method_names, weights=fake_weights, k=1)[0]
+        fake_data_dict = self._next_batch_from_group(chosen_fake_method, fake_loaders, self.fake_method_iters)
+
+        chosen_real_method = random.choices(real_method_names, weights=real_weights, k=1)[0]
+        real_data_dict = self._next_batch_from_group(chosen_real_method, real_loaders, self.real_method_iters)
+
+        data_dict = {}
+        for key in fake_data_dict.keys():
+            f_val, r_val = fake_data_dict[key], real_data_dict[key]
+            if torch.is_tensor(f_val) and torch.is_tensor(r_val):
+                data_dict[key] = torch.cat((f_val, r_val), dim=0)
+            elif isinstance(f_val, list):
+                data_dict[key] = f_val + (r_val if r_val is not None else [])
+            else:
+                data_dict[key] = f_val
+
+        batch_size = data_dict.get('label', torch.tensor([])).shape[0]
+        if batch_size == 0: return None
+
+        shuffle_indices = torch.randperm(batch_size)
+        for key in data_dict.keys():
+            if torch.is_tensor(data_dict[key]):
+                data_dict[key] = data_dict[key][shuffle_indices]
+            elif isinstance(data_dict[key], list):
+                data_dict[key] = [data_dict[key][i] for i in shuffle_indices.tolist()]
+
+        return data_dict
 
     def train_epoch(
             self,
-            real_loaders,
-            fake_loaders,
-            real_method_names,
-            fake_method_names,
-            real_weights,
-            fake_weights,
+            train_loader,  # Now a single argument for the training data
             epoch,
-            epoch_len,
-            val_method_loaders=None,
-            evaluation_frequency=1  # NEW: frequency parameter
+            train_videos,  # Used for calculating epoch length
+            val_method_loaders=None
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
-        # Calculate test step based on frequency
+        strategy = self.config.get('dataloader_params', {}).get('strategy', 'per_method')
+        batch_size = self.config.get('dataloader_params', {}).get('batch_size')
+        evaluation_frequency = self.config.get('data_params', {}).get('evaluation_frequency', 1)
+
+        # --- Determine Epoch Length based on strategy ---
+        if strategy == 'frame_level':
+            total_frames = sum(len(v.frame_paths) for v in train_videos)
+            epoch_len = math.ceil(total_frames / batch_size) if total_frames > 0 else 0
+        else:  # For per_method and video_level, it's based on total videos
+            total_train_videos = len(train_videos)
+            epoch_len = math.ceil(total_train_videos / batch_size) if total_train_videos > 0 else 0
+
+        self.logger.info(f"Training strategy: '{strategy}', Epoch length: {epoch_len} steps")
+
         test_step = epoch_len // evaluation_frequency if evaluation_frequency > 0 else epoch_len
-        if test_step == 0: test_step = 1  # Ensure we test at least once if epoch is short
+        if test_step == 0: test_step = 1
 
         step_cnt = epoch * epoch_len
-        pbar = tqdm(range(epoch_len), desc=f"EPOCH: {epoch + 1}/{self.config['nEpochs']}")
 
-        for iteration in pbar:
-            self.setTrain()
+        # --- Conditional Training Loop based on strategy ---
+        if strategy == 'per_method':
+            # This is the logic moved from train_sweep.py, now encapsulated here.
+            real_source_names = self.config['methods']['use_real_sources']
+            all_method_names = train_loader.keys()
+            real_method_names = [m for m in all_method_names if m in real_source_names]
+            fake_method_names = [m for m in all_method_names if m not in real_source_names]
 
-            chosen_fake_method = random.choices(fake_method_names, weights=fake_weights, k=1)[0]
-            fake_data_dict = self._next_batch_from_group(chosen_fake_method, fake_loaders, self.fake_method_iters)
+            real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
+            for v in train_videos:
+                (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
+            total_real_videos = sum(real_video_counts.values())
+            total_fake_videos = sum(fake_video_counts.values())
+            real_weights = [real_video_counts[m] / total_real_videos for m in
+                            real_method_names] if total_real_videos > 0 else []
+            fake_weights = [fake_video_counts[m] / total_fake_videos for m in
+                            fake_method_names] if total_fake_videos > 0 else []
 
-            chosen_real_method = random.choices(real_method_names, weights=real_weights, k=1)[0]
-            real_data_dict = self._next_batch_from_group(chosen_real_method, real_loaders, self.real_method_iters)
+            pbar = tqdm(range(epoch_len), desc=f"EPOCH (per_method): {epoch + 1}/{self.config['nEpochs']}")
+            for iteration in pbar:
+                data_dict = self._train_per_method_step(train_loader, train_loader, real_method_names,
+                                                        fake_method_names, real_weights, fake_weights)
+                if data_dict is None: continue
 
-            # Combine batches
-            data_dict = {}
-            # This robustly combines batches, handling Tensors, lists, and None values.
-            for key in fake_data_dict.keys():
-                f_val, r_val = fake_data_dict[key], real_data_dict[key]
-                if torch.is_tensor(f_val):
-                    data_dict[key] = torch.cat((f_val, r_val), dim=0)
-                elif isinstance(f_val, list):
-                    data_dict[key] = f_val + r_val
-                else:
-                    # This correctly handles the NoneType for 'landmark' and 'mask'
-                    data_dict[key] = f_val
+                self._run_train_step(data_dict, step_cnt, epoch, pbar)
+                step_cnt += 1
+                if (iteration + 1) % test_step == 0:
+                    self._run_validation(epoch, iteration, val_method_loaders)
 
-            batch_size = data_dict['label'].shape[0]
-            if batch_size == 0: continue  # Skip empty batches
+        elif strategy in ['video_level', 'frame_level']:
+            # This is the simpler loop for standard dataloaders.
+            pbar = tqdm(train_loader, desc=f"EPOCH ({strategy}): {epoch + 1}/{self.config['nEpochs']}", total=epoch_len)
+            for i, data_dict in enumerate(pbar):
+                self._run_train_step(data_dict, step_cnt, epoch, pbar)
+                step_cnt += 1
+                if (i + 1) % test_step == 0:
+                    self._run_validation(epoch, i, val_method_loaders)
+        else:
+            raise ValueError(f"Unsupported training strategy: {strategy}")
 
-            shuffle_indices = torch.randperm(batch_size)
-            for key in data_dict.keys():
-                if torch.is_tensor(data_dict[key]):
-                    data_dict[key] = data_dict[key][shuffle_indices]
-                elif isinstance(data_dict[key], list):
-                    data_dict[key] = [data_dict[key][i] for i in shuffle_indices.tolist()]
+    def _run_train_step(self, data_dict, step_cnt, epoch, pbar):
+        """Helper to avoid code duplication in the training loop."""
+        self.setTrain()
+        for key in data_dict.keys():
+            if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(self.model.device)
 
-            for key in data_dict.keys():
-                if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(self.model.device)
+        losses, predictions = self.train_step(data_dict)
 
-            losses, predictions = self.train_step(data_dict)
+        if self.wandb_run and self.config['local_rank'] == 0:
+            log_dict = {"train/step": step_cnt, "epoch": epoch + 1}
+            for name, value in losses.items():
+                log_dict[f'train/loss/{name}'] = value.item()
 
-            # --- W&B Logging for Training Step ---
-            if self.wandb_run and self.config['local_rank'] == 0:
-                log_dict = {"train/step": step_cnt, "epoch": epoch + 1}
-                for name, value in losses.items():
-                    log_dict[f'train/loss/{name}'] = value.item()
+            if type(self.model) is DDP:
+                batch_metrics = self.model.module.get_train_metrics(data_dict, predictions)
+            else:
+                batch_metrics = self.model.get_train_metrics(data_dict, predictions)
 
-                if type(self.model) is DDP:
-                    batch_metrics = self.model.module.get_train_metrics(data_dict, predictions)
-                else:
-                    batch_metrics = self.model.get_train_metrics(data_dict, predictions)
+            for name, value in batch_metrics.items():
+                log_dict[f'train/metric/{name}'] = value
+            self.wandb_run.log(log_dict)
 
-                for name, value in batch_metrics.items():
-                    log_dict[f'train/metric/{name}'] = value
+            pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
 
-                self.wandb_run.log(log_dict)
-                pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
-
-            step_cnt += 1
-            if (iteration + 1) % test_step == 0:
-                if val_method_loaders is not None and self.config['local_rank'] == 0:
-                    self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
-                    self.test_epoch(epoch, val_method_loaders)
+    def _run_validation(self, epoch, iteration, val_method_loaders):
+        """Helper to run validation to keep the main loop clean."""
+        if val_method_loaders is not None and self.config['local_rank'] == 0:
+            self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
+            self.test_epoch(epoch, val_method_loaders)
 
     @torch.no_grad()
     def test_epoch(self, epoch, val_method_loaders):
@@ -352,9 +417,6 @@ class Trainer(object):
                     method_labels[method].extend(data_dict['label'].cpu().numpy())
                     method_preds[method].extend(video_probs.cpu().numpy())
 
-                    # (Future) Here you can accumulate per-method metrics:
-                    # per_method_results[method].append(...)
-
                     pbar.update(1)
 
                 except StopIteration:
@@ -387,13 +449,14 @@ class Trainer(object):
         # Metrics Per Method
         method_metrics = {}
         for method in method_preds.keys():
-            method_metrics[method] = get_test_metrics(np.array(method_preds[method]), np.array(method_labels[method]))
+            method_metrics[method] = get_test_metrics(np.array(method_preds[method]),
+                                                      np.array(method_labels[method]))
             for name, value in method_metrics[method].items():
                 if name in ['acc']:
                     wandb_log_dict[f'val/method/{method}/{name}'] = value
                     self.logger.info(f"Method {method} val {name}: {value:.4f}")
 
-        # --- NEW: Create and log a W&B Table for side-by-side comparison ---
+        # --- Create and log a W&B Table for side-by-side comparison ---
         if self.wandb_run:
             columns = ["epoch", "method", "acc", "auc", "eer", "n_samples"]
             table_data = []
@@ -410,85 +473,100 @@ class Trainer(object):
             # Add the created table to the dictionary that will be logged
             wandb_log_dict["val/method_table"] = wandb.Table(columns=columns, data=table_data)
 
-        # --- Advanced Checkpoint Saving and Pruning Logic ---
+        # --- Advanced Checkpoint Saving and Early Stopping Logic ---
         current_metric = overall_metrics.get(self.metric_scoring)
-        if current_metric is not None and self.config['save_ckpt']:
+        if current_metric is None:
+            self.logger.warning(
+                f"Metric '{self.metric_scoring}' not found. Skipping checkpointing and early stopping check.")
+        else:
+            is_improvement = current_metric > self.best_val_metric + self.early_stopping_min_delta
 
-            # 1. Handle the "First Best" checkpoint (one-time save)
-            if self.first_best_gcs_path is None and current_metric > self.best_val_metric:
-                self.logger.info(f"🎉 Saving FIRST best model! Metric ({self.metric_scoring}): {current_metric:.4f}")
-                new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
-                                              eer=overall_metrics.get('eer'), ckpt_prefix='first_best')
-                if new_gcs_path:
-                    self.first_best_gcs_path = new_gcs_path
-                    if self.wandb_run:
-                        self.wandb_run.summary['first_best_ckpt_gcs'] = new_gcs_path
-                        self.wandb_run.summary['first_best_metric'] = current_metric
-
-            # 2. Manage the Top-N checkpoint list
-            is_top_n = len(self.top_n_checkpoints) < self.top_n_size or current_metric > self.top_n_checkpoints[-1][
-                'metric']
-
-            if is_top_n:
+            if is_improvement:
                 self.logger.info(
-                    f"🏆 New Top-{self.top_n_size} performance! Metric ({self.metric_scoring}): {current_metric:.4f}")
+                    f"🚀 Performance improved! New best {self.metric_scoring}: {current_metric:.4f} (previously {self.best_val_metric:.4f})")
+                self.epochs_without_improvement = 0  # Reset counter
 
-                # Determine the prefix: default, or 'fifth_best' for the special one-time save
-                ckpt_prefix = 'top_n'
-                if self.top_n_saved_count == 4 and self.fifth_best_gcs_path is None:
-                    self.logger.info("This is the 5th unique top model. Saving with 'fifth_best' prefix.")
-                    ckpt_prefix = 'fifth_best'
-
-                new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
-                                              eer=overall_metrics.get('eer'), ckpt_prefix=ckpt_prefix)
-
-                if new_gcs_path:
-                    # Increment counter only on successful save of a new top-N model
-                    self.top_n_saved_count += 1
-
-                    # If this was the special 5th save, lock it in
-                    if ckpt_prefix == 'fifth_best':
-                        self.fifth_best_gcs_path = new_gcs_path
-                        if self.wandb_run:
-                            self.wandb_run.summary['fifth_best_ckpt_gcs'] = new_gcs_path
-                            self.wandb_run.summary['fifth_best_metric'] = current_metric
-
-                    # Add new checkpoint to the list and sort
-                    self.top_n_checkpoints.append(
-                        {'metric': current_metric, 'epoch': epoch + 1, 'gcs_path': new_gcs_path})
-                    self.top_n_checkpoints.sort(key=lambda x: x['metric'], reverse=True)
-
-                    # Prune the list if it's too long
-                    if len(self.top_n_checkpoints) > self.top_n_size:
-                        worst_ckpt = self.top_n_checkpoints.pop()
+                # --- The entire checkpoint saving and best metric update logic now runs only on improvement ---
+                if self.config.get('save_ckpt', True):
+                    # 1. Handle the "First Best" checkpoint (one-time save)
+                    if self.first_best_gcs_path is None:
                         self.logger.info(
-                            f"Pruning checkpoint from epoch {worst_ckpt['epoch']} as it's no longer in the top {self.top_n_size}.")
-                        self._delete_from_gcs(worst_ckpt['gcs_path'])
+                            f"🎉 Saving FIRST best model! Metric ({self.metric_scoring}): {current_metric:.4f}")
+                        new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
+                                                      eer=overall_metrics.get('eer'), ckpt_prefix='first_best')
+                        if new_gcs_path:
+                            self.first_best_gcs_path = new_gcs_path
+                            if self.wandb_run:
+                                self.wandb_run.summary['first_best_ckpt_gcs'] = new_gcs_path
+                                self.wandb_run.summary['first_best_metric'] = current_metric
 
-            # 3. Update overall best metric and W&B summary (based on the current best in the list)
-            if self.top_n_checkpoints and self.top_n_checkpoints[0]['metric'] > self.best_val_metric:
-                overall_best = self.top_n_checkpoints[0]
-                self.best_val_metric = overall_best['metric']
-                self.best_val_epoch = overall_best['epoch']
+                    # 2. Manage the Top-N checkpoint list
+                    is_top_n = len(self.top_n_checkpoints) < self.top_n_size or current_metric > \
+                               self.top_n_checkpoints[-1]['metric']
+                    if is_top_n:
+                        self.logger.info(
+                            f"🏆 New Top-{self.top_n_size} performance! Metric ({self.metric_scoring}): {current_metric:.4f}")
+                        new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
+                                                      eer=overall_metrics.get('eer'), ckpt_prefix='top_n')
+                        if new_gcs_path:
+                            self.top_n_saved_count += 1
+                            self.top_n_checkpoints.append({
+                                'metric': current_metric,
+                                'epoch': epoch + 1,
+                                'gcs_path': new_gcs_path,
+                                'all_metrics': overall_metrics
+                            })
+                            self.top_n_checkpoints.sort(key=lambda x: x['metric'], reverse=True)
+                            if len(self.top_n_checkpoints) > self.top_n_size:
+                                worst_ckpt = self.top_n_checkpoints.pop()
+                                self.logger.info(
+                                    f"Pruning checkpoint from epoch {worst_ckpt['epoch']} as it's no longer in top {self.top_n_size}.")
+                                self._delete_from_gcs(worst_ckpt['gcs_path'])
 
+                # 3. Update overall best metric and W&B summary
+                if self.top_n_checkpoints and self.top_n_checkpoints[0]['metric'] > self.best_val_metric:
+                    overall_best = self.top_n_checkpoints[0]
+                    self.best_val_metric = overall_best['metric']
+                    self.best_val_epoch = overall_best['epoch']
+
+                    if self.wandb_run:
+                        self.wandb_run.summary['overall_best_ckpt_gcs'] = overall_best['gcs_path']
+                        self.wandb_run.summary['best/epoch'] = self.best_val_epoch
+                        self.wandb_run.summary['best/metric'] = self.best_val_metric
+                        best_metrics_dict = overall_best['all_metrics']
+                        best_auc = best_metrics_dict.get('auc', 0)
+                        best_eer = best_metrics_dict.get('eer', 0)
+                        best_acc = best_metrics_dict.get('acc', 0)
+                        self.wandb_run.summary['best/auc'] = best_auc
+                        self.wandb_run.summary['best/eer'] = best_eer
+                        self.wandb_run.summary['best/acc'] = best_acc
+                        self.wandb_run.summary[
+                            'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={best_auc:.4f} EER={best_eer:.4f} ACC={best_acc:.4f} ckpt=GCS"
+
+            else:  # No improvement
+                if self.early_stopping_enabled:
+                    self.epochs_without_improvement += 1
+                    self.logger.warning(
+                        f"No improvement for {self.epochs_without_improvement}/{self.early_stopping_patience} epochs. "
+                        f"Current {self.metric_scoring}: {current_metric:.4f}, Best: {self.best_val_metric:.4f}"
+                    )
+
+            # Check for early stopping condition after updating the counter
+            if self.early_stopping_enabled and self.epochs_without_improvement >= self.early_stopping_patience:
+                self.early_stop_triggered = True
+                self.logger.critical(
+                    f"🚨 EARLY STOPPING TRIGGERED! No improvement in '{self.metric_scoring}' for {self.early_stopping_patience} epochs."
+                )
                 if self.wandb_run:
-                    self.wandb_run.summary['overall_best_ckpt_gcs'] = self.top_n_checkpoints[0]['gcs_path']
-                    self.wandb_run.summary['best/epoch'] = self.best_val_epoch
-                    self.wandb_run.summary['best/metric'] = self.best_val_metric
-                    # Use full metrics from the best checkpoint dict
-                    best_ckpt_info = self.top_n_checkpoints[0]
-                    best_auc = get_test_metrics(np.array(all_preds), np.array(all_labels))['auc']
-                    best_eer = get_test_metrics(np.array(all_preds), np.array(all_labels))['eer']
-                    best_acc = get_test_metrics(np.array(all_preds), np.array(all_labels))['acc']
-
-                    self.wandb_run.summary['best/auc'] = best_auc
-                    self.wandb_run.summary['best/eer'] = best_eer
-                    self.wandb_run.summary['best/acc'] = best_acc
                     self.wandb_run.summary[
-                        'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={best_auc:.4f} EER={best_eer:.4f} ACC={best_acc:.4f} ckpt=GCS"
+                        'early_stop_reason'] = f"No improvement in {self.metric_scoring} for {self.early_stopping_patience} epochs."
+                    self.wandb_run.summary['early_stop_epoch'] = epoch + 1
 
         wandb_log_dict['val/best_metric'] = self.best_val_metric
         wandb_log_dict['val/best_epoch'] = self.best_val_epoch
+        if self.early_stopping_enabled:
+            wandb_log_dict['val/epochs_without_improvement'] = self.epochs_without_improvement
+
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
         del all_preds, all_labels, method_labels, method_preds, overall_metrics, all_losses
         gc.collect()

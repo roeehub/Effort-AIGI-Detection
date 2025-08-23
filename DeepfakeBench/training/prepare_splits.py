@@ -51,6 +51,7 @@ class VideoInfo:
     video_id: str  # folder name
     frame_paths: List[str]  # gs:// paths
     identity: int  # target identity (numeric)
+    label_id: int = 0  # a numeric label ID
 
     def __post_init__(self):
         # 1) strict label check
@@ -60,6 +61,7 @@ class VideoInfo:
                 f"for video '{self.method}/{self.video_id}'. "
                 "Allowed: 'real' or 'fake'."
             )
+        self.label_id = 0 if self.label == 'real' else 1
 
         # 2) basic sanity on frame list
         if not self.frame_paths:
@@ -132,19 +134,17 @@ def _balance_video_list(
 # ---------------------------------------------------------------------------
 # 3 Main entry
 # ---------------------------------------------------------------------------
-def prepare_video_splits(cfg_path: str = "config.yaml"
-                         ) -> Tuple[List[VideoInfo], List[VideoInfo], dict, dict]:
+def prepare_video_splits(data_cfg: dict) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
     """
-    Prepares video splits for training and validation.
+    Prepares video splits for training and validation using a config dictionary.
 
     Returns:
         Tuple containing:
         - train_videos (List[VideoInfo]): The balanced list of training videos.
         - val_videos (List[VideoInfo]): The balanced list of validation videos.
-        - cfg (dict): The loaded configuration.
         - stats (dict): A dictionary with statistics about the data preparation process.
     """
-    cfg = yaml.safe_load(open(cfg_path))
+    cfg = data_cfg  # Use the passed-in dictionary
     BUCKET = f"gs://{cfg['gcp']['bucket_name']}"
     SEED = cfg['data_params']['seed']
     VAL_RATIO = cfg['data_params']['val_split_ratio']
@@ -209,7 +209,7 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
         tid = extract_target_id(label, method, vid)
         if tid is None:  # synthetic unique
             tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
-        videos.append(VideoInfo(label, method, vid, fr, tid))
+        videos.append(VideoInfo(label, method, vid, fr, tid, label_id=(0 if label == 'real' else 1)))
 
     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
     stats['discovered_videos'] = len(videos)
@@ -293,7 +293,7 @@ def prepare_video_splits(cfg_path: str = "config.yaml"
 
     random.shuffle(train_videos)
     random.shuffle(val_videos)
-    return train_videos, val_videos, cfg, stats
+    return train_videos, val_videos, stats
 
 
 if __name__ == "__main__":

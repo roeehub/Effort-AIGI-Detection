@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # training/launch_experiment_jobs.sh
 # One launcher for single runs and W&B sweeps on Vertex AI.
+# Now supports passing extra entrypoint args after a literal `--`
+# (they become container args, e.g. `-- --param-config /workspace/train_parameters.yaml`).
 
 set -euo pipefail
 
@@ -15,7 +17,7 @@ MAIN_SCRIPT="train_sweep.py"       # program to run in 'train' mode
 SWEEP_ID=""                        # required for 'sweep' mode
 
 PROJECT=""                         # --project for gcloud
-REGIONS="us-central1,us-east4,europe-west4"
+REGIONS="us-central1,europe-west4,asia-southeast1"
 YAML_TEMPLATE="./vertex_job_template.yaml"
 
 IMAGE_URI=""                       # required (or set in your env)
@@ -23,10 +25,13 @@ GPU_TYPE="NVIDIA_TESLA_A100"       # matches a2-highgpu-1g
 GPU_COUNT="1"
 SERVICE_ACCOUNT=""                 # optional; if empty and PROJECT set, we’ll try a sane default
 
+# Extra args that should be forwarded to the container entrypoint
+EXTRA_ARGS=()                      # everything after a standalone `--` goes here
+
 usage() {
   cat <<EOF
 Usage:
-  $(basename "$0") --mode train|sweep [options]
+  $(basename "$0") --mode train|sweep [options] [-- <entrypoint extra args>]
 
 Common options:
   --project ID                GCP project for the job
@@ -43,7 +48,8 @@ Common options:
 Train mode:
   --mode train
   --main-script PATH          Python entrypoint (default: $MAIN_SCRIPT)
-  # (Pass extra python flags via env PY_ARGS="--epochs 5 --lr 1e-4" if you want; entrypoint can read it.)
+  # Pass extra python flags AFTER a literal -- so they reach the container entrypoint, e.g.:
+  #   $(basename "$0") --mode train ... -- --param-config /workspace/train_parameters.yaml
 
 Sweep mode:
   --mode sweep
@@ -53,16 +59,6 @@ Sweep mode:
 
 Env expected (no secrets in files):
   WANDB_API_KEY, WANDB_ENTITY, WANDB_PROJECT
-
-Examples:
-  # single training job
-  $0 --mode train --project my-proj --image-uri us-docker.pkg.dev/my-proj/effort/effort:latest
-
-  # one sweep agent, 5 trials
-  $0 --mode sweep --sweep-id dtect-vision/Effort-Deepfake/ABC123 --project my-proj --image-uri us-docker.pkg.dev/my-proj/effort/effort:latest
-
-  # six parallel agents (30 trials total with --count 5)
-  $0 --mode sweep --sweep-id dtect-vision/Effort-Deepfake/ABC123 --agents 6 --count 5 --project my-proj --image-uri us-docker.pkg.dev/my-proj/effort/effort:latest
 EOF
 }
 
@@ -100,6 +96,7 @@ while [[ $# -gt 0 ]]; do
     --service-account) SERVICE_ACCOUNT="$2"; shift 2 ;;
     --service-account=*) SERVICE_ACCOUNT="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
+    --) shift; EXTRA_ARGS+=("$@"); break ;;   # everything after -- goes to container args
     *) echo "Unknown option: $1"; usage; exit 2 ;;
   esac
 done
@@ -116,15 +113,25 @@ if [[ -z "${WANDB_API_KEY:-}" ]]; then
   echo "WARN: WANDB_API_KEY not set; your container must still get it (template env or Secret Manager)."
 fi
 if [[ -z "$SERVICE_ACCOUNT" && -n "$PROJECT" ]]; then
+  # Use a sensible default if you follow the convention; override with --service-account to customize.
   SERVICE_ACCOUNT="vertex-job-runner-train-cvit2@${PROJECT}.iam.gserviceaccount.com"
 fi
 
 # -------- helpers --------
 ts() { date +%Y%m%d-%H%M%S; }
+
+# Escape a single argument for YAML double-quoted string
+yaml_quote_arg() {
+  local s="$1"
+  s="${s//\\/\\\\}"   # backslashes
+  s="${s//\"/\\\"}"   # double quotes
+  printf '"%s"' "$s"
+}
+
 render_yaml() {
-  local in="$1" out="$2"
+  local in="$1" out="$2" jobname="$3"
   sed \
-    -e "s|{{JOB_NAME}}|$3|g" \
+    -e "s|{{JOB_NAME}}|$jobname|g" \
     -e "s|{{IMAGE_URI}}|$IMAGE_URI|g" \
     -e "s|{{GPU_TYPE}}|$GPU_TYPE|g" \
     -e "s|{{GPU_COUNT}}|$GPU_COUNT|g" \
@@ -132,16 +139,42 @@ render_yaml() {
     -e "s|{{WANDB_ENTITY}}|${WANDB_ENTITY:-}|g" \
     -e "s|{{WANDB_PROJECT}}|${WANDB_PROJECT:-}|g" \
     -e "s|{{JOB_MODE}}|$MODE|g" \
-    -e "s|{{SWEEP_ID}}|$SWEEP_ID|g" \
+    -e "s|{{SWEEP_ID}}|${SWEEP_ID:-"N/A"}|g" \
     -e "s|{{SWEEP_COUNT}}|$COUNT|g" \
     -e "s|{{MAIN_SCRIPT}}|$MAIN_SCRIPT|g" \
     -e "s|{{SERVICE_ACCOUNT}}|$SERVICE_ACCOUNT|g" \
     "$in" > "$out"
+
+  # If extra args were provided, inject them into containerSpec.args
+  if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+    local arr=( "--" "${EXTRA_ARGS[@]}" )
+    local yaml_list=""
+    for a in "${arr[@]}"; do
+      if [[ -n "$yaml_list" ]]; then yaml_list+=", "; fi
+      yaml_list+="$(yaml_quote_arg "$a")"
+    done
+    # Replace the placeholder empty list: args: []
+    if grep -qE '^[[:space:]]*args:[[:space:]]*\[[[:space:]]*\]' "$out"; then
+      sed -i.bak -e "s|^\([[:space:]]*args:\)[[:space:]]*\[[[:space:]]*\]|\1 [ ${yaml_list} ]|" "$out"
+      rm -f "$out.bak"
+    else
+      # Fallback: append under containerSpec if args:[] not present
+      awk -v yaml_list="$yaml_list" '
+        { print }
+        /^ *containerSpec:/ { in_cs=1; next }
+        in_cs && /^ *env:/ {
+          print "      args: [ " yaml_list " ]"
+          in_cs=0
+        }
+      ' "$out" > "$out.tmp" && mv "$out.tmp" "$out"
+    fi
+  fi
 }
 
 submit_job_once() {
   local name="$1"
-  local tmp="$(mktemp)"
+  local tmp
+  tmp="$(mktemp)"
   render_yaml "$YAML_TEMPLATE" "$tmp" "$name"
   local rc=1
   IFS=',' read -ra RLIST <<< "$REGIONS"
@@ -168,6 +201,9 @@ echo "Template: $YAML_TEMPLATE"
 echo "Regions: $REGIONS"
 [[ "$MODE" == "train" ]] && echo "Main script: $MAIN_SCRIPT"
 [[ "$MODE" == "sweep" ]] && echo "Sweep ID: $SWEEP_ID"
+if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+  echo "Entrypoint extra args: ${EXTRA_ARGS[*]}"
+fi
 
 pids=()
 for i in $(seq 1 "$AGENTS"); do
