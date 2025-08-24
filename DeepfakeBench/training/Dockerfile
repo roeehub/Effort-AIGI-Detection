@@ -25,7 +25,10 @@ RUN apt-get update && \
         libglib2.0-0 \
         git \
         curl \
-        ca-certificates && \
+        ca-certificates \
+        # Add required libraries for Pillow-SIMD compilation
+        libjpeg-dev \
+        zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # --- Create a symlink for `python` command ---
@@ -46,6 +49,10 @@ RUN python -m pip install --no-cache-dir --upgrade pip && \
         torch==2.1.1 torchvision==0.16.1 \
         --index-url https://download.pytorch.org/whl/cu121 && \
     python -m pip install --no-cache-dir -r requirements.txt
+
+
+# Reinstall pillow-simd to leverage SIMD optimizations, separately just to save the existing cache above
+RUN python -m pip install --no-cache-dir --force-reinstall pillow-simd
 
 # --- Copy Application Code ---
 # STEP 3: Now that slow dependencies are installed, copy the application code.

@@ -306,27 +306,30 @@ def main():
     wandb.config.update(curated_config_log, allow_val_change=True)
 
     # Construct and set an informative run name
-    model_name = config.get('model_name', 'model')
-    strategy = wandb.config.dataloader_strategy
-    if strategy == 'frame_level':
-        batch_info = f"frames{wandb.config.frames_per_batch}"
-    else:  # video_level or per_method
-        batch_info = f"vids{wandb.config.videos_per_batch}x{wandb.config.frames_per_video}f"
-    lr = wandb.config.learning_rate
-    wd = wandb.config.weight_decay
-    eps = wandb.config.optimizer_eps
-    local_rank = wandb.config.rank
-    # num_frames = wandb.config.num_frames_per_video -- This was causing an error, seems it was renamed.
-    subset_pct = wandb.config.data_subset_percentage
-    run_name = (
-        f"{model_name}"
-        f"_{strategy}"
-        f"_{batch_info}"
-        f"_lr{lr:.0e}"
-        f"_wd{wd:.0e}"
-        f"_r{local_rank}"
-    ).replace("+", "")
-    wandb.run.name = run_name
+    if wandb.config.get("name"):
+        wandb.run.name = wandb.config.name
+    else:
+        model_name = config.get('model_name', 'model')
+        strategy = wandb.config.dataloader_strategy
+        if strategy == 'frame_level':
+            batch_info = f"frames{wandb.config.frames_per_batch}"
+        else:  # video_level or per_method
+            batch_info = f"vids{wandb.config.videos_per_batch}x{wandb.config.frames_per_video}f"
+        lr = wandb.config.learning_rate
+        wd = wandb.config.weight_decay
+        eps = wandb.config.optimizer_eps
+        local_rank = wandb.config.rank
+        # num_frames = wandb.config.num_frames_per_video -- This was causing an error, seems it was renamed.
+        subset_pct = wandb.config.data_subset_percentage
+        run_name = (
+            f"{model_name}"
+            f"_{strategy}"
+            f"_{batch_info}"
+            f"_lr{lr:.0e}"
+            f"_wd{wd:.0e}"
+            f"_r{local_rank}"
+        ).replace("+", "")
+        wandb.run.name = run_name
 
     # Standard setup
     config['local_rank'] = args.local_rank
@@ -343,6 +346,12 @@ def main():
     if config['ddp']:
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
+
+    # Conditionally remove the base checkpoint from the download list if not needed
+    if not config.get('load_base_checkpoint', False):
+        if 'gcs_assets' in config and 'base_checkpoint' in config['gcs_assets']:
+            logger.info("`load_base_checkpoint` is False. Skipping download of the base checkpoint.")
+            del config['gcs_assets']['base_checkpoint']
 
     # Download assets from GCS
     download_assets_from_gcs(config, logger)

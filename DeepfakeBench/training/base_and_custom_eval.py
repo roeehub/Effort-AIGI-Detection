@@ -165,13 +165,22 @@ def load_all_models() -> Dict[str, torch.nn.Module]:
         if custom_checkpoint_path:
             local_filename = Path(custom_checkpoint_path.split("gs://", 1)[1]).name
             custom_weights_path = repo_base / "weights" / "custom" / local_filename
-            if custom_weights_path.exists():
-                loaded_models['custom'] = load_detector(config, str(custom_weights_path))
-                logger.info(f"✅ Loaded 'custom' model successfully from {custom_weights_path}.")
-            else:
-                logger.warning("Custom model specified but weights not found locally. Skipping.")
-        else:
-            logger.info("No custom model specified. Skipping.")
+
+            # Create the directory if it doesn't exist
+            (repo_base / "weights" / "custom").mkdir(parents=True, exist_ok=True)
+
+            # Download from GCS if the file doesn't exist locally
+            if not custom_weights_path.exists():
+                try:
+                    logger.info(f"Downloading custom model from {custom_checkpoint_path}")
+                    storage_client = storage.Client()
+                    bucket_name, blob_path = custom_checkpoint_path.replace("gs://", "").split("/", 1)
+                    bucket = storage_client.bucket(bucket_name)
+                    blob = bucket.blob(blob_path)
+                    blob.download_to_filename(str(custom_weights_path))
+                    logger.info(f"✅ Downloaded custom model to {custom_weights_path}")
+                except Exception as e:
+                    logger.error(f"Failed to download custom model: {e}")
 
         # 4. Initialize Pre-processors
         video_preprocessor.initialize_yolo_model()

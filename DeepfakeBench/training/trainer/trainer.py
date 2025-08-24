@@ -272,27 +272,39 @@ class Trainer(object):
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         strategy = self.config.get('dataloader_params', {}).get('strategy', 'per_method')
-        batch_size = self.config.get('dataloader_params', {}).get('batch_size')
-        evaluation_frequency = self.config.get('data_params', {}).get('evaluation_frequency', 1)
 
         # --- Determine Epoch Length based on strategy ---
         if strategy == 'frame_level':
+            effective_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
             total_frames = sum(len(v.frame_paths) for v in train_videos)
-            epoch_len = math.ceil(total_frames / batch_size) if total_frames > 0 else 0
-        else:  # For per_method and video_level, it's based on total videos
+            epoch_len = math.ceil(total_frames / effective_batch_size) if total_frames > 0 else 0
+        else:  # For per_method and video_level
+            effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
             total_train_videos = len(train_videos)
-            epoch_len = math.ceil(total_train_videos / batch_size) if total_train_videos > 0 else 0
+            epoch_len = math.ceil(total_train_videos / effective_batch_size) if total_train_videos > 0 else 0
 
         self.logger.info(f"Training strategy: '{strategy}', Epoch length: {epoch_len} steps")
 
-        test_step = epoch_len // evaluation_frequency if evaluation_frequency > 0 else epoch_len
-        if test_step == 0: test_step = 1
+        # --- PRECISE EVALUATION SCHEDULING ---
+        evaluation_frequency = self.config.get('data_params', {}).get('evaluation_frequency', 1)
+        if evaluation_frequency <= 0:
+            evaluation_frequency = 1  # Ensure at least one evaluation
+
+        eval_steps = set()
+        if epoch_len > 0:
+            # Calculate interval, ensuring it's at least 1
+            interval = max(1, epoch_len // evaluation_frequency)
+            # Add evaluation points based on the interval
+            for i in range(1, evaluation_frequency):
+                eval_steps.add(i * interval)
+            # Always add the last step to guarantee a final evaluation
+            eval_steps.add(epoch_len)
+        self.logger.info(f"Scheduled evaluation at steps: {sorted(list(eval_steps))}")
 
         step_cnt = epoch * epoch_len
 
         # --- Conditional Training Loop based on strategy ---
         if strategy == 'per_method':
-            # This is the logic moved from train_sweep.py, now encapsulated here.
             real_source_names = self.config['methods']['use_real_sources']
             all_method_names = train_loader.keys()
             real_method_names = [m for m in all_method_names if m in real_source_names]
@@ -316,16 +328,20 @@ class Trainer(object):
 
                 self._run_train_step(data_dict, step_cnt, epoch, pbar)
                 step_cnt += 1
-                if (iteration + 1) % test_step == 0:
+
+                # Use the precise evaluation schedule
+                if (iteration + 1) in eval_steps:
                     self._run_validation(epoch, iteration, val_method_loaders)
 
         elif strategy in ['video_level', 'frame_level']:
-            # This is the simpler loop for standard dataloaders.
             pbar = tqdm(train_loader, desc=f"EPOCH ({strategy}): {epoch + 1}/{self.config['nEpochs']}", total=epoch_len)
+            # We use 'i' as the iteration counter from enumerate
             for i, data_dict in enumerate(pbar):
                 self._run_train_step(data_dict, step_cnt, epoch, pbar)
                 step_cnt += 1
-                if (i + 1) % test_step == 0:
+
+                # Use the precise evaluation schedule. i is 0-based, so add 1.
+                if (i + 1) in eval_steps:
                     self._run_validation(epoch, i, val_method_loaders)
         else:
             raise ValueError(f"Unsupported training strategy: {strategy}")

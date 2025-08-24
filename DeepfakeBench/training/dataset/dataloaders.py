@@ -25,6 +25,19 @@ from collections import defaultdict, OrderedDict
 from prepare_splits import VideoInfo  # noqa , we import VideoInfo from prepare_splits.py which is 1 level up
 from itertools import chain  # noqa
 from concurrent.futures import ThreadPoolExecutor
+# --- helper callables for DataPipes (must be top-level & picklable) ---
+from functools import partial
+
+def _map_video(video_info, config, mode):
+    return load_and_process_video(video_info, config, mode)
+
+def _not_none(x):
+    return x is not None
+
+def _flatmap_frame_batch(batch_of_paths, config, mode):
+    # flatmap expects an iterable; load_and_process_frame_batch yields/iterates
+    return load_and_process_frame_batch(batch_of_paths, config, mode)
+
 
 # --- New controllable parameter for max data loaders in memory ---
 MAX_LOADERS_IN_MEMORY = 15
@@ -109,7 +122,7 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
     # Use a ThreadPoolExecutor to fetch multiple frames concurrently within this single function call.
     # The number of threads here (e.g., 8-16) is key. It allows one dataloader worker
     # to perform multiple GCS requests in parallel.
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    with ThreadPoolExecutor(max_workers=24) as executor:
         results = list(executor.map(_load_single, frame_info_batch))
 
     # The function should yield individual samples, not a list
@@ -121,14 +134,12 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
 def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
     """
     This function replaces `load_video_frames_as_dataset`.
-    It takes a VideoInfo object and loads the required frames from GCP.
-    It's resilient to individual corrupted frames, trying all available frames
-    before giving up on the video.
+    It takes a VideoInfo object and loads the required frames from GCP in parallel.
+    It's resilient to individual corrupted frames.
     It returns None on failure, so it can be filtered out.
     """
     dl_params = config.get('dataloader_params', {})
-    # The number of frames is now explicit and not dependent on mode
-    frame_num = dl_params.get('frames_per_video', 8)  # Default to 8 if not specified
+    frame_num = dl_params.get('frames_per_video', 8)
     resolution = config['resolution']
     all_frame_paths = list(video_info.frame_paths)
 
@@ -136,22 +147,28 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
         return None
 
     random.shuffle(all_frame_paths)
+    selected_paths = all_frame_paths[:frame_num]
 
-    images = []
-    loaded_frame_count = 0
-    for path in all_frame_paths:
-        if loaded_frame_count == frame_num:
-            break
+    def _load_single_frame(path):
+        """Helper function for a single thread to load one frame."""
         try:
             with fsspec.open(path, "rb") as f:
                 img = Image.open(f).convert("RGB")
                 img = img.resize((resolution, resolution), Image.BICUBIC)
-            images.append(img)
-            loaded_frame_count += 1
+            return img
         except Exception:
-            continue
+            return None  # Fail silently for one frame
 
-    if loaded_frame_count < frame_num:
+    # Use a ThreadPoolExecutor to fetch all frames for this video in parallel
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        # map() maintains the order of the input paths
+        image_results = list(executor.map(_load_single_frame, selected_paths))
+
+    # Filter out any frames that failed to load
+    images = [img for img in image_results if img is not None]
+
+    if len(images) < frame_num:
+        # Not enough frames could be loaded for this video
         return None
 
     if mode == 'train' and config['use_data_augmentation']:
@@ -221,8 +238,8 @@ class LazyDataLoaderManager:
         is_train = self.mode == 'train'
 
         pipe = IterableWrapper(videos).shuffle() if is_train else IterableWrapper(videos)
-        pipe = Mapper(pipe, lambda v: load_and_process_video(v, self.config, self.mode))
-        pipe = Filter(pipe, lambda x: x is not None)
+        pipe = Mapper(pipe, partial(_map_video, config=self.config, mode=self.mode))
+        pipe = Filter(pipe, _not_none)
 
         loader = DataLoader(
             pipe,
@@ -308,8 +325,8 @@ def _create_per_method_loaders(train_videos, val_videos, config, data_config):
 def _create_random_video_loader(train_videos, config, data_config):
     """Creates a single dataloader for the 'video_level' strategy."""
     pipe = IterableWrapper(train_videos).shuffle()
-    pipe = Mapper(pipe, lambda v: load_and_process_video(v, config, 'train'))
-    pipe = Filter(pipe, lambda x: x is not None)
+    pipe = Mapper(pipe, partial(_map_video, config=config, mode='train'))
+    pipe = Filter(pipe, _not_none)
 
     dl_params = data_config.get('dataloader_params', {})
     batch_size = dl_params.get('videos_per_batch', 8)
@@ -355,7 +372,7 @@ def _create_random_frame_loader(train_videos: list[VideoInfo], config: dict, dat
 
     # 5. Map the new BATCHED loading function. It will get a list of paths.
     # `flatmap` is used because our new function yields multiple processed frames.
-    pipe = pipe.flatmap(lambda batch_of_paths: load_and_process_frame_batch(batch_of_paths, config, 'train'))
+    pipe = pipe.flatmap(partial(_flatmap_frame_batch, config=config, mode='train'))
 
     # The filter is no longer needed here, as the batch loader handles it.
 
