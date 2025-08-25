@@ -307,7 +307,10 @@ def main():
 
     # Construct and set an informative run name
     if wandb.config.get("name"):
-        wandb.run.name = wandb.config.name
+        # take wandb.config.name and append timestamp to ensure uniqueness, md-HM
+        timestamp = time.strftime("%m%d-%H%M")
+        run_name = f"{wandb.config.name}_{timestamp}"
+        wandb.run.name = run_name
     else:
         model_name = config.get('model_name', 'model')
         strategy = wandb.config.dataloader_strategy

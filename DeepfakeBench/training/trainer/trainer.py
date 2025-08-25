@@ -380,64 +380,66 @@ class Trainer(object):
     def test_epoch(self, epoch, val_method_loaders):
         self.setEval()
 
-        val_iters = {name: iter(val_method_loaders[name]) for name in val_method_loaders.keys()}
+        # ---
+        # Create a single, accurate progress bar for the entire validation set.
+        # We iterate by videos, which is a more intuitive unit of progress.
+        # ---
+        total_videos = len(self.val_videos) if self.val_videos else 0
+        if total_videos == 0:
+            self.logger.warning("No validation videos found. Skipping validation.")
+            return
 
-        # --- Calculate total batches based on total number of videos and batch size ---
-        total_videos = len(self.val_videos)
-        batch_size = self.config['test_batchSize']
-        # The number of batches is the total videos divided by batch size, rounded up.
-        # We add a check for total_videos > 0 to avoid division by zero if val set is empty.
-        total_batches = math.ceil(total_videos / batch_size) if total_videos > 0 else 0
+        pbar = tqdm(total=total_videos, desc="Validating", unit="video")
 
-        pbar = tqdm(total=total_batches, desc="Validating (Interleaved)")
-        # Iterate through each method's DataLoader one by one.
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
-
         all_preds, all_labels = [], []
         all_losses = []
 
-        # --- Loop until all iterators are exhausted ---
-        while val_iters:
-            # Iterate over a copy of keys, as we will modify the dict
-            for method in list(val_iters.keys()):
-                try:
-                    # --- NEW: Get the next batch from the current method's iterator ---
-                    data_dict = next(val_iters[method])
+        # ---
+        #  We iterate through methods sequentially. It also works perfectly with the LazyDataLoaderManager
+        # to keep memory usage low.
+        # ---
+        for method in val_method_loaders.keys():
+            # The lazy manager will create the loader on-demand here
+            loader = val_method_loaders[method]
+            pbar.set_description(f"Validating: {method}")
 
-                    # Move tensors to the correct device
-                    for key, value in data_dict.items():
-                        if isinstance(value, torch.Tensor):
-                            data_dict[key] = value.to(self.model.device)
+            for data_dict in loader:
+                # Move tensors to the correct device
+                for key, value in data_dict.items():
+                    if isinstance(value, torch.Tensor):
+                        data_dict[key] = value.to(self.model.device)
 
-                    # skip empty batches or invalid shapes
-                    if data_dict['image'].shape[0] == 0: continue
-                    if data_dict['image'].dim() != 5: continue
+                # skip empty batches or invalid shapes
+                if data_dict['image'].shape[0] == 0: continue
+                if data_dict['image'].dim() != 5: continue
 
-                    B, T = data_dict['image'].shape[:2]
-                    predictions = self.model(data_dict, inference=True)
-                    video_probs = predictions['prob'].view(B, T).mean(dim=1)
+                B, T = data_dict['image'].shape[:2]
+                predictions = self.model(data_dict, inference=True)
+                video_probs = predictions['prob'].view(B, T).mean(dim=1)
 
-                    # --- Calculate and store validation loss for the batch ---
-                    if type(self.model) is DDP:
-                        losses = self.model.module.get_losses(data_dict, predictions)
-                    else:
-                        losses = self.model.get_losses(data_dict, predictions)
-                    all_losses.append(losses['overall'].item())
-                    # ---
+                # Calculate and store validation loss for the batch
+                if type(self.model) is DDP:
+                    losses = self.model.module.get_losses(data_dict, predictions)
+                else:
+                    losses = self.model.get_losses(data_dict, predictions)
+                all_losses.append(losses['overall'].item())
 
-                    all_labels.extend(data_dict['label'].cpu().numpy())
-                    all_preds.extend(video_probs.cpu().numpy())
+                labels_np = data_dict['label'].cpu().numpy()
+                probs_np = video_probs.cpu().numpy()
 
-                    # Add probabilities and labels by method
-                    method_labels[method].extend(data_dict['label'].cpu().numpy())
-                    method_preds[method].extend(video_probs.cpu().numpy())
+                all_labels.extend(labels_np)
+                all_preds.extend(probs_np)
 
-                    pbar.update(1)
+                # Add probabilities and labels by method
+                method_labels[method].extend(labels_np)
+                method_preds[method].extend(probs_np)
 
-                except StopIteration:
-                    # This loader is finished, remove it ---
-                    del val_iters[method]
+                # ---
+                # Update the progress bar by the number of videos in the batch.
+                # ---
+                pbar.update(B)
 
         pbar.close()
 

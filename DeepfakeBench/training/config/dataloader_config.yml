@@ -1,4 +1,4 @@
-# config.yaml
+# dataloder_config.yml
 
 gcp:
   bucket_name: "df40-frames"
@@ -18,27 +18,36 @@ data_params:
 # To exclude a method, simply remove it from the list.
 methods:
   use_real_sources:
-    - "FaceForensics++"
+    ### Original DF40 real videos from various sources
+    #    - "FaceForensics++"
     - "Celeb-real"
     - "YouTube-real"
+    ### My own collected real videos - bigger and more diverse
     - "external_youtube_avspeech"
   use_fake_methods:
+    ### Face-swapping (FS): Methods that swap a face from a source to a target.
     - "simswap"
+    - "mobileswap"
+    - "e4s"
+    - "facedancer"
+    - "faceswap"
+    - "inswap"
+    - "blendface"
+    - "fsgan"
+    - "uniface"
+    ### Face-reenactment (FR): Methods that transfer facial movements and expressions.
     - "one_shot_free"
     - "pirender"
-    - "mobileswap"
     - "facevid2vid"
     - "lia"
     - "fomm"
     - "MRAA"
-    - "e4s"
-    - "facedancer"
     - "wav2lip"
-    - "faceswap"
     - "mcnet"
-    - "inswap"
-    - "blendface"
-    - "fsgan"
+    - "sadtalker"
+    - "danet"
+    #      - "hyperreenact"
+    ### Entire Face Synthesis (EFS): Methods that generate a new, entire face from scratch.
     - "VQGAN"
     - "StyleGANXL"
     - "StyleGAN3"
@@ -46,12 +55,9 @@ methods:
     - "SiT"
     - "RDDM"
     - "DiT"
-    - "sadtalker"
-    - "danet"
-    - "hyperreenact"
     - "ddim"
-    - "uniface"
-    #    - "tpsm"
+  ### To be sorted/unused
+  # - "tpsm"
 
 dataloader_params:
   batch_size: 4  # This means actually 4 * num_frames_per_video = 32 frames per batch

@@ -40,7 +40,7 @@ def _flatmap_frame_batch(batch_of_paths, config, mode):
 
 
 # --- New controllable parameter for max data loaders in memory ---
-MAX_LOADERS_IN_MEMORY = 15
+MAX_LOADERS_IN_MEMORY = 2
 
 
 # This data augmentation function is fine, we can keep it.
@@ -227,10 +227,14 @@ class LazyDataLoaderManager:
         self.max_loaders = max_loaders
         self.active_loaders = OrderedDict()
         self.all_methods = list(self.videos_by_method.keys())
-        # hardcoded params for now, could be made configurable, this is used for validation at the moment, not training
-        # During validation we want to get metrics for all methods, so we have many loaders, so we limit this config
-        self.num_workers = 4
-        self.prefetch_factor = 2
+        dl_params = self.data_config.get('dataloader_params', {})
+        if self.mode == 'train':
+            # For training, use the standard worker/prefetch config
+            self.num_workers = dl_params.get('num_workers', 2)
+            self.prefetch_factor = dl_params.get('prefetch_factor', 1)
+        else:  # For 'test' or validation mode
+            self.num_workers = 6
+            self.prefetch_factor = 4
 
     def _create_loader(self, method):
         """Creates a DataLoader for a specific method."""
