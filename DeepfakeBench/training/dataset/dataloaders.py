@@ -28,11 +28,14 @@ from concurrent.futures import ThreadPoolExecutor
 # --- helper callables for DataPipes (must be top-level & picklable) ---
 from functools import partial
 
+
 def _map_video(video_info, config, mode):
     return load_and_process_video(video_info, config, mode)
 
+
 def _not_none(x):
     return x is not None
+
 
 def _flatmap_frame_batch(batch_of_paths, config, mode):
     # flatmap expects an iterable; load_and_process_frame_batch yields/iterates
@@ -41,6 +44,45 @@ def _flatmap_frame_batch(batch_of_paths, config, mode):
 
 # --- New controllable parameter for max data loaders in memory ---
 MAX_LOADERS_IN_MEMORY = 2
+
+
+def data_aug_v2(img, augmentation_seed=None):
+    """
+    Applies a two-stage augmentation pipeline compatible with albumentations==0.4.6.
+    1. Base augmentations for general variety (color, orientation).
+    2. A targeted "Quality Attack" using multi-level degradation to neutralize sharpness as a trivial cue.
+    """
+    if augmentation_seed is not None:
+        random.seed(augmentation_seed)
+        np.random.seed(augmentation_seed)
+
+    # Stage 1: Base augmentations for general variety.
+    # This part remains the same.
+    transform_base = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(p=0.3),
+        A.HueSaturationValue(p=0.2),
+    ])
+
+    # Stage 2: The "Quality Attack" adapted for v0.4.6
+    # We use a mix of degradations and the NoOp() trick.
+    transform_quality = A.Compose([
+        A.OneOf([
+            # Heavy Degradation Options
+            A.ImageCompression(quality_lower=50, quality_upper=80, p=0.5),
+            A.MotionBlur(blur_limit=9, p=0.2),
+            A.GaussNoise(var_limit=(20.0, 60.0), p=0.2),
+
+            # The "Do Nothing" Option
+            A.NoOp(p=0.1)  # Gives a chance for the image to pass through untouched
+        ], p=0.9)  # "Safety Valve": 90% of images will enter this lottery.
+    ])
+
+    img_np = np.array(img)
+    transformed_base = transform_base(image=img_np)
+    transformed_quality = transform_quality(image=transformed_base['image'])
+
+    return Image.fromarray(transformed_quality['image'])
 
 
 # This data augmentation function is fine, we can keep it.
@@ -75,7 +117,7 @@ def load_and_process_frame(frame_info: tuple, config: dict, mode: str):
 
     if mode == 'train' and config['use_data_augmentation']:
         aug_seed = random.randint(0, 2 ** 32 - 1)
-        img = data_aug(img, augmentation_seed=aug_seed)
+        img = data_aug_v2(img, augmentation_seed=aug_seed)
 
     normalize_transform = T.Compose([
         T.ToTensor(),
@@ -111,7 +153,7 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
             if use_aug:
                 # Give each augmentation its own seed for variety within a batch
                 aug_seed = random.randint(0, 2 ** 32 - 1)
-                img = data_aug(img, augmentation_seed=aug_seed)
+                img = data_aug_v2(img, augmentation_seed=aug_seed)
 
             image_tensor = normalize_transform(img)
             # The output format must match collate_fn's expectation
@@ -173,7 +215,7 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
 
     if mode == 'train' and config['use_data_augmentation']:
         aug_seed = random.randint(0, 2 ** 32 - 1)
-        images = [data_aug(img, augmentation_seed=aug_seed) for img in images]
+        images = [data_aug_v2(img, augmentation_seed=aug_seed) for img in images]
 
     normalize_transform = T.Compose([
         T.ToTensor(),

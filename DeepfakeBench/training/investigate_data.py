@@ -2,19 +2,19 @@
 
 import os
 import random
-import io
 import argparse
 from pathlib import Path
+import concurrent.futures
+from functools import partial
 
-import cv2  # noqa
-import fsspec  # noqa
-import numpy as np  # noqa
-import pandas as pd  # noqa
-import yaml  # noqa
-from google.cloud import storage  # noqa
-from PIL import Image  # noqa
-from tqdm import tqdm  # noqa
-from scipy import fft  # noqa
+import cv2
+import fsspec
+import numpy as np
+import pandas as pd
+import yaml
+from google.cloud import storage
+from tqdm import tqdm
+from scipy import fft
 
 # --- Configuration ---
 # Train Config
@@ -31,10 +31,12 @@ SAMPLE_FRAMES_PER_VIDEO_TEST = 3
 OUTPUT_CSV = "data_analysis_results.csv"
 OUTPUT_PLOT_DIR = "data_analysis_plots"
 DEBUG_IMAGE_PATH = "/Users/roeedar/Desktop/debug/wang2.png"
+# NEW: Default number of parallel workers for processing
+DEFAULT_WORKERS = os.cpu_count() * 2
 
 
-# --- Tier 1 & Tier 2 Analysis Functions ---
-
+# --- Tier 1 & Tier 2 Analysis Functions (Unchanged) ---
+# ... (all functions from get_laplacian_variance to get_frame_stats remain exactly the same)
 def get_laplacian_variance(image_np: np.ndarray, gcs_path: str = "local") -> float:
     """Calculates sharpness using Laplacian variance."""
     try:
@@ -113,9 +115,38 @@ def get_frame_stats(gcs_path: str, fs: fsspec.AbstractFileSystem) -> dict | None
         return None
 
 
-# --- Sampling Logic ---
+# --- NEW: Parallel Processing Function ---
+def _process_frames_in_parallel(frame_paths_with_metadata, fs, num_workers):
+    """
+    Takes a list of tuples (gcs_path, metadata) and processes them in parallel.
+    """
+    stats_list = []
 
-def _sample_train_data(bucket, fs):
+    # Use partial to pre-fill the 'fs' argument for our processing function
+    processing_function = partial(get_frame_stats, fs=fs)
+
+    # Create a list of GCS paths to feed into the executor
+    gcs_paths = [item[0] for item in frame_paths_with_metadata]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+        # Use executor.map to apply the function to all paths and wrap with tqdm for progress
+        results = list(
+            tqdm(executor.map(processing_function, gcs_paths), total=len(gcs_paths), desc="Processing Frames"))
+
+    # Now, combine the results with the original metadata
+    for i, stats in enumerate(results):
+        if stats:
+            # Original metadata was stored at frame_paths_with_metadata[i][1]
+            metadata = frame_paths_with_metadata[i][1]
+            stats.update(metadata)
+            stats_list.append(stats)
+
+    return stats_list
+
+
+# --- MODIFIED: Sampling Logic ---
+
+def _sample_train_data(bucket, fs, num_workers):
     """Specific sampling logic for the DF40 (train) dataset."""
     print("\n--- Sampling from TRAIN dataset (DF40) ---")
     with open(CONFIG_PATH, 'r') as f:
@@ -124,11 +155,10 @@ def _sample_train_data(bucket, fs):
     fake_methods = data_config['all_methods']['use_fake_methods']
     all_methods = real_sources + fake_methods
 
-    stats_list = []
-    for method in tqdm(all_methods, desc="Train Methods", unit="method"):
+    frame_paths_to_process = []
+    for method in tqdm(all_methods, desc="Discovering Train Videos", unit="method"):
         label = "real" if method in real_sources else "fake"
         prefix = f"{label}/{method}/"
-
         video_paths = set('/'.join(Path(b.name).parts[:-1]) + '/' for b in bucket.list_blobs(prefix=prefix))
         if not video_paths: continue
 
@@ -144,32 +174,26 @@ def _sample_train_data(bucket, fs):
 
             for frame_blob in selected_frames:
                 gcs_path = f"gs://{bucket.name}/{frame_blob.name}"
-                stats = get_frame_stats(gcs_path, fs)
-                if stats:
-                    stats.update({"label": label, "method": method, "source": "train"})
-                    stats_list.append(stats)
-    return stats_list
+                metadata = {"label": label, "method": method, "source": "train"}
+                frame_paths_to_process.append((gcs_path, metadata))
+
+    print(f"Discovered {len(frame_paths_to_process)} train frames to analyze.")
+    return _process_frames_in_parallel(frame_paths_to_process, fs, num_workers)
 
 
-def _sample_test_data(bucket, fs):
+def _sample_test_data(bucket, fs, num_workers):
     """Specific sampling logic for the OOD (test) dataset with corrected method discovery."""
     print(f"\n--- Sampling from TEST dataset ({bucket.name}) ---")
-
-    # --- START OF BUG FIX ---
-    # Use a list of tuples to correctly handle methods with the same name but different labels.
     methods_and_labels = []
     for label in ['real', 'fake']:
         iterator = bucket.list_blobs(prefix=f'{label}/', delimiter='/')
         for page in iterator.pages:
             for prefix in page.prefixes:
-                # prefix will be like 'fake/tiktok/'
                 method_name = prefix.strip('/').split('/')[-1]
                 methods_and_labels.append((method_name, label))
-    # --- END OF BUG FIX ---
 
-    stats_list = []
-    # Iterate over the list of tuples
-    for method, label in tqdm(methods_and_labels, desc="Test Methods", unit="method"):
+    frame_paths_to_process = []
+    for method, label in tqdm(methods_and_labels, desc="Discovering Test Videos", unit="method"):
         prefix = f"{label}/{method}/"
         video_paths = set('/'.join(Path(b.name).parts[:-1]) + '/' for b in bucket.list_blobs(prefix=prefix))
         if not video_paths: continue
@@ -183,18 +207,19 @@ def _sample_test_data(bucket, fs):
 
             for frame_blob in selected_frames:
                 gcs_path = f"gs://{bucket.name}/{frame_blob.name}"
-                stats = get_frame_stats(gcs_path, fs)
-                if stats:
-                    stats.update({"label": label, "method": method, "source": "test"})
-                    stats_list.append(stats)
-    return stats_list
+                metadata = {"label": label, "method": method, "source": "test"}
+                frame_paths_to_process.append((gcs_path, metadata))
+
+    print(f"Discovered {len(frame_paths_to_process)} test frames to analyze.")
+    return _process_frames_in_parallel(frame_paths_to_process, fs, num_workers)
 
 
-# --- Main Controller Functions ---
+# --- MODIFIED: Main Controller Functions ---
 
-def run_sampling(datasets, test_bucket_suffix):
+def run_sampling(datasets, test_bucket_suffix, num_workers):
     """Connects to GCS and runs sampling, saving intermediate results for robustness."""
     print("--- Mode: Sampling Data from GCS ---")
+    print(f"Using {num_workers} parallel workers for processing.")
 
     try:
         print("Connecting to GCS...")
@@ -206,21 +231,17 @@ def run_sampling(datasets, test_bucket_suffix):
 
     all_stats = []
     if os.path.exists(OUTPUT_CSV):
-        print(f"Found existing data file '{OUTPUT_CSV}'. Will append new data.")
-        # To avoid re-sampling, you might want to load existing data or clear the list.
-        # For simplicity, we'll start fresh. A more complex system could avoid re-sampling.
-        os.remove(OUTPUT_CSV)  # Start fresh to avoid duplicates if script is re-run
+        print(f"Found existing data file '{OUTPUT_CSV}'. Removing to start fresh.")
+        os.remove(OUTPUT_CSV)
 
     if 'train' in datasets:
         train_bucket = storage_client.bucket(DF40_BUCKET_NAME)
-        train_stats = _sample_train_data(train_bucket, fs)
+        train_stats = _sample_train_data(train_bucket, fs, num_workers)
         if train_stats:
             all_stats.extend(train_stats)
-            # --- ROBUSTNESS FIX: Save after train is done ---
             print("\nSaving intermediate results for TRAIN dataset...")
             pd.DataFrame(all_stats).to_csv(OUTPUT_CSV, index=False)
             print(f"✅ Saved {len(train_stats)} train frame stats to '{OUTPUT_CSV}'")
-            # --- END OF FIX ---
 
     if 'test' in datasets:
         if not test_bucket_suffix:
@@ -228,14 +249,12 @@ def run_sampling(datasets, test_bucket_suffix):
             return
         test_bucket_name = f"{TEST_BUCKET_PREFIX}-{test_bucket_suffix}"
         test_bucket = storage_client.bucket(test_bucket_name)
-        test_stats = _sample_test_data(test_bucket, fs)
+        test_stats = _sample_test_data(test_bucket, fs, num_workers)
         if test_stats:
             all_stats.extend(test_stats)
-            # --- ROBUSTNESS FIX: Save after test is done (overwriting the intermediate file) ---
             print("\nSaving final results for ALL sampled datasets...")
             pd.DataFrame(all_stats).to_csv(OUTPUT_CSV, index=False)
             print(f"✅ Saved {len(test_stats)} test frame stats. Total stats saved: {len(all_stats)}.")
-            # --- END OF FIX ---
 
     if not all_stats:
         print("\n[Error] No data was collected. Review logs for warnings.")
@@ -244,6 +263,8 @@ def run_sampling(datasets, test_bucket_suffix):
     print(f"\n--- Sampling Complete ---")
 
 
+# --- Plotting and Debug Functions (Unchanged) ---
+# ... (run_plotting and run_debug remain exactly the same)
 def run_plotting(csv_path):
     """Loads data from the CSV and generates analysis plots."""
     print(f"--- Mode: Plotting from '{csv_path}' ---")
@@ -262,6 +283,8 @@ def run_plotting(csv_path):
 
         # Add the 'source' to the method name for clear plotting
         df['method_source'] = df['method'] + ' (' + df['source'] + ')'
+        if 'image_area' not in df.columns:
+            df['image_area'] = df['width'] * df['height']
 
         plot_metrics = {
             "file_size_kb": "File Size (KB)",
@@ -301,7 +324,7 @@ def run_plotting(csv_path):
         print(f"\n✅ All plots saved in '{OUTPUT_PLOT_DIR}'.")
 
     except ImportError:
-        print("\n[Warning] `matplotlib`, `seaborn`, or `scipy` not installed. Skipping plot generation.")
+        print("\n[Warning] `matplotlib` or `seaborn` not installed. Skipping plot generation.")
     except Exception as e:
         print(f"\n[Plotting Error] An unexpected error occurred: {e}")
 
@@ -347,6 +370,7 @@ def run_debug(image_path):
 def main():
     parser = argparse.ArgumentParser(
         description="Investigate dataset properties for trivial cues across train and test sets.")
+    # ... (arguments for mode, dataset, test_bucket_suffix, debug are the same)
     parser.add_argument(
         '--mode', type=str, default='all', choices=['all', 'sample', 'plot'],
         help="Script mode: 'sample' to fetch data, 'plot' to generate plots, 'all' to do both."
@@ -358,6 +382,11 @@ def main():
     parser.add_argument(
         '--test_bucket_suffix', type=str, choices=['yolo', 'yolo-haar'],
         help="Suffix for the test bucket name (e.g., 'yolo'). Required if '--dataset' includes 'test'."
+    )
+    # --- NEW ARGUMENT ---
+    parser.add_argument(
+        '--workers', type=int, default=DEFAULT_WORKERS,
+        help=f"Number of parallel workers for downloading and processing frames. Default: {DEFAULT_WORKERS}"
     )
     parser.add_argument(
         '--debug', type=str, nargs='?', const=DEBUG_IMAGE_PATH, default=None,
@@ -377,11 +406,17 @@ def main():
     elif args.dataset == 'both':
         datasets_to_run = ['train', 'test']
 
+    # --- MODIFIED CALLS ---
     if args.mode in ['all', 'sample']:
-        run_sampling(datasets_to_run, args.test_bucket_suffix)
+        run_sampling(datasets_to_run, args.test_bucket_suffix, args.workers)
 
     if args.mode in ['all', 'plot']:
-        run_plotting(OUTPUT_CSV)
+        if not os.path.exists(OUTPUT_CSV) and args.mode == 'plot':
+            print(f"[Error] CSV file '{OUTPUT_CSV}' not found. Cannot plot.")
+            return
+        # Add a check to ensure the CSV exists before plotting
+        if os.path.exists(OUTPUT_CSV):
+            run_plotting(OUTPUT_CSV)
 
 
 if __name__ == "__main__":

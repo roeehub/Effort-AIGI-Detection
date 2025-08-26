@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import random
 import re
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,8 @@ from typing import List, Set, Tuple
 import yaml  # noqa
 from fsspec.core import url_to_fs  # pip install gcsfs  # noqa
 from sklearn.model_selection import GroupShuffleSplit  # pip install scikit-learn  # noqa
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # 1 Method categories (edit REG/REV if needed)
@@ -133,170 +136,277 @@ def _balance_video_list(
 
 # ---------------------------------------------------------------------------
 # 3 Main entry
-# ---------------------------------------------------------------------------
-def prepare_video_splits(data_cfg: dict) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
-    """
-    Prepares video splits for training and validation using a config dictionary.
+# # ---------------------------------------------------------------------------
+# def prepare_video_splits(data_cfg: dict) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
+#     """
+#     Prepares video splits for training and validation using a config dictionary.
+#
+#     Returns:
+#         Tuple containing:
+#         - train_videos (List[VideoInfo]): The balanced list of training videos.
+#         - val_videos (List[VideoInfo]): The balanced list of validation videos.
+#         - stats (dict): A dictionary with statistics about the data preparation process.
+#     """
+#     cfg = data_cfg  # Use the passed-in dictionary
+#     BUCKET = f"gs://{cfg['gcp']['bucket_name']}"
+#     SEED = cfg['data_params']['seed']
+#     VAL_RATIO = cfg['data_params']['val_split_ratio']
+#     SUBSET = cfg['data_params']['data_subset_percentage']
+#     allowed = set(cfg['methods']['use_real_sources']
+#                   + cfg['methods']['use_fake_methods'])
+#
+#     # NEW: Dictionary to hold statistics
+#     stats = {}
+#
+#     random.seed(SEED)
+#     manifest_path = Path(__file__).with_name("frame_manifest.json")
+#
+#     # ------------------------------------------------------------------ #
+#     # 1) Load cached manifest if it exists, else list & cache it        #
+#     # ------------------------------------------------------------------ #
+#     if manifest_path.exists():
+#         frame_paths = json.loads(manifest_path.read_text())
+#         print(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
+#     else:
+#         print("Listing frame objects on GCS (first run – may take a minute)…")
+#         fs = url_to_fs(BUCKET)[0]
+#         frame_paths = [
+#             f"gs://{p}"
+#             for p in fs.glob(f"{BUCKET}/**")
+#             if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}
+#         ]
+#         print(f"Found {len(frame_paths):,} frame files – caching manifest")
+#         manifest_path.write_text(json.dumps(frame_paths))
+#
+#     # Count and print the number of frames from the specified method
+#     avspeech_count = sum(1 for p in frame_paths if "external_youtube_avspeech" in p)
+#     print(f"[manifest] Found {avspeech_count:,} frames from 'external_youtube_avspeech'")
+#     stats['total_frames_in_manifest'] = len(frame_paths)
+#
+#     # ------------------------------------------------------------------ #
+#     # 2) Group frames → VideoInfo objects                                #
+#     # ------------------------------------------------------------------ #
+#     vids_dict: dict[tuple[str, str, str], List[str]] = defaultdict(list)
+#     for p in frame_paths:
+#         parts = Path(p).parts
+#         try:
+#             label, method, vid = parts[-4], parts[-3], parts[-2]
+#             if label not in {"real", "fake"}:
+#                 print(f"[WARN] Invalid label '{label}' in path '{p}'. Skipping.")
+#                 continue
+#         except Exception:
+#             continue
+#         if method not in allowed:
+#             continue
+#         vids_dict[(label, method, vid)].append(p)
+#
+#     videos: List[VideoInfo] = []
+#     warned = set()
+#     for (label, method, vid), fr in vids_dict.items():
+#         if method in EXCLUDE_METHODS:
+#             if method not in warned:
+#                 print(f"[WARN] excluding all videos from method '{method}'")
+#                 warned.add(method)
+#             continue
+#         fr.sort()
+#         tid = extract_target_id(label, method, vid)
+#         if tid is None:  # synthetic unique
+#             tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
+#         videos.append(VideoInfo(label, method, vid, fr, tid, label_id=(0 if label == 'real' else 1)))
+#
+#     print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
+#     stats['discovered_videos'] = len(videos)
+#     stats['discovered_methods'] = len(allowed)
+#     stats['subset_video_count'] = len(videos)  # Default value
+#
+#     # ------------------------------------------------------------------ #
+#     # 3. (NEW) Apply subset percentage to the ENTIRE dataset FIRST       #
+#     # ------------------------------------------------------------------ #
+#     if SUBSET < 1.0:
+#         print(f"\n[subset] Applying `data_subset_percentage`={SUBSET:.2f} to the entire dataset.")
+#         # Use GroupShuffleSplit to get a representative subset while respecting identities
+#         subset_splitter = GroupShuffleSplit(n_splits=1, train_size=SUBSET, random_state=SEED)
+#         all_identities = [v.identity for v in videos]
+#         try:
+#             # The 'train_idx' from this split will be our subset
+#             subset_indices, _ = next(subset_splitter.split(X=videos, groups=all_identities))
+#             videos = [videos[i] for i in subset_indices]
+#             print(f"[subset] Dataset reduced to {len(videos):,} videos.")
+#             stats['subset_video_count'] = len(videos)
+#         except ValueError as e:
+#             print(f"[subset] WARN: Could not create a subset while respecting groups. Error: {e}")
+#             print("[subset] Using a random sample instead. This may cause minor identity leakage in the subset.")
+#             random.shuffle(videos)
+#             subset_size = int(len(videos) * SUBSET)
+#             videos = videos[:subset_size]
+#             stats['subset_video_count'] = len(videos)
+#
+#     # ------------------------------------------------------------------ #
+#     # 4. Stratified GroupShuffleSplit (on the potentially smaller dataset)#
+#     # ------------------------------------------------------------------ #
+#     print(f"\n[split] Performing Stratified GroupShuffleSplit on {len(videos):,} videos...")
+#     train_idx, val_idx = [], []
+#     videos_by_method = defaultdict(list)
+#     for i, v in enumerate(videos):
+#         videos_by_method[v.method].append((i, v))
+#
+#     for method, method_videos_with_indices in videos_by_method.items():
+#         method_indices = [item[0] for item in method_videos_with_indices]
+#         method_groups = [item[1].identity for item in method_videos_with_indices]
+#
+#         if len(method_indices) < 2 or len(set(method_groups)) < 2:
+#             train_idx.extend(method_indices)
+#             continue
+#
+#         gss = GroupShuffleSplit(n_splits=1, test_size=VAL_RATIO, random_state=SEED)
+#         try:
+#             method_train_indices_local, method_val_indices_local = next(gss.split(
+#                 X=method_videos_with_indices, groups=method_groups
+#             ))
+#             train_idx.extend([method_indices[i] for i in method_train_indices_local])
+#             val_idx.extend([method_indices[i] for i in method_val_indices_local])
+#         except ValueError:
+#             train_idx.extend(method_indices)
+#
+#     # These are the complete, unbalanced splits
+#     train_videos_unbalanced = [videos[i] for i in train_idx]
+#     val_videos_unbalanced = [videos[i] for i in val_idx]
+#     print(f"Split complete (unbalanced) ▶ train {len(train_videos_unbalanced):,} | val {len(val_videos_unbalanced):,}")
+#     stats['unbalanced_train_count'] = len(train_videos_unbalanced)
+#     stats['unbalanced_val_count'] = len(val_videos_unbalanced)
+#
+#     # ------------------------------------------------------------------ #
+#     # 5. (NEW) Balance BOTH the training and validation sets             #
+#     # ------------------------------------------------------------------ #
+#     print("\n--- Balancing Training Set ---")
+#     train_videos = _balance_video_list(
+#         videos=train_videos_unbalanced,
+#         real_source_names=cfg['methods']['use_real_sources']
+#     )
+#
+#     print("\n--- Balancing Validation Set ---")
+#     val_videos = _balance_video_list(
+#         videos=val_videos_unbalanced,
+#         real_source_names=cfg['methods']['use_real_sources']
+#     )
+#
+#     print(f"\nFinal balanced split ▶ train {len(train_videos):,} | val {len(val_videos):,}")
+#     stats['balanced_train_count'] = len(train_videos)
+#     stats['balanced_val_count'] = len(val_videos)
+#
+#     random.shuffle(train_videos)
+#     random.shuffle(val_videos)
+#     return train_videos, val_videos, stats
+#
 
-    Returns:
-        Tuple containing:
-        - train_videos (List[VideoInfo]): The balanced list of training videos.
-        - val_videos (List[VideoInfo]): The balanced list of validation videos.
-        - stats (dict): A dictionary with statistics about the data preparation process.
+# ---------------------------------------------------------------------------
+# 4 Main entry for separated train/validation methods - v2
+# ---------------------------------------------------------------------------
+def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
     """
-    cfg = data_cfg  # Use the passed-in dictionary
+    Prepares video splits with a strict separation between training and validation methods.
+    This version has been audited to ensure all statistics are correctly calculated and
+    assigned in all execution paths, without relying on default values.
+    """
+    cfg = data_cfg
     BUCKET = f"gs://{cfg['gcp']['bucket_name']}"
     SEED = cfg['data_params']['seed']
-    VAL_RATIO = cfg['data_params']['val_split_ratio']
     SUBSET = cfg['data_params']['data_subset_percentage']
-    allowed = set(cfg['methods']['use_real_sources']
-                  + cfg['methods']['use_fake_methods'])
 
-    # NEW: Dictionary to hold statistics
+    # --- 1. Define method sets ---
+    real_methods = set(cfg['methods']['use_real_sources'])
+    train_fake_methods = set(cfg['methods']['use_fake_methods_for_training'])
+    val_fake_methods = set(cfg['methods']['use_fake_methods_for_validation'])
+    all_allowed_methods = real_methods | train_fake_methods | val_fake_methods
+
+    # The stats dictionary will be built progressively.
     stats = {}
-
     random.seed(SEED)
     manifest_path = Path(__file__).with_name("frame_manifest.json")
 
-    # ------------------------------------------------------------------ #
-    # 1) Load cached manifest if it exists, else list & cache it        #
-    # ------------------------------------------------------------------ #
+    # --- 2. Load manifest ---
     if manifest_path.exists():
         frame_paths = json.loads(manifest_path.read_text())
-        print(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
+        log.info(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
     else:
-        print("Listing frame objects on GCS (first run – may take a minute)…")
+        log.info("[manifest] Caching not found. Listing frame objects on GCS...")
         fs = url_to_fs(BUCKET)[0]
-        frame_paths = [
-            f"gs://{p}"
-            for p in fs.glob(f"{BUCKET}/**")
-            if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}
-        ]
-        print(f"Found {len(frame_paths):,} frame files – caching manifest")
+        frame_paths = [f"gs://{p}" for p in fs.glob(f"{BUCKET}/**")
+                       if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
+        log.info(f"[manifest] Found {len(frame_paths):,} frame files – writing to cache.")
         manifest_path.write_text(json.dumps(frame_paths))
-
-    # Count and print the number of frames from the specified method
-    avspeech_count = sum(1 for p in frame_paths if "external_youtube_avspeech" in p)
-    print(f"[manifest] Found {avspeech_count:,} frames from 'external_youtube_avspeech'")
     stats['total_frames_in_manifest'] = len(frame_paths)
 
-    # ------------------------------------------------------------------ #
-    # 2) Group frames → VideoInfo objects                                #
-    # ------------------------------------------------------------------ #
+    # --- 3. Group frames and calculate initial discovery stats ---
+    log.info("[discovery] Grouping frames into video objects...")
     vids_dict: dict[tuple[str, str, str], List[str]] = defaultdict(list)
     for p in frame_paths:
-        parts = Path(p).parts
         try:
+            parts = Path(p).parts
             label, method, vid = parts[-4], parts[-3], parts[-2]
-            if label not in {"real", "fake"}:
-                print(f"[WARN] Invalid label '{label}' in path '{p}'. Skipping.")
-                continue
-        except Exception:
+            if method in all_allowed_methods and method not in EXCLUDE_METHODS:
+                vids_dict[(label, method, vid)].append(p)
+        except IndexError:
             continue
-        if method not in allowed:
-            continue
-        vids_dict[(label, method, vid)].append(p)
 
-    videos: List[VideoInfo] = []
-    warned = set()
+    stats['discovered_videos'] = len(vids_dict)
+    stats['discovered_methods'] = len(all_allowed_methods)
+    log.info(
+        f"[discovery] Discovered {stats['discovered_videos']:,} videos from {stats['discovered_methods']} allowed methods.")
+
+    # --- 4. Create separate pools and calculate unbalanced stats ---
+    log.info("[split] Creating separate pools for training and validation methods...")
+    training_pool: List[VideoInfo] = []
+    validation_pool: List[VideoInfo] = []
     for (label, method, vid), fr in vids_dict.items():
-        if method in EXCLUDE_METHODS:
-            if method not in warned:
-                print(f"[WARN] excluding all videos from method '{method}'")
-                warned.add(method)
-            continue
         fr.sort()
         tid = extract_target_id(label, method, vid)
-        if tid is None:  # synthetic unique
-            tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
-        videos.append(VideoInfo(label, method, vid, fr, tid, label_id=(0 if label == 'real' else 1)))
+        if tid is None: tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
+        video = VideoInfo(label, method, vid, fr, tid, label_id=(0 if label == 'real' else 1))
 
-    print(f"Discovered {len(videos):,} videos across {len(allowed)} methods")
-    stats['discovered_videos'] = len(videos)
-    stats['discovered_methods'] = len(allowed)
-    stats['subset_video_count'] = len(videos)  # Default value
+        if method in real_methods:
+            training_pool.append(video)
+            validation_pool.append(video)
+        elif method in train_fake_methods:
+            training_pool.append(video)
+        elif method in val_fake_methods:
+            validation_pool.append(video)
 
-    # ------------------------------------------------------------------ #
-    # 3. (NEW) Apply subset percentage to the ENTIRE dataset FIRST       #
-    # ------------------------------------------------------------------ #
+    stats['unbalanced_train_count'] = len(training_pool)
+    stats['unbalanced_val_count'] = len(validation_pool)
+    log.info(
+        f"[split] Created pools ▶ train: {stats['unbalanced_train_count']:,} | val: {stats['unbalanced_val_count']:,} videos")
+
+    # --- 5. Apply subset percentage and calculate subset stats ---
     if SUBSET < 1.0:
-        print(f"\n[subset] Applying `data_subset_percentage`={SUBSET:.2f} to the entire dataset.")
-        # Use GroupShuffleSplit to get a representative subset while respecting identities
-        subset_splitter = GroupShuffleSplit(n_splits=1, train_size=SUBSET, random_state=SEED)
-        all_identities = [v.identity for v in videos]
-        try:
-            # The 'train_idx' from this split will be our subset
-            subset_indices, _ = next(subset_splitter.split(X=videos, groups=all_identities))
-            videos = [videos[i] for i in subset_indices]
-            print(f"[subset] Dataset reduced to {len(videos):,} videos.")
-            stats['subset_video_count'] = len(videos)
-        except ValueError as e:
-            print(f"[subset] WARN: Could not create a subset while respecting groups. Error: {e}")
-            print("[subset] Using a random sample instead. This may cause minor identity leakage in the subset.")
-            random.shuffle(videos)
-            subset_size = int(len(videos) * SUBSET)
-            videos = videos[:subset_size]
-            stats['subset_video_count'] = len(videos)
+        log.info(f"[subset] Applying `data_subset_percentage`={SUBSET:.2f} to each pool.")
+        if training_pool:
+            random.shuffle(training_pool)
+            training_pool = training_pool[:int(len(training_pool) * SUBSET)]
+        if validation_pool:
+            random.shuffle(validation_pool)
+            validation_pool = validation_pool[:int(len(validation_pool) * SUBSET)]
+        log.info(f"[subset] Subset pools ▶ train: {len(training_pool):,} | val: {len(validation_pool):,} videos")
 
-    # ------------------------------------------------------------------ #
-    # 4. Stratified GroupShuffleSplit (on the potentially smaller dataset)#
-    # ------------------------------------------------------------------ #
-    print(f"\n[split] Performing Stratified GroupShuffleSplit on {len(videos):,} videos...")
-    train_idx, val_idx = [], []
-    videos_by_method = defaultdict(list)
-    for i, v in enumerate(videos):
-        videos_by_method[v.method].append((i, v))
+    # This is calculated *after* the optional subsetting block to be correct in all cases.
+    stats['subset_video_count'] = len(training_pool) + len(validation_pool)
 
-    for method, method_videos_with_indices in videos_by_method.items():
-        method_indices = [item[0] for item in method_videos_with_indices]
-        method_groups = [item[1].identity for item in method_videos_with_indices]
+    # --- 6. Balance pools and calculate final balanced stats ---
+    log.info("--- Balancing Training Set from its pool ---")
+    train_videos = _balance_video_list(videos=training_pool, real_source_names=list(real_methods))
 
-        if len(method_indices) < 2 or len(set(method_groups)) < 2:
-            train_idx.extend(method_indices)
-            continue
+    log.info("--- Balancing Validation Set from its pool ---")
+    val_videos = _balance_video_list(videos=validation_pool, real_source_names=list(real_methods))
 
-        gss = GroupShuffleSplit(n_splits=1, test_size=VAL_RATIO, random_state=SEED)
-        try:
-            method_train_indices_local, method_val_indices_local = next(gss.split(
-                X=method_videos_with_indices, groups=method_groups
-            ))
-            train_idx.extend([method_indices[i] for i in method_train_indices_local])
-            val_idx.extend([method_indices[i] for i in method_val_indices_local])
-        except ValueError:
-            train_idx.extend(method_indices)
-
-    # These are the complete, unbalanced splits
-    train_videos_unbalanced = [videos[i] for i in train_idx]
-    val_videos_unbalanced = [videos[i] for i in val_idx]
-    print(f"Split complete (unbalanced) ▶ train {len(train_videos_unbalanced):,} | val {len(val_videos_unbalanced):,}")
-    stats['unbalanced_train_count'] = len(train_videos_unbalanced)
-    stats['unbalanced_val_count'] = len(val_videos_unbalanced)
-
-    # ------------------------------------------------------------------ #
-    # 5. (NEW) Balance BOTH the training and validation sets             #
-    # ------------------------------------------------------------------ #
-    print("\n--- Balancing Training Set ---")
-    train_videos = _balance_video_list(
-        videos=train_videos_unbalanced,
-        real_source_names=cfg['methods']['use_real_sources']
-    )
-
-    print("\n--- Balancing Validation Set ---")
-    val_videos = _balance_video_list(
-        videos=val_videos_unbalanced,
-        real_source_names=cfg['methods']['use_real_sources']
-    )
-
-    print(f"\nFinal balanced split ▶ train {len(train_videos):,} | val {len(val_videos):,}")
     stats['balanced_train_count'] = len(train_videos)
     stats['balanced_val_count'] = len(val_videos)
+    log.info(
+        f"Final balanced split ▶ train: {stats['balanced_train_count']:,} videos | val: {stats['balanced_val_count']:,} videos")
 
     random.shuffle(train_videos)
     random.shuffle(val_videos)
     return train_videos, val_videos, stats
-
-
-if __name__ == "__main__":
-    tr, va, _ = prepare_video_splits()
-    print("train example:", tr[0].method, tr[0].video_id, tr[0].identity)
-    print("val   example:", va[0].method, va[0].video_id, va[0].identity)
+# if __name__ == "__main__":
+#     tr, va, _ = prepare_video_splits()
+#     print("train example:", tr[0].method, tr[0].video_id, tr[0].identity)
+#     print("val   example:", va[0].method, va[0].video_id, va[0].identity)

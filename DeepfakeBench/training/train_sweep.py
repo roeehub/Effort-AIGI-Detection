@@ -42,7 +42,7 @@ from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
-from prepare_splits import prepare_video_splits
+from prepare_splits import prepare_video_splits_v2
 from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
 
 parser = argparse.ArgumentParser(description='Process some paths.')
@@ -360,7 +360,8 @@ def main():
     download_assets_from_gcs(config, logger)
 
     logger.info("------- Configuration & Data Loading -------")
-    train_videos, val_videos, data_split_stats = prepare_video_splits(data_config)
+    # train_videos, val_videos, data_split_stats = prepare_video_splits(data_config)
+    train_videos, val_videos, data_split_stats = prepare_video_splits_v2(data_config)
 
     # --- Create Dataloaders using the new factory function ---
     train_loader, val_method_loaders = create_dataloaders(
@@ -370,33 +371,64 @@ def main():
     # --- Create and log the comprehensive run overview ---
     real_methods = data_config.get('methods', {}).get('use_real_sources', [])
     fake_methods = data_config.get('methods', {}).get('use_fake_methods', [])
+
+    # --- Validate and gather data for the overview ---
+    overview_data = {
+        "Model": config.get('model_name'),
+        # "Base Checkpoint": wandb.config.get('gcs_base_checkpoint'),
+        "Run ID": wandb.run.id,
+        "Discovered Videos": data_split_stats.get('discovered_videos'),
+        "Discovered Methods": data_split_stats.get('discovered_methods'),
+        "Data Subset Percentage": wandb.config.get('data_subset_percentage'),
+        "Subset Video Count": data_split_stats.get('subset_video_count'),
+        "Unbalanced Train Count": data_split_stats.get('unbalanced_train_count'),
+        "Unbalanced Val Count": data_split_stats.get('unbalanced_val_count'),
+        "Balanced Train Count": data_split_stats.get('balanced_train_count'),
+        "Balanced Val Count": data_split_stats.get('balanced_val_count'),
+        "Dataloader Strategy": wandb.config.get('dataloader_strategy'),
+        "Frames per Video": wandb.config.get('frames_per_video'),
+        "Videos per Batch": wandb.config.get('videos_per_batch'),
+        "Frames per Batch": wandb.config.get('frames_per_batch'),
+        "Learning Rate": wandb.config.get('learning_rate'),
+        "Weight Decay": wandb.config.get('weight_decay'),
+        "Epsilon": wandb.config.get('optimizer_eps'),
+        "Total Epochs": config.get('nEpochs'),
+        "Eval Frequency": wandb.config.get('evaluation_frequency'),
+    }
+
+    # Check for any None values that would cause formatting errors
+    for key, value in overview_data.items():
+        if value is None:
+            raise ValueError(
+                f"'{key}' is None. Cannot generate run overview. Check your config and data processing steps.")
+
+    # --- Create and log the comprehensive run overview ---
     overview_text = f"""
-        ### Run Overview
-        - **Model:** `{config.get('model_name', 'N/A')}`
-        - **Base Checkpoint:** `{wandb.config.gcs_base_checkpoint}`
-        - **Run ID:** `{wandb.run.id}`
+            ### Run Overview
+            - **Model:** `{overview_data["Model"]}`
+            - **Run ID:** `{overview_data["Run ID"]}`
 
-        ### Data Split Details
-        - **Discovered:** `{data_split_stats.get('discovered_videos'):,}` videos from `{data_split_stats.get('discovered_methods')}` methods.
-        - **Subset:** Using `{wandb.config.data_params.get('data_subset_percentage'):.1%}` of data (`{data_split_stats.get('subset_video_count'):,}` videos).
-        - **Unbalanced Split:** Train: `{data_split_stats.get('unbalanced_train_count'):,}` | Val: `{data_split_stats.get('unbalanced_val_count'):,}`
-        - **Final Balanced Split:** Train: `{data_split_stats.get('balanced_train_count'):,}` | Val: `{data_split_stats.get('balanced_val_count'):,}`
+            ### Data Split Details
+            - **Discovered:** `{overview_data["Discovered Videos"]:,}` videos from `{overview_data["Discovered Methods"]}` methods.
+            - **Subset:** Using `{overview_data["Data Subset Percentage"]:.1%}` of data (`{overview_data["Subset Video Count"]:,}` videos).
+            - **Unbalanced Split:** Train: `{overview_data["Unbalanced Train Count"]:,}` | Val: `{overview_data["Unbalanced Val Count"]:,}`
+            - **Final Balanced Split:** Train: `{overview_data["Balanced Train Count"]:,}` | Val: `{overview_data["Balanced Val Count"]:,}`
 
-        ### Datasets Used
-        - **Real Sources ({len(real_methods)}):** `{', '.join(real_methods)}`
-        - **Fake Methods ({len(fake_methods)}):** `{', '.join(fake_methods)}`
+            ### Datasets Used
+            - **Real Sources ({len(real_methods)}):** `{', '.join(real_methods)}`
+            - **Fake Methods ({len(fake_methods)}):** `{', '.join(fake_methods)}`
 
-        ### Sweep Hyperparameters
-        - **Dataloader Strategy:** `{wandb.config.dataloader_strategy}`
-        - **Frames per Video:** `{wandb.config.frames_per_video}`
-        - **Videos per Batch:** `{wandb.config.videos_per_batch}`
-        - **Frames per Batch:** `{wandb.config.frames_per_batch}`
-        - **Learning Rate:** `{wandb.config.learning_rate:.1e}`
-        - **Weight Decay:** `{wandb.config.weight_decay:.1e}`
-        - **Epsilon:** `{wandb.config.optimizer_eps:.1e}`
-        - **Total Epochs:** `{config.get('nEpochs', 'N/A')}`
-        - **Eval Frequency:** `{wandb.config.evaluation_frequency}` per epoch
-        """
+            ### Sweep Hyperparameters
+            - **Dataloader Strategy:** `{overview_data["Dataloader Strategy"]}`
+            - **Frames per Video:** `{overview_data["Frames per Video"]}`
+            - **Videos per Batch:** `{overview_data["Videos per Batch"]}`
+            - **Frames per Batch:** `{overview_data["Frames per Batch"]}`
+            - **Learning Rate:** `{overview_data["Learning Rate"]:.1e}`
+            - **Weight Decay:** `{overview_data["Weight Decay"]:.1e}`
+            - **Epsilon:** `{overview_data["Epsilon"]:.1e}`
+            - **Total Epochs:** `{overview_data["Total Epochs"]}`
+            - **Eval Frequency:** `{overview_data["Eval Frequency"]}` per epoch
+            """
     wandb.run.summary["run_overview"] = overview_text.strip()
 
     # --- Log detailed dataset balance statistics ---
