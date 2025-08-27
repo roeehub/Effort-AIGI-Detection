@@ -15,6 +15,7 @@ add_relative_path(1)  # go 1 levels up (..)
 import torch  # noqa
 from torch.utils.data import DataLoader, IterDataPipe  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
+from torchdata.datapipes.iter import Multiplexer  # noqa
 import random
 import fsspec  # noqa
 from PIL import Image  # noqa
@@ -27,6 +28,7 @@ from itertools import chain  # noqa
 from concurrent.futures import ThreadPoolExecutor
 # --- helper callables for DataPipes (must be top-level & picklable) ---
 from functools import partial
+from typing import List, Dict
 
 
 def _map_video(video_info, config, mode):
@@ -173,20 +175,28 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
             yield result
 
 
-def load_and_process_video(video_info: VideoInfo, config: dict, mode: str):
+def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame_count_override: int = None):
     """
     This function replaces `load_video_frames_as_dataset`.
     It takes a VideoInfo object and loads the required frames from GCP in parallel.
     It's resilient to individual corrupted frames.
     It returns None on failure, so it can be filtered out.
     """
-    dl_params = config.get('dataloader_params', {})
-    frame_num = dl_params.get('frames_per_video', 8)
+    if frame_count_override is not None:
+        frame_num = frame_count_override
+    else:
+        dl_params = config.get('dataloader_params', {})
+        frame_num = dl_params.get('frames_per_video', 8)
+
     resolution = config['resolution']
     all_frame_paths = list(video_info.frame_paths)
 
     if len(all_frame_paths) < frame_num:
-        return None
+        # For OOD, we can be more lenient and take what we can get.
+        if frame_count_override is not None and len(all_frame_paths) > 0:
+            frame_num = len(all_frame_paths)
+        else:
+            return None
 
     random.shuffle(all_frame_paths)
     selected_paths = all_frame_paths[:frame_num]
@@ -260,7 +270,7 @@ class LazyDataLoaderManager:
     evicted when the memory capacity is reached.
     """
 
-    def __init__(self, videos_by_method, config, data_config, batch_size, mode, max_loaders):
+    def __init__(self, videos_by_method, config, data_config, batch_size, mode, max_loaders, **kwargs):
         self.videos_by_method = videos_by_method
         self.config = config
         self.data_config = data_config
@@ -269,6 +279,9 @@ class LazyDataLoaderManager:
         self.max_loaders = max_loaders
         self.active_loaders = OrderedDict()
         self.all_methods = list(self.videos_by_method.keys())
+        # Accept a custom mapping function for flexibility (e.g., for OOD)
+        self.map_fn = kwargs.get('map_fn', None)
+
         dl_params = self.data_config.get('dataloader_params', {})
         if self.mode == 'train':
             # For training, use the standard worker/prefetch config
@@ -284,7 +297,13 @@ class LazyDataLoaderManager:
         is_train = self.mode == 'train'
 
         pipe = IterableWrapper(videos).shuffle() if is_train else IterableWrapper(videos)
-        pipe = Mapper(pipe, partial(_map_video, config=self.config, mode=self.mode))
+
+        # Use the custom map_fn if provided, otherwise default to the standard one.
+        map_function = self.map_fn
+        if map_function is None:
+            map_function = partial(_map_video, config=self.config, mode=self.mode)
+
+        pipe = Mapper(pipe, map_function)
         pipe = Filter(pipe, _not_none)
 
         loader = DataLoader(
@@ -292,7 +311,7 @@ class LazyDataLoaderManager:
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             collate_fn=collate_fn,
-            persistent_workers=is_train,
+            persistent_workers=is_train and self.num_workers > 0,  # Fix for num_workers=0 case
             prefetch_factor=self.prefetch_factor
         )
         return loader
@@ -432,11 +451,133 @@ def _create_random_frame_loader(train_videos: list[VideoInfo], config: dict, dat
     )
 
 
-def create_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo], config: dict,
+def _create_property_balanced_loader(train_frames: List[Dict], config: dict, data_config: dict):
+    """
+    Implements the "Anchor-Mate" sampling strategy.
+    1. Samples 1 "anchor" frame from each of the 32 property buckets.
+    2. For each anchor, finds a random "mate" frame from the same video.
+    3. This creates a batch that is perfectly balanced by anchor and regularized by the mate.
+    """
+    dl_params = data_config.get('dataloader_params', {})
+    gpu_batch_size = dl_params.get('frames_per_batch', 64)
+    num_workers = dl_params.get('num_workers', 16)
+
+    # This strategy requires a batch size that is a multiple of the number of buckets (32)
+    if gpu_batch_size % 32 != 0:
+        raise ValueError(f"For Anchor-Mate sampling, `frames_per_batch` ({gpu_batch_size}) must be a multiple of 32.")
+
+    # 1. Pre-computation: Organize frames for fast lookups
+    # Bucket dictionary for sampling anchors
+    anchor_buckets = defaultdict(list)
+    for frame_dict in train_frames:
+        anchor_buckets[frame_dict['property_bucket']].append(frame_dict)
+
+    # Video dictionary for finding mates
+    frames_by_video = defaultdict(list)
+    for frame_dict in train_frames:
+        frames_by_video[frame_dict['video_id']].append(frame_dict)
+
+    num_buckets = len(anchor_buckets)
+    log_msg = f"Anchor-Mate loader using {num_buckets} buckets. "
+    log_msg += f"Smallest anchor bucket has {min(len(v) for v in anchor_buckets.values())} frames."
+    print(log_msg)
+
+    # 2. Create a datapipe for each anchor bucket
+    anchor_pipes = []
+    for bucket_key, frames in anchor_buckets.items():
+        pipe = IterableWrapper(frames).cycle().shuffle()
+        anchor_pipes.append(pipe)
+
+    # 3. Use Multiplexer to sample one anchor from each pipe
+    samples_per_bucket = gpu_batch_size // (num_buckets * 2)  # e.g., 64 / (32*2) = 1
+    if samples_per_bucket < 1:
+        samples_per_bucket = 1  # Fallback for smaller batches, though not recommended
+
+    # This pipe yields tuples of anchor frames, e.g., (anchor1, anchor2, ..., anchor32)
+    combined_pipe = Multiplexer(*anchor_pipes, n_instances_per_iter=samples_per_bucket)
+
+    # 4. Define the Anchor-Mate pairing function
+    def find_mates_and_flatten(anchor_tuple):
+        batch_frames = []
+        for anchor_frame in anchor_tuple:
+            batch_frames.append(anchor_frame)  # Add the anchor
+
+            video_id = anchor_frame['video_id']
+            siblings = frames_by_video[video_id]
+
+            # Find a mate that is not the anchor itself
+            if len(siblings) > 1:
+                mate_frame = random.choice(siblings)
+                while mate_frame['path'] == anchor_frame['path']:
+                    mate_frame = random.choice(siblings)
+            else:
+                mate_frame = anchor_frame
+
+            batch_frames.append(mate_frame)  # Add the mate
+
+        random.shuffle(batch_frames)  # Shuffle to mix anchors and mates
+        return batch_frames
+
+    # 5. Build the final pipeline
+    # Map the pairing function to the stream of anchor tuples
+    final_pipe = combined_pipe.map(find_mates_and_flatten)
+    # Flatten the stream of lists into a stream of individual frames
+    final_pipe = final_pipe.flatmap(lambda x: x)
+    # Map the function that loads and processes a single frame
+    final_pipe = final_pipe.map(lambda f: load_and_process_frame((f['path'], f['label_id']), config, 'train'))
+    final_pipe = final_pipe.filter(_not_none)
+
+    return DataLoader(
+        final_pipe,
+        batch_size=gpu_batch_size,  # DataLoader now handles the final batching
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        persistent_workers=True,
+        prefetch_factor=data_config['dataloader_params']['prefetch_factor']
+    )
+
+
+def create_ood_loader(ood_videos: list[VideoInfo], config: dict, data_config: dict):
+    """
+    Factory function to create the OOD dataloader.
+    It is always per-method for detailed analysis and uses a fixed number of frames.
+    """
+    print("--- Creating OOD dataloader ---")
+    if not ood_videos:
+        print("No OOD videos found, returning None for the OOD loader.")
+        return None
+
+    ood_videos_by_method = defaultdict(list)
+    for v in ood_videos:
+        ood_videos_by_method[v.method].append(v)
+
+    # Create a special mapping function that enforces 4 frames per video
+    ood_map_fn = partial(
+        load_and_process_video,
+        config=config,
+        mode='test',  # No augmentations
+        frame_count_override=4
+    )
+
+    ood_loader = LazyDataLoaderManager(
+        videos_by_method=ood_videos_by_method,
+        config=config,
+        data_config=data_config,
+        batch_size=config['test_batchSize'],
+        mode='test',
+        max_loaders=MAX_LOADERS_IN_MEMORY,
+        map_fn=ood_map_fn  # Pass the custom mapping function
+    )
+
+    return ood_loader
+
+
+def create_dataloaders(train_data: List, val_videos: List[VideoInfo], config: dict,
                        data_config: dict):
     """
     Factory function to create dataloaders based on the specified strategy.
     The validation loader is ALWAYS per-method for consistent evaluation.
+    The `train_data` can be a list of VideoInfo or a list of frame dictionaries.
     """
     strategy = data_config.get('dataloader_params', {}).get('strategy', 'per_method')
     print(f"--- Creating dataloaders with strategy: '{strategy}' ---")
@@ -444,16 +585,18 @@ def create_dataloaders(train_videos: list[VideoInfo], val_videos: list[VideoInfo
     # --- 1. Create Training Loader based on strategy ---
     if strategy == 'per_method':
         # The per_method helper returns both train and val loaders
-        train_loader, val_loader = _create_per_method_loaders(train_videos, val_videos, config, data_config)
+        train_loader, val_loader = _create_per_method_loaders(train_data, val_videos, config, data_config)
         return train_loader, val_loader
 
     elif strategy == 'video_level':
-        train_loader = _create_random_video_loader(train_videos, config, data_config)
+        train_loader = _create_random_video_loader(train_data, config, data_config)
 
     elif strategy == 'frame_level':
-        # Adjust batch size for frame-level training if needed for GPU memory
-        # This is a good place for such logic. For now, we assume it's set correctly in the config.
-        train_loader = _create_random_frame_loader(train_videos, config, data_config)
+        train_loader = _create_random_frame_loader(train_data, config, data_config)
+
+    elif strategy == 'property_balancing':
+        # This new strategy expects a list of frame dictionaries as `train_data`
+        train_loader = _create_property_balanced_loader(train_data, config, data_config)
 
     else:
         raise ValueError(f"Unknown dataloader strategy: '{strategy}'")
