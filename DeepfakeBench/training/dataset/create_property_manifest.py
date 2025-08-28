@@ -33,7 +33,7 @@ except ImportError as e:
     sys.exit(1)
 
 # --- Setup basic logging ---
-logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-m-%d %H:%M:%S")
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 log = logging.getLogger(__name__)
 
 # ==============================================================================
@@ -63,7 +63,7 @@ def get_video_identity(label: str, method: str, video_id: str) -> int:
 
     if not is_synthetic and not is_unmappable_real:
         try:
-            # NEW: Special case for 'wav2lip' format 'XXX_...'
+            # Special case for 'wav2lip' format 'XXX_...'
             if method == "wav2lip" and '_' in video_id:
                 source_id_str = video_id.split('_')[0]
                 return int(source_id_str)
@@ -108,7 +108,6 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
             log.warning(f"Skipping malformed path (too short): {gcs_path}")
             return None
         label, method, video_id_raw = parts[-4], parts[-3], parts[-2]
-        # This is the new, unified integer ID
         unified_id = get_video_identity(label, method, video_id_raw)
 
         info = fs.info(gcs_path)
@@ -122,8 +121,8 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
 
         return {
             "path": gcs_path, "label": label, "method": method,
-            "original_video_id": video_id_raw,  # Keep the original string ID
-            "video_id": unified_id,  # The new, unified integer ID
+            "original_video_id": video_id_raw,
+            "video_id": unified_id,
             "file_size_kb": round(file_size_kb, 2),
             "sharpness": round(sharpness, 2),
         }
@@ -149,9 +148,6 @@ def update_manifest_ids(input_path: Path, output_path: Path, workers: int):
         log.error(f"Input manifest not found at: {input_path}")
         sys.exit(1)
 
-    # --- KEY CHANGE: Preserve original ID ---
-    # If there's already an 'original_video_id', we use it. Otherwise,
-    # we rename the current 'video_id' to create it.
     if 'original_video_id' not in df.columns:
         log.info("Renaming 'video_id' to 'original_video_id' to preserve it.")
         df.rename(columns={'video_id': 'original_video_id'}, inplace=True)
@@ -160,7 +156,6 @@ def update_manifest_ids(input_path: Path, output_path: Path, workers: int):
 
     log.info(f"Loaded {len(df):,} records. Re-computing IDs with {workers} workers...")
 
-    # The apply function now reads from the preserved original ID
     def compute_new_ids(chunk_df: pd.DataFrame) -> pd.Series:
         return chunk_df.apply(
             lambda row: get_video_identity(row['label'], row['method'], row['original_video_id']),
@@ -176,12 +171,10 @@ def update_manifest_ids(input_path: Path, output_path: Path, workers: int):
             new_id_chunks.append(future.result())
 
     log.info("ID computation complete. Updating DataFrame...")
-    # Overwrite the 'video_id' column with the newly computed unified IDs
     df['video_id'] = pd.concat(new_id_chunks)
 
     log.info(f"Writing updated DataFrame to Parquet file: '{output_path}'")
     try:
-        # Ensure column order is logical
         cols = ['path', 'label', 'method', 'video_id', 'original_video_id']
         other_cols = [c for c in df.columns if c not in cols]
         df = df[cols + other_cols]
@@ -193,7 +186,7 @@ def update_manifest_ids(input_path: Path, output_path: Path, workers: int):
 
 
 # ==============================================================================
-# --- MAIN EXECUTION (No changes needed here) ---
+# --- MAIN EXECUTION ---
 # ==============================================================================
 
 def main():
