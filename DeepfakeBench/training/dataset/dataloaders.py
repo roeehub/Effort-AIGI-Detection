@@ -15,7 +15,7 @@ add_relative_path(1)  # go 1 levels up (..)
 import torch  # noqa
 from torch.utils.data import DataLoader, IterDataPipe  # noqa
 from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
-from torchdata.datapipes.iter import Multiplexer  # noqa
+from torchdata.datapipes.iter import Zipper  # noqa
 import random
 import fsspec  # noqa
 from PIL import Image  # noqa
@@ -29,6 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 # --- helper callables for DataPipes (must be top-level & picklable) ---
 from functools import partial
 from typing import List, Dict
+import cv2  # noqa
 
 
 def _map_video(video_info, config, mode):
@@ -44,97 +45,305 @@ def _flatmap_frame_batch(batch_of_paths, config, mode):
     return load_and_process_frame_batch(batch_of_paths, config, mode)
 
 
+# ==============================================================================
+# --- NEW: FLEXIBLE AUGMENTATION PIPELINES (albumentations==0.4.6 compatible) ---
+# ==============================================================================
+
+# --- Pipeline to aggressively degrade image quality ---
+degrade_quality_pipeline = A.Compose([
+    A.OneOf([
+        A.ImageCompression(quality_lower=40, quality_upper=70, p=0.8),
+        A.GaussianBlur(blur_limit=(5, 11), p=0.6),
+        A.GaussNoise(var_limit=(20.0, 80.0), p=0.4),
+    ], p=1.0)
+])
+
+# --- Pipeline to enhance image quality ---
+enhance_quality_pipeline = A.Compose([
+    A.IAASharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.9),
+])
+
+# --- Pipeline to simulate social media compression ---
+social_media_pipeline = A.Compose([
+    A.GaussianBlur(blur_limit=(3, 7), p=0.5),
+    A.Downscale(scale_min=0.5, scale_max=0.75, interpolation=cv2.INTER_AREA, p=0.8),
+    A.ImageCompression(quality_lower=30, quality_upper=60, p=1.0),
+], p=1.0)
+
+
+def create_surgical_augmentation_pipeline(
+        config: dict,
+        frame_properties: dict
+) -> A.Compose:
+    """
+    Dynamically constructs an Albumentations pipeline based on a configuration
+    and specific frame properties.
+    """
+    transforms_list = []
+
+    # 1. Base & Geometric
+    transforms_list.append(A.HorizontalFlip(p=0.5))
+    if config.get('use_geometric', False):
+        transforms_list.append(A.ShiftScaleRotate(
+            shift_limit=0.0625, scale_limit=0.1, rotate_limit=7,
+            interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, p=0.7
+        ))
+
+    # Added back to prevent the model from "forgetting" its robustness to color/lighting.
+    # We use mild parameters and moderate probability.
+    if config.get('use_color_jitter', False):
+        transforms_list.extend([
+            A.RandomBrightnessContrast(
+                brightness_limit=0.15, contrast_limit=0.15, p=0.5
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5
+            )
+        ])
+
+    # 2. Surgical Sharpness Adjustment
+    sharpness_bucket = frame_properties.get('sharpness_bucket')
+    chance_for_sharpness_adjustment = config.get('sharpness_adjust_prob', 0.5)
+    if random.random() < chance_for_sharpness_adjustment:
+        if sharpness_bucket == 'q4':
+            transforms_list.append(degrade_quality_pipeline)
+        elif sharpness_bucket == 'q1':
+            transforms_list.append(enhance_quality_pipeline)
+
+    # 3. Advanced Noise & Artifact Simulation
+    if config.get('use_advanced_noise', False):
+        transforms_list.append(A.OneOf([
+            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.5),
+            social_media_pipeline
+        ], p=config.get('advanced_noise_prob', 0.6)))
+
+    # 4. Occlusion
+    if config.get('use_occlusion', False):
+        transforms_list.append(A.Cutout(
+            num_holes=8, max_h_size=24, max_w_size=24, fill_value=0,
+            p=config.get('occlusion_prob', 0.5)
+        ))
+
+    return A.Compose(transforms_list)
+
+
+def create_general_augmentation_pipeline(config: dict) -> A.Compose:
+    """
+    Creates a robust, general-purpose augmentation pipeline for strategies
+    that do not have access to frame-level properties.
+    """
+    transforms_list = [
+        A.HorizontalFlip(p=0.5),
+    ]
+    if config.get('use_geometric', False):
+        transforms_list.append(A.ShiftScaleRotate(
+            shift_limit=0.0625, scale_limit=0.1, rotate_limit=7,
+            interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, p=0.7
+        ))
+
+    # --- NEW: Optional Color Jitter (also added here for consistency) ---
+    if config.get('use_color_jitter', False):
+        transforms_list.extend([
+            A.RandomBrightnessContrast(
+                brightness_limit=0.15, contrast_limit=0.15, p=0.5
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5
+            )
+        ])
+
+    # General quality variations
+    transforms_list.append(A.OneOf([
+        A.ImageCompression(quality_lower=50, quality_upper=80, p=0.5),
+        A.GaussianBlur(blur_limit=(3, 7), p=0.3),
+        A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
+    ], p=0.8))  # Apply one of the quality transforms 80% of the time
+
+    if config.get('use_occlusion', False):
+        transforms_list.append(A.Cutout(
+            num_holes=8, max_h_size=24, max_w_size=24, fill_value=0,
+            p=config.get('occlusion_prob', 0.5)
+        ))
+    return A.Compose(transforms_list)
+
+
+# ======================================================================================
+# === NEW DataPipes and helpers for the property-balanced strategy ===
+# ======================================================================================
+
+
+class CustomRoundRobinDataPipe(IterDataPipe):
+    def __init__(self, *datapipes):
+        super().__init__()
+        self.datapipes = datapipes
+
+    def __iter__(self):
+        iterators = [iter(dp) for dp in self.datapipes]
+        while True:
+            for it in iterators:
+                try:
+                    yield next(it)
+                except StopIteration:
+                    return
+
+
+class CustomSampleMultiplexerDataPipe(IterDataPipe):
+    def __init__(self, datapipes, weights):
+        super().__init__()
+        self.datapipes = datapipes
+        self.weights = weights
+
+    def __iter__(self):
+        iterators = [iter(dp) for dp in self.datapipes]
+        indices = np.arange(len(self.datapipes))
+        while True:
+            chosen_index = np.random.choice(indices, p=self.weights)
+            try:
+                yield next(iterators[chosen_index])
+            except StopIteration:
+                return
+
+
+def _consolidate_small_buckets(frames_by_bucket: dict, min_size: int, label_name: str) -> dict:
+    consolidated_buckets = {}
+    misc_frames = []
+    for bucket_name, frames in frames_by_bucket.items():
+        if len(frames) < min_size:
+            misc_frames.extend(frames)
+        else:
+            consolidated_buckets[bucket_name] = frames
+    if misc_frames:
+        consolidated_buckets[f'misc_{label_name}'] = misc_frames
+    return consolidated_buckets
+
+
+def _create_master_stream_for_label(consolidated_buckets: dict) -> IterDataPipe:
+    if not consolidated_buckets: return None
+    bucket_datapipes = [IterableWrapper(frames).cycle() for frames in consolidated_buckets.values()]
+    return CustomRoundRobinDataPipe(*bucket_datapipes)
+
+
+def _build_clip_to_frames_lookup(all_frames: list[dict]) -> dict[str, list[dict]]:
+    """Builds a lookup table mapping clip_id to a list of its frame dictionaries."""
+    lookup = defaultdict(list)
+    for frame in all_frames:
+        # NOTE: Using clip_id for pairing, as per the verified script.
+        # Ensure 'clip_id' exists in your frame_properties.parquet file.
+        lookup[frame['clip_id']].append(frame)
+    return lookup
+
+
+class MateFinderDataPipe(IterDataPipe):
+    def __init__(self, source_datapipe: IterDataPipe, lookup: dict):
+        super().__init__()
+        self.source_datapipe = source_datapipe
+        self.lookup = lookup
+
+    def __iter__(self):
+        for anchor_frame in self.source_datapipe:
+            yield anchor_frame  # Yield anchor first
+
+            clip_id = anchor_frame.get('clip_id')
+            if clip_id is None:
+                print(
+                    f"WARNING: [MateFinder] Frame missing 'clip_id'. Path: {anchor_frame.get('path')}. Using self as mate.")
+                yield anchor_frame  # Fallback: use self as mate
+                continue
+
+            possible_mates = self.lookup.get(clip_id, [])
+            mates_pool = [m for m in possible_mates if m['path'] != anchor_frame['path']]
+
+            if not mates_pool:
+                # This is a valid case for clips with only one frame.
+                # Use the anchor frame itself as the mate to maintain batch structure.
+                print(f"INFO: [MateFinder] No unique mate found for clip_id '{clip_id}'. Using self as mate.")
+                yield anchor_frame
+            else:
+                yield random.choice(mates_pool)
+
+
+# ======================================================================================
+
 # --- New controllable parameter for max data loaders in memory ---
 MAX_LOADERS_IN_MEMORY = 2
 
+# --- Base augmentations for general variety (always applied) ---
+transform_base = A.Compose([
+    A.HorizontalFlip(p=0.5),
+    A.RandomBrightnessContrast(p=0.2),
+    A.HueSaturationValue(p=0.1),
+])
 
-def data_aug_v2(img, augmentation_seed=None):
+# --- Pipeline to aggressively degrade image quality ---
+degrade_quality_pipeline = A.Compose([
+    A.OneOf([
+        A.ImageCompression(quality_lower=40, quality_upper=70, p=0.8),
+        A.GaussianBlur(blur_limit=(5, 11), p=0.6),
+        A.GaussNoise(var_limit=(20.0, 80.0), p=0.4),
+    ], p=1.0)  # Always apply one of the degradations from this list
+])
+
+# --- Pipeline to enhance image quality ---
+enhance_quality_pipeline = A.Compose([
+    # This is an effective "unsharp mask"
+    A.IAASharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.9),
+])
+
+
+def surgical_data_aug(img: Image.Image, frame_properties: dict) -> Image.Image:
     """
-    Applies a two-stage augmentation pipeline compatible with albumentations==0.4.6.
-    1. Base augmentations for general variety (color, orientation).
-    2. A targeted "Quality Attack" using multi-level degradation to neutralize sharpness as a trivial cue.
+    Applies augmentations dynamically based on frame properties to create "counter-examples"
+    and break trivial correlations like "blurry = fake" or "sharp = real".
     """
-    if augmentation_seed is not None:
-        random.seed(augmentation_seed)
-        np.random.seed(augmentation_seed)
-
-    # Stage 1: Base augmentations for general variety.
-    # This part remains the same.
-    transform_base = A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.RandomBrightnessContrast(p=0.3),
-        A.HueSaturationValue(p=0.2),
-    ])
-
-    # Stage 2: The "Quality Attack" adapted for v0.4.6
-    # We use a mix of degradations and the NoOp() trick.
-    transform_quality = A.Compose([
-        A.OneOf([
-            # Heavy Degradation Options
-            A.ImageCompression(quality_lower=50, quality_upper=80, p=0.5),
-            A.MotionBlur(blur_limit=9, p=0.2),
-            A.GaussNoise(var_limit=(20.0, 60.0), p=0.2),
-
-            # The "Do Nothing" Option
-            A.NoOp(p=0.1)  # Gives a chance for the image to pass through untouched
-        ], p=0.9)  # "Safety Valve": 90% of images will enter this lottery.
-    ])
-
     img_np = np.array(img)
-    transformed_base = transform_base(image=img_np)
-    transformed_quality = transform_quality(image=transformed_base['image'])
+    chance_for_sharpness_adjustment = 0.5  # 50% chance to adjust sharpness-related properties
 
-    return Image.fromarray(transformed_quality['image'])
+    # 1. Always apply base transformations for general robustness
+    img_np = transform_base(image=img_np)['image']
+
+    sharpness_bucket = frame_properties.get('sharpness_bucket')
+
+    # 2. Apply surgical, property-based transformations
+    if sharpness_bucket == 'q4':  # This is a very sharp image
+        # Degrade it with high probability to teach the model that sharp images can also be low quality
+        if random.random() < chance_for_sharpness_adjustment:
+            img_np = degrade_quality_pipeline(image=img_np)['image']
+
+    elif sharpness_bucket == 'q1':  # This is a very blurry image
+        # Enhance it with high probability to teach the model that blurry images can be sharpened
+        if random.random() < chance_for_sharpness_adjustment:
+            img_np = enhance_quality_pipeline(image=img_np)['image']
+
+    # For middle buckets (q2, q3), apply a mix with lower probability to create more variety
+    elif sharpness_bucket in ['q2', 'q3']:
+        if random.random() < chance_for_sharpness_adjustment / 2:
+            if random.random() < 0.5:
+                img_np = degrade_quality_pipeline(image=img_np)['image']
+            else:
+                img_np = enhance_quality_pipeline(image=img_np)['image']
+
+    return Image.fromarray(img_np)
 
 
-# This data augmentation function is fine, we can keep it.
-def data_aug(img, landmark=None, mask=None, augmentation_seed=None):
+def data_aug_v2(img, config: dict, augmentation_seed=None):
+    """
+    A general-purpose quality augmentation pipeline that is now configurable.
+    """
     if augmentation_seed is not None:
         random.seed(augmentation_seed)
         np.random.seed(augmentation_seed)
-    transform = A.Compose([
-        A.HorizontalFlip(p=0.5), A.RandomBrightnessContrast(p=0.5), A.HueSaturationValue(p=0.3),
-        A.ImageCompression(quality_lower=40, p=0.1), A.GaussNoise(p=0.1), A.MotionBlur(p=0.1),
-        A.CLAHE(p=0.1), A.ChannelShuffle(p=0.1), A.Cutout(p=0.1), A.RandomGamma(p=0.3), A.GlassBlur(p=0.3),
-    ])
-    transformed = transform(image=np.array(img))
+
+    aug_params = config.get('augmentation_params', {})
+    pipeline = create_general_augmentation_pipeline(aug_params)
+
+    transformed = pipeline(image=np.array(img))
     return Image.fromarray(transformed['image'])
-
-
-def load_and_process_frame(frame_info: tuple, config: dict, mode: str):
-    """
-    Loads and processes a single frame.
-    Input: A tuple (frame_path, label_id)
-    Returns None on failure.
-    """
-    frame_path, label_id = frame_info
-    resolution = config['resolution']
-
-    try:
-        with fsspec.open(frame_path, "rb") as f:
-            img = Image.open(f).convert("RGB")
-            img = img.resize((resolution, resolution), Image.BICUBIC)
-    except Exception:
-        return None  # Fail silently for a single frame
-
-    if mode == 'train' and config['use_data_augmentation']:
-        aug_seed = random.randint(0, 2 ** 32 - 1)
-        img = data_aug_v2(img, augmentation_seed=aug_seed)
-
-    normalize_transform = T.Compose([
-        T.ToTensor(),
-        T.Normalize(mean=config['mean'], std=config['std'])
-    ])
-
-    image_tensor = normalize_transform(img)
-    # The output format must match collate_fn's expectation
-    return image_tensor, label_id, None, None, frame_path
 
 
 def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mode: str):
     """
     Loads and processes a BATCH of frames in parallel using a thread pool.
-    This is much more efficient for cloud storage as it overlaps I/O latency.
+    Used by the 'frame_level' strategy.
     """
     resolution = config['resolution']
     use_aug = mode == 'train' and config['use_data_augmentation']
@@ -153,23 +362,60 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
                 img = img.resize((resolution, resolution), Image.BICUBIC)
 
             if use_aug:
-                # Give each augmentation its own seed for variety within a batch
+                # This strategy doesn't have frame properties, so it uses the general aug
                 aug_seed = random.randint(0, 2 ** 32 - 1)
                 img = data_aug_v2(img, augmentation_seed=aug_seed)
 
             image_tensor = normalize_transform(img)
-            # The output format must match collate_fn's expectation
             return image_tensor, label_id, None, None, frame_path
         except Exception:
-            return None  # Fail silently for a single frame
+            return None
 
-    # Use a ThreadPoolExecutor to fetch multiple frames concurrently within this single function call.
-    # The number of threads here (e.g., 8-16) is key. It allows one dataloader worker
-    # to perform multiple GCS requests in parallel.
     with ThreadPoolExecutor(max_workers=24) as executor:
         results = list(executor.map(_load_single, frame_info_batch))
 
-    # The function should yield individual samples, not a list
+    for result in results:
+        if result is not None:
+            yield result
+
+
+def load_and_process_property_batch(frame_dict_batch: list[dict], config: dict, mode: str):
+    """
+    Parallel frame loader for the property-balanced strategy.
+    Now uses the new configurable, surgical augmentation pipeline.
+    """
+    resolution = config['resolution']
+    use_aug = mode == 'train' and config['use_data_augmentation']
+    aug_params = config.get('augmentation_params', {})  # Get the new config dict
+
+    normalize_transform = T.Compose([
+        T.ToTensor(),
+        T.Normalize(mean=config['mean'], std=config['std'])
+    ])
+
+    def _load_single(frame_dict):
+        frame_path = frame_dict['path']
+        label_id = frame_dict['label_id']
+        try:
+            with fsspec.open(frame_path, "rb") as f:
+                img = Image.open(f).convert("RGB")
+                img = img.resize((resolution, resolution), Image.BICUBIC)
+
+            if use_aug:
+                # Dynamically create and apply the surgical pipeline for each frame
+                pipeline = create_surgical_augmentation_pipeline(aug_params, frame_dict)
+                img_np = np.array(img)
+                augmented_img = pipeline(image=img_np)['image']
+                img = Image.fromarray(augmented_img)
+
+            image_tensor = normalize_transform(img)
+            return image_tensor, label_id, None, None, frame_path
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=24) as executor:
+        results = list(executor.map(_load_single, frame_dict_batch))
+
     for result in results:
         if result is not None:
             yield result
@@ -177,10 +423,7 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
 
 def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame_count_override: int = None):
     """
-    This function replaces `load_video_frames_as_dataset`.
-    It takes a VideoInfo object and loads the required frames from GCP in parallel.
-    It's resilient to individual corrupted frames.
-    It returns None on failure, so it can be filtered out.
+    Loads frames for a video in parallel. Used by 'video_level' and 'per_method' strategies.
     """
     if frame_count_override is not None:
         frame_num = frame_count_override
@@ -209,7 +452,7 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame
                 img = img.resize((resolution, resolution), Image.BICUBIC)
             return img
         except Exception:
-            return None  # Fail silently for one frame
+            return None
 
     # Use a ThreadPoolExecutor to fetch all frames for this video in parallel
     with ThreadPoolExecutor(max_workers=16) as executor:
@@ -225,7 +468,8 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame
 
     if mode == 'train' and config['use_data_augmentation']:
         aug_seed = random.randint(0, 2 ** 32 - 1)
-        images = [data_aug_v2(img, augmentation_seed=aug_seed) for img in images]
+        # These strategies don't have properties, so they use the general augmentation
+        images = [data_aug_v2(img, config, augmentation_seed=aug_seed) for img in images]
 
     normalize_transform = T.Compose([
         T.ToTensor(),
@@ -262,7 +506,6 @@ def collate_fn(batch):
     return data_dict
 
 
-# --- New Class for managing data loaders in a memory-efficient way ---
 class LazyDataLoaderManager:
     """
     Manages a dictionary of DataLoader objects, but only keeps a fixed number
@@ -348,10 +591,6 @@ class LazyDataLoaderManager:
         new_loader = self._create_loader(method)
         self.active_loaders[method] = new_loader
         return new_loader
-
-    def keys(self):
-        """Returns all possible method keys, not just active ones."""
-        return self.all_methods
 
     def __contains__(self, method):
         """Checks if a method is available, even if not active."""
@@ -439,8 +678,6 @@ def _create_random_frame_loader(train_videos: list[VideoInfo], config: dict, dat
     # `flatmap` is used because our new function yields multiple processed frames.
     pipe = pipe.flatmap(partial(_flatmap_frame_batch, config=config, mode='train'))
 
-    # The filter is no longer needed here, as the batch loader handles it.
-
     return DataLoader(
         pipe,
         batch_size=gpu_batch_size,  # This is the final batch size for the GPU
@@ -451,96 +688,73 @@ def _create_random_frame_loader(train_videos: list[VideoInfo], config: dict, dat
     )
 
 
-def _create_property_balanced_loader(train_frames: List[Dict], config: dict, data_config: dict):
+def _create_property_balanced_loader(all_train_frames: list[dict], config: dict, data_config: dict):
     """
-    Implements the "Anchor-Mate" sampling strategy.
-    1. Samples 1 "anchor" frame from each of the 32 property buckets.
-    2. For each anchor, finds a random "mate" frame from the same video.
-    3. This creates a batch that is perfectly balanced by anchor and regularized by the mate.
+    Creates the property-balanced dataloader using the Anchor-Mate strategy.
+    This implementation is based on the verified pipeline.
     """
-    dl_params = data_config.get('dataloader_params', {})
-    gpu_batch_size = dl_params.get('frames_per_batch', 64)
-    num_workers = dl_params.get('num_workers', 16)
+    dl_params = data_config['dataloader_params']
+    BATCH_SIZE = dl_params['frames_per_batch']
+    NUM_WORKERS = dl_params['num_workers']
+    MIN_BUCKET_SIZE = BATCH_SIZE  # A sensible minimum to avoid tiny cycled iterators
 
-    # This strategy requires a batch size that is a multiple of the number of buckets (32)
-    if gpu_batch_size % 32 != 0:
-        raise ValueError(f"For Anchor-Mate sampling, `frames_per_batch` ({gpu_batch_size}) must be a multiple of 32.")
+    # 1. Build the lookup table for finding mates efficiently
+    clip_lookup = _build_clip_to_frames_lookup(all_train_frames)
+    print(f"Built clip_id lookup table with {len(clip_lookup)} unique clips.")
 
-    # 1. Pre-computation: Organize frames for fast lookups
-    # Bucket dictionary for sampling anchors
-    anchor_buckets = defaultdict(list)
-    for frame_dict in train_frames:
-        anchor_buckets[frame_dict['property_bucket']].append(frame_dict)
+    # 2. Segregate all frames by label and then by property bucket
+    real_frames_by_bucket = defaultdict(list)
+    fake_frames_by_bucket = defaultdict(list)
+    for frame_info in all_train_frames:
+        bucket = frame_info['property_bucket']
+        if frame_info['label_id'] == 0:
+            real_frames_by_bucket[bucket].append(frame_info)
+        else:
+            fake_frames_by_bucket[bucket].append(frame_info)
 
-    # Video dictionary for finding mates
-    frames_by_video = defaultdict(list)
-    for frame_dict in train_frames:
-        frames_by_video[frame_dict['video_id']].append(frame_dict)
+    # 3. Consolidate small buckets to prevent overhead
+    consolidated_real = _consolidate_small_buckets(real_frames_by_bucket, MIN_BUCKET_SIZE, 'real')
+    consolidated_fake = _consolidate_small_buckets(fake_frames_by_bucket, MIN_BUCKET_SIZE, 'fake')
 
-    num_buckets = len(anchor_buckets)
-    log_msg = f"Anchor-Mate loader using {num_buckets} buckets. "
-    log_msg += f"Smallest anchor bucket has {min(len(v) for v in anchor_buckets.values())} frames."
-    print(log_msg)
+    # 4. Create master streams that cycle through property buckets for each label
+    real_master_stream = _create_master_stream_for_label(consolidated_real)
+    fake_master_stream = _create_master_stream_for_label(consolidated_fake)
+    if real_master_stream is None or fake_master_stream is None:
+        raise ValueError("Cannot create dataloader: data for one or both labels is missing.")
 
-    # 2. Create a datapipe for each anchor bucket
-    anchor_pipes = []
-    for bucket_key, frames in anchor_buckets.items():
-        pipe = IterableWrapper(frames).cycle().shuffle()
-        anchor_pipes.append(pipe)
+    # 5. Probabilistically sample from master streams to create a 50/50 balanced "anchor" stream
+    anchor_pipe = CustomSampleMultiplexerDataPipe([real_master_stream, fake_master_stream], [0.5, 0.5])
 
-    # 3. Use Multiplexer to sample one anchor from each pipe
-    samples_per_bucket = gpu_batch_size // (num_buckets * 2)  # e.g., 64 / (32*2) = 1
-    if samples_per_bucket < 1:
-        samples_per_bucket = 1  # Fallback for smaller batches, though not recommended
+    # 6. Add sharding (for DDP) and shuffling
+    if NUM_WORKERS > 0:
+        anchor_pipe = anchor_pipe.sharding_filter()
+    anchor_pipe = anchor_pipe.shuffle(buffer_size=10000)
 
-    # This pipe yields tuples of anchor frames, e.g., (anchor1, anchor2, ..., anchor32)
-    combined_pipe = Multiplexer(*anchor_pipes, n_instances_per_iter=samples_per_bucket)
+    # 7. Use the MateFinderDataPipe to double the stream with paired frames
+    # This pipe takes one anchor and yields (anchor, mate)
+    combined_pipe = MateFinderDataPipe(anchor_pipe, clip_lookup)
 
-    # 4. Define the Anchor-Mate pairing function
-    def find_mates_and_flatten(anchor_tuple):
-        batch_frames = []
-        for anchor_frame in anchor_tuple:
-            batch_frames.append(anchor_frame)  # Add the anchor
-
-            video_id = anchor_frame['video_id']
-            siblings = frames_by_video[video_id]
-
-            # Find a mate that is not the anchor itself
-            if len(siblings) > 1:
-                mate_frame = random.choice(siblings)
-                while mate_frame['path'] == anchor_frame['path']:
-                    mate_frame = random.choice(siblings)
-            else:
-                mate_frame = anchor_frame
-
-            batch_frames.append(mate_frame)  # Add the mate
-
-        random.shuffle(batch_frames)  # Shuffle to mix anchors and mates
-        return batch_frames
-
-    # 5. Build the final pipeline
-    # Map the pairing function to the stream of anchor tuples
-    final_pipe = combined_pipe.map(find_mates_and_flatten)
-    # Flatten the stream of lists into a stream of individual frames
-    final_pipe = final_pipe.flatmap(lambda x: x)
-    # Map the function that loads and processes a single frame
-    final_pipe = final_pipe.map(lambda f: load_and_process_frame((f['path'], f['label_id']), config, 'train'))
-    final_pipe = final_pipe.filter(_not_none)
+    # 8. Batch the frame dictionaries FOR I/O EFFICIENCY, then use the parallel loader
+    # The flatmap will yield individual processed frames.
+    # We create a larger IO batch to send to each worker for efficiency.
+    io_batch_size = BATCH_SIZE * 4  # A good default, e.g., 256
+    combined_pipe = combined_pipe.batch(io_batch_size).flatmap(
+        partial(load_and_process_property_batch, config=config, mode='train')
+    )
 
     return DataLoader(
-        final_pipe,
-        batch_size=gpu_batch_size,  # DataLoader now handles the final batching
-        num_workers=num_workers,
-        collate_fn=collate_fn,
-        persistent_workers=True,
-        prefetch_factor=data_config['dataloader_params']['prefetch_factor']
+        combined_pipe,
+        batch_size=BATCH_SIZE,  # Let the DataLoader create the final GPU batch
+        num_workers=NUM_WORKERS,
+        collate_fn=collate_fn,  # Now this collate_fn will receive a list of tuples, which is correct
+        persistent_workers=True if NUM_WORKERS > 0 else False,
+        prefetch_factor=dl_params['prefetch_factor']
     )
 
 
 def create_ood_loader(ood_videos: list[VideoInfo], config: dict, data_config: dict):
     """
     Factory function to create the OOD dataloader.
-    It is always per-method for detailed analysis and uses a fixed number of frames.
     """
     print("--- Creating OOD dataloader ---")
     if not ood_videos:
@@ -551,24 +765,13 @@ def create_ood_loader(ood_videos: list[VideoInfo], config: dict, data_config: di
     for v in ood_videos:
         ood_videos_by_method[v.method].append(v)
 
-    # Create a special mapping function that enforces 4 frames per video
-    ood_map_fn = partial(
-        load_and_process_video,
-        config=config,
-        mode='test',  # No augmentations
-        frame_count_override=4
-    )
+    ood_map_fn = partial(load_and_process_video, config=config, mode='test', frame_count_override=4)
 
     ood_loader = LazyDataLoaderManager(
-        videos_by_method=ood_videos_by_method,
-        config=config,
-        data_config=data_config,
-        batch_size=config['test_batchSize'],
-        mode='test',
-        max_loaders=MAX_LOADERS_IN_MEMORY,
-        map_fn=ood_map_fn  # Pass the custom mapping function
+        videos_by_method=ood_videos_by_method, config=config, data_config=data_config,
+        batch_size=config['test_batchSize'], mode='test', max_loaders=MAX_LOADERS_IN_MEMORY,
+        map_fn=ood_map_fn
     )
-
     return ood_loader
 
 
@@ -576,43 +779,31 @@ def create_dataloaders(train_data: List, val_videos: List[VideoInfo], config: di
                        data_config: dict):
     """
     Factory function to create dataloaders based on the specified strategy.
-    The validation loader is ALWAYS per-method for consistent evaluation.
-    The `train_data` can be a list of VideoInfo or a list of frame dictionaries.
     """
     strategy = data_config.get('dataloader_params', {}).get('strategy', 'per_method')
     print(f"--- Creating dataloaders with strategy: '{strategy}' ---")
 
-    # --- 1. Create Training Loader based on strategy ---
     if strategy == 'per_method':
         # The per_method helper returns both train and val loaders
         train_loader, val_loader = _create_per_method_loaders(train_data, val_videos, config, data_config)
         return train_loader, val_loader
-
     elif strategy == 'video_level':
         train_loader = _create_random_video_loader(train_data, config, data_config)
-
     elif strategy == 'frame_level':
         train_loader = _create_random_frame_loader(train_data, config, data_config)
-
     elif strategy == 'property_balancing':
         # This new strategy expects a list of frame dictionaries as `train_data`
         train_loader = _create_property_balanced_loader(train_data, config, data_config)
-
     else:
         raise ValueError(f"Unknown dataloader strategy: '{strategy}'")
 
-    # --- 2. Create the Validation Loader (always per-method) ---
+    # Create the Validation Loader (always per-method for consistent evaluation)
     val_videos_by_method = defaultdict(list)
     for v in val_videos:
         val_videos_by_method[v.method].append(v)
 
     val_loader = LazyDataLoaderManager(
-        videos_by_method=val_videos_by_method,
-        config=config,
-        data_config=data_config,
-        batch_size=config['test_batchSize'],
-        mode='test',
-        max_loaders=MAX_LOADERS_IN_MEMORY
+        videos_by_method=val_videos_by_method, config=config, data_config=data_config,
+        batch_size=config['test_batchSize'], mode='test', max_loaders=MAX_LOADERS_IN_MEMORY
     )
-
     return train_loader, val_loader
