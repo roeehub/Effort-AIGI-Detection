@@ -34,11 +34,28 @@ from tqdm import tqdm
 
 # --- Local Imports from Project ---
 try:
-    from video_preprocessor import initialize_yolo_model, _get_yolo_face_box
-except ImportError:
-    print("\n[ERROR] Could not import from 'video_preprocessor.py'.")
-    print("Please ensure the file is in the same directory or your PYTHONPATH is set correctly.")
-    exit(1)
+    # Works when running as a module from the repo root:
+    #   python -m training.recrop_dataset
+    from training.video_preprocessor import initialize_yolo_model, _get_yolo_face_box
+except Exception:
+    try:
+        # Works when running the file directly from inside training/:
+        #   python recrop_dataset.py
+        from video_preprocessor import initialize_yolo_model, _get_yolo_face_box
+    except Exception as e:
+        import os, sys, traceback
+        # Last-resort: add this file's directory to sys.path and retry
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            from video_preprocessor import initialize_yolo_model, _get_yolo_face_box
+        except Exception:
+            print("\n[ERROR] Could not import from 'video_preprocessor.py'.")
+            print("Please ensure you either:")
+            print("  1) run from repo root with:  python -m training.recrop_dataset")
+            print("  2) or run inside training/: python recrop_dataset.py")
+            print("If needed, set PYTHONPATH to the repo root.")
+            print("\nDebug info:\n", traceback.format_exc())
+            sys.exit(1)
 
 # --- Configuration ---
 TARGET_RFA = 0.85
