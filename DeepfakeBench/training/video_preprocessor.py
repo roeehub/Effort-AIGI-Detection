@@ -35,6 +35,7 @@ DLIB_LANDMARK_MODEL_PATH = "shape_predictor_81_face_landmarks.dat"
 
 # --- YOLO Settings ---
 YOLO_MODEL_PATH = "yolov8s-face.pt"
+# YOLO_MODEL_PATH = "/Users/roeedar/Library/Application Support/JetBrains/PyCharmCE2024.2/scratches/yolov8s-face.pt"
 YOLO_BBOX_MARGIN = 20
 YOLO_CONF_THRESHOLD = 0.20
 
