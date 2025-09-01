@@ -21,7 +21,7 @@ import cv2  # noqa
 import numpy as np  # noqa
 import torch  # noqa
 import torchvision.transforms as T  # noqa
-import dlib  # noqa
+# import dlib  # noqa
 from skimage import transform as trans  # noqa
 from ultralytics import YOLO  # noqa
 
