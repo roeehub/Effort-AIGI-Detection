@@ -82,9 +82,28 @@ def run_stage_1_text_filter():
     keyword_pattern = "|".join(CONFIG["FACE_KEYWORDS"])
 
     print(f"[*] Loading dataset: {CONFIG['DATASET_NAME']}...")
-    dataset = load_dataset(CONFIG["DATASET_NAME"], split="train")
+    try:
+        # ------------------- FINAL FIX -------------------
+        # The dataset has a metadata mismatch on the Hub (claims 948 examples but has 760).
+        # ignore_verifications=True tells the library to load the data file as-is
+        # and not worry about the incorrect metadata.
+        dataset = load_dataset(
+            CONFIG["DATASET_NAME"],
+            split="train",
+            ignore_verifications=True
+        )
+        # --------------------------------------------------
+    except Exception as e:
+        print(f"\n[ERROR] Failed to load the dataset.")
+        print(f"        Details: {e}")
+        print("        There might be a deeper issue with the dataset on the Hub or your connection.")
+        sys.exit(1)
+
     df = dataset.to_pandas()
     initial_records = len(df)
+
+    # This number will now correctly be 760
+    print(f"[*] Successfully loaded {initial_records} records.")
 
     print(f"[*] Filtering {initial_records} records with keyword pattern...")
     filtered_df = df[df["prompt"].str.contains(keyword_pattern, case=False, regex=True)].copy()
@@ -114,7 +133,6 @@ def run_stage_1_text_filter():
     print("-------------------------")
 
     return all_videos_df
-
 
 # ──────────────────────────
 # 🚀 Pipeline Stage 2 (Parallel)
