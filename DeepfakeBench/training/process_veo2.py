@@ -83,16 +83,17 @@ def run_stage_1_text_filter():
 
     print(f"[*] Loading dataset: {CONFIG['DATASET_NAME']}...")
     try:
-        # ------------------- FINAL FIX -------------------
-        # The dataset has a metadata mismatch on the Hub (claims 948 examples but has 760).
-        # ignore_verifications=True tells the library to load the data file as-is
-        # and not worry about the incorrect metadata.
+        # ------------------- FINAL, CORRECTED CODE -------------------
+        # The dataset has a metadata mismatch on the Hub.
+        # 'verification_mode="no_checks"' is the correct parameter to tell the
+        # library to load the data as-is and skip the size/checksum verification
+        # that is causing the error.
         dataset = load_dataset(
             CONFIG["DATASET_NAME"],
             split="train",
-            ignore_verifications=True
+            verification_mode="no_checks"
         )
-        # --------------------------------------------------
+        # -----------------------------------------------------------
     except Exception as e:
         print(f"\n[ERROR] Failed to load the dataset.")
         print(f"        Details: {e}")
@@ -102,7 +103,6 @@ def run_stage_1_text_filter():
     df = dataset.to_pandas()
     initial_records = len(df)
 
-    # This number will now correctly be 760
     print(f"[*] Successfully loaded {initial_records} records.")
 
     print(f"[*] Filtering {initial_records} records with keyword pattern...")
@@ -133,6 +133,7 @@ def run_stage_1_text_filter():
     print("-------------------------")
 
     return all_videos_df
+
 
 # ──────────────────────────
 # 🚀 Pipeline Stage 2 (Parallel)
