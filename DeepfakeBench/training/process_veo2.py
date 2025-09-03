@@ -1,20 +1,19 @@
 """
-process_veo2.py
+process_synthetic_videos_HQ.py
 =================================
 This script implements a three-stage, resumable, and parallelized pipeline to
-filter the Rapidata/text-2-video-human-preferences-veo2 dataset and extract
-high-quality cropped faces from synthetic videos.
+download the HIGHEST QUALITY MP4s from the Rapidata/text-2-video-human-preferences-veo2
+dataset and extract high-quality, high-confidence cropped faces.
+
+**Key Feature:**
+- Bypasses the dataset's default low-quality GIF URLs by programmatically
+  constructing direct download links to the original MP4 files.
 
 **Features:**
-- Metadata Logging: Clear summaries after each stage (Started/Filtered/Remaining).
-- Multiprocessing: Stages 2 and 3 are parallelized for significant speedup.
-- Model Tracking: The text-to-video model (e.g., 'veo2', 'sora') is extracted
-  and tracked throughout the pipeline.
-- Resumable: The pipeline can be stopped and restarted, picking up where it left off.
-
-Stage 1: Text-based Filtering -> Saves candidates with model info.
-Stage 2: Sparse Face Verification (Parallel) -> Verifies videos in parallel.
-Stage 3: Dense Face Extraction (Parallel) -> Extracts faces in parallel.
+- Metadata Logging: Clear summaries after each stage.
+- Multiprocessing: Stages 2 and 3 are parallelized for speed.
+- Resumable: The pipeline can be stopped and restarted.
+- Quality Control: Stage 3 uses high confidence and minimum size filters.
 """
 import os
 import random
@@ -41,34 +40,41 @@ except ImportError:
 # 📍 Configuration
 # ──────────────────────────
 CONFIG = {
-    # --- Pipeline & Concurrency ---
     "NUM_WORKERS": max(1, cpu_count() - 1),
     "DATASET_NAME": "Rapidata/text-2-video-human-preferences-veo2",
-
-    # --- State Management ---
     "STAGE_1_OUTPUT": "intermediate_step1_text_filtered.csv",
     "STAGE_2_OUTPUT": "intermediate_step2_face_verified.csv",
     "STAGE_3_LOG": "intermediate_step3_extraction_log.csv",
-
-    # --- Directories ---
-    "VIDEO_CACHE_DIR": "video_cache",
+    "VIDEO_CACHE_DIR": "video_cache_mp4",  # Use a new cache for MP4s
     "FACES_OUTPUT_DIR": "output_faces",
-
-    # --- Stage 1: Text Filtering ---
     "FACE_KEYWORDS": [
         "face", "person", "man", "woman", "boy", "girl", "human", "people", "portrait",
         "selfie", "actor", "actress", "child", "baby", "crowd", "headshot",
         "close-up of a person", "smiling", "laughing", "talking"
     ],
-
-    # --- Stage 2: Sparse Verification ---
     "SPARSE_CHECK_FRAMES": 10,
     "SPARSE_CONF_THRESHOLD": 0.15,
-
-    # --- Stage 3: Dense Extraction ---
-    "DENSE_CONF_THRESHOLD": 0.60,
+    "DENSE_CONF_THRESHOLD": 0.85,
+    "MIN_FACE_PIXEL_SIZE": 96,
     "CROP_METHOD": "yolo"
 }
+
+
+# ──────────────────────────
+# 🛠️ URL Transformation Helper
+# ──────────────────────────
+
+def construct_mp4_url(gif_url: str) -> str:
+    """
+    Transforms a dataset's GIF URL into a direct download URL for the original MP4.
+    Example Input:  https://.../some_hash/0000_sora_1.gif
+    Example Output: https://huggingface.co/datasets/Rapidata/text-2-video-human-preferences-veo2/resolve/main/videos/0000_sora_1.mp4
+    """
+    base_filename = Path(gif_url).name
+    mp4_filename = Path(base_filename).with_suffix('.mp4').name
+
+    # This is the direct download template for files in the repo
+    return f"https://huggingface.co/datasets/{CONFIG['DATASET_NAME']}/resolve/main/videos/{mp4_filename}"
 
 
 # ──────────────────────────
@@ -76,39 +82,25 @@ CONFIG = {
 # ──────────────────────────
 
 def run_stage_1_text_filter():
-    """Filters dataset on keywords and extracts model info, saving to CSV."""
-    print("--- Starting Stage 1: Text-based Filtering ---")
+    """Filters dataset, then transforms GIF URLs to high-quality MP4 URLs."""
+    print("--- Starting Stage 1: Text-based Filtering & URL Transformation ---")
 
     keyword_pattern = "|".join(CONFIG["FACE_KEYWORDS"])
 
     print(f"[*] Loading dataset: {CONFIG['DATASET_NAME']}...")
     try:
-        # ------------------- FINAL, CORRECTED CODE -------------------
-        # The dataset has a metadata mismatch on the Hub.
-        # 'verification_mode="no_checks"' is the correct parameter to tell the
-        # library to load the data as-is and skip the size/checksum verification
-        # that is causing the error.
-        dataset = load_dataset(
-            CONFIG["DATASET_NAME"],
-            split="train",
-            verification_mode="no_checks"
-        )
-        # -----------------------------------------------------------
+        dataset = load_dataset(CONFIG["DATASET_NAME"], split="train", verification_mode="no_checks")
     except Exception as e:
-        print(f"\n[ERROR] Failed to load the dataset.")
-        print(f"        Details: {e}")
-        print("        There might be a deeper issue with the dataset on the Hub or your connection.")
+        print(f"\n[ERROR] Failed to load the dataset. Details: {e}")
         sys.exit(1)
 
     df = dataset.to_pandas()
     initial_records = len(df)
 
     print(f"[*] Successfully loaded {initial_records} records.")
-
-    print(f"[*] Filtering {initial_records} records with keyword pattern...")
+    print(f"[*] Filtering records with keyword pattern...")
     filtered_df = df[df["prompt"].str.contains(keyword_pattern, case=False, regex=True)].copy()
 
-    # Reshape the data to have one row per video, preserving model info
     def extract_model_name(url):
         try:
             return Path(url).name.split('_')[1]
@@ -117,19 +109,24 @@ def run_stage_1_text_filter():
 
     v1 = filtered_df[['prompt', 'video1']].rename(columns={'video1': 'video_url'})
     v1['model_name'] = v1['video_url'].apply(extract_model_name)
-
     v2 = filtered_df[['prompt', 'video2']].rename(columns={'video2': 'video_url'})
     v2['model_name'] = v2['video_url'].apply(extract_model_name)
 
     all_videos_df = pd.concat([v1, v2], ignore_index=True).drop_duplicates(subset=['video_url']).reset_index(drop=True)
-    unique_videos_count = len(all_videos_df)
 
+    # --- IMPORTANT: URL TRANSFORMATION STEP ---
+    print("[*] Constructing direct MP4 URLs to ensure highest quality...")
+    all_videos_df['mp4_url'] = all_videos_df['video_url'].apply(construct_mp4_url)
+    # ---
+
+    unique_videos_count = len(all_videos_df)
     print(f"[*] Saved text-filtered candidates to '{CONFIG['STAGE_1_OUTPUT']}'")
     all_videos_df.to_csv(CONFIG['STAGE_1_OUTPUT'], index=False)
 
     print("\n--- Stage 1 Summary ---")
-    print(f"[*] Started with:            {initial_records} prompt-video pairs")
+    print(f"[*] Started with:            {initial_records * 2} video files (approx)")
     print(f"[*] Remaining after filter:  {unique_videos_count} unique videos")
+    print("[*] Status:                  High-quality MP4 URLs are ready for download.")
     print("-------------------------")
 
     return all_videos_df
@@ -140,10 +137,13 @@ def run_stage_1_text_filter():
 # ──────────────────────────
 
 def verify_video_worker(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Worker function for sparse face verification."""
+    """Worker function for sparse face verification using MP4 URLs."""
     yolo_model = initialize_yolo_model()
     yolo_model.conf = CONFIG["SPARSE_CONF_THRESHOLD"]
-    video_url = args["video_url"]
+
+    # --- Use the new mp4_url for downloading ---
+    video_url = args["mp4_url"]
+
     local_path = Path(CONFIG["VIDEO_CACHE_DIR"]) / Path(video_url).name
 
     try:
@@ -152,21 +152,22 @@ def verify_video_worker(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not cap.isOpened(): return None
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if total_frames < CONFIG["SPARSE_CHECK_FRAMES"]:
-            cap.release();
+            cap.release()
             return None
         frame_indices = random.sample(range(total_frames), CONFIG["SPARSE_CHECK_FRAMES"])
         for frame_idx in frame_indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if ret and _get_yolo_face_box(frame, model=yolo_model) is not None:
-                cap.release();
+                cap.release()
                 return args
-        cap.release();
+        cap.release()
         return None
     except Exception:
         return None
 
 
+# NOTE: run_stage_2 function remains the same as it just orchestrates the workers.
 def run_stage_2_sparse_face_check(input_df: pd.DataFrame):
     """Orchestrates the parallel sparse face verification."""
     videos_to_verify_count = len(input_df)
@@ -201,10 +202,14 @@ def run_stage_2_sparse_face_check(input_df: pd.DataFrame):
 # ──────────────────────────
 
 def extract_faces_worker(args: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Worker function for dense face extraction."""
+    """Worker function for dense, high-quality face extraction from MP4s."""
     yolo_model = initialize_yolo_model()
     yolo_model.conf = CONFIG["DENSE_CONF_THRESHOLD"]
-    video_url, model_name = args["video_url"], args["model_name"]
+
+    # --- Use the new mp4_url ---
+    video_url = args["mp4_url"]
+    model_name = args["model_name"]
+
     video_filename = Path(video_url).name
     local_path = Path(CONFIG["VIDEO_CACHE_DIR"]) / video_filename
     video_face_dir = Path(CONFIG["FACES_OUTPUT_DIR"]) / Path(video_filename).stem
@@ -220,23 +225,26 @@ def extract_faces_worker(args: Dict[str, Any]) -> List[Dict[str, Any]]:
             ret, frame = cap.read()
             if not ret: break
             frame_count += 1
-            if _get_yolo_face_box(frame, model=yolo_model) is not None:
-                cropped_face = extract_yolo_face(frame)
-                if cropped_face is not None:
-                    save_path = video_face_dir / f"frame_{frame_count:04d}_face.jpg"
-                    cv2.imwrite(str(save_path), cropped_face)
-                    extraction_log.append({
-                        "source_video": video_filename,
-                        "model_name": model_name,
-                        "frame": frame_count,
-                        "face_path": str(save_path)
-                    })
+            box = _get_yolo_face_box(frame, model=yolo_model)
+            if box is not None:
+                face_w, face_h = box[2] - box[0], box[3] - box[1]
+                if face_w >= CONFIG["MIN_FACE_PIXEL_SIZE"] and face_h >= CONFIG["MIN_FACE_PIXEL_SIZE"]:
+                    cropped_face = extract_yolo_face(frame)
+                    if cropped_face is not None:
+                        save_path = video_face_dir / f"frame_{frame_count:04d}_face.jpg"
+                        cv2.imwrite(str(save_path), cropped_face)
+                        extraction_log.append({
+                            "source_video": video_filename, "model_name": model_name,
+                            "frame": frame_count, "face_path": str(save_path),
+                            "original_face_width": int(face_w), "original_face_height": int(face_h)
+                        })
         cap.release()
     except Exception:
         return []
     return extraction_log
 
 
+# NOTE: run_stage_3 function remains the same as it just orchestrates the workers.
 def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
     """Orchestrates the parallel dense face extraction."""
     videos_to_process_count = len(input_df)
@@ -263,14 +271,15 @@ def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
     print("\n--- Stage 3 Summary ---")
     print(f"[*] Started with:            {videos_to_process_count} verified videos")
     print(f"[*] Videos yielding faces:   {videos_with_faces}")
-    print(f"[*] Total faces extracted:   {total_faces_extracted}")
+    print(
+        f"[*] Total faces extracted:   {total_faces_extracted} (High-Confidence, >{CONFIG['MIN_FACE_PIXEL_SIZE']}px from MP4s)")
     print("-------------------------")
 
 
 # ──────────────────────────
 # 🚀 Main Orchestrator
 # ──────────────────────────
-
+# NOTE: The main function remains the same as it just calls the stages in order.
 def main():
     """Main function to orchestrate the pipeline."""
     start_time = time.time()
