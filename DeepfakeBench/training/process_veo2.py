@@ -1,31 +1,23 @@
 """
-process_veo2.py
+process_synthetic_videos_HQ_V2.py
 =================================
 This script implements a three-stage, resumable, and parallelized pipeline to
 download the HIGHEST QUALITY MP4s from the Rapidata/text-2-video-human-preferences-veo2
-dataset and extract high-quality, high-confidence cropped faces.
+dataset and extract a high-quality, diverse set of faces.
 
-**New Feature:**
-- Pass the '--clean' flag to robustly delete all intermediate files and
-  output directories before starting a fresh run from scratch.
-  Example: python process_synthetic_videos_HQ.py --clean
-
-**Key Feature:**
-- Bypasses the dataset's default low-quality GIF URLs by programmatically
-  constructing direct download links to the original MP4 files.
-
-**Features:**
-- Metadata Logging: Clear summaries after each stage.
-- Multiprocessing: Stages 2 and 3 are parallelized for speed.
-- Resumable: The pipeline can be stopped and restarted.
-- Quality Control: Stage 3 uses high confidence and minimum size filters.
+**New in V2 (Advanced Quality Filtering):**
+- Blur Detection: Discards blurry faces using Laplacian variance.
+- Profile Filtering: Uses a bounding box aspect ratio heuristic to discard side-on views.
+- Temporally Diverse Sampling: Finds ALL high-quality faces in a video, then selects
+  up to 8 faces that are evenly spaced throughout the video's timeline.
+- Command-line Control: Use '--clean' to force a fresh run.
 """
 import os
 import random
 import sys
 import time
-import argparse  # <-- Import argparse
-import shutil  # <-- Import shutil for robust directory deletion
+import argparse
+import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from multiprocessing import Pool, cpu_count
@@ -34,6 +26,7 @@ from urllib.request import urlretrieve
 import cv2
 import pandas as pd
 import torch
+import numpy as np  # <-- Import numpy for linspace
 from datasets import load_dataset
 from tqdm import tqdm
 
@@ -61,44 +54,29 @@ CONFIG = {
     ],
     "SPARSE_CHECK_FRAMES": 10,
     "SPARSE_CONF_THRESHOLD": 0.15,
-    "DENSE_CONF_THRESHOLD": 0.85,
-    "MIN_FACE_PIXEL_SIZE": 96,
-    "CROP_METHOD": "yolo"
+
+    # --- V2: Advanced Quality & Sampling Controls ---
+    "DENSE_CONF_THRESHOLD": 0.85,  # Confidence for a face to be considered a candidate
+    "MIN_FACE_PIXEL_SIZE": 96,  # Minimum width and height of a face
+    "BLUR_THRESHOLD": 100.0,  # Laplacian variance. Lower is more blurry. Tune if needed.
+    "MIN_ASPECT_RATIO": 0.7,  # width/height. Filters out most full profiles.
+    "MAX_FACES_PER_VIDEO": 8,  # Max number of faces to save per video
 }
 
 
 # ──────────────────────────
-# 🛠️ Cleanup & URL Helper
+# 🛠️ Helpers
 # ──────────────────────────
 
 def clean_previous_run():
-    """
-    Robustly deletes intermediate files and output directories from a previous run.
-    Checks for existence before attempting deletion to avoid errors.
-    """
+    """Robustly deletes intermediate files and output directories from a previous run."""
     print("🧹 --clean flag detected. Deleting previous run artifacts...")
-
-    files_to_delete = [
-        CONFIG["STAGE_1_OUTPUT"],
-        CONFIG["STAGE_2_OUTPUT"],
-        CONFIG["STAGE_3_LOG"]
-    ]
-
-    dirs_to_delete = [
-        CONFIG["VIDEO_CACHE_DIR"],
-        CONFIG["FACES_OUTPUT_DIR"]
-    ]
-
+    files_to_delete = [CONFIG["STAGE_1_OUTPUT"], CONFIG["STAGE_2_OUTPUT"], CONFIG["STAGE_3_LOG"]]
+    dirs_to_delete = [CONFIG["VIDEO_CACHE_DIR"], CONFIG["FACES_OUTPUT_DIR"]]
     for f in files_to_delete:
-        if os.path.exists(f):
-            os.remove(f)
-            print(f"   Deleted file: {f}")
-
+        if os.path.exists(f): os.remove(f); print(f"   Deleted file: {f}")
     for d in dirs_to_delete:
-        if os.path.exists(d):
-            shutil.rmtree(d)
-            print(f"   Deleted directory: {d}")
-
+        if os.path.exists(d): shutil.rmtree(d); print(f"   Deleted directory: {d}")
     print("✅ Cleanup complete.\n")
 
 
@@ -109,9 +87,17 @@ def construct_mp4_url(gif_url: str) -> str:
     return f"https://huggingface.co/datasets/{CONFIG['DATASET_NAME']}/resolve/main/videos/{mp4_filename}"
 
 
+def measure_blur(image: np.ndarray) -> float:
+    """Measures the blur of an image using the variance of the Laplacian."""
+    if image.ndim == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return cv2.Laplacian(image, cv2.CV_64F).var()
+
+
 # ──────────────────────────
-# 🚀 Pipeline Stages (Functions are unchanged)
+# 🚀 Pipeline Stage 1 & 2 (Unchanged)
 # ──────────────────────────
+# ... (run_stage_1_text_filter and run_stage_2_sparse_face_check are identical to the previous version)
 
 def run_stage_1_text_filter():
     print("--- Starting Stage 1: Text-based Filtering & URL Transformation ---")
@@ -120,7 +106,7 @@ def run_stage_1_text_filter():
     try:
         dataset = load_dataset(CONFIG["DATASET_NAME"], split="train", verification_mode="no_checks")
     except Exception as e:
-        print(f"\n[ERROR] Failed to load the dataset. Details: {e}");
+        print(f"\n[ERROR] Failed to load the dataset. Details: {e}")
         sys.exit(1)
     df = dataset.to_pandas()
     initial_records = len(df)
@@ -163,16 +149,16 @@ def verify_video_worker(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not cap.isOpened(): return None
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if total_frames < CONFIG["SPARSE_CHECK_FRAMES"]:
-            cap.release();
+            cap.release()
             return None
         frame_indices = random.sample(range(total_frames), CONFIG["SPARSE_CHECK_FRAMES"])
         for frame_idx in frame_indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if ret and _get_yolo_face_box(frame, model=yolo_model) is not None:
-                cap.release();
+                cap.release()
                 return args
-        cap.release();
+        cap.release()
         return None
     except Exception:
         return None
@@ -201,16 +187,26 @@ def run_stage_2_sparse_face_check(input_df: pd.DataFrame):
     return verified_df
 
 
+# ──────────────────────────
+# 🚀 Pipeline Stage 3 (Completely Reworked)
+# ──────────────────────────
+
 def extract_faces_worker(args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Worker that finds ALL high-quality faces in a video, then samples up to
+    CONFIG["MAX_FACES_PER_VIDEO"] of them with even temporal spacing.
+    """
     yolo_model = initialize_yolo_model()
     yolo_model.conf = CONFIG["DENSE_CONF_THRESHOLD"]
+
     video_url, model_name = args["mp4_url"], args["model_name"]
     video_filename = Path(video_url).name
     local_path = Path(CONFIG["VIDEO_CACHE_DIR"]) / video_filename
     video_face_dir = Path(CONFIG["FACES_OUTPUT_DIR"]) / Path(video_filename).stem
-    os.makedirs(video_face_dir, exist_ok=True)
+
     if not local_path.exists(): return []
-    extraction_log = []
+
+    all_valid_faces = []
     try:
         cap = cv2.VideoCapture(str(local_path))
         frame_count = 0
@@ -218,33 +214,71 @@ def extract_faces_worker(args: Dict[str, Any]) -> List[Dict[str, Any]]:
             ret, frame = cap.read()
             if not ret: break
             frame_count += 1
+
             box = _get_yolo_face_box(frame, model=yolo_model)
-            if box is not None:
-                face_w, face_h = box[2] - box[0], box[3] - box[1]
-                if face_w >= CONFIG["MIN_FACE_PIXEL_SIZE"] and face_h >= CONFIG["MIN_FACE_PIXEL_SIZE"]:
-                    cropped_face = extract_yolo_face(frame)
-                    if cropped_face is not None:
-                        save_path = video_face_dir / f"frame_{frame_count:04d}_face.jpg"
-                        cv2.imwrite(str(save_path), cropped_face)
-                        extraction_log.append({
-                            "source_video": video_filename, "model_name": model_name,
-                            "frame": frame_count, "face_path": str(save_path),
-                            "original_face_width": int(face_w), "original_face_height": int(face_h)
-                        })
+            if box is None: continue
+
+            # --- Quality Filter 1: Size and Aspect Ratio (Orientation) ---
+            face_w, face_h = box[2] - box[0], box[3] - box[1]
+            if face_w < CONFIG["MIN_FACE_PIXEL_SIZE"] or face_h < CONFIG["MIN_FACE_PIXEL_SIZE"]: continue
+            if (face_w / face_h) < CONFIG["MIN_ASPECT_RATIO"]: continue
+
+            cropped_face = extract_yolo_face(frame)
+            if cropped_face is None: continue
+
+            # --- Quality Filter 2: Blur ---
+            blur_score = measure_blur(cropped_face)
+            if blur_score < CONFIG["BLUR_THRESHOLD"]: continue
+
+            # If all checks pass, add the candidate to our list
+            all_valid_faces.append({
+                "image": cropped_face,
+                "frame": frame_count,
+                "width": int(face_w),
+                "height": int(face_h),
+                "blur": blur_score
+            })
         cap.release()
     except Exception:
         return []
+
+    # --- Subsampling Logic ---
+    num_valid_faces = len(all_valid_faces)
+    if num_valid_faces == 0: return []
+
+    if num_valid_faces <= CONFIG["MAX_FACES_PER_VIDEO"]:
+        selected_faces = all_valid_faces
+    else:
+        # Select evenly spaced indices from the list of valid faces
+        indices = np.linspace(0, num_valid_faces - 1, CONFIG["MAX_FACES_PER_VIDEO"], dtype=int)
+        selected_faces = [all_valid_faces[i] for i in indices]
+
+    # --- Save selected faces and create logs ---
+    os.makedirs(video_face_dir, exist_ok=True)
+    extraction_log = []
+    for face_data in selected_faces:
+        save_path = video_face_dir / f"frame_{face_data['frame']:04d}_face.jpg"
+        cv2.imwrite(str(save_path), face_data['image'])
+        extraction_log.append({
+            "source_video": video_filename, "model_name": model_name,
+            "frame": face_data['frame'], "face_path": str(save_path),
+            "original_face_width": face_data['width'],
+            "original_face_height": face_data['height'],
+            "blur_score": round(face_data['blur'], 2)
+        })
+
     return extraction_log
 
 
 def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
+    """Orchestrates the parallel advanced face extraction and sampling."""
     videos_to_process_count = len(input_df)
-    print(f"\n--- Starting Stage 3: Dense Face Extraction (using {CONFIG['NUM_WORKERS']} workers) ---")
+    print(f"\n--- Starting Stage 3: Advanced Face Extraction (using {CONFIG['NUM_WORKERS']} workers) ---")
     os.makedirs(CONFIG["FACES_OUTPUT_DIR"], exist_ok=True)
     tasks = input_df.to_dict('records')
     all_logs = []
     with Pool(processes=CONFIG['NUM_WORKERS']) as pool:
-        with tqdm(total=len(tasks), desc="Extracting faces") as pbar:
+        with tqdm(total=len(tasks), desc="Extracting high-quality faces") as pbar:
             for result_list in pool.imap_unordered(extract_faces_worker, tasks):
                 if result_list: all_logs.extend(result_list)
                 pbar.update()
@@ -257,8 +291,7 @@ def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
     print("\n--- Stage 3 Summary ---")
     print(f"[*] Started with:            {videos_to_process_count} verified videos")
     print(f"[*] Videos yielding faces:   {videos_with_faces}")
-    print(
-        f"[*] Total faces extracted:   {total_faces_extracted} (High-Confidence, >{CONFIG['MIN_FACE_PIXEL_SIZE']}px from MP4s)")
+    print(f"[*] Total faces extracted:   {total_faces_extracted} (Filtered for quality & diversity)")
     print("-------------------------")
 
 
@@ -268,7 +301,6 @@ def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
 
 def main():
     """Main function to orchestrate the pipeline."""
-    # --- New: Parse command-line arguments ---
     parser = argparse.ArgumentParser(
         description="A 3-stage pipeline to download and extract faces from a video dataset.")
     parser.add_argument("--clean", action="store_true",
@@ -277,11 +309,9 @@ def main():
 
     if args.clean:
         clean_previous_run()
-    # ---
 
     start_time = time.time()
 
-    # The resumable logic now runs after the optional cleanup
     if Path(CONFIG["STAGE_3_LOG"]).exists():
         print("✅ Pipeline has already completed. Final log exists.")
         print(f"   -> To run again from scratch, use the --clean flag.")
