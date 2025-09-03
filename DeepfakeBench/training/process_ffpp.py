@@ -27,7 +27,7 @@ BUCKET_NAME = "faceforensics_pp_cropped"
 GCS_ROOT_PREFIX = "fake"
 
 # --- Processing Parameters ---
-NUM_CORES = 32
+NUM_CORES = 8
 FRAMES_TO_SAMPLE = 34
 FRAMES_TO_KEEP = 32
 FAILURE_TOLERANCE = 2
