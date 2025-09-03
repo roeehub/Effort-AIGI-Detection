@@ -24,7 +24,7 @@ except ImportError:
 # 📍 Global Configuration
 # ──────────────────────────
 # --- Paths and GCS ---
-DATASET_ROOT = Path("FaceForensics_data")
+DATASET_ROOT = Path("FaceForensics_data/FaceForensics++_C23/")
 BUCKET_NAME = "faceforensics_pp_cropped"
 GCS_ROOT_PREFIX = "fake"
 
