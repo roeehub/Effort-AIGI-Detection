@@ -25,7 +25,7 @@ import random
 import sys
 import time
 import argparse  # <-- Import argparse
-import shutil    # <-- Import shutil for robust directory deletion
+import shutil  # <-- Import shutil for robust directory deletion
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from multiprocessing import Pool, cpu_count
@@ -66,6 +66,7 @@ CONFIG = {
     "CROP_METHOD": "yolo"
 }
 
+
 # ──────────────────────────
 # 🛠️ Cleanup & URL Helper
 # ──────────────────────────
@@ -100,11 +101,13 @@ def clean_previous_run():
 
     print("✅ Cleanup complete.\n")
 
+
 def construct_mp4_url(gif_url: str) -> str:
     """Transforms a dataset's GIF URL into a direct download URL for the original MP4."""
     base_filename = Path(gif_url).name
     mp4_filename = Path(base_filename).with_suffix('.mp4').name
     return f"https://huggingface.co/datasets/{CONFIG['DATASET_NAME']}/resolve/main/videos/{mp4_filename}"
+
 
 # ──────────────────────────
 # 🚀 Pipeline Stages (Functions are unchanged)
@@ -117,15 +120,20 @@ def run_stage_1_text_filter():
     try:
         dataset = load_dataset(CONFIG["DATASET_NAME"], split="train", verification_mode="no_checks")
     except Exception as e:
-        print(f"\n[ERROR] Failed to load the dataset. Details: {e}"); sys.exit(1)
+        print(f"\n[ERROR] Failed to load the dataset. Details: {e}");
+        sys.exit(1)
     df = dataset.to_pandas()
     initial_records = len(df)
     print(f"[*] Successfully loaded {initial_records} records.")
     print(f"[*] Filtering records with keyword pattern...")
     filtered_df = df[df["prompt"].str.contains(keyword_pattern, case=False, regex=True)].copy()
+
     def extract_model_name(url):
-        try: return Path(url).name.split('_')[1]
-        except IndexError: return "unknown"
+        try:
+            return Path(url).name.split('_')[1]
+        except IndexError:
+            return "unknown"
+
     v1 = filtered_df[['prompt', 'video1']].rename(columns={'video1': 'video_url'})
     v1['model_name'] = v1['video_url'].apply(extract_model_name)
     v2 = filtered_df[['prompt', 'video2']].rename(columns={'video2': 'video_url'})
@@ -143,6 +151,7 @@ def run_stage_1_text_filter():
     print("-------------------------")
     return all_videos_df
 
+
 def verify_video_worker(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     yolo_model = initialize_yolo_model()
     yolo_model.conf = CONFIG["SPARSE_CONF_THRESHOLD"]
@@ -154,16 +163,20 @@ def verify_video_worker(args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not cap.isOpened(): return None
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if total_frames < CONFIG["SPARSE_CHECK_FRAMES"]:
-            cap.release(); return None
+            cap.release();
+            return None
         frame_indices = random.sample(range(total_frames), CONFIG["SPARSE_CHECK_FRAMES"])
         for frame_idx in frame_indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if ret and _get_yolo_face_box(frame, model=yolo_model) is not None:
-                cap.release(); return args
-        cap.release(); return None
+                cap.release();
+                return args
+        cap.release();
+        return None
     except Exception:
         return None
+
 
 def run_stage_2_sparse_face_check(input_df: pd.DataFrame):
     videos_to_verify_count = len(input_df)
@@ -186,6 +199,7 @@ def run_stage_2_sparse_face_check(input_df: pd.DataFrame):
     print(f"[*] Remaining for Stage 3: {videos_passed_count} videos")
     print("-------------------------")
     return verified_df
+
 
 def extract_faces_worker(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     yolo_model = initialize_yolo_model()
@@ -222,6 +236,7 @@ def extract_faces_worker(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
     return extraction_log
 
+
 def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
     videos_to_process_count = len(input_df)
     print(f"\n--- Starting Stage 3: Dense Face Extraction (using {CONFIG['NUM_WORKERS']} workers) ---")
@@ -242,8 +257,10 @@ def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
     print("\n--- Stage 3 Summary ---")
     print(f"[*] Started with:            {videos_to_process_count} verified videos")
     print(f"[*] Videos yielding faces:   {videos_with_faces}")
-    print(f"[*] Total faces extracted:   {total_faces_extracted} (High-Confidence, >{CONFIG['MIN_FACE_PIXEL_SIZE']}px from MP4s)")
+    print(
+        f"[*] Total faces extracted:   {total_faces_extracted} (High-Confidence, >{CONFIG['MIN_FACE_PIXEL_SIZE']}px from MP4s)")
     print("-------------------------")
+
 
 # ──────────────────────────
 # 🚀 Main Orchestrator
@@ -252,8 +269,10 @@ def run_stage_3_dense_face_extraction(input_df: pd.DataFrame):
 def main():
     """Main function to orchestrate the pipeline."""
     # --- New: Parse command-line arguments ---
-    parser = argparse.ArgumentParser(description="A 3-stage pipeline to download and extract faces from a video dataset.")
-    parser.add_argument("--clean", action="store_true", help="Delete all intermediate files and output directories before starting.")
+    parser = argparse.ArgumentParser(
+        description="A 3-stage pipeline to download and extract faces from a video dataset.")
+    parser.add_argument("--clean", action="store_true",
+                        help="Delete all intermediate files and output directories before starting.")
     args = parser.parse_args()
 
     if args.clean:
