@@ -249,11 +249,57 @@ def _create_master_stream_for_label(consolidated_buckets: dict) -> IterDataPipe:
     return CustomRoundRobinDataPipe(*bucket_datapipes)
 
 
-# --- The core dataloader creation function ---
+# +++ NEW HELPER FUNCTION AND DATAPIPE FOR ANCHOR-MATE LOGIC +++
+def _build_video_to_frames_lookup(all_frames: list[dict]) -> dict[str, list[dict]]:
+    """Builds a lookup table mapping clip_id to a list of its frame dictionaries."""
+    lookup = defaultdict(list)
+    for frame in all_frames:
+        lookup[frame['clip_id']].append(frame)  # MODIFIED: Use clip_id
+    return lookup
+
+
+class MateFinderDataPipe(IterDataPipe):
+    """
+    Takes a stream of 'anchor' frames and for each one, finds and yields a random
+    'mate' frame from the same video.
+    """
+
+    def __init__(self, source_datapipe: IterDataPipe, lookup: dict):
+        super().__init__()
+        self.source_datapipe = source_datapipe
+        self.lookup = lookup
+
+    def __iter__(self):
+        for anchor_frame in self.source_datapipe:
+            # First, yield the anchor frame itself, which was selected by our balancing logic
+            yield anchor_frame
+
+            clip_id = anchor_frame['clip_id']
+            possible_mates = self.lookup.get(clip_id, [])
+
+            # Filter out the anchor frame itself to ensure the mate is different
+            mates_pool = [m for m in possible_mates if m['path'] != anchor_frame['path']]
+
+            if not mates_pool:
+                # Edge case: video has only 1 frame. Yield the anchor again to maintain
+                # batch size parity.
+                log.warning(f"Could not find a different mate for {anchor_frame['path']}. Duplicating anchor.")
+                yield anchor_frame
+            else:
+                # Randomly select a mate and yield it
+                mate_frame = random.choice(mates_pool)
+                yield mate_frame
+
+
+# --- The core dataloader creation function (MODIFIED) ---
 def create_property_balanced_loader(all_train_frames: list[dict], config: dict, data_config: dict) -> DataLoader:
     BATCH_SIZE = data_config['dataloader_params']['frames_per_batch']
     MIN_BUCKET_SIZE = BATCH_SIZE
     NUM_WORKERS = data_config['dataloader_params']['num_workers']
+
+    # +++ ADDED: Build the video_id -> frames lookup table ONCE. +++
+    video_lookup = _build_video_to_frames_lookup(all_train_frames)
+    log.info(f"Built video_id lookup table with {len(video_lookup)} unique videos.")
 
     # 1. Segregate by label and property
     real_frames_by_bucket = defaultdict(list)
@@ -275,26 +321,22 @@ def create_property_balanced_loader(all_train_frames: list[dict], config: dict, 
     if real_master_stream is None or fake_master_stream is None:
         raise ValueError("Cannot create dataloader: one or both label types have no data.")
 
-    # 4. Probabilistically balance labels
-    combined_pipe = CustomSampleMultiplexerDataPipe([real_master_stream, fake_master_stream], [0.5, 0.5])
+    # 4. Probabilistically balance labels to create a stream of "anchors"
+    anchor_pipe = CustomSampleMultiplexerDataPipe([real_master_stream, fake_master_stream], [0.5, 0.5])
 
-    # =========================================================================
-    # --- NEW & CRITICAL: SHARDING AND SHUFFLING ---
-    # This is the standard torchdata pattern for multi-worker data loading.
-    # sharding_filter() distributes the stream of items among workers.
-    # Each worker gets a unique, non-overlapping subset of the data.
+    # 5. SHARDING AND SHUFFLING
     if NUM_WORKERS > 0:
-        combined_pipe = combined_pipe.sharding_filter()
+        anchor_pipe = anchor_pipe.sharding_filter()
+    anchor_pipe = anchor_pipe.shuffle(buffer_size=10000)
 
-    # Now, shuffle AFTER sharding. Each worker will shuffle its own unique
-    # stream of data, leading to true randomness across all batches.
-    # It's good practice to set a buffer_size.
-    combined_pipe = combined_pipe.shuffle(buffer_size=10000)
-    # =========================================================================
+    # --- REPLACED: The old coincidental groupby logic is removed ---
+    # combined_pipe = combined_pipe.groupby(group_key_fn=get_video_id, group_size=2, guaranteed_group_size=True)
+    # combined_pipe = combined_pipe.map(get_group_elements).flatten()
 
-    # 5. Enforce Anchor-Mate Pairing
-    combined_pipe = combined_pipe.groupby(group_key_fn=get_video_id, group_size=2, guaranteed_group_size=True)
-    combined_pipe = combined_pipe.map(get_group_elements).flatten()
+    # +++ ADDED: Insert the intentional MateFinderDataPipe +++
+    # This pipe takes the stream of anchors and doubles its length by inserting a mate after each anchor.
+    # A batch of 64 will now contain 32 property-balanced anchors and their 32 corresponding mates.
+    combined_pipe = MateFinderDataPipe(anchor_pipe, video_lookup)
 
     # 6. Apply transforms, batching, and create DataLoader
     transform_fn = FrameTransformer(config['resolution'], config['mean'], config['std'],
@@ -325,8 +367,14 @@ def validate_and_visualize_batch(batch: dict, original_df: pd.DataFrame, batch_h
     print("\n" + "=" * 80 + "\n||" + " " * 28 + "ANALYZING NEW BATCH" + " " * 29 + "||\n" + "=" * 80)
     batch_paths = batch['path']
     batch_df = original_df[original_df['path'].isin(batch_paths)].copy()
-    batch_df['path_cat'] = pd.Categorical(batch_df['path'], categories=batch_paths, ordered=True)
-    batch_df.sort_values('path_cat', inplace=True)
+
+    # Reorder the dataframe to match the batch order for correct visualization
+    # Note: With mates, paths can be duplicated if a frame is an anchor and also chosen as a mate.
+    # We'll handle this by creating a temporary mapping.
+    temp_df = pd.DataFrame({'path': batch_paths})
+    temp_df = temp_df.merge(original_df.drop_duplicates(subset=['path']), on='path', how='left')
+    batch_df = temp_df
+
     labels = batch['label_id'].numpy()
     BATCH_SIZE = len(labels)
 
@@ -351,11 +399,12 @@ def validate_and_visualize_batch(batch: dict, original_df: pd.DataFrame, batch_h
 
     # 3. Anchor-Mate Pairing
     print("\n--- [Check 3/3] Anchor-Mate Pairing ---")
-    video_id_counts = batch_df['video_id'].value_counts()
-    if all(video_id_counts % 2 == 0):
-        print(f"✅ STATUS: Correct. All video IDs appear in pairs.")
+    # MODIFIED: Check pairing by the unique clip_id
+    clip_id_counts = batch_df['clip_id'].value_counts()
+    if all(clip_id_counts % 2 == 0):
+        print(f"✅ STATUS: Correct. All clip IDs appear in pairs (or multiples of 2).")
     else:
-        print("❌ STATUS: INCORRECT PAIRING DETECTED!\n", video_id_counts[video_id_counts % 2 != 0])
+        print("❌ STATUS: INCORRECT PAIRING DETECTED!\n", clip_id_counts[clip_id_counts % 2 != 0])
 
     # 4. Visualization
     if input("\nDisplay image grid for this batch? (y/n): ").lower() == 'y':
@@ -369,13 +418,17 @@ def validate_and_visualize_batch(batch: dict, original_df: pd.DataFrame, batch_h
                 ax.axis('off')
                 continue
 
+            # The first item is the Anchor, the second is its Mate, etc.
+            pair_status = "Anchor" if i % 2 == 0 else "Mate"
+
             img_np = unnormalize_image(batch['image'][i], CONFIG['mean'], CONFIG['std'])
             label_text = "Real" if labels[i] == 0 else "Fake"
-            video_id = batch_df.iloc[i]['video_id']
+            # MODIFIED: Display the clip_id for easier verification
+            clip_id = batch_df.iloc[i]['clip_id']
             prop_bucket = batch_df.iloc[i]['property_bucket']
 
             ax.imshow(np.clip(img_np, 0, 1))
-            ax.set_title(f"{video_id}\n{label_text} | {prop_bucket}", fontsize=8)
+            ax.set_title(f"({pair_status}) ClipID: {clip_id}\n{label_text} | {prop_bucket}", fontsize=8)
             ax.axis('off')
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -415,9 +468,9 @@ def main():
 
     print("\nQ: How many batches do we have?")
     print(f"A: The dataloader uses infinite streams (.cycle()), so it can produce endless batches.")
-    print(f"   However, one 'epoch' is typically defined as iterating through the number of original training frames.")
-    print(f"   Based on this, one epoch would consist of approximately: "
-          f"{int(num_train_frames / BATCH_SIZE)} batches ({num_train_frames:,} frames / {BATCH_SIZE} frames per batch).")
+    print(f"   One 'epoch' is defined by the number of unique ANCHORS sampled, which is based on original frames.")
+    print(f"   One epoch would consist of approximately: "
+          f"{int(num_train_frames / (BATCH_SIZE / 2))} batches ({num_train_frames:,} anchors / {int(BATCH_SIZE / 2)} anchors per batch).")
     print("#" * 80)
 
     # Convert dataframe to the list of dictionaries the loader expects

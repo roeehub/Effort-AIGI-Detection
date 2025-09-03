@@ -36,7 +36,6 @@ DEFAULT_WORKERS = os.cpu_count() * 2
 
 
 # --- Tier 1 & Tier 2 Analysis Functions (Unchanged) ---
-# ... (all functions from get_laplacian_variance to get_frame_stats remain exactly the same)
 def get_laplacian_variance(image_np: np.ndarray, gcs_path: str = "local") -> float:
     """Calculates sharpness using Laplacian variance."""
     try:
@@ -263,10 +262,12 @@ def run_sampling(datasets, test_bucket_suffix, num_workers):
     print(f"\n--- Sampling Complete ---")
 
 
-# --- Plotting and Debug Functions (Unchanged) ---
-# ... (run_plotting and run_debug remain exactly the same)
 def run_plotting(csv_path):
-    """Loads data from the CSV and generates analysis plots."""
+    """
+    Loads data from CSV and generates analysis plots.
+    - Groups test methods on the left.
+    - Correctly handles methods that contain both real and fake videos.
+    """
     print(f"--- Mode: Plotting from '{csv_path}' ---")
     if not os.path.exists(csv_path):
         print(f"[Error] CSV file not found: '{csv_path}'. Run sampling first.")
@@ -278,11 +279,8 @@ def run_plotting(csv_path):
     try:
         import matplotlib.pyplot as plt
         import seaborn as sns
-        from matplotlib.patches import Patch
         sns.set_theme(style="whitegrid")
 
-        # Add the 'source' to the method name for clear plotting
-        df['method_source'] = df['method'] + ' (' + df['source'] + ')'
         if 'image_area' not in df.columns:
             df['image_area'] = df['width'] * df['height']
 
@@ -296,25 +294,56 @@ def run_plotting(csv_path):
             "mean_b": "Mean Blue Channel"
         }
 
-        color_map = {'real': 'g', 'fake': 'r'}
-        # Map the combined 'method_source' to the original label's color
-        method_source_to_label = df[['method_source', 'label']].drop_duplicates().set_index('method_source')['label']
-        custom_palette = method_source_to_label.map(color_map).to_dict()
-        order = sorted(df['method_source'].unique())
+        # --- REVISED: Custom sorting logic for the X-axis 'method' column ---
+        all_methods = df['method'].unique()
+        # Identify which methods appear in the test set vs. train set
+        methods_in_test = df[df['source'] == 'test']['method'].unique()
+        methods_in_train = df[df['source'] == 'train']['method'].unique()
+
+        # Prioritize methods that appear in the test set, then the rest
+        test_methods_sorted = sorted(list(methods_in_test))
+        # Ensure train methods are unique and sorted
+        train_methods_sorted = sorted(list(set(methods_in_train) - set(methods_in_test)))
+
+        order = test_methods_sorted + train_methods_sorted
+        # --- END OF REVISION ---
 
         for col, title in plot_metrics.items():
             print(f"  - Generating plot for {title}...")
-            plt.figure(figsize=(24, 12))
+            plt.figure(figsize=(28, 14))
 
-            ax = sns.boxplot(data=df, x='method_source', y=col, order=order, palette=custom_palette)
+            # --- MAJOR CHANGE: Using `hue` for correct color mapping ---
+            # We now use 'method' for x, and 'source' combined with 'label' for hue.
+            # This allows seaborn to handle cases where a method has real/fake in test/train.
+            ax = sns.boxplot(data=df, x='method', y=col, hue='label', order=order,
+                             palette={'real': 'g', 'fake': 'r'})
 
-            plt.title(f'Distribution of {title} by Method and Source', fontsize=20)
+            # This part is a bit more complex to add the (test)/(train) indicators back
+            # We will modify the xticklabels directly for clarity.
+            new_labels = []
+            for tick_label in ax.get_xticklabels():
+                method_name = tick_label.get_text()
+                sources = []
+                if method_name in methods_in_test:
+                    sources.append('test')
+                if method_name in methods_in_train:
+                    sources.append('train')
+                new_labels.append(f"{method_name} ({'/'.join(sources)})")
+            ax.set_xticklabels(new_labels)
+            # --- END OF MAJOR CHANGE ---
+
+            plt.title(f'Distribution of {title} by Method and Label', fontsize=20)
             plt.xlabel("Method (Source)", fontsize=14)
             plt.ylabel(title, fontsize=14)
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+            ax.tick_params(axis='x', rotation=45, labelsize=12)
+            # Ensure the legend is correctly labeled
+            ax.legend(title='Label')
 
-            legend_elements = [Patch(facecolor='g', label='Real'), Patch(facecolor='r', label='Fake')]
-            ax.legend(handles=legend_elements, title="Label")
+            # --- Add a visual separator between test and train data ---
+            if test_methods_sorted and train_methods_sorted:
+                # The line goes after the last method that appears in the test set
+                separator_pos = len(test_methods_sorted) - 0.5
+                ax.axvline(separator_pos, color='k', linestyle='--', linewidth=2, alpha=0.7)
 
             plt.tight_layout()
             plot_path = os.path.join(OUTPUT_PLOT_DIR, f"{col}_distribution.png")
@@ -327,6 +356,100 @@ def run_plotting(csv_path):
         print("\n[Warning] `matplotlib` or `seaborn` not installed. Skipping plot generation.")
     except Exception as e:
         print(f"\n[Plotting Error] An unexpected error occurred: {e}")
+
+
+def _generate_quantile_table(df: pd.DataFrame, metric: str, title: str):
+    """Helper function to create and print a formatted quantile table."""
+    print(f"\n--- {title} ---")
+    if metric not in df.columns:
+        print(f"[Warning] Metric '{metric}' not found in the DataFrame. Skipping table.")
+        return
+
+    # Calculate quantiles using modern pandas aggregation
+    quantile_df = df.groupby(['method', 'label']).agg(
+        p25=(metric, lambda x: x.quantile(0.25)),
+        median=(metric, 'median'),
+        p75=(metric, lambda x: x.quantile(0.75)),
+        count=(metric, 'size')  # Also get the count of samples for context
+    ).sort_index()
+
+    # Format for better readability
+    for col in ['p25', 'median', 'p75']:
+        quantile_df[col] = quantile_df[col].map('{:,.2f}'.format)
+
+    print(quantile_df)
+    print("-" * (len(title) + 6))
+
+
+def _calculate_overlap_percentage(df, group1_method, group1_label, group2_method, group2_label, metric='sharpness'):
+    """Helper to calculate the 'Killer Stat' overlap."""
+    group1_df = df[(df['method'] == group1_method) & (df['label'] == group1_label)]
+    group2_df = df[(df['method'] == group2_method) & (df['label'] == group2_label)]
+
+    if group1_df.empty or group2_df.empty:
+        return None, None  # One of the groups doesn't exist in the data
+
+    median_g2 = group2_df[metric].median()
+    median_g1 = group1_df[metric].median()
+
+    # % of Group 1 sharper than Group 2's median
+    overlap_1_vs_2 = (group1_df[metric] > median_g2).mean() * 100
+
+    # % of Group 2 blurrier than Group 1's median
+    overlap_2_vs_1 = (group2_df[metric] < median_g1).mean() * 100
+
+    return overlap_1_vs_2, overlap_2_vs_1
+
+
+def run_numerical_report(csv_path):
+    """
+    Loads data from the analysis CSV and generates numerical summary tables
+    to quantitatively assess data imbalance.
+    """
+    print(f"--- Mode: Generating Numerical Report from '{csv_path}' ---")
+    if not os.path.exists(csv_path):
+        print(f"[Error] CSV file not found: '{csv_path}'. Run sampling first.")
+        return
+
+    df = pd.read_csv(csv_path)
+    # Ensure we only look at training data for this analysis
+    df = df[df['source'] == 'train'].copy()
+
+    if df.empty:
+        print("[Error] No training data found in the CSV. Cannot generate report.")
+        return
+
+    # --- 1. Generate Quantile Tables for all methods ---
+    _generate_quantile_table(df, 'sharpness', 'Quantile Breakdown for Sharpness (Training Set)')
+    _generate_quantile_table(df, 'mean_r', 'Quantile Breakdown for Mean Red Channel (Training Set)')
+    _generate_quantile_table(df, 'file_size_kb', 'Quantile Breakdown for File Size (KB) (Training Set)')
+
+    # --- 2. Calculate the "Killer Stat" for Key Comparisons ---
+    print("\n\n--- Overlap Analysis ('The Killer Stat') ---")
+    print("This analysis reveals how easily classes can be separated by a single metric.")
+
+    # Comparison 1: Blurry Real vs. Sharp Fake
+    print("\n[Comparison 1]: Blurry Reals (Celeb-real) vs. A Sharp Fake (SIT)")
+    overlap1, overlap2 = _calculate_overlap_percentage(df, 'Celeb-real', 'real', 'SIT', 'fake')
+    if overlap1 is not None:
+        print(f"  - Percentage of 'Celeb-real' frames SHARPER than the median 'SIT' frame: {overlap1:.2f}%")
+        print(f"  - Percentage of 'SIT' frames BLURRIER than the median 'Celeb-real' frame: {overlap2:.2f}%")
+    else:
+        print("  - Could not perform comparison; one or both methods not found in training data.")
+
+    # Comparison 2: Sharp Real vs. Blurry Fake
+    print("\n[Comparison 2]: Sharp Reals (external_youtube_avspeech) vs. A Blurry Fake (FaceShifter)")
+    overlap3, overlap4 = _calculate_overlap_percentage(df, 'external_youtube_avspeech', 'real', 'FaceShifter', 'fake')
+    if overlap3 is not None:
+        print(
+            f"  - Percentage of 'youtube_avspeech' frames SHARPER than the median 'FaceShifter' frame: {overlap3:.2f}%")
+        print(
+            f"  - Percentage of 'FaceShifter' frames BLURRIER than the median 'youtube_avspeech' frame: {overlap4:.2f}%")
+    else:
+        print("  - Could not perform comparison; one or both methods not found in training data.")
+    print("-" * 42)
+
+    print("\n✅ Numerical report finished.")
 
 
 def run_debug(image_path):
@@ -370,10 +493,9 @@ def run_debug(image_path):
 def main():
     parser = argparse.ArgumentParser(
         description="Investigate dataset properties for trivial cues across train and test sets.")
-    # ... (arguments for mode, dataset, test_bucket_suffix, debug are the same)
     parser.add_argument(
-        '--mode', type=str, default='all', choices=['all', 'sample', 'plot'],
-        help="Script mode: 'sample' to fetch data, 'plot' to generate plots, 'all' to do both."
+        '--mode', type=str, default='all', choices=['all', 'sample', 'plot', 'report'],
+        help="Script mode: 'sample' to fetch data, 'plot' to generate plots, 'report' for numerical summary, 'all' for sample+plot."
     )
     parser.add_argument(
         '--dataset', type=str, default='both', choices=['train', 'test', 'both'],
@@ -410,13 +532,20 @@ def main():
     if args.mode in ['all', 'sample']:
         run_sampling(datasets_to_run, args.test_bucket_suffix, args.workers)
 
+    # Check if CSV exists before plotting or reporting
+    csv_exists = os.path.exists(OUTPUT_CSV)
+
     if args.mode in ['all', 'plot']:
-        if not os.path.exists(OUTPUT_CSV) and args.mode == 'plot':
+        if not csv_exists:
             print(f"[Error] CSV file '{OUTPUT_CSV}' not found. Cannot plot.")
-            return
-        # Add a check to ensure the CSV exists before plotting
-        if os.path.exists(OUTPUT_CSV):
+        else:
             run_plotting(OUTPUT_CSV)
+
+    if args.mode == 'report':
+        if not csv_exists:
+            print(f"[Error] CSV file '{OUTPUT_CSV}' not found. Run sampling first to create it.")
+        else:
+            run_numerical_report(OUTPUT_CSV)
 
 
 if __name__ == "__main__":

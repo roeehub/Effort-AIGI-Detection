@@ -54,6 +54,9 @@ RUN python -m pip install --no-cache-dir --upgrade pip && \
 # Reinstall pillow-simd to leverage SIMD optimizations, separately just to save the existing cache above
 RUN python -m pip install --no-cache-dir --force-reinstall pillow-simd
 
+# Install pandas and parquet separately to leverage caching better
+RUN python -m pip install --no-cache-dir pandas pyarrow
+
 # --- Copy Application Code ---
 # STEP 3: Now that slow dependencies are installed, copy the application code.
 # Changes to your scripts (.py, .sh) will only invalidate the cache from this point on.

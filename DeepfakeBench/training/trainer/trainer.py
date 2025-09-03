@@ -40,7 +40,8 @@ class Trainer(object):
             logger,
             metric_scoring='auc',
             wandb_run=None,
-            val_videos=None
+            val_videos=None,
+            ood_loader=None
     ):
         if config is None or model is None or optimizer is None or logger is None:
             raise ValueError("config, model, optimizer, and logger must be implemented")
@@ -53,6 +54,7 @@ class Trainer(object):
         self.metric_scoring = metric_scoring
         self.wandb_run = wandb_run
         self.val_videos = val_videos  # Store the validation videos
+        self.ood_loader = ood_loader  # Optional OOD loader
         self.unified_val_loader = None  # To cache the efficient loader
 
         # --- Comprehensive checkpoint tracking ---
@@ -273,12 +275,23 @@ class Trainer(object):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         strategy = self.config.get('dataloader_params', {}).get('strategy', 'per_method')
 
-        # --- Determine Epoch Length based on strategy ---
-        if strategy == 'frame_level':
+        if strategy == 'per_method' or strategy == 'video_level':
+            effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
+            total_train_videos = len(train_videos)
+            epoch_len = math.ceil(total_train_videos / effective_batch_size) if total_train_videos > 0 else 0
+
+        elif strategy == 'frame_level' or strategy == 'property_balancing':
             effective_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
-            total_frames = sum(len(v.frame_paths) for v in train_videos)
+            # train_videos is now a list of frames (dicts) or videos (VideoInfo)
+            # We need to handle both cases.
+            if isinstance(train_videos[0], dict):  # This is property_balancing
+                total_frames = len(train_videos)
+            else:  # This is the original frame_level
+                total_frames = sum(len(v.frame_paths) for v in train_videos)
             epoch_len = math.ceil(total_frames / effective_batch_size) if total_frames > 0 else 0
-        else:  # For per_method and video_level
+
+        else:
+            # This block now correctly handles the other strategies
             effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
             total_train_videos = len(train_videos)
             epoch_len = math.ceil(total_train_videos / effective_batch_size) if total_train_videos > 0 else 0
@@ -302,6 +315,7 @@ class Trainer(object):
         self.logger.info(f"Scheduled evaluation at steps: {sorted(list(eval_steps))}")
 
         step_cnt = epoch * epoch_len
+        epoch_start_time = time.time()
 
         # --- Conditional Training Loop based on strategy ---
         if strategy == 'per_method':
@@ -326,27 +340,32 @@ class Trainer(object):
                                                         fake_method_names, real_weights, fake_weights)
                 if data_dict is None: continue
 
-                self._run_train_step(data_dict, step_cnt, epoch, pbar)
+                # Pass new timing/progress args
+                self._run_train_step(data_dict, step_cnt, epoch, epoch_len, epoch_start_time)
                 step_cnt += 1
 
-                # Use the precise evaluation schedule
                 if (iteration + 1) in eval_steps:
-                    self._run_validation(epoch, iteration, val_method_loaders)
+                    self._run_validation(epoch, iteration + 1, val_method_loaders)
 
-        elif strategy in ['video_level', 'frame_level']:
+        elif strategy in ['video_level', 'frame_level', 'property_balancing']:
             pbar = tqdm(train_loader, desc=f"EPOCH ({strategy}): {epoch + 1}/{self.config['nEpochs']}", total=epoch_len)
             # We use 'i' as the iteration counter from enumerate
             for i, data_dict in enumerate(pbar):
-                self._run_train_step(data_dict, step_cnt, epoch, pbar)
+                if i >= epoch_len:
+                    break  # Safety check to not exceed epoch length
+
+                # Pass new timing/progress args
+                self._run_train_step(data_dict, step_cnt, epoch, epoch_len, epoch_start_time)
                 step_cnt += 1
 
-                # Use the precise evaluation schedule. i is 0-based, so add 1.
                 if (i + 1) in eval_steps:
                     self._run_validation(epoch, i, val_method_loaders)
         else:
             raise ValueError(f"Unsupported training strategy: {strategy}")
 
-    def _run_train_step(self, data_dict, step_cnt, epoch, pbar):
+        self.logger.info(f"===> Epoch[{epoch + 1}] finished in {(time.time() - epoch_start_time) / 60:.2f} minutes.")
+
+    def _run_train_step(self, data_dict, step_cnt, epoch, epoch_len, epoch_start_time):  # Add new args
         """Helper to avoid code duplication in the training loop."""
         self.setTrain()
         for key in data_dict.keys():
@@ -366,15 +385,48 @@ class Trainer(object):
 
             for name, value in batch_metrics.items():
                 log_dict[f'train/metric/{name}'] = value
-            self.wandb_run.log(log_dict)
 
-            pbar.set_postfix_str(f"Loss: {losses['overall'].item():.4f}")
+            # --- DETAILED PROGRESS LOGGING (REPLACES PBAR) ---
+            log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
+            current_iter_in_epoch = step_cnt - (epoch * epoch_len)
+
+            # Log every N steps or on the very last step of the epoch
+            if (current_iter_in_epoch % log_progress_steps == 0) or (current_iter_in_epoch == epoch_len - 1):
+                time_elapsed = time.time() - epoch_start_time
+                steps_per_sec = (current_iter_in_epoch + 1) / time_elapsed if time_elapsed > 0 else 0
+
+                log_dict['train/steps_per_sec'] = steps_per_sec
+
+                progress_pct = 0.0
+                if epoch_len > 0:
+                    progress_pct = ((current_iter_in_epoch + 1) / epoch_len) * 100
+                    log_dict['train/epoch_progress'] = progress_pct
+
+                    if steps_per_sec > 0:
+                        time_remaining_sec = (epoch_len - (current_iter_in_epoch + 1)) / steps_per_sec
+                        log_dict['train/epoch_eta_min'] = time_remaining_sec / 60
+
+                # Log to WandB
+                self.wandb_run.log(log_dict)
+
+                # Log a simple text line to the logger for basic feedback
+                self.logger.info(
+                    f"Epoch {epoch + 1}/{self.config['nEpochs']} | "
+                    f"Step {current_iter_in_epoch + 1}/{epoch_len} "
+                    f"({progress_pct:.1f}%) | "
+                    f"Loss: {losses['overall'].item():.4f} | "
+                    f"Speed: {steps_per_sec:.2f} it/s"
+                )
+            else:
+                # For other steps, just log the minimal required info to not miss loss spikes
+                self.wandb_run.log({"train/loss/overall": losses['overall'].item(), "train/step": step_cnt})
 
     def _run_validation(self, epoch, iteration, val_method_loaders):
         """Helper to run validation to keep the main loop clean."""
         if val_method_loaders is not None and self.config['local_rank'] == 0:
             self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
             self.test_epoch(epoch, val_method_loaders)
+            self._run_ood_monitoring(epoch)
 
     @torch.no_grad()
     def test_epoch(self, epoch, val_method_loaders):
@@ -389,7 +441,9 @@ class Trainer(object):
             self.logger.warning("No validation videos found. Skipping validation.")
             return
 
-        pbar = tqdm(total=total_videos, desc="Validating", unit="video")
+        self.logger.info(f"Starting validation for {total_videos} videos...")
+        val_start_time = time.time()
+        videos_processed = 0
 
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
@@ -403,7 +457,9 @@ class Trainer(object):
         for method in val_method_loaders.keys():
             # The lazy manager will create the loader on-demand here
             loader = val_method_loaders[method]
-            pbar.set_description(f"Validating: {method}")
+            num_videos_in_method = len(val_method_loaders.videos_by_method[method])
+
+            self.logger.info(f"Validating method: {method} ({num_videos_in_method} videos)")
 
             for data_dict in loader:
                 # Move tensors to the correct device
@@ -436,16 +492,17 @@ class Trainer(object):
                 method_labels[method].extend(labels_np)
                 method_preds[method].extend(probs_np)
 
-                # ---
-                # Update the progress bar by the number of videos in the batch.
-                # ---
-                pbar.update(B)
+                B = data_dict['image'].shape[0]
+                videos_processed += B
 
-        pbar.close()
+            self.logger.info(f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
 
         if not all_labels:
             self.logger.error("Validation failed: No data was processed after iterating all loaders.")
             return
+
+        total_val_time = time.time() - val_start_time
+        self.logger.info(f"Validation finished in {total_val_time:.2f}s. Calculating metrics...")
 
         self.logger.info("--- Calculating overall validation performance ---")
         overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
@@ -590,3 +647,89 @@ class Trainer(object):
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.info("===> Evaluation Done!")
+
+    def _run_ood_monitoring(self, epoch):
+        """Helper to run the OOD monitoring loop."""
+        if self.ood_loader is not None and self.config['local_rank'] == 0:
+            self.logger.info(f"\n===> OOD Monitoring at epoch {epoch + 1}")
+            self.ood_monitoring_epoch(epoch)
+
+    @torch.no_grad()
+    def ood_monitoring_epoch(self, epoch):
+        """
+        Runs evaluation on the OOD set. Logs metrics with an 'ood/' prefix
+        and does NOT affect checkpointing or early stopping.
+        """
+        self.setEval()
+
+        total_videos = sum(len(v_list) for v_list in self.ood_loader.videos_by_method.values())
+        if total_videos == 0:
+            self.logger.warning("OOD loader is configured but contains no videos. Skipping.")
+            return
+
+        method_labels = defaultdict(list)
+        method_preds = defaultdict(list)
+        all_preds, all_labels = [], []
+
+        self.logger.info(f"Starting OOD Monitoring for {total_videos} videos...")
+        ood_start_time = time.time()
+        videos_processed = 0
+
+        for method in self.ood_loader.keys():
+            loader = self.ood_loader[method]
+
+            for data_dict in loader:
+                for key, value in data_dict.items():
+                    if isinstance(value, torch.Tensor): data_dict[key] = value.to(self.model.device)
+                if data_dict['image'].shape[0] == 0 or data_dict['image'].dim() != 5: continue
+
+                B, T = data_dict['image'].shape[:2]
+                predictions = self.model(data_dict, inference=True)
+                video_probs = predictions['prob'].view(B, T).mean(dim=1)
+
+                labels_np = data_dict['label'].cpu().numpy()
+                probs_np = video_probs.cpu().numpy()
+
+                all_labels.extend(labels_np)
+                all_preds.extend(probs_np)
+                method_labels[method].extend(labels_np)
+                method_preds[method].extend(probs_np)
+
+                B = data_dict['image'].shape[0]
+                videos_processed += B
+
+            self.logger.info(
+                f"  ... OOD method {method} done. Total progress: {videos_processed}/{total_videos} videos.")
+
+        total_ood_time = time.time() - ood_start_time
+        self.logger.info(f"OOD Monitoring finished in {total_ood_time:.2f}s. Calculating metrics...")
+
+        if not all_labels:
+            self.logger.error("OOD Monitoring failed: No data was processed.")
+            return
+
+        overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
+        wandb_log_dict = {"ood/epoch": epoch + 1}
+
+        for name, value in overall_metrics.items():
+            if name not in ['pred', 'label']:
+                wandb_log_dict[f'ood/overall/{name}'] = value
+                self.logger.info(f"OOD Overall {name}: {value:.4f}")
+
+        # Log the probability distribution histogram
+        wandb_log_dict['ood/probabilities'] = wandb.Histogram(np.array(all_preds))
+
+        # Metrics Per Method
+        method_metrics = {}
+        for method in method_preds.keys():
+            method_metrics[method] = get_test_metrics(np.array(method_preds[method]),
+                                                      np.array(method_labels[method]))
+            for name, value in method_metrics[method].items():
+                if name in ['acc', 'auc', 'eer']:
+                    wandb_log_dict[f'ood/method/{method}/{name}'] = value
+
+        if self.wandb_run: self.wandb_run.log(wandb_log_dict)
+        del all_preds, all_labels, method_labels, method_preds, overall_metrics
+        gc.collect()
+        torch.cuda.empty_cache()
+        self.logger.info("===> OOD Monitoring Done!")

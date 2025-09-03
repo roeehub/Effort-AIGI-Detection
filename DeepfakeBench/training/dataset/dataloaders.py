@@ -1,5 +1,3 @@
-# --- dataloaders.py ---
-
 import os
 import sys
 
@@ -274,20 +272,21 @@ transform_base = A.Compose([
     A.HueSaturationValue(p=0.1),
 ])
 
-# --- Pipeline to aggressively degrade image quality ---
-degrade_quality_pipeline = A.Compose([
-    A.OneOf([
-        A.ImageCompression(quality_lower=40, quality_upper=70, p=0.8),
-        A.GaussianBlur(blur_limit=(5, 11), p=0.6),
-        A.GaussNoise(var_limit=(20.0, 80.0), p=0.4),
-    ], p=1.0)  # Always apply one of the degradations from this list
-])
 
-# --- Pipeline to enhance image quality ---
-enhance_quality_pipeline = A.Compose([
-    # This is an effective "unsharp mask"
-    A.IAASharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.9),
-])
+# # --- Pipeline to aggressively degrade image quality ---
+# degrade_quality_pipeline = A.Compose([
+#     A.OneOf([
+#         A.ImageCompression(quality_lower=40, quality_upper=70, p=0.8),
+#         A.GaussianBlur(blur_limit=(5, 11), p=0.6),
+#         A.GaussNoise(var_limit=(20.0, 80.0), p=0.4),
+#     ], p=1.0)  # Always apply one of the degradations from this list
+# ])
+#
+# # --- Pipeline to enhance image quality ---
+# enhance_quality_pipeline = A.Compose([
+#     # This is an effective "unsharp mask"
+#     A.IAASharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.9),
+# ])
 
 
 def surgical_data_aug(img: Image.Image, frame_properties: dict) -> Image.Image:
@@ -364,7 +363,7 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
             if use_aug:
                 # This strategy doesn't have frame properties, so it uses the general aug
                 aug_seed = random.randint(0, 2 ** 32 - 1)
-                img = data_aug_v2(img, augmentation_seed=aug_seed)
+                img = data_aug_v2(img, config, augmentation_seed=aug_seed)
 
             image_tensor = normalize_transform(img)
             return image_tensor, label_id, None, None, frame_path
@@ -435,11 +434,10 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame
     all_frame_paths = list(video_info.frame_paths)
 
     if len(all_frame_paths) < frame_num:
-        # For OOD, we can be more lenient and take what we can get.
-        if frame_count_override is not None and len(all_frame_paths) > 0:
-            frame_num = len(all_frame_paths)
-        else:
-            return None
+        # If a video doesn't have enough frames to create a tensor of the standard
+        # size for this batch, it must be skipped. Returning None achieves this
+        # as the Filter datapipe will discard it.
+        return None
 
     random.shuffle(all_frame_paths)
     selected_paths = all_frame_paths[:frame_num]

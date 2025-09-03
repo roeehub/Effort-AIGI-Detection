@@ -15,14 +15,48 @@ the ID unification logic in 'create_property_manifest.py'.
 
 Usage:
     pip install rich pandas pyarrow
-    python diagnose_manifests.py
+    python diagnose_manifests.py [--include-validation]
 """
 import json
+import argparse
 from pathlib import Path
 
 import pandas as pd
 from rich.console import Console
 from rich.table import Table
+
+# Methods are categorized based on the provided YAML structure.
+# This makes the logic for calculating totals clear and maintainable.
+
+# Methods considered to be 'real' sources
+REAL_METHODS = [
+    "Celeb-real",
+    "YouTube-real",
+    "external_youtube_avspeech",
+    # NOTE: "FaceForensics++" is often treated as a real source for its fakes,
+    # but isn't a standalone real method in the same way. We'll categorize it
+    # based on its appearance in the manifests (e.g. 'ff-real'). Add if needed.
+]
+
+# Fake methods used for the training set
+TRAINING_FAKE_METHODS = [
+    # Face-swapping (FS)
+    "simswap", "mobileswap", "faceswap", "inswap", "blendface", "fsgan", "uniface",
+    # Face-reenactment (FR)
+    "pirender", "facevid2vid", "lia", "fomm", "MRAA", "wav2lip", "mcnet", "danet",
+    # Entire Face Synthesis (EFS)
+    "VQGAN", "StyleGAN3", "StyleGAN2", "SiT", "RDDM", "ddim",
+]
+
+# Fake methods used for the validation (hold-out) set
+VALIDATION_METHODS = [
+    "facedancer",
+    "sadtalker",
+    "DiT",
+    "StyleGANXL",
+    "e4s",
+    "one_shot_free",
+]
 
 
 def parse_source_manifest(manifest_path: Path) -> pd.DataFrame:
@@ -69,7 +103,6 @@ def parse_processed_manifest(manifest_path: Path) -> pd.DataFrame:
     df = pd.read_parquet(manifest_path)
 
     # Use .size() which is robust and doesn't depend on a specific column name.
-    # This fixes the KeyError.
     analysis = df.groupby('method').agg(
         Processed_Frames=('video_id', 'size'),
         Processed_Unique_IDs=('video_id', 'nunique')
@@ -81,6 +114,16 @@ def parse_processed_manifest(manifest_path: Path) -> pd.DataFrame:
 
 def main():
     """Main execution function."""
+    parser = argparse.ArgumentParser(
+        description="Diagnose and compare source and processed data manifests."
+    )
+    parser.add_argument(
+        '--include-validation',
+        action='store_true',
+        help="Include validation methods in the report."
+    )
+    args = parser.parse_args()
+
     console = Console()
     source_manifest_path = Path("frame_manifest.json")
     processed_manifest_path = Path("frame_properties.parquet")
@@ -97,6 +140,13 @@ def main():
     # Perform an outer merge to keep all methods from both files
     report_df = pd.merge(source_df, processed_df, on='Method', how='outer')
     report_df.fillna(0, inplace=True)  # Replace NaNs with 0 for methods missing in one file
+
+    # Conditionally filter out validation methods
+    if not args.include_validation:
+        report_df = report_df[~report_df['Method'].isin(VALIDATION_METHODS)].copy()
+        console.print(
+            "[bold yellow]Note:[/] Validation methods are excluded. Use `--include-validation` to see them.\n"
+        )
 
     # Convert counts to integers for clean display
     count_cols = [col for col in report_df.columns if col != 'Method']
@@ -134,6 +184,31 @@ def main():
         )
 
     console.print(table)
+
+    # --- Calculate and Print Totals (LOGIC FIXED) ---
+    # These calculations are performed on the `report_df` which has already been
+    # filtered based on the `--include-validation` flag.
+    total_real_videos = report_df[report_df['Method'].isin(REAL_METHODS)]['Processed_Unique_IDs'].sum()
+    total_training_fakes = report_df[report_df['Method'].isin(TRAINING_FAKE_METHODS)]['Processed_Unique_IDs'].sum()
+    total_validation_fakes = report_df[report_df['Method'].isin(VALIDATION_METHODS)]['Processed_Unique_IDs'].sum()
+
+    console.print("\n[bold underline]Video Totals[/]")
+    console.print(f"Total Real Videos: [bold green]{total_real_videos:,}[/]")
+    console.print(f"Total Fake Videos (Training): [bold red]{total_training_fakes:,}[/]")
+
+    if args.include_validation and total_validation_fakes > 0:
+        console.print(f"Total Fake Videos (Validation): [bold yellow]{total_validation_fakes:,}[/]")
+        total_fakes = total_training_fakes + total_validation_fakes
+        console.print(f"Total Fake Videos (All): [bold red]{total_fakes:,}[/]")
+    else:
+        # If not including validation, the total is just the training fakes
+        console.print(f"Total Fake Videos (All): [bold red]{total_training_fakes:,}[/]")
+
+    console.print(
+        "\n[italic]Note: 'Total Fake Videos' is a sum of unique IDs per method and may include duplicates if a source video is used for multiple fake methods.[/italic]"
+    )
+
+    # --- Interpretation Guide (MARKUP FIXED) ---
     console.print("\n[bold yellow]HOW TO INTERPRET THIS REPORT:[/]")
     console.print(
         "1. [bold]Frames Dropped %:[/bold] A high percentage indicates a problem processing a specific method (e.g., corrupt files, naming issues). A small percentage (~0.2%) is normal.")
@@ -142,7 +217,7 @@ def main():
     console.print(
         "   - For a [bold]FAKE[/] method like 'simswap', the 'Processed IDs' count should match its [bold]SOURCE's[/bold] 'Processed IDs' count (e.g., 'FaceForensics++').")
     console.print(
-        "   - [bold red]If 'Source Videos' and 'Processed IDs' are the same for a FAKE method, your ID unification is NOT working.[/bold]")
+        "   - [bold red]If 'Source Videos' and 'Processed IDs' are the same for a FAKE method, your ID unification is NOT working.[/bold red]")
 
 
 if __name__ == "__main__":

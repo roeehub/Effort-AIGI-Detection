@@ -1,17 +1,17 @@
 """
-investigate_face_crops.py (v2 with Prefix Analysis)
+investigate_face_crops.py (v4 - Production Ready, Thread-Safe)
 ================================================
-A diagnostic script to quantitatively analyze face crop sizes across different
-data sources in the training and OOD test sets.
+A diagnostic script to quantitatively analyze face crop sizes.
 
-Purpose:
-To verify the hypothesis that some data sources have systematically different
-face crops. This version includes a '--gcs_prefix' flag to allow analysis of
-specific subdirectories, such as sample outputs from a processing pipeline.
+New in this version:
+- Fix: Solves multi-threading errors (e.g., 'Conv' object has no attribute 'bn')
+  by implementing a thread-safe YOLO model initializer. Each worker thread
+  now gets its own independent model instance, preventing state corruption.
 """
 import os
 import random
 import argparse
+import threading
 from pathlib import Path
 import concurrent.futures
 from functools import partial
@@ -27,250 +27,183 @@ from tqdm import tqdm
 try:
     from video_preprocessor import initialize_yolo_model, _get_yolo_face_box
 except ImportError:
-    print("\n[ERROR] Could not import from 'video_preprocessor.py'.")
-    print("Please ensure the file is in the same directory or your PYTHONPATH is set correctly.")
+    print("\n[ERROR] Could not import from 'video_preprocessor.py'. Please ensure it's in the same directory.")
     exit(1)
 
-# --- Configuration ---
-DF40_BUCKET_NAME = "df40-frames-recropped-rfa85"
+# --- Config ---
 CONFIG_PATH = './config/dataloader_config.yml'
-SAMPLE_VIDEOS_PER_METHOD_TRAIN = 30
-SAMPLE_FRAMES_PER_VIDEO_TRAIN = 3
-
-TEST_BUCKET_PREFIX = "deep-fake-test-recropped-rfa85"
-SAMPLE_FRAMES_PER_VIDEO_TEST = 3
-
 OUTPUT_CSV = "face_crop_analysis_results.csv"
 OUTPUT_PLOT_DIR = "face_crop_analysis_plots"
 DEFAULT_WORKERS = os.cpu_count() or 4
+IMG_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+
+# --- THREAD-SAFE YOLO INITIALIZER (THE FIX) ---
+thread_local = threading.local()
 
 
-# --- Core Logic (Unchanged) ---
-def get_face_crop_stats(gcs_path: str, fs: fsspec.AbstractFileSystem, yolo_model) -> dict | None:
+def get_yolo_for_thread():
+    """Ensures each thread gets its own instance of the YOLO model."""
+    if not hasattr(thread_local, "yolo_model"):
+        # This function is called once per thread.
+        thread_local.yolo_model = initialize_yolo_model()
+    return thread_local.yolo_model
+
+
+# --- Core Logic (Adapted for Thread Safety) ---
+def get_face_crop_stats(path: str, fs: fsspec.AbstractFileSystem) -> dict | None:
+    """Worker function to analyze a single image."""
+    yolo_model = get_yolo_for_thread()  # Each thread gets its model here
     try:
-        with fs.open(gcs_path, 'rb') as f:
+        with fs.open(path, 'rb') as f:
             image_bytes = np.frombuffer(f.read(), np.uint8)
         image_np_bgr = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
-        if image_np_bgr is None:
-            tqdm.write(f"\n[OpenCV Warning] cv2.imdecode failed for {gcs_path}.")
-            return None
-        img_height, img_width, _ = image_np_bgr.shape
-        image_area = img_height * img_width
+        if image_np_bgr is None: return None
+        image_area = image_np_bgr.shape[0] * image_np_bgr.shape[1]
         bbox = _get_yolo_face_box(image_np_bgr, yolo_model)
-        if bbox is None:
-            return {"relative_face_area": 0.0}
-        x0, y0, x1, y1 = bbox
-        face_area = (x1 - x0) * (y1 - y0)
-        relative_face_area = face_area / image_area if image_area > 0 else 0.0
-        return {"relative_face_area": relative_face_area}
+        if bbox is None: return {"relative_face_area": 0.0}
+        face_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+        return {"relative_face_area": face_area / image_area if image_area > 0 else 0.0}
     except Exception as e:
-        tqdm.write(f"\n[Processing Error] Could not process {gcs_path}: {e}")
+        tqdm.write(f"\n[Error] Processing {path}: {e}");
         return None
 
 
-def _process_frames_in_parallel(frame_paths_with_metadata, fs, yolo_model, num_workers):
+def _process_in_parallel(paths_with_metadata, fs, num_workers):
     stats_list = []
-    processing_function = partial(get_face_crop_stats, fs=fs, yolo_model=yolo_model)
-    gcs_paths = [item[0] for item in frame_paths_with_metadata]
+    # Note: We no longer pass the yolo_model from the main thread
+    processing_func = partial(get_face_crop_stats, fs=fs)
+    paths = [item[0] for item in paths_with_metadata]
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        results = list(
-            tqdm(executor.map(processing_function, gcs_paths), total=len(gcs_paths), desc="Analyzing Face Crops"))
+        results = list(tqdm(executor.map(processing_func, paths), total=len(paths), desc="Analyzing Face Crops"))
+
     for i, stats in enumerate(results):
         if stats:
-            metadata = frame_paths_with_metadata[i][1]
-            stats.update(metadata)
+            stats.update(paths_with_metadata[i][1]);
             stats_list.append(stats)
     return stats_list
 
 
-# --- Data Sampling Logic (MODIFIED FOR GCS PREFIX) ---
-def _get_full_prefix(base_prefix, gcs_prefix_arg):
-    if gcs_prefix_arg:
-        return os.path.join(gcs_prefix_arg, base_prefix.lstrip('/'))
-    return base_prefix
-
-
-def _sample_train_data(bucket, fs, yolo_model, num_workers, gcs_prefix):
-    print("\n--- Sampling from TRAIN dataset (DF40) ---")
-    if gcs_prefix: print(f"Analyzing under prefix: '{gcs_prefix}'")
-    with open(CONFIG_PATH, 'r') as f:
-        data_config = yaml.safe_load(f)
-    all_methods = data_config['all_methods']['use_real_sources'] + data_config['all_methods']['use_fake_methods']
-    frame_paths_to_process = []
-    for method in tqdm(all_methods, desc="Discovering Train Videos", unit="method"):
-        label = "real" if method in data_config['all_methods']['use_real_sources'] else "fake"
-        full_method_prefix = _get_full_prefix(f"{label}/{method}/", gcs_prefix)
-        video_paths = set('/'.join(Path(b.name).parts[:-1]) + '/' for b in bucket.list_blobs(prefix=full_method_prefix))
-        if not video_paths: continue
-        num_videos_to_sample = min(len(video_paths), SAMPLE_VIDEOS_PER_METHOD_TRAIN)
-        selected_videos = random.sample(list(video_paths), num_videos_to_sample)
-        for video_prefix in selected_videos:
-            frame_blobs = [b for b in bucket.list_blobs(prefix=video_prefix) if not b.name.endswith('/')]
-            if not frame_blobs: continue
-            num_frames_to_sample = min(len(frame_blobs), SAMPLE_FRAMES_PER_VIDEO_TRAIN)
-            selected_frames = random.sample(frame_blobs, num_frames_to_sample)
-            for frame_blob in selected_frames:
-                gcs_path = f"gs://{bucket.name}/{frame_blob.name}"
-                metadata = {"label": label, "method": method, "source": "train"}
-                frame_paths_to_process.append((gcs_path, metadata))
-    print(f"Discovered {len(frame_paths_to_process)} train frames to analyze.")
-    return _process_frames_in_parallel(frame_paths_to_process, fs, yolo_model, num_workers)
-
-
-def _sample_test_data(bucket, fs, yolo_model, num_workers, gcs_prefix):
-    print(f"\n--- Sampling from TEST dataset ({bucket.name}) ---")
-    if gcs_prefix: print(f"Analyzing under prefix: '{gcs_prefix}'")
-    methods_and_labels = []
-    for label in ['real', 'fake']:
-        full_label_prefix = _get_full_prefix(f'{label}/', gcs_prefix)
-        iterator = bucket.list_blobs(prefix=full_label_prefix, delimiter='/')
-        for page in iterator.pages:
-            for prefix in page.prefixes:
-                method_name = prefix.strip('/').split('/')[-1]
-                methods_and_labels.append((method_name, label))
-    frame_paths_to_process = []
-    for method, label in tqdm(methods_and_labels, desc="Discovering Test Videos", unit="method"):
-        base_prefix = f"{label}/{method}/"
-        full_prefix = _get_full_prefix(base_prefix, gcs_prefix)
-        video_paths = set('/'.join(Path(b.name).parts[:-1]) + '/' for b in bucket.list_blobs(prefix=full_prefix))
-        if not video_paths: continue
-        for video_prefix in list(video_paths):
-            frame_blobs = [b for b in bucket.list_blobs(prefix=video_prefix) if not b.name.endswith('/')]
-            if not frame_blobs: continue
-            num_frames_to_sample = min(len(frame_blobs), SAMPLE_FRAMES_PER_VIDEO_TEST)
-            selected_frames = random.sample(frame_blobs, num_frames_to_sample)
-            for frame_blob in selected_frames:
-                gcs_path = f"gs://{bucket.name}/{frame_blob.name}"
-                metadata = {"label": label, "method": method, "source": "test"}
-                frame_paths_to_process.append((gcs_path, metadata))
-    print(f"Discovered {len(frame_paths_to_process)} test frames to analyze.")
-    return _process_frames_in_parallel(frame_paths_to_process, fs, yolo_model, num_workers)
-
-
-# --- Main Controller Functions ---
-def run_sampling(args):
-    print("--- Mode: Sampling & Analyzing Data from GCS ---")
-    print(f"Using {args.workers} parallel workers.")
-    try:
-        print("Initializing models and connecting to GCS...")
-        yolo_model = initialize_yolo_model()
-        storage_client = storage.Client()
-        fs = fsspec.filesystem('gcs')
-    except Exception as e:
-        print(f"\n[Error] Could not connect to GCS or initialize models. Details: {e}")
+# --- Local Directory Analysis Logic (Adapted for Thread Safety) ---
+def analyze_local_directory(args):
+    print(f"--- Mode: Analyzing Local Directory: {args.local_dir} ---")
+    local_path = Path(args.local_dir)
+    if not local_path.is_dir():
+        print(f"[ERROR] Local directory not found: {args.local_dir}");
         return
-    all_stats = []
-    if os.path.exists(OUTPUT_CSV):
-        print(f"Found existing data file '{OUTPUT_CSV}'. Removing to start fresh.")
-        os.remove(OUTPUT_CSV)
 
-    datasets_to_run = ['train', 'test'] if args.dataset == 'both' else [args.dataset]
-    if 'train' in datasets_to_run:
-        train_bucket = storage_client.bucket(DF40_BUCKET_NAME)
-        train_stats = _sample_train_data(train_bucket, fs, yolo_model, args.workers, args.gcs_prefix)
-        if train_stats: all_stats.extend(train_stats)
-    if 'test' in datasets_to_run:
-        if not args.test_bucket_suffix:
-            print("[Error] --test_bucket_suffix is required when sampling 'test' or 'both' datasets.")
-            return
-        test_bucket_name = f"{TEST_BUCKET_PREFIX}-{args.test_bucket_suffix}"
-        test_bucket = storage_client.bucket(test_bucket_name)
-        test_stats = _sample_test_data(test_bucket, fs, yolo_model, args.workers, args.gcs_prefix)
-        if test_stats: all_stats.extend(test_stats)
-    if not all_stats:
-        print("\n[Error] No data was collected. Review logs for warnings.")
-        return
-    print("\nSaving final results...")
-    pd.DataFrame(all_stats).to_csv(OUTPUT_CSV, index=False)
-    print(f"✅ Saved {len(all_stats)} frame stats to '{OUTPUT_CSV}'.")
-    print(f"\n--- Analysis Complete ---")
+    print("Discovering image files...")
+    all_files = [p for p in local_path.rglob('*') if p.suffix.lower() in IMG_EXTENSIONS]
+
+    paths_to_process = []
+    for f in all_files:
+        try:
+            relative_parts = f.relative_to(local_path).parts
+            label = relative_parts[0]
+            method = relative_parts[1]
+            metadata = {"label": label, "method": method, "source": "local_sample"}
+            paths_to_process.append((str(f), metadata))
+        except IndexError:
+            tqdm.write(f"\n[Warning] Could not parse metadata from path: {f}. Skipping.")
+
+    print(f"Found {len(paths_to_process)} frames to analyze.")
+    if not paths_to_process: return
+
+    fs = fsspec.filesystem('file')
+    # Note: We no longer initialize the model here in the main thread
+    return _process_in_parallel(paths_to_process, fs, args.workers)
 
 
-# --- Plotting and Reporting Functions (Unchanged) ---
+# --- Plotting and Reporting (Unchanged) ---
 def run_plotting(csv_path):
     print(f"--- Mode: Plotting from '{csv_path}' ---")
-    if not os.path.exists(csv_path):
-        print(f"[Error] CSV file not found: '{csv_path}'. Run sampling first.")
-        return
+    if not os.path.exists(csv_path): print(f"[Error] CSV not found: '{csv_path}'"); return
     df = pd.read_csv(csv_path)
     os.makedirs(OUTPUT_PLOT_DIR, exist_ok=True)
     try:
-        import matplotlib.pyplot as plt
+        import matplotlib.pyplot as plt;
         import seaborn as sns
         sns.set_theme(style="whitegrid")
-        methods_in_test = df[df['source'] == 'test']['method'].unique()
-        methods_in_train = df[df['source'] == 'train']['method'].unique()
-        order = sorted(list(set(methods_in_test) | set(methods_in_train)))
-        plt.figure(figsize=(28, 14))
-        ax = sns.boxplot(data=df, x='method', y='relative_face_area', hue='label', order=order,
-                         palette={'real': 'g', 'fake': 'r'})
-        new_labels = [f"{tick.get_text()} ({'/'.join(df[df['method'] == tick.get_text()]['source'].unique())})" for tick
-                      in ax.get_xticklabels()]
-        ax.set_xticklabels(new_labels)
-        plt.title('Distribution of Relative Face Area by Method', fontsize=20)
-        plt.xlabel("Method (Source)", fontsize=14)
-        plt.ylabel("Relative Face Area (Face BBox / Image Area)", fontsize=14)
-        ax.tick_params(axis='x', rotation=45, labelsize=12)
-        ax.legend(title='Label')
-        if methods_in_test.any() and set(methods_in_train) - set(methods_in_test):
-            separator_pos = len(sorted(list(methods_in_test))) - 0.5
-            ax.axvline(separator_pos, color='k', linestyle='--', linewidth=2, alpha=0.7)
-        plt.tight_layout()
-        plot_path = os.path.join(OUTPUT_PLOT_DIR, "relative_face_area_distribution.png")
-        plt.savefig(plot_path)
-        plt.close()
-        print(f"\n✅ Plot saved to '{plot_path}'.")
+        # Ensure 'method' column exists and handle potential empty DataFrame
+        if 'method' in df.columns and not df.empty:
+            order = sorted(df['method'].unique())
+            plt.figure(figsize=(28, 14))
+            sns.boxplot(data=df, x='method', y='relative_face_area', hue='label', order=order,
+                        palette={'real': 'g', 'fake': 'r'})
+            plt.title('Distribution of Relative Face Area by Method', fontsize=20)
+            plt.xlabel("Method", fontsize=14);
+            plt.ylabel("Relative Face Area", fontsize=14)
+            plt.xticks(rotation=45, ha="right");
+            plt.tight_layout()
+            plot_path = os.path.join(OUTPUT_PLOT_DIR, "relative_face_area_distribution.png")
+            plt.savefig(plot_path);
+            plt.close()
+            print(f"\n✅ Plot saved to '{plot_path}'.")
+        else:
+            print("[Warning] No data to plot. 'method' column might be missing or DataFrame is empty.")
     except ImportError:
-        print("\n[Warning] `matplotlib` or `seaborn` not installed. Skipping plot generation.")
+        print("\n[Warning] `matplotlib` or `seaborn` not installed.")
     except Exception as e:
-        print(f"\n[Plotting Error] An unexpected error occurred: {e}")
+        print(f"\n[Plotting Error] {e}")
 
 
 def run_numerical_report(csv_path):
     print(f"--- Mode: Generating Numerical Report from '{csv_path}' ---")
-    if not os.path.exists(csv_path):
-        print(f"[Error] CSV file not found: '{csv_path}'.")
-        return
+    if not os.path.exists(csv_path): print(f"[Error] CSV not found: '{csv_path}'"); return
     df = pd.read_csv(csv_path)
-    metric = 'relative_face_area'
-    print(f"\n--- Quantile Breakdown for {metric} ---")
-    quantile_df = df.groupby(['source', 'method', 'label']).agg(p25=(metric, lambda x: x.quantile(0.25)),
-                                                                median=(metric, 'median'),
-                                                                p75=(metric, lambda x: x.quantile(0.75)),
-                                                                mean=(metric, 'mean'), std=(metric, 'std'),
-                                                                count=(metric, 'size')).sort_index()
+    if df.empty:
+        print("[Warning] CSV file is empty. No report to generate.")
+        return
+    print("\n--- Quantile Breakdown for Relative Face Area ---")
+    quantile_df = df.groupby(['source', 'method', 'label']).agg(
+        p25=('relative_face_area', lambda x: x.quantile(0.25)),
+        median=('relative_face_area', 'median'),
+        p75=('relative_face_area', lambda x: x.quantile(0.75)),
+        mean=('relative_face_area', 'mean'),
+        std=('relative_face_area', 'std'),
+        count=('relative_face_area', 'size')).sort_index()
     for col in ['p25', 'median', 'p75', 'mean', 'std']:
         quantile_df[col] = quantile_df[col].map('{:.3f}'.format)
-    pd.set_option('display.max_rows', None)
-    print(quantile_df)
+    pd.set_option('display.max_rows', None);
+    print(quantile_df);
     print("-" * 47)
     print("\n✅ Numerical report finished.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Investigate face crop consistency across dataset sources.")
-    parser.add_argument('--mode', type=str, default='all', choices=['all', 'sample', 'plot', 'report'],
-                        help="Script mode.")
-    parser.add_argument('--dataset', type=str, default='both', choices=['train', 'test', 'both'],
-                        help="Which dataset(s) to analyze.")
-    parser.add_argument('--test_bucket_suffix', type=str, choices=['yolo', 'yolo-haar'],
-                        help="Suffix for the test bucket name.")
-    parser.add_argument('--workers', type=int, default=DEFAULT_WORKERS,
-                        help=f"Number of parallel workers. Default: {DEFAULT_WORKERS}")
-    parser.add_argument('--gcs_prefix', type=str, default=None,
-                        help="Optional GCS prefix to analyze a specific subdirectory.")
+    parser = argparse.ArgumentParser(description="Investigate face crop consistency.")
+    parser.add_argument('--mode', default='all', choices=['all', 'analyze', 'plot', 'report'])
+    parser.add_argument('--workers', type=int, default=DEFAULT_WORKERS)
+
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument('--local_dir', type=str, help="Analyze a local directory of images.")
+    source_group.add_argument('--csv_file', type=str, help="Run plotting/reporting on an existing CSV file.")
+
     args = parser.parse_args()
 
-    if args.mode in ['all', 'sample']:
-        run_sampling(args)
-    csv_exists = os.path.exists(OUTPUT_CSV)
-    if not csv_exists and args.mode in ['plot', 'report']:
-        print(f"[Error] CSV file '{OUTPUT_CSV}' not found. Run sampling first.")
+    # Determine the CSV path to use
+    csv_path = args.csv_file if args.csv_file else OUTPUT_CSV
+
+    if args.mode in ['all', 'analyze']:
+        if args.local_dir:
+            all_stats = analyze_local_directory(args)
+            if all_stats:
+                if os.path.exists(OUTPUT_CSV): os.remove(OUTPUT_CSV)
+                pd.DataFrame(all_stats).to_csv(OUTPUT_CSV, index=False)
+                print(f"✅ Saved {len(all_stats)} frame stats to '{OUTPUT_CSV}'.")
+            else:
+                print("\nNo data was collected.");
+                return
+        elif not args.csv_file:
+            print("[Error] Must provide --local_dir for analysis mode.")
+            return
+
+    if not os.path.exists(csv_path) and args.mode in ['plot', 'report', 'all']:
+        print(f"[Error] CSV file '{csv_path}' not found. Run analysis first.")
         return
-    if args.mode in ['all', 'plot']:
-        run_plotting(OUTPUT_CSV)
-    if args.mode in ['all', 'report']:
-        run_numerical_report(OUTPUT_CSV)
+
+    if args.mode in ['all', 'plot']: run_plotting(csv_path)
+    if args.mode in ['all', 'report']: run_numerical_report(csv_path)
 
 
 if __name__ == "__main__":

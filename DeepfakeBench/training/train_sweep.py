@@ -42,8 +42,8 @@ from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
 from logger import create_logger
 from PIL.ImageFilter import RankFilter  # noqa
-from prepare_splits import prepare_video_splits_v2
-from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
+from dataset.dataloaders import create_dataloaders, collate_fn, create_ood_loader  # noqa
+from prepare_splits import prepare_video_splits_v2, prepare_ood_videos
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector_path', type=str,
@@ -283,6 +283,7 @@ def main():
     data_config['dataloader_params']['frames_per_video'] = wandb.config.frames_per_video
     data_config['data_params']['val_split_ratio'] = wandb.config.val_split_ratio
     data_config['data_params']['evaluation_frequency'] = wandb.config.evaluation_frequency
+    data_config['property_balancing']['enabled'] = wandb.config.property_balancing_enabled
 
     # --- 3. Data and Dataloader params (Fixed Context) ---
     data_config['data_params']['seed'] = wandb.config.seed
@@ -350,6 +351,58 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
+    # --- 4. Augmentation params (from wandb.config) ---
+    # Check if augmentation_params are defined in the W&B config (from sweep or YAML)
+    if 'augmentation_params' in wandb.config and wandb.config.augmentation_params:
+        # Convert the W&B Config object to a standard Python dictionary
+        config['augmentation_params'] = dict(wandb.config.augmentation_params)
+        logger.info("Successfully loaded augmentation parameters from the run's configuration.")
+        logger.info(f"Augmentation settings: {config['augmentation_params']}")
+    else:
+        # Fallback to a default configuration if not provided, with a clear warning.
+        logger.warning("`augmentation_params` not found in the run's configuration. Using a default set.")
+        config['augmentation_params'] = {
+            "use_geometric": True,
+            "use_advanced_noise": False,
+            "use_color_jitter": True,
+            "use_occlusion": True,
+            "sharpness_adjust_prob": 0.6,
+            "occlusion_prob": 0.4,
+        }
+        logger.info(f"Default augmentation settings: {config['augmentation_params']}")
+
+    # --- 5. Dataset Method Override (from wandb.config) ---
+    # This logic checks if the user has provided a method override in their
+    # run config (e.g., train_parameters.yaml) and applies it.
+    if 'dataset_methods' in wandb.config and wandb.config.dataset_methods:
+        logger.info("--- Overriding dataset methods from the run's configuration. ---")
+
+        # Create a reference to the override config for cleaner code
+        method_overrides = wandb.config.dataset_methods
+
+        # Check and override each list individually for maximum flexibility
+        if 'use_real_sources' in method_overrides:
+            data_config['methods']['use_real_sources'] = list(method_overrides['use_real_sources'])
+            logger.info(f"Overriding REAL sources with: {data_config['methods']['use_real_sources']}")
+
+        if 'use_fake_methods_for_training' in method_overrides:
+            data_config['methods']['use_fake_methods_for_training'] = list(
+                method_overrides['use_fake_methods_for_training'])
+            logger.info(
+                f"Overriding FAKE TRAINING methods with: {data_config['methods']['use_fake_methods_for_training']}")
+
+        if 'use_fake_methods_for_validation' in method_overrides:
+            data_config['methods']['use_fake_methods_for_validation'] = list(
+                method_overrides['use_fake_methods_for_validation'])
+            logger.info(
+                f"Overriding FAKE VALIDATION methods with: {data_config['methods']['use_fake_methods_for_validation']}")
+
+    else:
+        logger.info("--- Using default dataset methods from ./config/dataloader_config.yml ---")
+        # Log the defaults for clarity
+        logger.info(f"Default FAKE TRAINING methods: {data_config['methods']['use_fake_methods_for_training']}")
+        logger.info(f"Default FAKE VALIDATION methods: {data_config['methods']['use_fake_methods_for_validation']}")
+
     # Conditionally remove the base checkpoint from the download list if not needed
     if not config.get('load_base_checkpoint', False):
         if 'gcs_assets' in config and 'base_checkpoint' in config['gcs_assets']:
@@ -368,6 +421,19 @@ def main():
         train_videos, val_videos, config, data_config
     )
 
+    logger.info(
+        f"DEBUG: is property balancing enabled? {data_config.get('property_balancing', {}).get('enabled', False)}")
+
+    # --- Create OOD Loader ---
+    logger.info("------- OOD Data Loading -------")
+    ood_loader = None
+    if data_config.get('gcp', {}).get('ood_bucket_name'):
+        ood_videos = prepare_ood_videos(data_config)
+        if ood_videos:
+            ood_loader = create_ood_loader(ood_videos, config, data_config)
+    else:
+        logger.info("No 'ood_bucket_name' in config, skipping OOD loader creation.")
+
     # --- Create and log the comprehensive run overview ---
     real_methods = data_config.get('methods', {}).get('use_real_sources', [])
     fake_methods = data_config.get('methods', {}).get('use_fake_methods', [])
@@ -380,11 +446,12 @@ def main():
         "Discovered Videos": data_split_stats.get('discovered_videos'),
         "Discovered Methods": data_split_stats.get('discovered_methods'),
         "Data Subset Percentage": wandb.config.get('data_subset_percentage'),
-        "Subset Video Count": data_split_stats.get('subset_video_count'),
-        "Unbalanced Train Count": data_split_stats.get('unbalanced_train_count'),
-        "Unbalanced Val Count": data_split_stats.get('unbalanced_val_count'),
-        "Balanced Train Count": data_split_stats.get('balanced_train_count'),
-        "Balanced Val Count": data_split_stats.get('balanced_val_count'),
+        "Unbalanced Train Frames": data_split_stats.get('unbalanced_train_count'),  # This was frames
+        "Unbalanced Val Videos": data_split_stats.get('unbalanced_val_count'),  # This was videos
+        "Final Train Videos": data_split_stats.get('train_video_count'),
+        "Final Train Frames": data_split_stats.get('train_frame_count'),
+        "Final Val Videos": data_split_stats.get('val_video_count'),
+        "Final Val Frames": data_split_stats.get('val_frame_count'),
         "Dataloader Strategy": wandb.config.get('dataloader_strategy'),
         "Frames per Video": wandb.config.get('frames_per_video'),
         "Videos per Batch": wandb.config.get('videos_per_batch'),
@@ -410,9 +477,9 @@ def main():
 
             ### Data Split Details
             - **Discovered:** `{overview_data["Discovered Videos"]:,}` videos from `{overview_data["Discovered Methods"]}` methods.
-            - **Subset:** Using `{overview_data["Data Subset Percentage"]:.1%}` of data (`{overview_data["Subset Video Count"]:,}` videos).
-            - **Unbalanced Split:** Train: `{overview_data["Unbalanced Train Count"]:,}` | Val: `{overview_data["Unbalanced Val Count"]:,}`
-            - **Final Balanced Split:** Train: `{overview_data["Balanced Train Count"]:,}` | Val: `{overview_data["Balanced Val Count"]:,}`
+            - **Unbalanced Pools:** Train: `{overview_data["Unbalanced Train Frames"]:,}` frames | Val: `{overview_data["Unbalanced Val Videos"]:,}` videos
+            - **Final Training Set (Unbalanced):** `{overview_data["Final Train Videos"]:,}` videos (`{overview_data["Final Train Frames"]:,}` frames)
+            - **Final Validation Set (Balanced):** `{overview_data["Final Val Videos"]:,}` videos (`{overview_data["Final Val Frames"]:,}` frames)
 
             ### Datasets Used
             - **Real Sources ({len(real_methods)}):** `{', '.join(real_methods)}`
@@ -433,9 +500,18 @@ def main():
 
     # --- Log detailed dataset balance statistics ---
     real_source_names = data_config['methods']['use_real_sources']
+    is_property_balancing = data_config.get('property_balancing', {}).get('enabled', False)
+
+    # conditionally handle list of dicts vs. list of objects
+    # Calculate per-method counts for the balanced training set
+    if is_property_balancing:
+        # train_videos is a list of frame dictionaries; count frames per method
+        train_counts = Counter(frame['method'] for frame in train_videos)
+    else:
+        # train_videos is a list of VideoInfo objects; count videos per method
+        train_counts = Counter(v.method for v in train_videos)
 
     # Calculate per-method counts for the balanced training set
-    train_counts = Counter(v.method for v in train_videos)
     train_real_count = sum(count for method, count in train_counts.items() if method in real_source_names)
     train_fake_count = sum(count for method, count in train_counts.items() if method not in real_source_names)
 
@@ -470,7 +546,7 @@ def main():
     metric_scoring = choose_metric(config)
     trainer = Trainer(
         config, model, optimizer, scheduler, logger, metric_scoring,
-        wandb_run=wandb_run, val_videos=val_videos
+        wandb_run=wandb_run, val_videos=val_videos, ood_loader=ood_loader
     )
 
     if config.get('load_base_checkpoint', False):
@@ -505,8 +581,11 @@ def main():
         trainer.train_epoch(
             train_loader=train_loader,
             epoch=epoch,
+            # For property_balancing, train_videos is actually train_frames (list of dicts)
+            # For other strategies, it's a list of VideoInfo
+            # The variable name is fine, but the content differs by strategy.
             val_method_loaders=val_method_loaders,
-            train_videos=train_videos  # Pass the video list for epoch_len calculation
+            train_videos=train_videos  # Pass the train_frames list here
         )
         if scheduler is not None:
             scheduler.step()

@@ -37,7 +37,7 @@ logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(
 log = logging.getLogger(__name__)
 
 # ==============================================================================
-# --- CORRECTED, SELF-CONTAINED IDENTITY EXTRACTION FUNCTION ---
+# --- ID EXTRACTION FUNCTIONS ---
 # ==============================================================================
 
 # --- Configuration: Method Categories (ddim is correctly placed here) ---
@@ -55,6 +55,7 @@ REV_METHODS: Set[str] = {}
 def get_video_identity(label: str, method: str, video_id: str) -> int:
     """
     Determines a unique, stable integer identity for a video based on its name.
+    This serves as a person_id to prevent identity leakage between splits.
     Handles multiple formats and falls back to hashing for synthetic videos.
     """
     # Stage 1: Skip parsing for videos that don't have a numeric target ID
@@ -85,6 +86,18 @@ def get_video_identity(label: str, method: str, video_id: str) -> int:
     return positive_hash + 100_000
 
 
+def get_clip_id(method: str, original_video_id: str) -> int:
+    """
+    Generates a unique, stable integer ID for a video clip by hashing its
+    method and original ID string. This ID is for identifying the specific
+    video clip, distinct from the person identity (video_id).
+    """
+    hashed_id = hash((method, original_video_id))
+    # Ensure the hash is a positive integer for consistency
+    positive_hash = hashed_id & 0x7FFFFFFF
+    return positive_hash
+
+
 # ==============================================================================
 # --- PROPERTY CALCULATION & PROCESSING LOGIC ---
 # ==============================================================================
@@ -108,7 +121,9 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
             log.warning(f"Skipping malformed path (too short): {gcs_path}")
             return None
         label, method, video_id_raw = parts[-4], parts[-3], parts[-2]
+
         unified_id = get_video_identity(label, method, video_id_raw)
+        clip_id = get_clip_id(method, video_id_raw)
 
         info = fs.info(gcs_path)
         file_size_kb = info.get("size", 0) / 1024.0
@@ -123,6 +138,7 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
             "path": gcs_path, "label": label, "method": method,
             "original_video_id": video_id_raw,
             "video_id": unified_id,
+            "clip_id": clip_id,
             "file_size_kb": round(file_size_kb, 2),
             "sharpness": round(sharpness, 2),
         }
@@ -137,9 +153,9 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
 
 def update_manifest_ids(input_path: Path, output_path: Path, workers: int):
     """
-    Loads an existing manifest, re-computes the video IDs, and saves the
-    updated manifest. The new unified ID is placed in 'video_id', and the
-    original is preserved in 'original_video_id'.
+    Loads an existing manifest, re-computes video_id (person ID) and
+    clip_id (unique clip ID), and saves the updated manifest. The original
+    video string is preserved in 'original_video_id'.
     """
     log.info(f"Loading existing manifest from '{input_path}'...")
     try:
@@ -156,26 +172,32 @@ def update_manifest_ids(input_path: Path, output_path: Path, workers: int):
 
     log.info(f"Loaded {len(df):,} records. Re-computing IDs with {workers} workers...")
 
-    def compute_new_ids(chunk_df: pd.DataFrame) -> pd.Series:
+    def compute_ids_for_chunk(chunk_df: pd.DataFrame) -> pd.DataFrame:
+        """Computes both video_id (person) and clip_id (clip) for a DataFrame chunk."""
         return chunk_df.apply(
-            lambda row: get_video_identity(row['label'], row['method'], row['original_video_id']),
+            lambda row: pd.Series({
+                'video_id': get_video_identity(row['label'], row['method'], row['original_video_id']),
+                'clip_id': get_clip_id(row['method'], row['original_video_id'])
+            }),
             axis=1
         )
 
     df_chunks = np.array_split(df, workers)
     new_id_chunks = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(compute_new_ids, chunk) for chunk in df_chunks}
+        futures = {executor.submit(compute_ids_for_chunk, chunk) for chunk in df_chunks}
         progress_bar = tqdm(as_completed(futures), total=len(futures), desc="Updating IDs")
         for future in progress_bar:
             new_id_chunks.append(future.result())
 
     log.info("ID computation complete. Updating DataFrame...")
-    df['video_id'] = pd.concat(new_id_chunks)
+    new_ids_df = pd.concat(new_id_chunks)
+    df['video_id'] = new_ids_df['video_id']
+    df['clip_id'] = new_ids_df['clip_id']
 
     log.info(f"Writing updated DataFrame to Parquet file: '{output_path}'")
     try:
-        cols = ['path', 'label', 'method', 'video_id', 'original_video_id']
+        cols = ['path', 'label', 'method', 'video_id', 'clip_id', 'original_video_id']
         other_cols = [c for c in df.columns if c not in cols]
         df = df[cols + other_cols]
         df.to_parquet(output_path, index=False, engine='pyarrow', compression='snappy')

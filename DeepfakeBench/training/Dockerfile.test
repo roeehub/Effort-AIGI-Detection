@@ -1,0 +1,51 @@
+# ────────────────────────────────────────────────────────────────
+# Dockerfile for LOCAL TESTING - Replicates the production environment
+# ────────────────────────────────────────────────────────────────
+
+# STEP 1: Use the EXACT same base image as production
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+# STEP 2: Use the EXACT same environment setup and system package installation
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_PROGRESS_BAR=off
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-dev \
+        python3.10-distutils \
+        python3-pip \
+        build-essential \
+        cmake \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        git \
+        curl \
+        ca-certificates \
+        libjpeg-dev \
+        zlib1g-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/python3.10 /usr/bin/python
+
+# STEP 3: Set the same working directory
+WORKDIR /workspace
+
+# STEP 4: Copy the necessary files for the test
+# copy all
+COPY . .
+
+# STEP 5: Replicate the Python dependency installation sequence EXACTLY
+RUN python -m pip install --no-cache-dir \
+    torch==2.1.1 torchvision==0.16.1 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+RUN python -m pip install --no-cache-dir -r requirements.txt
+
+# Also replicate the pillow-simd reinstall step
+RUN python -m pip install --no-cache-dir --force-reinstall pillow-simd
+
+# STEP 6: Define the container's command to run our test script
+# This replaces the production ENTRYPOINT for the purpose of this test.
+CMD ["python", "test_imports.py"]

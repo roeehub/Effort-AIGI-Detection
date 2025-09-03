@@ -1,10 +1,10 @@
 # --- train_parameters.yaml ---
 
 # Core Effort/Optimizer Hyperparameters (Matched to Paper except LR)
-learning_rate: 5.0e-5
+learning_rate: 1.0e-4
 weight_decay: 0.05
 optimizer_eps: 1.0e-8
-lambda_reg: 1.0
+lambda_reg: 2.0
 rank: 1023
 
 # baseline values:
@@ -15,16 +15,16 @@ rank: 1023
 #rank: 1023
 
 # Training Schedule
-nEpochs: 20
+nEpochs: 10
 early_stopping_enabled: true
 early_stopping_patience: 5
-early_stopping_min_delta: 0.001
+early_stopping_min_delta: 0.01
 
 # --- NEW DATALOADER CONFIGURATION ---
-dataloader_strategy: video_level # <-- Strategy for the baseline is 'frame_level'
+dataloader_strategy: property_balancing
 
 # --- Parameters for different strategies ---
-# For 'frame_level' training:
+# For 'frame_level' /  'property_balancing' training:
 frames_per_batch: 64  # Total frames per batch. Clean and simple.
 
 # For 'video_level' training (values for a future experiment):
@@ -34,14 +34,33 @@ frames_per_video: 1   # Number of frames to sample from each video.
 
 # --- Fixed Context ---
 test_batch_size: 8 # For validation, this is videos per batch. Can stay as is.
-val_split_ratio: 0.1
-evaluation_frequency: 5
+val_split_ratio: 0.065  # only relevant for real videos.
+evaluation_frequency: 3 # important since we are fine-tuning
 seed: 737
-data_subset_percentage: 0.4
+data_subset_percentage: 1.0
 num_workers: 12  # Number of cores
 prefetch_factor: 3
-load_base_checkpoint: false
+load_base_checkpoint: false  # always false.
 
+property_balancing_enabled: true
+
+augmentation_params:
+    # --- Setup 1: "Conservative & Targeted" ---
+    use_geometric: True
+    use_advanced_noise: False
+    use_color_jitter: True
+    use_occlusion: True
+    sharpness_adjust_prob: 0.6
+    occlusion_prob: 0.4
+
+    # --- Setup 2: "Aggressive Real-World Simulation" ---
+#      use_geometric: True
+#      use_advanced_noise: True
+#      use_color_jitter: True
+#      use_occlusion: True
+#      sharpness_adjust_prob: 0.7
+#      advanced_noise_prob: 0.6
+#      occlusion_prob: 0.6
 
 # "" or None will give a run name based on parameters
-name: "video_level_baseline_first_holdout_baseline"
+name: "property_balancing_debug_freq3_lamda2.0_aug1"

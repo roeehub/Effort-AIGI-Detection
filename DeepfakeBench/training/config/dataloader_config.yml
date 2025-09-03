@@ -1,8 +1,10 @@
 # dataloder_config.yml
 
 gcp:
-  bucket_name: "df40-frames"
-  ood_bucket_name: "deep-fake-test-10-08-25-frames-yolo"
+  bucket_name: "df40-frames-recropped-rfa85"
+  ood_bucket_name: "deep-fake-test-10-08-25-frames-yolo-recropped-rfa85"
+#  bucket_name: "df40-frames"
+#  ood_bucket_name: "deep-fake-test-10-08-25-frames-yolo"
 
 data_params:
   # Use a fixed seed for reproducible splits and sampling
@@ -15,51 +17,111 @@ data_params:
   # Number of frames to sample from each video's 32 frames
   num_frames_per_video: 8
 
-# ---------------------------------------------------------------------------
-# NEW, SEPARATED METHOD CONFIGURATION
-# ---------------------------------------------------------------------------
+property_balancing:
+  enabled: true
+
+
+# --- test ----
 methods:
-  use_real_sources:
-#    - "FaceForensics++"
+  use_real_sources:  # Real sources are shared for training and validation
+    - "FaceForensics++"
     - "Celeb-real"
     - "YouTube-real"
     - "external_youtube_avspeech"
 
   use_fake_methods_for_training:
-    ### Face-swapping (FS)
-    - "simswap"
-    - "mobileswap"
-    - "faceswap"
-    - "inswap"
-    - "blendface"
-    - "fsgan"
-    - "uniface"
-    ### Face-reenactment (FR)
-    - "pirender"
-    - "facevid2vid"
-    - "lia"
-    - "fomm"
-    - "MRAA"
-    - "wav2lip"
-    - "mcnet"
-    - "danet"
-    ### Entire Face Synthesis (EFS)
-    - "VQGAN"
-    - "StyleGAN3"
-    - "StyleGAN2"
-    - "SiT"
-    - "RDDM"
-    - "ddim"
+    # TRAINING: Select one foundational or "classic" representative from each bucket.
+    # The goal is to learn the core signature of each forgery family.
+
+    # Bucket 1: StyleGAN Family
+    - "StyleGAN2"          # The most classic and influential StyleGAN.
+
+    # Bucket 2: Diffusion Models
+    - "ddim"               # Represents a foundational and fast diffusion sampling technique.
+
+    # Bucket 3: Audio-Driven Lip-Sync
+    - "wav2lip"            # A widely used and foundational lip-sync model.
+
+    # Bucket 4: General Motion Transfer
+    - "fomm"               # The "First-Order Motion Model" is a seminal paper in this area.
+
+    # Bucket 5 & 6: Face Swaps
+    - "faceswap"           # The original deepfake technique.
+    - "fsgan"              # A key subject-agnostic swapping GAN.
+    - "simswap"            # A popular and strong baseline for modern swaps.
+
+    # Outlier EFS (to maintain some diversity)
+    - "VQGAN"              # A different architectural approach (VQ + GAN + Transformer).
 
   use_fake_methods_for_validation:
-    # This is the hold-out set for testing generalization.
-    # These methods will NOT be seen during training.
-    - "facedancer"
-    - "sadtalker"
-    - "DiT"
-    - "StyleGANXL"
-    - "e4s"
-    - "one_shot_free"
+    # VALIDATION: Test generalization on the more advanced/different members of each family.
+    # If the model succeeds here, it learned the family's "essence", not just one implementation.
+
+    # Bucket 1: StyleGAN Family (Modern)
+    - "StyleGAN3"          # Tests generalization to alias-free GANs.
+    - "StyleGAN-XL"        # Tests generalization to scaled-up GANs.
+
+    # Bucket 2: Diffusion Models (Modern)
+    - "RDDM"               # A very recent (2024) diffusion architecture.
+    - "DiT"                # Tests generalization to Transformer-based diffusion.
+
+    # Bucket 3: Audio-Driven Lip-Sync (Modern)
+    - "sadtalker"          # A popular, recent (2023) and high-quality talking head generator.
+
+    # Bucket 4: General Motion Transfer (Modern)
+    - "MRAA"               # Based on the newer AnimateAnyone pipeline.
+    - "pirender"           # A different approach using 3DMMs.
+
+    # Bucket 5: Modern Face Swaps (SOTA)
+    - "facedancer"         # High-fidelity swap from 2023.
+    - "e4s"                # High-fidelity swap framed as an "editing" task (2023).
+# -----------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# NEW, SEPARATED METHOD CONFIGURATION
+# ---------------------------------------------------------------------------
+#methods:
+#  use_real_sources:  # used for training and validation, by a split
+#    - "FaceForensics++"
+#    - "Celeb-real"
+#    - "YouTube-real"
+#    - "external_youtube_avspeech"
+#
+#  use_fake_methods_for_training:
+#    ### Face-swapping (FS)
+#    - "simswap"
+#    - "mobileswap"
+#    - "faceswap"
+#    - "inswap"
+#    - "blendface"
+#    - "fsgan"
+#    - "uniface"
+#    ### Face-reenactment (FR)
+#    - "pirender"
+#    - "facevid2vid"
+#    - "lia"
+#    - "fomm"
+#    - "MRAA"
+#    - "wav2lip"
+#    - "mcnet"
+#    - "danet"
+#    ### Entire Face Synthesis (EFS)
+#    - "VQGAN"
+#    - "StyleGAN3"
+#    - "StyleGAN2"
+#    - "SiT"
+#    - "RDDM"
+#    - "ddim"
+#
+#  use_fake_methods_for_validation:
+#    # This is the hold-out set for testing generalization.
+#    # These methods will NOT be seen during training.
+#    - "facedancer"
+#    - "sadtalker"
+#    - "DiT"
+#    - "StyleGANXL"
+#    - "e4s"
+#    - "one_shot_free"
 
 # Define which sources/methods to include in the dataset.
 # To exclude a method, simply remove it from the list.

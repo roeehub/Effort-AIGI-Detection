@@ -9,7 +9,8 @@ import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
-MANIFEST_PATH = "frame_properties.parquet"
+# MANIFEST_PATH = "frame_properties.parquet"
+MANIFEST_PATH = "/Users/roeedar/Downloads/frame_properties.parquet"
 
 # --- Configuration ---
 REFERENCE_METHOD = "FaceForensics++"
@@ -39,7 +40,6 @@ def main():
 
     console.print(f"\nAnalyzing ID overlap against reference method: [bold magenta]'{REFERENCE_METHOD}'[/]\n")
 
-    # --- THIS NOW USES THE UNIFIED 'video_id' COLUMN ---
     all_methods_in_df = df['method'].unique()
     if REFERENCE_METHOD not in all_methods_in_df:
         console.print(f"[bold red]Error:[/] Reference method '{REFERENCE_METHOD}' not found in the manifest.")
@@ -110,8 +110,5 @@ def inspect_id_mapping(manifest_path: str):
 
 
 if __name__ == "__main__":
-    # --- STEP 1: Run this inspection first! ---
-    inspect_id_mapping(manifest_path=MANIFEST_PATH)
-
-    # --- STEP 2: Once inspection looks good, comment out the line above and uncomment the line below ---
+    # inspect_id_mapping(manifest_path=MANIFEST_PATH)
     main()

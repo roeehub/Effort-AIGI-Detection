@@ -7,6 +7,7 @@ dataset_json_folder: '/Youtu_Pangu_Security_Public/youtu-pangu-public/zhiyuanyan
 SWA: False
 
 
+
 gcs_assets:
   base_checkpoint:
     gcs_path: "gs://base-checkpoints/effort-aigi/effort_clip_L14_trainOn_FaceForensic.pth"
@@ -14,6 +15,12 @@ gcs_assets:
   clip_backbone:
     gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
     local_path: "./weights/models--openai--clip-vit-large-patch14/"
+  frame_manifest_json:
+    gcs_path: 'gs://df40-frames/manifests/frame_manifest_v1.json'
+    local_path: './frame_manifest.json'
+  property_manifest_parquet:
+    gcs_path: 'gs://df40-frames/manifests/frame_properties_v2.parquet'
+    local_path: './frame_properties.parquet'
 
 
 checkpointing:
