@@ -83,7 +83,7 @@ def create_surgical_augmentation_pipeline(
     transforms_list.append(A.HorizontalFlip(p=0.5))
     if config.get('use_geometric', False):
         transforms_list.append(A.ShiftScaleRotate(
-            shift_limit=0.0625, scale_limit=0.1, rotate_limit=7,
+            shift_limit=0.0625, scale_limit=0.12, rotate_limit=7,
             interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, p=0.7
         ))
 
@@ -135,7 +135,7 @@ def create_general_augmentation_pipeline(config: dict) -> A.Compose:
     ]
     if config.get('use_geometric', False):
         transforms_list.append(A.ShiftScaleRotate(
-            shift_limit=0.0625, scale_limit=0.1, rotate_limit=7,
+            shift_limit=0.0625, scale_limit=0.12, rotate_limit=7,
             interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, p=0.7
         ))
 
