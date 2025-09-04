@@ -41,22 +41,29 @@ logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] %(
 log = logging.getLogger(__name__)
 
 # ==============================================================================
-# --- METHOD & CATEGORY DEFINITIONS ---
+# --- METHOD & CATEGORY DEFINITIONS (CORRECTED) ---
 # ==============================================================================
 # These sets contain STANDARDIZED method names (lowercase_snake_case)
 # Used by get_method_category() to assign a 'BASE' category.
 # Any method not in these lists will have its own name as its category.
 
 BASE_FF_METHODS: Set[str] = {
-    'deepfakes', 'face2face', 'faceshifter', 'faceswap', 'neuraltextures'
+    'deepfakes', 'face2face', 'faceshifter', 'faceswap', 'neuraltextures',
+    'deepfakedetection',  # Correctly categorized here
 }
 BASE_DF40_EFS_METHODS: Set[str] = {
     "dit", "sit", "ddim", "rddm", "vqgan", "stylegan2", "stylegan3", "styleganxl",
 }
 BASE_DF40_REG_METHODS: Set[str] = {
+    # --- DF40 Fake Methods ---
     "simswap", "fsgan", "fomm", "facedancer", "inswap", "one_shot_free",
     "blendface", "lia", "mobileswap", "mcnet", "uniface", "mraa", "facevid2vid",
     "wav2lip", "sadtalker", "danet", "e4s", "pirender", "tpsm",
+    "hyperreenact",  # Correctly categorized here
+    # --- Real Source Videos (Grouped with DF40 for sampling) ---
+    "youtube_real",
+    "faceforensics++",
+    "celeb_real",
 }
 
 
@@ -106,7 +113,7 @@ def get_clip_id(method: str, original_video_id: str) -> int:
 
 
 # ==============================================================================
-# --- CORE PROCESSING LOGIC ---
+# --- CORE PROCESSING LOGIC (Unchanged) ---
 # ==============================================================================
 def calculate_sharpness(image_bytes: bytes) -> float:
     try:
@@ -121,21 +128,16 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
     """Processes a single GCS path to extract metadata and compute properties."""
     try:
         parts = Path(gcs_path).parts
-        # Expected structure: gs://BUCKET/label/method/video_id/frame.png
-        # So parts[-4] is label, parts[-3] is method, etc.
         if len(parts) < 5:
             log.warning(f"Skipping malformed path (too short): {gcs_path}")
             return None
 
-        # --- Path Parsing & Standardization ---
         label, method_raw, video_id_raw = parts[-4], parts[-3], parts[-2]
         method = standardize_method_name(method_raw)
 
-        # --- ID Generation ---
         unified_id = get_video_identity(label, method, video_id_raw)
         clip_id = get_clip_id(method, video_id_raw)
 
-        # --- Property Calculation ---
         info = fs.info(gcs_path)
         file_size_kb = info.get("size", 0) / 1024.0
 
@@ -161,15 +163,13 @@ def process_path(gcs_path: str, fs: fsspec.AbstractFileSystem) -> Optional[Dict]
 
 
 # ==============================================================================
-# --- NEW: PATH AGGREGATION & CACHING ---
+# --- PATH AGGREGATION & CACHING (Unchanged) ---
 # ==============================================================================
-
 def _scan_bucket(bucket_name: str, fs: fsspec.AbstractFileSystem) -> List[str]:
     """Scans a single GCS bucket for image files."""
     full_bucket_path = f"gs://{bucket_name}"
     log.info(f"Scanning bucket: {full_bucket_path}...")
     try:
-        # Use fs.find for recursive search, more efficient than glob for deep trees
         paths_dict = fs.find(full_bucket_path, detail=False)
         image_paths = [
             f"gs://{p}" for p in paths_dict
@@ -229,7 +229,7 @@ def aggregate_paths_from_buckets(
 
 
 # ==============================================================================
-# --- MAIN EXECUTION ---
+# --- MAIN EXECUTION (Unchanged) ---
 # ==============================================================================
 def main():
     parser = argparse.ArgumentParser(
@@ -250,7 +250,6 @@ def main():
                         help="Ignore the path cache and force a full rescan of all GCS buckets.")
     args = parser.parse_args()
 
-    # --- Phase 1: Aggregate all frame paths from GCS (with caching) ---
     all_paths = aggregate_paths_from_buckets(
         bucket_names=args.buckets,
         cache_path=Path(args.path_cache),
@@ -265,7 +264,6 @@ def main():
         log.warning(f"Processing limited to the first {args.limit:,} paths.")
         all_paths = all_paths[:args.limit]
 
-    # --- Phase 2: Process all paths in parallel to get properties ---
     fs = fsspec.filesystem("gcs")
     log.info(f"Starting property calculation for {len(all_paths):,} frames with {args.workers} workers...")
     results_list, error_count = [], 0
@@ -286,19 +284,16 @@ def main():
         log.warning("No valid data was processed. Output file will not be created.")
         sys.exit(1)
 
-    # --- Phase 3: Create DataFrame and add the method_category column ---
     log.info(f"Aggregating {len(results_list):,} results into a DataFrame...")
     df = pd.DataFrame(results_list)
 
     log.info("Adding 'method_category' column...")
     df['method_category'] = df['method'].apply(get_method_category)
 
-    # --- Phase 4: Save the final, enriched manifest ---
     output_path = Path(args.output_manifest)
     log.info(f"Writing final DataFrame to Parquet file: '{output_path}'")
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        # Reorder columns for better readability
         cols = [
             'path', 'label', 'method', 'method_category', 'video_id', 'clip_id',
             'original_video_id', 'sharpness', 'file_size_kb'
