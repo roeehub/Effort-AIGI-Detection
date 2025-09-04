@@ -27,7 +27,7 @@ GLOBAL_BUCKET_NAME = "effort-collected-data"
 GCS_SOURCE_BUCKET = "veo3-creations"  # Default, can be overridden
 
 # --- Processing Parameters ---
-NUM_CORES = 2
+NUM_CORES = 4
 FRAMES_TO_SAMPLE = 35
 FRAMES_TO_KEEP = 32
 FAILURE_TOLERANCE = FRAMES_TO_SAMPLE - FRAMES_TO_KEEP
