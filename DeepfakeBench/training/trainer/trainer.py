@@ -396,6 +396,7 @@ class Trainer(object):
                 steps_per_sec = (current_iter_in_epoch + 1) / time_elapsed if time_elapsed > 0 else 0
 
                 log_dict['train/steps_per_sec'] = steps_per_sec
+                log_dict['train/probabilities'] = wandb.Histogram(predictions['prob'].detach().cpu().numpy())
 
                 progress_pct = 0.0
                 if epoch_len > 0:
@@ -521,6 +522,9 @@ class Trainer(object):
                 wandb_log_dict[f'val/overall/{name}'] = value
                 self.logger.info(f"Overall val {name}: {value:.4f}")
 
+        # Log the probability distribution histogram
+        wandb_log_dict['val/probabilities'] = wandb.Histogram(np.array(all_preds))
+
         # Metrics Per Method
         method_metrics = {}
         for method in method_preds.keys():
@@ -555,15 +559,30 @@ class Trainer(object):
                 f"Metric '{self.metric_scoring}' not found. Skipping checkpointing and early stopping check.")
         else:
             is_improvement = current_metric > self.best_val_metric + self.early_stopping_min_delta
-
             if is_improvement:
                 self.logger.info(
                     f"🚀 Performance improved! New best {self.metric_scoring}: {current_metric:.4f} (previously {self.best_val_metric:.4f})")
+
+                # 1. Update the best metric and epoch immediately. This is now the source of truth.
+                self.best_val_metric = current_metric
+                self.best_val_epoch = epoch + 1
                 self.epochs_without_improvement = 0  # Reset counter
 
-                # --- The entire checkpoint saving and best metric update logic now runs only on improvement ---
+                # 2. Update W&B summary to reflect the new best state
+                if self.wandb_run:
+                    self.wandb_run.summary['best/epoch'] = self.best_val_epoch
+                    self.wandb_run.summary['best/metric'] = self.best_val_metric
+                    best_metrics_dict = overall_metrics
+                    best_auc = best_metrics_dict.get('auc', 0)
+                    best_eer = best_metrics_dict.get('eer', 0)
+                    best_acc = best_metrics_dict.get('acc', 0)
+                    self.wandb_run.summary['best/auc'] = best_auc
+                    self.wandb_run.summary['best/eer'] = best_eer
+                    self.wandb_run.summary['best/acc'] = best_acc
+
+                # 3. Handle checkpointing now that the state is updated
                 if self.config.get('save_ckpt', True):
-                    # 1. Handle the "First Best" checkpoint (one-time save)
+                    # Handle the "First Best" checkpoint (one-time save)
                     if self.first_best_gcs_path is None:
                         self.logger.info(
                             f"🎉 Saving FIRST best model! Metric ({self.metric_scoring}): {current_metric:.4f}")
@@ -575,7 +594,7 @@ class Trainer(object):
                                 self.wandb_run.summary['first_best_ckpt_gcs'] = new_gcs_path
                                 self.wandb_run.summary['first_best_metric'] = current_metric
 
-                    # 2. Manage the Top-N checkpoint list
+                    # Manage the Top-N checkpoint list
                     is_top_n = len(self.top_n_checkpoints) < self.top_n_size or current_metric > \
                                self.top_n_checkpoints[-1]['metric']
                     if is_top_n:
@@ -592,31 +611,21 @@ class Trainer(object):
                                 'all_metrics': overall_metrics
                             })
                             self.top_n_checkpoints.sort(key=lambda x: x['metric'], reverse=True)
+
+                            # Update the 'overall_best_ckpt' summary field after sorting
+                            if self.wandb_run:
+                                self.wandb_run.summary['overall_best_ckpt_gcs'] = self.top_n_checkpoints[0]['gcs_path']
+
                             if len(self.top_n_checkpoints) > self.top_n_size:
                                 worst_ckpt = self.top_n_checkpoints.pop()
                                 self.logger.info(
                                     f"Pruning checkpoint from epoch {worst_ckpt['epoch']} as it's no longer in top {self.top_n_size}.")
                                 self._delete_from_gcs(worst_ckpt['gcs_path'])
 
-                # 3. Update overall best metric and W&B summary
-                if self.top_n_checkpoints and self.top_n_checkpoints[0]['metric'] > self.best_val_metric:
-                    overall_best = self.top_n_checkpoints[0]
-                    self.best_val_metric = overall_best['metric']
-                    self.best_val_epoch = overall_best['epoch']
-
-                    if self.wandb_run:
-                        self.wandb_run.summary['overall_best_ckpt_gcs'] = overall_best['gcs_path']
-                        self.wandb_run.summary['best/epoch'] = self.best_val_epoch
-                        self.wandb_run.summary['best/metric'] = self.best_val_metric
-                        best_metrics_dict = overall_best['all_metrics']
-                        best_auc = best_metrics_dict.get('auc', 0)
-                        best_eer = best_metrics_dict.get('eer', 0)
-                        best_acc = best_metrics_dict.get('acc', 0)
-                        self.wandb_run.summary['best/auc'] = best_auc
-                        self.wandb_run.summary['best/eer'] = best_eer
-                        self.wandb_run.summary['best/acc'] = best_acc
-                        self.wandb_run.summary[
-                            'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={best_auc:.4f} EER={best_eer:.4f} ACC={best_acc:.4f} ckpt=GCS"
+                # Update final summary line after all potential GCS path updates
+                if self.wandb_run:
+                    self.wandb_run.summary[
+                        'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={self.wandb_run.summary['best/auc']:.4f} EER={self.wandb_run.summary['best/eer']:.4f} ACC={self.wandb_run.summary['best/acc']:.4f} ckpt=GCS"
 
             else:  # No improvement
                 if self.early_stopping_enabled:
@@ -722,11 +731,23 @@ class Trainer(object):
         # Metrics Per Method
         method_metrics = {}
         for method in method_preds.keys():
-            method_metrics[method] = get_test_metrics(np.array(method_preds[method]),
-                                                      np.array(method_labels[method]))
+            # Check if there are any labels for this method to avoid errors
+            if not method_labels[method]:
+                continue
+
+            labels_for_method = np.array(method_labels[method])
+            preds_for_method = np.array(method_preds[method])
+
+            # All labels for a given method group (e.g., 'tiktok' from real videos) should be the same.
+            # We use the first label to determine if it's a real (0) or fake (1) group.
+            label_type = '_real' if labels_for_method[0] == 0 else '_fake'
+            method_key = f"{method}{label_type}"
+
+            method_metrics[method] = get_test_metrics(preds_for_method, labels_for_method)
+
             for name, value in method_metrics[method].items():
                 if name in ['acc', 'auc', 'eer']:
-                    wandb_log_dict[f'ood/method/{method}/{name}'] = value
+                    wandb_log_dict[f'ood/method/{method_key}/{name}'] = value
 
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
         del all_preds, all_labels, method_labels, method_preds, overall_metrics
