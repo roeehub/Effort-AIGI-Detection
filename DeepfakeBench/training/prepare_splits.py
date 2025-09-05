@@ -19,6 +19,7 @@ from fsspec.core import url_to_fs  # pip install gcsfs  # noqa
 from sklearn.model_selection import GroupShuffleSplit  # pip install scikit-learn  # noqa
 import pandas as pd  # pip install pandas pyarrow  # noqa
 import numpy as np  # noqa
+from sklearn.model_selection import train_test_split  # noqa
 
 log = logging.getLogger(__name__)
 
@@ -194,16 +195,25 @@ def _balance_df_by_label(
     return balanced_df.sample(frac=1, random_state=seed).reset_index(drop=True)
 
 
-def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List[VideoInfo], List[VideoInfo], dict]:
+def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
     """
-    Prepares video splits with a strict separation between training and validation methods.
-    This version has been audited to ensure all statistics are correctly calculated and
-    assigned in all execution paths, without relying on default values.
+    [MODIFIED]
+    Prepares video splits. This function now adheres to a new return signature to support
+    dual-validation, returning (train_data, val_in_dist, val_holdout, stats).
+
+    - If 'property_balancing' is enabled, it delegates to `prepare_splits_property_based`,
+      which implements the full dual-validation logic.
+    - Otherwise, it runs the legacy splitting logic and returns its single validation set
+      as `val_holdout`, with an empty list for `val_in_dist`, ensuring compatibility.
     """
 
     if data_cfg.get('property_balancing', {}).get('enabled', False):
-        # The new execution path
-        return prepare_splits_property_based(data_cfg)  # type: ignore
+        # This function is expected to return the 4-tuple: (train_data, val_in_dist, val_holdout, stats)
+        # This call assumes that change has been made in prepare_splits_property_based.py
+        return prepare_splits_property_based(data_cfg)
+
+    # --- LEGACY EXECUTION PATH (for non-property-balancing strategies) ---
+    # The following logic remains unchanged, except for the final return statement.
 
     cfg = data_cfg
     BUCKET = f"gs://{cfg['gcp']['bucket_name']}"
@@ -226,7 +236,7 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List[VideoInfo], List[Video
         frame_paths = json.loads(manifest_path.read_text())
         log.info(f"[manifest] Loaded {len(frame_paths):,} frame paths from cache")
     else:
-        log.info("[manifest] Caching not found. Listing frame objects on GCS...")
+        log.info("[manifest] Cache not found. Listing frame objects on GCS...")
         fs = url_to_fs(BUCKET)[0]
         frame_paths = [f"gs://{p}" for p in fs.glob(f"{BUCKET}/**")
                        if Path(p).suffix.lower() in {'.png', '.jpg', '.jpeg'}]
@@ -302,160 +312,116 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List[VideoInfo], List[Video
 
     random.shuffle(train_videos)
     random.shuffle(val_videos)
-    return train_videos, val_videos, stats
+
+    # --- 7. MODIFIED RETURN STATEMENT FOR COMPATIBILITY ---
+    # The legacy path returns its single validation set as the "holdout" set
+    # and an empty list for the "in-distribution" set. This makes it compatible
+    # with the new 4-tuple return signature expected by the main training script.
+    val_in_dist_videos = []
+    val_holdout_videos = val_videos
+
+    return train_videos, val_in_dist_videos, val_holdout_videos, stats
 
 
-def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[VideoInfo], dict]:
+def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[VideoInfo], List[VideoInfo], Dict]:
     """
-    Prepares train/val splits using a method-based hold-out strategy combined
-    with property-aware data handling.
-    - The training set is a list of frame dicts, intended for a property-balancing loader.
-    - The validation set is a list of VideoInfo objects, label-balanced by video.
+    [REVISED & FIXED]
+    Prepares data splits using frame properties and a strict identity-based split.
     """
-    log.info("--- Running property-based split with method hold-out strategy ---")
     cfg = data_cfg
     SEED = cfg['data_params']['seed']
-    MANIFEST_PATH = Path(__file__).with_name("frame_properties.parquet")
+    # FIX: Use the correct variable from the config
+    VAL_SPLIT_RATIO = cfg['data_params'].get('val_split_ratio', 0.1)
+    PROPERTIES_FILE = cfg['property_balancing']['frame_properties_parquet_path']
 
-    if not MANIFEST_PATH.exists():
-        raise FileNotFoundError(
-            f"Property manifest not found at {MANIFEST_PATH}. Please run `create_property_manifest.py` first.")
-
-    log.info(f"Loading property manifest from {MANIFEST_PATH}...")
-    df = pd.read_parquet(MANIFEST_PATH)
-    log.info(f"Loaded {len(df):,} frames from {df['video_id'].nunique():,} videos.")
-    df['label_id'] = np.where(df['label'] == 'real', 0, 1)
-
-    log.info("Dynamically creating property buckets from the 'sharpness' and 'file_size_kb' columns...")
-    try:
-        # Create sharpness and size buckets as per the verified script
-        df['sharpness_bucket'] = pd.qcut(df['sharpness'], 4,
-                                         labels=[f's_q{i}' for i in range(1, 5)], duplicates='drop')
-        df['size_bucket'] = pd.qcut(df['file_size_kb'], 4,
-                                    labels=[f'f_q{i}' for i in range(1, 5)], duplicates='drop')
-        df['property_bucket'] = df['sharpness_bucket'].astype(str) + '_' + df['size_bucket'].astype(str)
-        log.info(f"Successfully created {df['property_bucket'].nunique()} on-the-fly property buckets.")
-    except Exception as e:
-        log.error(f"Failed to create property buckets on-the-fly. Error: {e}")
-        raise
-
-    stats = {
-        'total_frames_in_manifest': len(df),
-        'discovered_videos': df['video_id'].nunique(),
-        'discovered_methods': df['method'].nunique()
-    }
+    log.info(f"--- Preparing splits with Property-Based Strategy (Seed: {SEED}) ---")
+    log.info(f"Loading frame properties from: {PROPERTIES_FILE}")
 
     # --- 1. Define method sets from config ---
-    log.info("[split] Defining method sets for hold-out strategy...")
     real_methods = set(cfg['methods']['use_real_sources'])
     train_fake_methods = set(cfg['methods']['use_fake_methods_for_training'])
     val_fake_methods = set(cfg['methods']['use_fake_methods_for_validation'])
+    all_allowed_methods = real_methods | train_fake_methods | val_fake_methods
+    stats = {}
 
-    # --- 2. THE MASTER ID SPLIT (STRATIFIED AND BALANCED) ---
-    # Create disjoint identity sets, ensuring the validation pool is balanced by label.
-    log.info("[split] Performing stratified & balanced master split on identities by label...")
+    # --- 2. Load and filter data ---
+    df = pd.read_parquet(PROPERTIES_FILE)
+    stats['total_frames_in_parquet'] = len(df)
+    log.info(f"Loaded {len(df):,} frame records from Parquet file.")
 
-    # Get unique video_id and their corresponding label
-    video_labels = df[['video_id', 'label']].drop_duplicates()
-    real_videos = video_labels[video_labels['label'] == 'real']
-    fake_videos = video_labels[video_labels['label'] == 'fake']
+    df_filtered = df[df['method'].isin(all_allowed_methods) & ~df['method'].isin(EXCLUDE_METHODS)].copy()
+    stats['total_frames_after_filtering'] = len(df_filtered)
+    log.info(f"Filtered to {len(df_filtered):,} frames from allowed methods.")
 
-    log.info(f"  - Found {len(real_videos)} unique real videos and {len(fake_videos)} unique fake videos.")
+    # --- 3. Perform strict identity-based split ON THE DATAFRAME ---
+    log.info(f"Performing identity-based split with validation ratio: {VAL_SPLIT_RATIO}")
+    unique_ids = df_filtered['target_id'].unique()
 
-    # Determine the number of validation videos PER CLASS based on the val_split_ratio of the smaller class
-    val_ratio = cfg['data_params'].get('val_split_ratio', 0.1)
-    val_size_per_class = int(min(len(real_videos), len(fake_videos)) * val_ratio)
+    # Check for NaN or None in unique_ids which can cause errors
+    unique_ids = [uid for uid in unique_ids if pd.notna(uid)]
 
-    log.info(f"  - Target validation size: {val_size_per_class} real and {val_size_per_class} fake videos.")
+    train_ids, val_ids = train_test_split(unique_ids, test_size=VAL_SPLIT_RATIO, random_state=SEED)
+    train_ids, val_ids = set(train_ids), set(val_ids)
 
-    # We must handle the case where val_size_per_class is 0
-    if val_size_per_class == 0:
-        raise ValueError(
-            f"Validation size per class is 0. This can happen if 'val_split_ratio' ({val_ratio}) "
-            f"is too small for the number of videos in the smallest class ({min(len(real_videos), len(fake_videos))})."
-        )
+    train_df = df_filtered[df_filtered['target_id'].isin(train_ids)]
+    val_df = df_filtered[df_filtered['target_id'].isin(val_ids)]
 
-    # Sample 'val_size_per_class' videos from the real set for validation
-    val_real_ids = set(real_videos.sample(n=val_size_per_class, random_state=SEED)['video_id'])
-    train_real_ids = set(real_videos[~real_videos['video_id'].isin(val_real_ids)]['video_id'])
+    stats['unbalanced_train_frame_count'] = len(train_df)
+    stats['unbalanced_val_frame_count'] = len(val_df)
+    log.info(f"Split pools by identity ▶ Train: {len(train_df):,} frames | Val: {len(val_df):,} frames")
 
-    # Sample 'val_size_per_class' videos from the fake set for validation
-    val_fake_ids = set(fake_videos.sample(n=val_size_per_class, random_state=SEED)['video_id'])
-    train_fake_ids = set(fake_videos[~fake_videos['video_id'].isin(val_fake_ids)]['video_id'])
+    # --- 4. Balance the training set (DataFrame) and convert to dicts ---
+    log.info("--- Balancing Training Set ---")
+    train_df_balanced = _balance_df_by_label(train_df, real_methods, SEED)
+    final_train_data = train_df_balanced.to_dict('records')  # The format needed by the loader
+    stats['train_frame_count'] = len(final_train_data)
+    stats['train_video_count'] = len(train_df_balanced['video_id'].unique())
 
-    # Combine the final ID sets
-    train_ids = train_real_ids.union(train_fake_ids)
-    val_ids = val_real_ids.union(val_fake_ids)
+    # --- 5. Assemble val pool into VideoInfo objects and subdivide ---
+    log.info("Assembling validation videos and subdividing...")
+    val_pool: List[VideoInfo] = []
+    for (label, method, video_id), group in val_df.groupby(['label', 'method', 'video_id']):
+        frame_paths = group['path'].tolist()
+        target_id = group['target_id'].iloc[0]
+        video = VideoInfo(label, method, video_id, frame_paths, target_id)
+        val_pool.append(video)
 
-    log.info(f"  - Identities split into: {len(train_ids):,} training, {len(val_ids):,} validation.")
-    log.info(f"  - Validation pool composition: {len(val_real_ids)} real videos, {len(val_fake_ids)} fake videos.")
+    val_in_dist_pool, val_holdout_pool = [], []
+    for video in val_pool:
+        is_real = video.method in real_methods
+        is_train_fake = video.method in train_fake_methods
+        is_val_fake = video.method in val_fake_methods
 
-    # --- 3. Assign all videos to train/val pools based on their identity ---
-    log.info("[split] Assigning all video frames to pools based on their identity...")
-    initial_train_df = df[df['video_id'].isin(train_ids)]
-    initial_val_df = df[df['video_id'].isin(val_ids)]
+        if is_real:
+            val_in_dist_pool.append(video)
+            val_holdout_pool.append(video)
+        elif is_train_fake:
+            val_in_dist_pool.append(video)
+        elif is_val_fake:
+            val_holdout_pool.append(video)
+
+    # --- 6. Balance both validation sets independently ---
+    log.info("--- Balancing In-Distribution Validation Set ---")
+    val_in_dist_videos = _balance_video_list(val_in_dist_pool, list(real_methods))
+
+    log.info("--- Balancing Holdout Validation Set ---")
+    val_holdout_videos = _balance_video_list(val_holdout_pool, list(real_methods))
+
+    stats['val_in_dist_video_count'] = len(val_in_dist_videos)
+    stats['val_holdout_video_count'] = len(val_holdout_videos)
+
     log.info(
-        f"  - Initial pools created -> Train: {len(initial_train_df):,} frames | Val: {len(initial_val_df):,} frames.")
-
-    # --- 4. Apply the method hold-out constraint to the identity-safe pools ---
-    # Now, filter each pool to only contain its allowed methods.
-    # This discards videos that don't fit the hold-out criteria (e.g., a val-person with a train-method).
-    log.info("[split] Applying method hold-out constraints to finalize unbalanced pools...")
-
-    allowed_train_methods = real_methods | train_fake_methods
-    train_df_unbalanced = initial_train_df[initial_train_df['method'].isin(allowed_train_methods)]
-
-    allowed_val_methods = real_methods | val_fake_methods
-    val_df_unbalanced = initial_val_df[initial_val_df['method'].isin(allowed_val_methods)]
-
-    log.info(
-        f"  - Post-filtering -> Train: {len(train_df_unbalanced):,} frames ({initial_train_df.shape[0] - train_df_unbalanced.shape[0]:,} removed).")
-    log.info(
-        f"  - Post-filtering -> Val: {len(val_df_unbalanced):,} frames ({initial_val_df.shape[0] - val_df_unbalanced.shape[0]:,} removed).")
-
-    stats['unbalanced_train_count'] = len(train_df_unbalanced)  # Use frame count
-    stats['unbalanced_val_count'] = val_df_unbalanced['video_id'].nunique()  # Use video count
-    log.info(
-        f"Assembled unbalanced sets -> Train Pool: {stats['unbalanced_train_count']:,} frames | Val Pool: {stats['unbalanced_val_count']:,} videos")
-
-    # --- 5. Balance ONLY the validation set ---
-    log.info("[balance] Balancing validation set by label (50/50 real vs fake videos)...")
-    val_df_balanced = _balance_df_by_label(val_df_unbalanced, real_methods, SEED)
-
-    # --- 6. Finalize and report ---
-    # *** KEY CHANGE: Use the UNBALANCED dataframe for the training set. ***
-    # The dataloader is now responsible for all training-time balancing.
-    train_frames = train_df_unbalanced.to_dict('records')
-    log.info(
-        "[INFO] Training set is intentionally left unbalanced. The property-balancing dataloader will handle sampling."
+        f"Final splits ▶ "
+        f"Train: {stats['train_video_count']:,} videos ({stats['train_frame_count']:,} frames) | "
+        f"Val In-Dist: {len(val_in_dist_videos):,} videos | "
+        f"Val Holdout: {len(val_holdout_videos):,} videos"
     )
 
-    # Convert the balanced validation DataFrame back to VideoInfo objects
-    val_videos_map = defaultdict(list)
-    for row in val_df_balanced.itertuples():
-        val_videos_map[(row.label, row.method, row.video_id)].append(row.path)
+    random.shuffle(final_train_data)
+    random.shuffle(val_in_dist_videos)
+    random.shuffle(val_holdout_videos)
 
-    val_videos = []
-    for (label, method, vid), frame_paths in val_videos_map.items():
-        frame_paths.sort()
-        tid = extract_target_id(label, method, str(vid))
-        if tid is None: tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
-        val_videos.append(VideoInfo(label, method, vid, frame_paths, tid))
-
-    # --- 6. Finalize and report detailed stats ---
-    stats['train_frame_count'] = len(train_frames)
-    stats['train_video_count'] = train_df_unbalanced['video_id'].nunique()
-
-    # The validation set is a list of VideoInfo objects from the BALANCED pool
-    stats['val_video_count'] = len(val_videos)
-    stats['val_frame_count'] = val_df_balanced.shape[0]  # Get frame count from the balanced df
-
-    log.info(
-        f"Final training pool size: {stats['train_video_count']:,} videos ({stats['train_frame_count']:,} frames).")
-    log.info(
-        f"Final validation set size: {stats['val_video_count']:,} videos ({stats['val_frame_count']:,} frames) (label-balanced).")
-
-    return train_frames, val_videos, stats
+    return final_train_data, val_in_dist_videos, val_holdout_videos, stats
 
 
 def prepare_ood_videos(data_cfg: dict) -> List[VideoInfo]:

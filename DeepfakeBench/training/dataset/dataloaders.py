@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 
@@ -689,40 +690,54 @@ def _create_random_frame_loader(train_videos: list[VideoInfo], config: dict, dat
 def _create_property_balanced_loader(all_train_frames: list[dict], config: dict, data_config: dict):
     """
     Creates the property-balanced dataloader using the Anchor-Mate strategy.
-    This implementation is based on the verified pipeline.
+    This implementation performs hierarchical sampling based on weights defined in the config.
+    It first samples by 'method_category' and then balances by 'property_bucket' within that category.
     """
     dl_params = data_config['dataloader_params']
     BATCH_SIZE = dl_params['frames_per_batch']
     NUM_WORKERS = dl_params['num_workers']
-    MIN_BUCKET_SIZE = BATCH_SIZE  # A sensible minimum to avoid tiny cycled iterators
+    # A sensible minimum to avoid creating tiny, inefficient cycled iterators for small buckets
+    MIN_BUCKET_SIZE = BATCH_SIZE
 
-    # === NEW: Get category weights from config ===
-    # These dictionaries will define the sampling probability for each category.
+    # --- 1. Get category weights from config ---
+    # These dictionaries define the sampling probability for each high-level category.
+    # The keys MUST match the 'method_category' strings in your Parquet manifest.
     real_category_weights = dl_params.get('real_category_weights', {})
     fake_category_weights = dl_params.get('fake_category_weights', {})
+
+    if not math.isclose(sum(real_category_weights.values()), 1.0):
+        raise ValueError(f"Real category weights do not sum to 1.0! Got: {sum(real_category_weights.values())}")
+    if not math.isclose(sum(fake_category_weights.values()), 1.0):
+        raise ValueError(f"Fake category weights do not sum to 1.0! Got: {sum(fake_category_weights.values())}")
+
+    if not real_category_weights or not fake_category_weights:
+        raise ValueError("`real_category_weights` and `fake_category_weights` must be defined "
+                         "in the dataloader config for property balancing strategy.")
+
     print(f"Using REAL category weights: {real_category_weights}")
     print(f"Using FAKE category weights: {fake_category_weights}")
 
-    # 1. Build the lookup table for finding mates efficiently (Unchanged)
+    # --- 2. Build the lookup table for finding mates efficiently ---
     clip_lookup = _build_clip_to_frames_lookup(all_train_frames)
     print(f"Built clip_id lookup table with {len(clip_lookup)} unique clips.")
 
-    # === MODIFIED: Segregate frames by category FIRST ===
-    # Instead of just real/fake, we now group into categories defined in the manifest.
+    # --- 3. Segregate all frames by method category ---
     real_frames_by_category = defaultdict(list)
     fake_frames_by_category = defaultdict(list)
     for frame_info in all_train_frames:
-        category = frame_info['method_category']
+        # These columns must exist in your Parquet file
+        category = frame_info.get('method_category')
+        if category is None:
+            continue  # Skip frames that don't have a category
+
         if frame_info['label_id'] == 0:
-            # Only include categories that have a defined weight
             if category in real_category_weights:
                 real_frames_by_category[category].append(frame_info)
         else:
-            # Only include categories that have a defined weight
             if category in fake_category_weights:
                 fake_frames_by_category[category].append(frame_info)
 
-    # === NEW: Create the hierarchical master stream for REAL data ===
+    # --- 4. Create the hierarchical master stream for REAL data ---
     real_category_streams = []
     real_weights = []
     for category, weight in real_category_weights.items():
@@ -745,12 +760,13 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
             real_weights.append(weight)
 
     if not real_category_streams:
-        raise ValueError("Cannot create dataloader: no valid REAL data streams were created.")
+        raise ValueError(
+            "Cannot create dataloader: no valid REAL data streams were created. Check config and Parquet file.")
 
     # C. Create the master REAL stream by sampling from category streams
     master_real_stream = CustomSampleMultiplexerDataPipe(real_category_streams, real_weights)
 
-    # === NEW: Create the hierarchical master stream for FAKE data (Symmetrical Logic) ===
+    # --- 5. Create the hierarchical master stream for FAKE data (Symmetrical Logic) ---
     fake_category_streams = []
     fake_weights = []
     for category, weight in fake_category_weights.items():
@@ -771,30 +787,25 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
             fake_weights.append(weight)
 
     if not fake_category_streams:
-        raise ValueError("Cannot create dataloader: no valid FAKE data streams were created.")
+        raise ValueError(
+            "Cannot create dataloader: no valid FAKE data streams were created. Check config and Parquet file.")
 
     master_fake_stream = CustomSampleMultiplexerDataPipe(fake_category_streams, fake_weights)
 
-    # === MODIFIED: The final multiplexer now uses the new master streams ===
-    # The core 50/50 real/fake balance is preserved, but the streams themselves are now hierarchical.
+    # --- 6. The final multiplexer uses the new master streams with a 50/50 real/fake balance ---
     anchor_pipe = CustomSampleMultiplexerDataPipe([master_real_stream, master_fake_stream], [0.5, 0.5])
 
-    # === DOWNSTREAM LOGIC: REMAINS COMPLETELY UNCHANGED ===
-    # The rest of the pipeline is agnostic to how the anchor_pipe was constructed.
-
-    # 6. Add sharding (for DDP) and shuffling
+    # --- 7. Downstream logic remains the same (sharding, finding mates, parallel loading) ---
     if NUM_WORKERS > 0:
         anchor_pipe = anchor_pipe.sharding_filter()
     anchor_pipe = anchor_pipe.shuffle(buffer_size=10000)
 
-    # 7. Use the MateFinderDataPipe to double the stream with paired frames
-    # This pipe takes one anchor and yields (anchor, mate)
+    # This pipe takes one anchor frame and yields (anchor, mate)
     combined_pipe = MateFinderDataPipe(anchor_pipe, clip_lookup)
 
-    # 8. Batch the frame dictionaries FOR I/O EFFICIENCY, then use the parallel loader
-    # The flatmap will yield individual processed frames.
-    # We create a larger IO batch to send to each worker for efficiency.
-    io_batch_size = BATCH_SIZE * 4  # A good default, e.g., 256
+    # Batch frame dictionaries for I/O efficiency, then use the parallel loader
+    # A larger IO batch is sent to each worker for better cloud storage throughput.
+    io_batch_size = BATCH_SIZE * 4
     combined_pipe = combined_pipe.batch(io_batch_size).flatmap(
         partial(load_and_process_property_batch, config=config, mode='train')
     )
@@ -832,35 +843,104 @@ def create_ood_loader(ood_videos: list[VideoInfo], config: dict, data_config: di
     return ood_loader
 
 
-def create_dataloaders(train_data: List, val_videos: List[VideoInfo], config: dict,
-                       data_config: dict):
+def _create_validation_loader(
+        val_videos: List[VideoInfo],
+        config: dict,
+        data_config: dict
+) -> LazyDataLoaderManager:
     """
-    Factory function to create dataloaders based on the specified strategy.
+    [NEW HELPER FUNCTION]
+    Creates a validation dataloader manager from a list of VideoInfo objects.
+
+    This function encapsulates the logic for creating a per-method validation loader,
+    making it reusable for both in-distribution and holdout validation sets.
+
+    Args:
+        val_videos: A list of VideoInfo objects for this validation set.
+        config: The main model/training configuration dictionary.
+        data_config: The data-specific configuration dictionary.
+
+    Returns:
+        A configured LazyDataLoaderManager instance.
+    """
+    if not val_videos:
+        print("WARNING: Received an empty list of videos. The corresponding validation loader will be empty.")
+
+    val_videos_by_method = defaultdict(list)
+    for v in val_videos:
+        val_videos_by_method[v.method].append(v)
+
+    val_loader_manager = LazyDataLoaderManager(
+        videos_by_method=val_videos_by_method,
+        config=config,
+        data_config=data_config,
+        batch_size=config['test_batchSize'],
+        mode='test',
+        max_loaders=MAX_LOADERS_IN_MEMORY
+    )
+    return val_loader_manager
+
+
+def create_dataloaders(
+        train_data: List,
+        val_in_dist_videos: List[VideoInfo],
+        val_holdout_videos: List[VideoInfo],
+        config: dict,
+        data_config: dict
+):
+    """
+    [MODIFIED FACTORY FUNCTION]
+    Factory function to create all dataloaders based on the specified strategy.
+
+    This function is upgraded to support a dual-validation setup by creating three
+    distinct dataloaders:
+    1. train_loader: For training, configured by the chosen strategy.
+    2. val_in_dist_loader: For validating on unseen videos from training methods.
+    3. val_holdout_loader: For validating on unseen videos from held-out methods.
+
+    Args:
+        train_data: The data for the training set (format depends on strategy).
+        val_in_dist_videos: List of VideoInfo objects for in-distribution validation.
+        val_holdout_videos: List of VideoInfo objects for holdout validation.
+        config: The main model/training configuration dictionary.
+        data_config: The data-specific configuration dictionary.
+
+    Returns:
+        A tuple of three dataloaders: (train_loader, val_in_dist_loader, val_holdout_loader).
     """
     strategy = data_config.get('dataloader_params', {}).get('strategy', 'per_method')
     print(f"--- Creating dataloaders with strategy: '{strategy}' ---")
 
+    # --- 1. Create the Training Loader (Logic is largely unchanged) ---
     if strategy == 'per_method':
-        # The per_method helper returns both train and val loaders
-        train_loader, val_loader = _create_per_method_loaders(train_data, val_videos, config, data_config)
-        return train_loader, val_loader
+        # This logic was previously in `_create_per_method_loaders`.
+        # We bring it here for clarity and consistency.
+        train_videos_by_method = defaultdict(list)
+        for v in train_data:
+            train_videos_by_method[v.method].append(v)
+
+        train_batch_size = data_config['dataloader_params']['batch_size'] // 2
+        if train_batch_size == 0: train_batch_size = 1
+
+        train_loader = LazyDataLoaderManager(
+            videos_by_method=train_videos_by_method, config=config,
+            data_config=data_config, batch_size=train_batch_size, mode='train',
+            max_loaders=MAX_LOADERS_IN_MEMORY
+        )
     elif strategy == 'video_level':
         train_loader = _create_random_video_loader(train_data, config, data_config)
     elif strategy == 'frame_level':
         train_loader = _create_random_frame_loader(train_data, config, data_config)
     elif strategy == 'property_balancing':
-        # This new strategy expects a list of frame dictionaries as `train_data`
         train_loader = _create_property_balanced_loader(train_data, config, data_config)
     else:
         raise ValueError(f"Unknown dataloader strategy: '{strategy}'")
 
-    # Create the Validation Loader (always per-method for consistent evaluation)
-    val_videos_by_method = defaultdict(list)
-    for v in val_videos:
-        val_videos_by_method[v.method].append(v)
+    # --- 2. Create the TWO Validation Loaders using the new helper ---
+    print("\n--- Creating In-Distribution Validation Loader ---")
+    val_in_dist_loader = _create_validation_loader(val_in_dist_videos, config, data_config)
 
-    val_loader = LazyDataLoaderManager(
-        videos_by_method=val_videos_by_method, config=config, data_config=data_config,
-        batch_size=config['test_batchSize'], mode='test', max_loaders=MAX_LOADERS_IN_MEMORY
-    )
-    return train_loader, val_loader
+    print("\n--- Creating Holdout Validation Loader ---")
+    val_holdout_loader = _create_validation_loader(val_holdout_videos, config, data_config)
+
+    return train_loader, val_in_dist_loader, val_holdout_loader

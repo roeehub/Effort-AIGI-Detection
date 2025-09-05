@@ -275,12 +275,13 @@ def main():
         'patience': wandb.config.get('early_stopping_patience', 3),
         'min_delta': wandb.config.get('early_stopping_min_delta', 0.0001)
     }
+    config['metric_scoring'] = 'auc'
 
     # --- 2. Data and Dataloader params (Search Space) ---
     data_config['dataloader_params']['strategy'] = wandb.config.dataloader_strategy
     data_config['dataloader_params']['frames_per_batch'] = wandb.config.frames_per_batch
-    data_config['dataloader_params']['videos_per_batch'] = wandb.config.videos_per_batch
-    data_config['dataloader_params']['frames_per_video'] = wandb.config.frames_per_video
+    data_config['dataloader_params']['videos_per_batch'] = wandb.config.get('videos_per_batch', 8)
+    data_config['dataloader_params']['frames_per_video'] = wandb.config.get('frames_per_video', 8)
     data_config['data_params']['val_split_ratio'] = wandb.config.val_split_ratio
     data_config['data_params']['evaluation_frequency'] = wandb.config.evaluation_frequency
     data_config['property_balancing']['enabled'] = wandb.config.property_balancing_enabled
@@ -413,12 +414,12 @@ def main():
     download_assets_from_gcs(config, logger)
 
     logger.info("------- Configuration & Data Loading -------")
-    # train_videos, val_videos, data_split_stats = prepare_video_splits(data_config)
-    train_videos, val_videos, data_split_stats = prepare_video_splits_v2(data_config)
+    # MODIFIED: Unpack the three data splits (train, val_in_dist, val_holdout)
+    train_data, val_in_dist_videos, val_holdout_videos, data_split_stats = prepare_video_splits_v2(data_config)
 
-    # --- Create Dataloaders using the new factory function ---
-    train_loader, val_method_loaders = create_dataloaders(
-        train_videos, val_videos, config, data_config
+    # MODIFIED: Pass the two validation sets and receive three dataloaders
+    train_loader, val_in_dist_loader, val_holdout_loader = create_dataloaders(
+        train_data, val_in_dist_videos, val_holdout_videos, config, data_config
     )
 
     logger.info(
@@ -434,9 +435,20 @@ def main():
     else:
         logger.info("No 'ood_bucket_name' in config, skipping OOD loader creation.")
 
+    # NEW: Combine validation sets for accurate overall statistics
+    all_val_videos = val_in_dist_videos + val_holdout_videos
+
     # --- Create and log the comprehensive run overview ---
     real_methods = data_config.get('methods', {}).get('use_real_sources', [])
-    fake_methods = data_config.get('methods', {}).get('use_fake_methods', [])
+    # MODIFIED: We now have two sets of validation methods, so we combine them for logging
+    train_fake_methods = data_config.get('methods', {}).get('use_fake_methods_for_training', [])
+    val_fake_methods = data_config.get('methods', {}).get('use_fake_methods_for_validation', [])
+    all_fake_methods_used = sorted(list(set(train_fake_methods + val_fake_methods)))
+
+    # --- Validate and gather data for the overview ---
+    # MODIFIED: Update validation counts to use the combined list
+    data_split_stats['val_video_count'] = len(all_val_videos)
+    data_split_stats['val_frame_count'] = sum(len(v.frame_paths) for v in all_val_videos)
 
     # --- Validate and gather data for the overview ---
     overview_data = {
@@ -483,7 +495,7 @@ def main():
 
             ### Datasets Used
             - **Real Sources ({len(real_methods)}):** `{', '.join(real_methods)}`
-            - **Fake Methods ({len(fake_methods)}):** `{', '.join(fake_methods)}`
+            - **Fake Methods ({len(all_fake_methods_used)}):** `{', '.join(all_fake_methods_used)}`
 
             ### Sweep Hyperparameters
             - **Dataloader Strategy:** `{overview_data["Dataloader Strategy"]}`
@@ -505,11 +517,11 @@ def main():
     # conditionally handle list of dicts vs. list of objects
     # Calculate per-method counts for the balanced training set
     if is_property_balancing:
-        # train_videos is a list of frame dictionaries; count frames per method
-        train_counts = Counter(frame['method'] for frame in train_videos)
+        # train_data is a list of frame dictionaries; count frames per method
+        train_counts = Counter(frame['method'] for frame in train_data)  # Use train_data
     else:
-        # train_videos is a list of VideoInfo objects; count videos per method
-        train_counts = Counter(v.method for v in train_videos)
+        # train_data is a list of VideoInfo objects; count videos per method
+        train_counts = Counter(v.method for v in train_data)  # Use train_data
 
     # Calculate per-method counts for the balanced training set
     train_real_count = sum(count for method, count in train_counts.items() if method in real_source_names)
@@ -522,7 +534,8 @@ def main():
         data_table.add_data("train", data_type, method, count)
 
     # Also get validation counts and add them to the table
-    val_counts = Counter(v.method for v in val_videos)
+    # MODIFIED: Use the combined 'all_val_videos' list for validation counts
+    val_counts = Counter(v.method for v in all_val_videos)
     val_real_count = sum(count for method, count in val_counts.items() if method in real_source_names)
     val_fake_count = sum(count for method, count in val_counts.items() if method not in real_source_names)
     for method, count in val_counts.items():
@@ -544,9 +557,14 @@ def main():
     optimizer = choose_optimizer(model, config)
     scheduler = choose_scheduler(config, optimizer)
     metric_scoring = choose_metric(config)
+    # MODIFIED: Pass the two new validation loaders directly to the Trainer
     trainer = Trainer(
-        config, model, optimizer, scheduler, logger, metric_scoring,
-        wandb_run=wandb_run, val_videos=val_videos, ood_loader=ood_loader
+        config, model, optimizer, scheduler, logger,
+        val_in_dist_loader=val_in_dist_loader,
+        val_holdout_loader=val_holdout_loader,
+        metric_scoring=metric_scoring,
+        wandb_run=wandb_run,
+        ood_loader=ood_loader
     )
 
     if config.get('load_base_checkpoint', False):
@@ -565,27 +583,13 @@ def main():
             "Skipping checkpoint load. The model will start from the base CLIP weights. ---"
         )
 
-    # # --- Initial Validation before Training ---
-    # logger.info("--- Performing initial validation on the base model before training ---")
-    # if config['local_rank'] == 0:
-    #     # Ensure there are validation loaders to test on.
-    #     # test_epoch is safe to call with empty loaders, but this check is cleaner.
-    #     if val_method_loaders and len(val_method_loaders.keys()) > 0:
-    #         trainer.test_epoch(epoch=-1, val_method_loaders=val_method_loaders)
-    #         logger.info("--- Initial validation complete. Starting training. ---")
-    #     else:
-    #         logger.warning("No validation loaders found. Skipping initial validation.")
-
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
+        # MODIFIED: The call is now simpler. The trainer handles its own validation loaders.
         trainer.train_epoch(
             train_loader=train_loader,
             epoch=epoch,
-            # For property_balancing, train_videos is actually train_frames (list of dicts)
-            # For other strategies, it's a list of VideoInfo
-            # The variable name is fine, but the content differs by strategy.
-            val_method_loaders=val_method_loaders,
-            train_videos=train_videos  # Pass the train_frames list here
+            train_videos=train_data
         )
         if scheduler is not None:
             scheduler.step()

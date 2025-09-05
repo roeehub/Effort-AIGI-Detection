@@ -38,9 +38,10 @@ class Trainer(object):
             optimizer,
             scheduler,
             logger,
+            val_in_dist_loader,
+            val_holdout_loader,
             metric_scoring='auc',
             wandb_run=None,
-            val_videos=None,
             ood_loader=None
     ):
         if config is None or model is None or optimizer is None or logger is None:
@@ -53,7 +54,8 @@ class Trainer(object):
         self.logger = logger
         self.metric_scoring = metric_scoring
         self.wandb_run = wandb_run
-        self.val_videos = val_videos  # Store the validation videos
+        self.val_in_dist_loader = val_in_dist_loader
+        self.val_holdout_loader = val_holdout_loader
         self.ood_loader = ood_loader  # Optional OOD loader
         self.unified_val_loader = None  # To cache the efficient loader
 
@@ -274,24 +276,19 @@ class Trainer(object):
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         strategy = self.config.get('dataloader_params', {}).get('strategy', 'per_method')
+        is_property_balancing = self.config.get('property_balancing', {}).get('enabled',
+                                                                              False)  # Check the specific flag
 
-        if strategy == 'per_method' or strategy == 'video_level':
-            effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
-            total_train_videos = len(train_videos)
-            epoch_len = math.ceil(total_train_videos / effective_batch_size) if total_train_videos > 0 else 0
-
-        elif strategy == 'frame_level' or strategy == 'property_balancing':
+        if strategy == 'property_balancing':
             effective_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
-            # train_videos is now a list of frames (dicts) or videos (VideoInfo)
-            # We need to handle both cases.
-            if isinstance(train_videos[0], dict):  # This is property_balancing
-                total_frames = len(train_videos)
-            else:  # This is the original frame_level
-                total_frames = sum(len(v.frame_paths) for v in train_videos)
+            total_items = len(train_videos)  # train_videos is a list of frames (dicts)
+            epoch_len = math.ceil(total_items / effective_batch_size) if total_items > 0 else 0
+        elif strategy == 'frame_level':
+            effective_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
+            # This assumes train_videos is a list of VideoInfo objects for this strategy
+            total_frames = sum(len(v.frame_paths) for v in train_videos)
             epoch_len = math.ceil(total_frames / effective_batch_size) if total_frames > 0 else 0
-
-        else:
-            # This block now correctly handles the other strategies
+        else:  # Handles 'per_method' and 'video_level'
             effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
             total_train_videos = len(train_videos)
             epoch_len = math.ceil(total_train_videos / effective_batch_size) if total_train_videos > 0 else 0
@@ -359,7 +356,7 @@ class Trainer(object):
                 step_cnt += 1
 
                 if (i + 1) in eval_steps:
-                    self._run_validation(epoch, i, val_method_loaders)
+                    self._run_validation(epoch, i)
         else:
             raise ValueError(f"Unsupported training strategy: {strategy}")
 
@@ -422,27 +419,57 @@ class Trainer(object):
                 # For other steps, just log the minimal required info to not miss loss spikes
                 self.wandb_run.log({"train/loss/overall": losses['overall'].item(), "train/step": step_cnt})
 
-    def _run_validation(self, epoch, iteration, val_method_loaders):
-        """Helper to run validation to keep the main loop clean."""
-        if val_method_loaders is not None and self.config['local_rank'] == 0:
+    def _run_validation(self, epoch, iteration):
+        """
+        Helper to run the full validation suite, including in-distribution and holdout sets.
+        The holdout set is designated as the primary metric for checkpointing.
+        """
+        if self.config['local_rank'] == 0:
             self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
-            self.test_epoch(epoch, val_method_loaders)
+
+            # 1. Run In-Distribution Validation (for diagnostics)
+            if self.val_in_dist_loader:
+                self.test_epoch(
+                    epoch=epoch,
+                    validation_loader=self.val_in_dist_loader,
+                    log_prefix="val_in_dist",
+                    is_primary_metric=False
+                )
+
+            # 2. Run Holdout Validation (for checkpointing and early stopping)
+            if self.val_holdout_loader:
+                self.test_epoch(
+                    epoch=epoch,
+                    validation_loader=self.val_holdout_loader,
+                    log_prefix="val_holdout",
+                    is_primary_metric=True
+                )
+
+            # 3. Run OOD monitoring as before
             self._run_ood_monitoring(epoch)
 
     @torch.no_grad()
-    def test_epoch(self, epoch, val_method_loaders):
+    def test_epoch(self, epoch, validation_loader, log_prefix: str, is_primary_metric: bool):
+        """
+        Performs a full evaluation on a given validation dataloader. This function is now
+        general-purpose and can be used for any validation set.
+
+        Args:
+            epoch (int): The current epoch number.
+            validation_loader (LazyDataLoaderManager): The dataloader to evaluate.
+            log_prefix (str): The prefix for WandB logs (e.g., "val_in_dist", "val_holdout").
+            is_primary_metric (bool): If True, the results from this run will be used for
+                                      checkpointing and early stopping decisions.
+        """
         self.setEval()
 
-        # ---
-        # Create a single, accurate progress bar for the entire validation set.
-        # We iterate by videos, which is a more intuitive unit of progress.
-        # ---
-        total_videos = len(self.val_videos) if self.val_videos else 0
+        # Calculate total videos from the provided loader, not a stored class attribute.
+        total_videos = sum(len(v) for v in validation_loader.videos_by_method.values())
         if total_videos == 0:
-            self.logger.warning("No validation videos found. Skipping validation.")
+            self.logger.warning(f"No validation videos found for loader with prefix '{log_prefix}'. Skipping.")
             return
 
-        self.logger.info(f"Starting validation for {total_videos} videos...")
+        self.logger.info(f"--- Starting validation for '{log_prefix}' set ({total_videos} videos)...")
         val_start_time = time.time()
         videos_processed = 0
 
@@ -451,16 +478,12 @@ class Trainer(object):
         all_preds, all_labels = [], []
         all_losses = []
 
-        # ---
-        #  We iterate through methods sequentially. It also works perfectly with the LazyDataLoaderManager
-        # to keep memory usage low.
-        # ---
-        for method in val_method_loaders.keys():
-            # The lazy manager will create the loader on-demand here
-            loader = val_method_loaders[method]
-            num_videos_in_method = len(val_method_loaders.videos_by_method[method])
+        # Iterate through methods from the provided loader.
+        for method in validation_loader.keys():
+            loader = validation_loader[method]
+            num_videos_in_method = len(validation_loader.videos_by_method[method])
 
-            self.logger.info(f"Validating method: {method} ({num_videos_in_method} videos)")
+            self.logger.info(f"Validating method: {method} ({num_videos_in_method} videos) for '{log_prefix}' set")
 
             for data_dict in loader:
                 # Move tensors to the correct device
@@ -468,15 +491,12 @@ class Trainer(object):
                     if isinstance(value, torch.Tensor):
                         data_dict[key] = value.to(self.model.device)
 
-                # skip empty batches or invalid shapes
-                if data_dict['image'].shape[0] == 0: continue
-                if data_dict['image'].dim() != 5: continue
+                if data_dict['image'].shape[0] == 0 or data_dict['image'].dim() != 5: continue
 
                 B, T = data_dict['image'].shape[:2]
                 predictions = self.model(data_dict, inference=True)
                 video_probs = predictions['prob'].view(B, T).mean(dim=1)
 
-                # Calculate and store validation loss for the batch
                 if type(self.model) is DDP:
                     losses = self.model.module.get_losses(data_dict, predictions)
                 else:
@@ -488,174 +508,132 @@ class Trainer(object):
 
                 all_labels.extend(labels_np)
                 all_preds.extend(probs_np)
-
-                # Add probabilities and labels by method
                 method_labels[method].extend(labels_np)
                 method_preds[method].extend(probs_np)
-
-                B = data_dict['image'].shape[0]
-                videos_processed += B
+                videos_processed += data_dict['image'].shape[0]
 
             self.logger.info(f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
 
         if not all_labels:
-            self.logger.error("Validation failed: No data was processed after iterating all loaders.")
+            self.logger.error(f"Validation failed for '{log_prefix}': No data was processed.")
             return
 
         total_val_time = time.time() - val_start_time
-        self.logger.info(f"Validation finished in {total_val_time:.2f}s. Calculating metrics...")
+        self.logger.info(f"Validation for '{log_prefix}' finished in {total_val_time:.2f}s. Calculating metrics...")
 
-        self.logger.info("--- Calculating overall validation performance ---")
+        self.logger.info(f"--- Calculating overall performance for '{log_prefix}' ---")
         overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
 
-        wandb_log_dict = {"val/epoch": epoch + 1}
+        # Use the log_prefix for all WandB metrics to create separate charts.
+        wandb_log_dict = {f"{log_prefix}/epoch": epoch + 1}
 
-        # --- Calculate and log average validation loss ---
         if all_losses:
             avg_val_loss = np.mean(all_losses)
-            wandb_log_dict['val/overall/loss'] = avg_val_loss
-            self.logger.info(f"Overall val loss: {avg_val_loss:.4f}")
-        # ---
+            wandb_log_dict[f'{log_prefix}/overall/loss'] = avg_val_loss
+            self.logger.info(f"Overall {log_prefix} loss: {avg_val_loss:.4f}")
 
         for name, value in overall_metrics.items():
             if name not in ['pred', 'label']:
-                wandb_log_dict[f'val/overall/{name}'] = value
-                self.logger.info(f"Overall val {name}: {value:.4f}")
+                wandb_log_dict[f'{log_prefix}/overall/{name}'] = value
+                self.logger.info(f"Overall {log_prefix} {name}: {value:.4f}")
 
-        # Log the probability distribution histogram
-        wandb_log_dict['val/probabilities'] = wandb.Histogram(np.array(all_preds))
+        wandb_log_dict[f'{log_prefix}/probabilities'] = wandb.Histogram(np.array(all_preds))
 
-        # Metrics Per Method
+        # Metrics Per Method, logged with the correct prefix.
         method_metrics = {}
         for method in method_preds.keys():
             method_metrics[method] = get_test_metrics(np.array(method_preds[method]),
                                                       np.array(method_labels[method]))
             for name, value in method_metrics[method].items():
                 if name in ['acc']:
-                    wandb_log_dict[f'val/method/{method}/{name}'] = value
-                    self.logger.info(f"Method {method} val {name}: {value:.4f}")
+                    wandb_log_dict[f'{log_prefix}/method/{method}/{name}'] = value
+                    self.logger.info(f"Method {method} ({log_prefix}) val {name}: {value:.4f}")
 
-        # --- Create and log a W&B Table for side-by-side comparison ---
+        # Create and log a W&B Table, namespaced with the prefix.
         if self.wandb_run:
             columns = ["epoch", "method", "acc", "auc", "eer", "n_samples"]
             table_data = []
             for method, metrics in method_metrics.items():
                 table_data.append([
-                    epoch + 1,
-                    method,
-                    metrics.get('acc'),
-                    metrics.get('auc'),
-                    metrics.get('eer'),
-                    len(method_labels[method])  # Get the sample count for the method
+                    epoch + 1, method, metrics.get('acc'), metrics.get('auc'),
+                    metrics.get('eer'), len(method_labels[method])
                 ])
+            wandb_log_dict[f"{log_prefix}/method_table"] = wandb.Table(columns=columns, data=table_data)
 
-            # Add the created table to the dictionary that will be logged
-            wandb_log_dict["val/method_table"] = wandb.Table(columns=columns, data=table_data)
+        # --- THIS IS THE CRUCIAL CONTROL BLOCK ---
+        # All checkpointing and early stopping logic is now conditional on this being the
+        # designated primary validation set (i.e., the holdout set).
+        if is_primary_metric:
+            current_metric = overall_metrics.get(self.metric_scoring)
+            if current_metric is None:
+                self.logger.warning(
+                    f"Primary metric '{self.metric_scoring}' not found. Skipping checkpointing and early stopping check.")
+            else:
+                is_improvement = current_metric > self.best_val_metric + self.early_stopping_min_delta
+                if is_improvement:
+                    self.logger.info(
+                        f"🚀 PRIMARY METRIC IMPROVED! New best {self.metric_scoring}: {current_metric:.4f} (previously {self.best_val_metric:.4f})")
+                    self.best_val_metric = current_metric
+                    self.best_val_epoch = epoch + 1
+                    self.epochs_without_improvement = 0
 
-        # --- Advanced Checkpoint Saving and Early Stopping Logic ---
-        current_metric = overall_metrics.get(self.metric_scoring)
-        if current_metric is None:
-            self.logger.warning(
-                f"Metric '{self.metric_scoring}' not found. Skipping checkpointing and early stopping check.")
-        else:
-            is_improvement = current_metric > self.best_val_metric + self.early_stopping_min_delta
-            if is_improvement:
-                self.logger.info(
-                    f"🚀 Performance improved! New best {self.metric_scoring}: {current_metric:.4f} (previously {self.best_val_metric:.4f})")
+                    if self.wandb_run:
+                        self.wandb_run.summary['best/epoch'] = self.best_val_epoch
+                        self.wandb_run.summary['best/metric'] = self.best_val_metric
+                        self.wandb_run.summary['best/auc'] = overall_metrics.get('auc', 0)
+                        self.wandb_run.summary['best/eer'] = overall_metrics.get('eer', 0)
+                        self.wandb_run.summary['best/acc'] = overall_metrics.get('acc', 0)
 
-                # 1. Update the best metric and epoch immediately. This is now the source of truth.
-                self.best_val_metric = current_metric
-                self.best_val_epoch = epoch + 1
-                self.epochs_without_improvement = 0  # Reset counter
+                    if self.config.get('save_ckpt', True):
+                        if self.first_best_gcs_path is None:
+                            new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
+                                                          eer=overall_metrics.get('eer'), ckpt_prefix='first_best')
+                            if new_gcs_path:
+                                self.first_best_gcs_path = new_gcs_path
 
-                # 2. Update W&B summary to reflect the new best state
-                if self.wandb_run:
-                    self.wandb_run.summary['best/epoch'] = self.best_val_epoch
-                    self.wandb_run.summary['best/metric'] = self.best_val_metric
-                    best_metrics_dict = overall_metrics
-                    best_auc = best_metrics_dict.get('auc', 0)
-                    best_eer = best_metrics_dict.get('eer', 0)
-                    best_acc = best_metrics_dict.get('acc', 0)
-                    self.wandb_run.summary['best/auc'] = best_auc
-                    self.wandb_run.summary['best/eer'] = best_eer
-                    self.wandb_run.summary['best/acc'] = best_acc
+                        is_top_n = len(self.top_n_checkpoints) < self.top_n_size or current_metric > \
+                                   self.top_n_checkpoints[-1]['metric']
+                        if is_top_n:
+                            new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
+                                                          eer=overall_metrics.get('eer'), ckpt_prefix='top_n')
+                            if new_gcs_path:
+                                self.top_n_checkpoints.append(
+                                    {'metric': current_metric, 'epoch': epoch + 1, 'gcs_path': new_gcs_path})
+                                self.top_n_checkpoints.sort(key=lambda x: x['metric'], reverse=True)
+                                if len(self.top_n_checkpoints) > self.top_n_size:
+                                    worst_ckpt = self.top_n_checkpoints.pop()
+                                    self._delete_from_gcs(worst_ckpt['gcs_path'])
 
-                # 3. Handle checkpointing now that the state is updated
-                if self.config.get('save_ckpt', True):
-                    # Handle the "First Best" checkpoint (one-time save)
-                    if self.first_best_gcs_path is None:
-                        self.logger.info(
-                            f"🎉 Saving FIRST best model! Metric ({self.metric_scoring}): {current_metric:.4f}")
-                        new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
-                                                      eer=overall_metrics.get('eer'), ckpt_prefix='first_best')
-                        if new_gcs_path:
-                            self.first_best_gcs_path = new_gcs_path
-                            if self.wandb_run:
-                                self.wandb_run.summary['first_best_ckpt_gcs'] = new_gcs_path
-                                self.wandb_run.summary['first_best_metric'] = current_metric
+                    if self.wandb_run:
+                        self.wandb_run.summary['overall_best_ckpt_gcs'] = self.top_n_checkpoints[0]['gcs_path']
+                        self.wandb_run.summary[
+                            'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={self.wandb_run.summary['best/auc']:.4f}"
 
-                    # Manage the Top-N checkpoint list
-                    is_top_n = len(self.top_n_checkpoints) < self.top_n_size or current_metric > \
-                               self.top_n_checkpoints[-1]['metric']
-                    if is_top_n:
-                        self.logger.info(
-                            f"🏆 New Top-{self.top_n_size} performance! Metric ({self.metric_scoring}): {current_metric:.4f}")
-                        new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
-                                                      eer=overall_metrics.get('eer'), ckpt_prefix='top_n')
-                        if new_gcs_path:
-                            self.top_n_saved_count += 1
-                            self.top_n_checkpoints.append({
-                                'metric': current_metric,
-                                'epoch': epoch + 1,
-                                'gcs_path': new_gcs_path,
-                                'all_metrics': overall_metrics
-                            })
-                            self.top_n_checkpoints.sort(key=lambda x: x['metric'], reverse=True)
+                else:  # No improvement
+                    if self.early_stopping_enabled:
+                        self.epochs_without_improvement += 1
+                        self.logger.warning(
+                            f"No primary metric improvement for {self.epochs_without_improvement}/{self.early_stopping_patience} epochs. "
+                            f"Current {self.metric_scoring}: {current_metric:.4f}, Best: {self.best_val_metric:.4f}"
+                        )
 
-                            # Update the 'overall_best_ckpt' summary field after sorting
-                            if self.wandb_run:
-                                self.wandb_run.summary['overall_best_ckpt_gcs'] = self.top_n_checkpoints[0]['gcs_path']
+                if self.early_stopping_enabled and self.epochs_without_improvement >= self.early_stopping_patience:
+                    self.early_stop_triggered = True
+                    self.logger.critical(
+                        f"🚨 EARLY STOPPING TRIGGERED! No improvement in '{self.metric_scoring}' for {self.early_stopping_patience} epochs.")
 
-                            if len(self.top_n_checkpoints) > self.top_n_size:
-                                worst_ckpt = self.top_n_checkpoints.pop()
-                                self.logger.info(
-                                    f"Pruning checkpoint from epoch {worst_ckpt['epoch']} as it's no longer in top {self.top_n_size}.")
-                                self._delete_from_gcs(worst_ckpt['gcs_path'])
-
-                # Update final summary line after all potential GCS path updates
-                if self.wandb_run:
-                    self.wandb_run.summary[
-                        'bottom_line'] = f"best_epoch={self.best_val_epoch} AUC={self.wandb_run.summary['best/auc']:.4f} EER={self.wandb_run.summary['best/eer']:.4f} ACC={self.wandb_run.summary['best/acc']:.4f} ckpt=GCS"
-
-            else:  # No improvement
-                if self.early_stopping_enabled:
-                    self.epochs_without_improvement += 1
-                    self.logger.warning(
-                        f"No improvement for {self.epochs_without_improvement}/{self.early_stopping_patience} epochs. "
-                        f"Current {self.metric_scoring}: {current_metric:.4f}, Best: {self.best_val_metric:.4f}"
-                    )
-
-            # Check for early stopping condition after updating the counter
-            if self.early_stopping_enabled and self.epochs_without_improvement >= self.early_stopping_patience:
-                self.early_stop_triggered = True
-                self.logger.critical(
-                    f"🚨 EARLY STOPPING TRIGGERED! No improvement in '{self.metric_scoring}' for {self.early_stopping_patience} epochs."
-                )
-                if self.wandb_run:
-                    self.wandb_run.summary[
-                        'early_stop_reason'] = f"No improvement in {self.metric_scoring} for {self.early_stopping_patience} epochs."
-                    self.wandb_run.summary['early_stop_epoch'] = epoch + 1
-
-        wandb_log_dict['val/best_metric'] = self.best_val_metric
-        wandb_log_dict['val/best_epoch'] = self.best_val_epoch
+        # Log the tracked best metric state regardless of which validation set is running for consistent tracking.
+        # We namespace it to make it clear this is the state of the *primary* validation metric.
+        wandb_log_dict['val_primary/best_metric'] = self.best_val_metric
+        wandb_log_dict['val_primary/best_epoch'] = self.best_val_epoch
         if self.early_stopping_enabled:
-            wandb_log_dict['val/epochs_without_improvement'] = self.epochs_without_improvement
+            wandb_log_dict['val_primary/epochs_without_improvement'] = self.epochs_without_improvement
 
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
         del all_preds, all_labels, method_labels, method_preds, overall_metrics, all_losses
         gc.collect()
         torch.cuda.empty_cache()
-        self.logger.info("===> Evaluation Done!")
+        self.logger.info(f"===> Evaluation for '{log_prefix}' Done!")
 
     def _run_ood_monitoring(self, epoch):
         """Helper to run the OOD monitoring loop."""
