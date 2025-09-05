@@ -351,25 +351,44 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     train_fake_methods = set(cfg['methods']['use_fake_methods_for_training'])
     val_fake_methods = set(cfg['methods']['use_fake_methods_for_validation'])
 
-    # --- 2. THE MASTER ID SPLIT ---
-    # First, create disjoint sets of IDENTITIES for training and validation.
-    # This is the core of the leak prevention strategy.
-    log.info("[split] Performing master split on all unique identities to prevent leaks...")
-    all_identities = pd.DataFrame(df['video_id'].unique(), columns=['video_id'])
+    # --- 2. THE MASTER ID SPLIT (STRATIFIED AND BALANCED) ---
+    # Create disjoint identity sets, ensuring the validation pool is balanced by label.
+    log.info("[split] Performing stratified & balanced master split on identities by label...")
 
-    gss = GroupShuffleSplit(
-        n_splits=1,
-        test_size=cfg['data_params'].get('val_split_ratio', 0.1),
-        random_state=SEED
-    )
-    # Note: We split the DataFrame of unique IDs, not the full DataFrame.
-    # The 'groups' argument is implicitly the 'video_id' column itself.
-    # I added the `groups` parameter to explicitly use the 'video_id' for grouping.
-    train_idx, val_idx = next(gss.split(all_identities, groups=all_identities['video_id']))
+    # Get unique video_id and their corresponding label
+    video_labels = df[['video_id', 'label']].drop_duplicates()
+    real_videos = video_labels[video_labels['label'] == 'real']
+    fake_videos = video_labels[video_labels['label'] == 'fake']
 
-    train_ids = set(all_identities.iloc[train_idx]['video_id'])
-    val_ids = set(all_identities.iloc[val_idx]['video_id'])
-    log.info(f"  - Identities split into: {len(train_ids)} for training, {len(val_ids)} for validation.")
+    log.info(f"  - Found {len(real_videos)} unique real videos and {len(fake_videos)} unique fake videos.")
+
+    # Determine the number of validation videos PER CLASS based on the val_split_ratio of the smaller class
+    val_ratio = cfg['data_params'].get('val_split_ratio', 0.1)
+    val_size_per_class = int(min(len(real_videos), len(fake_videos)) * val_ratio)
+
+    log.info(f"  - Target validation size: {val_size_per_class} real and {val_size_per_class} fake videos.")
+
+    # We must handle the case where val_size_per_class is 0
+    if val_size_per_class == 0:
+        raise ValueError(
+            f"Validation size per class is 0. This can happen if 'val_split_ratio' ({val_ratio}) "
+            f"is too small for the number of videos in the smallest class ({min(len(real_videos), len(fake_videos))})."
+        )
+
+    # Sample 'val_size_per_class' videos from the real set for validation
+    val_real_ids = set(real_videos.sample(n=val_size_per_class, random_state=SEED)['video_id'])
+    train_real_ids = set(real_videos[~real_videos['video_id'].isin(val_real_ids)]['video_id'])
+
+    # Sample 'val_size_per_class' videos from the fake set for validation
+    val_fake_ids = set(fake_videos.sample(n=val_size_per_class, random_state=SEED)['video_id'])
+    train_fake_ids = set(fake_videos[~fake_videos['video_id'].isin(val_fake_ids)]['video_id'])
+
+    # Combine the final ID sets
+    train_ids = train_real_ids.union(train_fake_ids)
+    val_ids = val_real_ids.union(val_fake_ids)
+
+    log.info(f"  - Identities split into: {len(train_ids):,} training, {len(val_ids):,} validation.")
+    log.info(f"  - Validation pool composition: {len(val_real_ids)} real videos, {len(val_fake_ids)} fake videos.")
 
     # --- 3. Assign all videos to train/val pools based on their identity ---
     log.info("[split] Assigning all video frames to pools based on their identity...")

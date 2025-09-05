@@ -696,32 +696,91 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     NUM_WORKERS = dl_params['num_workers']
     MIN_BUCKET_SIZE = BATCH_SIZE  # A sensible minimum to avoid tiny cycled iterators
 
-    # 1. Build the lookup table for finding mates efficiently
+    # === NEW: Get category weights from config ===
+    # These dictionaries will define the sampling probability for each category.
+    real_category_weights = dl_params.get('real_category_weights', {})
+    fake_category_weights = dl_params.get('fake_category_weights', {})
+    print(f"Using REAL category weights: {real_category_weights}")
+    print(f"Using FAKE category weights: {fake_category_weights}")
+
+    # 1. Build the lookup table for finding mates efficiently (Unchanged)
     clip_lookup = _build_clip_to_frames_lookup(all_train_frames)
     print(f"Built clip_id lookup table with {len(clip_lookup)} unique clips.")
 
-    # 2. Segregate all frames by label and then by property bucket
-    real_frames_by_bucket = defaultdict(list)
-    fake_frames_by_bucket = defaultdict(list)
+    # === MODIFIED: Segregate frames by category FIRST ===
+    # Instead of just real/fake, we now group into categories defined in the manifest.
+    real_frames_by_category = defaultdict(list)
+    fake_frames_by_category = defaultdict(list)
     for frame_info in all_train_frames:
-        bucket = frame_info['property_bucket']
+        category = frame_info['method_category']
         if frame_info['label_id'] == 0:
-            real_frames_by_bucket[bucket].append(frame_info)
+            # Only include categories that have a defined weight
+            if category in real_category_weights:
+                real_frames_by_category[category].append(frame_info)
         else:
-            fake_frames_by_bucket[bucket].append(frame_info)
+            # Only include categories that have a defined weight
+            if category in fake_category_weights:
+                fake_frames_by_category[category].append(frame_info)
 
-    # 3. Consolidate small buckets to prevent overhead
-    consolidated_real = _consolidate_small_buckets(real_frames_by_bucket, MIN_BUCKET_SIZE, 'real')
-    consolidated_fake = _consolidate_small_buckets(fake_frames_by_bucket, MIN_BUCKET_SIZE, 'fake')
+    # === NEW: Create the hierarchical master stream for REAL data ===
+    real_category_streams = []
+    real_weights = []
+    for category, weight in real_category_weights.items():
+        frames = real_frames_by_category.get(category)
+        if not frames:
+            print(f"WARNING: No frames found for REAL category '{category}', skipping.")
+            continue
 
-    # 4. Create master streams that cycle through property buckets for each label
-    real_master_stream = _create_master_stream_for_label(consolidated_real)
-    fake_master_stream = _create_master_stream_for_label(consolidated_fake)
-    if real_master_stream is None or fake_master_stream is None:
-        raise ValueError("Cannot create dataloader: data for one or both labels is missing.")
+        # A. Group frames within this category by property bucket
+        frames_by_bucket = defaultdict(list)
+        for frame in frames:
+            frames_by_bucket[frame['property_bucket']].append(frame)
 
-    # 5. Probabilistically sample from master streams to create a 50/50 balanced "anchor" stream
-    anchor_pipe = CustomSampleMultiplexerDataPipe([real_master_stream, fake_master_stream], [0.5, 0.5])
+        # B. Consolidate small buckets and create a property-balanced stream for THIS CATEGORY
+        consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
+        category_stream = _create_master_stream_for_label(consolidated)
+
+        if category_stream:
+            real_category_streams.append(category_stream)
+            real_weights.append(weight)
+
+    if not real_category_streams:
+        raise ValueError("Cannot create dataloader: no valid REAL data streams were created.")
+
+    # C. Create the master REAL stream by sampling from category streams
+    master_real_stream = CustomSampleMultiplexerDataPipe(real_category_streams, real_weights)
+
+    # === NEW: Create the hierarchical master stream for FAKE data (Symmetrical Logic) ===
+    fake_category_streams = []
+    fake_weights = []
+    for category, weight in fake_category_weights.items():
+        frames = fake_frames_by_category.get(category)
+        if not frames:
+            print(f"WARNING: No frames found for FAKE category '{category}', skipping.")
+            continue
+
+        frames_by_bucket = defaultdict(list)
+        for frame in frames:
+            frames_by_bucket[frame['property_bucket']].append(frame)
+
+        consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
+        category_stream = _create_master_stream_for_label(consolidated)
+
+        if category_stream:
+            fake_category_streams.append(category_stream)
+            fake_weights.append(weight)
+
+    if not fake_category_streams:
+        raise ValueError("Cannot create dataloader: no valid FAKE data streams were created.")
+
+    master_fake_stream = CustomSampleMultiplexerDataPipe(fake_category_streams, fake_weights)
+
+    # === MODIFIED: The final multiplexer now uses the new master streams ===
+    # The core 50/50 real/fake balance is preserved, but the streams themselves are now hierarchical.
+    anchor_pipe = CustomSampleMultiplexerDataPipe([master_real_stream, master_fake_stream], [0.5, 0.5])
+
+    # === DOWNSTREAM LOGIC: REMAINS COMPLETELY UNCHANGED ===
+    # The rest of the pipeline is agnostic to how the anchor_pipe was constructed.
 
     # 6. Add sharding (for DDP) and shuffling
     if NUM_WORKERS > 0:
@@ -744,7 +803,7 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
         combined_pipe,
         batch_size=BATCH_SIZE,  # Let the DataLoader create the final GPU batch
         num_workers=NUM_WORKERS,
-        collate_fn=collate_fn,  # Now this collate_fn will receive a list of tuples, which is correct
+        collate_fn=collate_fn,
         persistent_workers=True if NUM_WORKERS > 0 else False,
         prefetch_factor=dl_params['prefetch_factor']
     )
