@@ -327,10 +327,10 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     """
     [REVISED & FIXED]
     Prepares data splits using frame properties and a strict identity-based split.
+    This version correctly populates the stats dictionary for the run overview.
     """
     cfg = data_cfg
     SEED = cfg['data_params']['seed']
-    # FIX: Use the correct variable from the config
     VAL_SPLIT_RATIO = cfg['data_params'].get('val_split_ratio', 0.1)
     PROPERTIES_FILE = cfg['property_balancing']['frame_properties_parquet_path']
 
@@ -346,44 +346,60 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
 
     # --- 2. Load and filter data ---
     df = pd.read_parquet(PROPERTIES_FILE)
+
+    # [FIX] Populate initial discovery stats from the raw Parquet file
+    # before any filtering, to match the legacy path's logic and prevent the error.
+    stats['discovered_videos'] = df.groupby(['method', 'original_video_id']).ngroups
+    stats['discovered_methods'] = df['method'].nunique()
     stats['total_frames_in_parquet'] = len(df)
     log.info(f"Loaded {len(df):,} frame records from Parquet file.")
+    log.info(
+        f"[discovery] Discovered {stats['discovered_videos']:,} videos from {stats['discovered_methods']} methods in Parquet.")
 
     df_filtered = df[df['method'].isin(all_allowed_methods) & ~df['method'].isin(EXCLUDE_METHODS)].copy()
     stats['total_frames_after_filtering'] = len(df_filtered)
     log.info(f"Filtered to {len(df_filtered):,} frames from allowed methods.")
 
-    # --- 3. Perform strict identity-based split ON THE DATAFRAME ---
+    # --- Create sharpness buckets from the continuous sharpness value ---
+    log.info("Creating sharpness buckets (quartiles)...")
+    df_filtered['sharpness_bucket'] = pd.qcut(
+        df_filtered['sharpness'],
+        q=4,
+        labels=['q1', 'q2', 'q3', 'q4'],
+        duplicates='drop'
+    )
+    log.info(f"Value counts for new 'sharpness_bucket' column:\n{df_filtered['sharpness_bucket'].value_counts()}")
+
+    # --- 3. Perform strict identity-based split using the 'video_id' column ---
     log.info(f"Performing identity-based split with validation ratio: {VAL_SPLIT_RATIO}")
-    unique_ids = df_filtered['target_id'].unique()
-
-    # Check for NaN or None in unique_ids which can cause errors
-    unique_ids = [uid for uid in unique_ids if pd.notna(uid)]
-
+    unique_ids = df_filtered['video_id'].unique()
     train_ids, val_ids = train_test_split(unique_ids, test_size=VAL_SPLIT_RATIO, random_state=SEED)
     train_ids, val_ids = set(train_ids), set(val_ids)
 
-    train_df = df_filtered[df_filtered['target_id'].isin(train_ids)]
-    val_df = df_filtered[df_filtered['target_id'].isin(val_ids)]
+    train_df = df_filtered[df_filtered['video_id'].isin(train_ids)]
+    val_df = df_filtered[df_filtered['video_id'].isin(val_ids)]
 
-    stats['unbalanced_train_frame_count'] = len(train_df)
-    stats['unbalanced_val_frame_count'] = len(val_df)
-    log.info(f"Split pools by identity ▶ Train: {len(train_df):,} frames | Val: {len(val_df):,} frames")
+    # [FIX] Rename keys to match what the train script expects for the overview.
+    # The train script expects 'unbalanced_train_count' for frames and 'unbalanced_val_count' for videos.
+    stats['unbalanced_train_count'] = len(train_df)
+    stats['unbalanced_val_count'] = val_df['video_id'].nunique()
+    log.info(
+        f"Split pools by identity ▶ Train: {stats['unbalanced_train_count']:,} frames | Val: {stats['unbalanced_val_count']:,} videos")
 
     # --- 4. Balance the training set (DataFrame) and convert to dicts ---
     log.info("--- Balancing Training Set ---")
     train_df_balanced = _balance_df_by_label(train_df, real_methods, SEED)
-    final_train_data = train_df_balanced.to_dict('records')  # The format needed by the loader
+    final_train_data = train_df_balanced.to_dict('records')
     stats['train_frame_count'] = len(final_train_data)
     stats['train_video_count'] = len(train_df_balanced['video_id'].unique())
 
     # --- 5. Assemble val pool into VideoInfo objects and subdivide ---
     log.info("Assembling validation videos and subdividing...")
     val_pool: List[VideoInfo] = []
-    for (label, method, video_id), group in val_df.groupby(['label', 'method', 'video_id']):
+    for (label, method, original_video_id), group in val_df.groupby(['label', 'method', 'original_video_id']):
         frame_paths = group['path'].tolist()
-        target_id = group['target_id'].iloc[0]
-        video = VideoInfo(label, method, video_id, frame_paths, target_id)
+        identity = int(group['video_id'].iloc[0])
+        video = VideoInfo(label, method, original_video_id, frame_paths, identity)
         val_pool.append(video)
 
     val_in_dist_pool, val_holdout_pool = [], []

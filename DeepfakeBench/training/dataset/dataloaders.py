@@ -693,6 +693,19 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     This implementation performs hierarchical sampling based on weights defined in the config.
     It first samples by 'method_category' and then balances by 'property_bucket' within that category.
     """
+
+    # The data from the Parquet file has 'label' (str) but not 'label_id' (int).
+    # This loop ensures 'label_id' is present before the main logic begins.
+    # This is confirmed to be necessary by the provided Parquet schema.
+    for frame_info in all_train_frames:
+        if 'label_id' not in frame_info:
+            # We must have the 'label' key to proceed
+            if 'label' not in frame_info:
+                raise KeyError(
+                    f"Frame dictionary is missing both 'label' and 'label_id'. Cannot proceed. Frame info: {frame_info}")
+            # Create 'label_id' based on the string 'label'
+            frame_info['label_id'] = 0 if frame_info['label'] == 'real' else 1
+
     dl_params = data_config['dataloader_params']
     BATCH_SIZE = dl_params['frames_per_batch']
     NUM_WORKERS = dl_params['num_workers']
@@ -749,7 +762,8 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
         # A. Group frames within this category by property bucket
         frames_by_bucket = defaultdict(list)
         for frame in frames:
-            frames_by_bucket[frame['property_bucket']].append(frame)
+            # [FIXED] Use 'sharpness_bucket' which is now created in prepare_splits.py
+            frames_by_bucket[frame['sharpness_bucket']].append(frame)
 
         # B. Consolidate small buckets and create a property-balanced stream for THIS CATEGORY
         consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
@@ -777,7 +791,8 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
 
         frames_by_bucket = defaultdict(list)
         for frame in frames:
-            frames_by_bucket[frame['property_bucket']].append(frame)
+            # [FIXED] Use 'sharpness_bucket' which is now created in prepare_splits.py
+            frames_by_bucket[frame['sharpness_bucket']].append(frame)
 
         consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
         category_stream = _create_master_stream_for_label(consolidated)

@@ -404,6 +404,30 @@ def main():
         logger.info(f"Default FAKE TRAINING methods: {data_config['methods']['use_fake_methods_for_training']}")
         logger.info(f"Default FAKE VALIDATION methods: {data_config['methods']['use_fake_methods_for_validation']}")
 
+    # --- 6. Property Balancing Weights (from wandb.config) ---
+    # This section transfers the hierarchical sampling weights from the W&B run config
+    # to the data_config, which is used by the dataloader. This is necessary for the
+    # 'property_balancing' strategy to work correctly.
+    if data_config.get('property_balancing', {}).get('enabled', False):
+        logger.info("--- Transferring property balancing weights from run configuration ---")
+        if 'real_category_weights' in wandb.config:
+            # --- CORRECTED PATH: Place weights in 'dataloader_params' ---
+            data_config['dataloader_params']['real_category_weights'] = dict(wandb.config.real_category_weights)
+            logger.info(
+                f"Loaded real_category_weights: {data_config['dataloader_params']['real_category_weights']}")
+        else:
+            logger.warning("`real_category_weights` not found in run config. Dataloader will likely fail.")
+            data_config['dataloader_params']['real_category_weights'] = {}
+
+        if 'fake_category_weights' in wandb.config:
+            # --- CORRECTED PATH: Place weights in 'dataloader_params' ---
+            data_config['dataloader_params']['fake_category_weights'] = dict(wandb.config.fake_category_weights)
+            logger.info(
+                f"Loaded fake_category_weights: {data_config['dataloader_params']['fake_category_weights']}")
+        else:
+            logger.warning("`fake_category_weights` not found in run config. Dataloader will likely fail.")
+            data_config['dataloader_params']['fake_category_weights'] = {}
+
     # Conditionally remove the base checkpoint from the download list if not needed
     if not config.get('load_base_checkpoint', False):
         if 'gcs_assets' in config and 'base_checkpoint' in config['gcs_assets']:
@@ -412,6 +436,17 @@ def main():
 
     # Download assets from GCS
     download_assets_from_gcs(config, logger)
+
+    # Programmatically set the parquet path for property balancing ---
+    # This ensures that the dataloader config uses the same local path defined in the gcs_assets.
+    if (data_config.get('property_balancing', {}).get('enabled', False) and
+            'property_manifest_parquet' in config.get('gcs_assets', {})):
+        local_path = config['gcs_assets']['property_manifest_parquet']['local_path']
+        data_config['property_balancing']['frame_properties_parquet_path'] = local_path
+        logger.info(
+            "Programmatically set 'frame_properties_parquet_path' for property balancing "
+            f"to: {local_path}"
+        )
 
     logger.info("------- Configuration & Data Loading -------")
     # MODIFIED: Unpack the three data splits (train, val_in_dist, val_holdout)
@@ -458,15 +493,20 @@ def main():
         "Discovered Videos": data_split_stats.get('discovered_videos'),
         "Discovered Methods": data_split_stats.get('discovered_methods'),
         "Data Subset Percentage": wandb.config.get('data_subset_percentage'),
-        "Unbalanced Train Frames": data_split_stats.get('unbalanced_train_count'),  # This was frames
-        "Unbalanced Val Videos": data_split_stats.get('unbalanced_val_count'),  # This was videos
+        "Unbalanced Train Frames": data_split_stats.get('unbalanced_train_count'),
+        "Unbalanced Val Videos": data_split_stats.get('unbalanced_val_count'),
         "Final Train Videos": data_split_stats.get('train_video_count'),
         "Final Train Frames": data_split_stats.get('train_frame_count'),
         "Final Val Videos": data_split_stats.get('val_video_count'),
         "Final Val Frames": data_split_stats.get('val_frame_count'),
         "Dataloader Strategy": wandb.config.get('dataloader_strategy'),
-        "Frames per Video": wandb.config.get('frames_per_video'),
-        "Videos per Batch": wandb.config.get('videos_per_batch'),
+
+        # [FIXED] Add default 'N/A' for optional parameters. This prevents the
+        # script from crashing when a strategy that doesn't use these
+        # parameters (e.g., 'property_balancing') is selected.
+        "Frames per Video": wandb.config.get('frames_per_video', 8),
+        "Videos per Batch": wandb.config.get('videos_per_batch', 8),
+
         "Frames per Batch": wandb.config.get('frames_per_batch'),
         "Learning Rate": wandb.config.get('learning_rate'),
         "Weight Decay": wandb.config.get('weight_decay'),
