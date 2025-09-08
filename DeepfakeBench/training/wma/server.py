@@ -24,6 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # ===================== END: EASY FIX =====================
 
 
+print("Hello 1")
+
+
 try:
     # --- Preferred relative imports for running as a package (e.g., with systemd) ---
     from . import wma_streaming_pb2 as pb2
