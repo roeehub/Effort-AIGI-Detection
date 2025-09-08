@@ -77,8 +77,8 @@ info "Restarting the ${SERVICE_NAME} service..."
 sudo systemctl restart "$SERVICE_NAME"
 
 # --- 4. Final Status Check ---
-info "Waiting 2 seconds for service to initialize..."
-sleep 2
+info "Waiting 3 seconds for service to initialize..."
+sleep 3
 
 info "Checking final status of the service..."
 
