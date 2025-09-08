@@ -12,6 +12,10 @@ Group=roee
 # The PARENT directory of the 'wma' package
 WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training
 
+# THE FIX: Explicitly set the PYTHONPATH to the WorkingDirectory.
+# This forces Python to look for packages starting from here.
+Environment="PYTHONPATH=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training"
+
 # The ABSOLUTE path to the venv python + '-m' flag to run as a module
 ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python -m wma.server
 
