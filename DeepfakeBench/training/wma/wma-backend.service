@@ -1,28 +1,20 @@
-# /etc/systemd/system/wma-backend.service
-
 [Unit]
 Description=WMA Streaming Backend Service
 After=network.target
 
 [Service]
-# The user that will run the service
 User=roee
 Group=roee
 
-# The PARENT directory of the 'wma' package
-WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training
+# CRITICAL CHANGE: Set WorkingDirectory to WHERE the script is.
+WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
 
-# THE FIX: Explicitly set the PYTHONPATH to the WorkingDirectory.
-# This forces Python to look for packages starting from here.
-Environment="PYTHONPATH=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training"
-
-# The ABSOLUTE path to the venv python + '-m' flag to run as a module
-ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python -m wma.server
-
-# Using an absolute path for data is the robust choice
+# Remove the PYTHONPATH line, it's not needed for this method.
 Environment="DATA_DIRECTORY=/var/data/wma_storage"
 
-# Restart the service if it crashes
+# CRITICAL CHANGE: Execute the server.py file directly. No '-m'.
+ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python server.py
+
 Restart=always
 RestartSec=5
 
