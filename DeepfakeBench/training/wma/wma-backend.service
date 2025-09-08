@@ -9,12 +9,11 @@ After=network.target
 User=roee
 Group=roee
 
-# The root directory of your WMA project
-WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
+# The directory CONTAINING the 'wma' package
+WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training
 
-# The command to start the server.
-# NOTE: It's just 'server.py' because we are already in the WorkingDirectory.
-ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python server.py
+# Run the 'server' module inside the 'wma' package
+ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python -m wma.server
 
 # Use an absolute path for storing data. This is much more robust.
 Environment="DATA_DIRECTORY=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data_storage"
