@@ -9,19 +9,16 @@ After=network.target
 User=roee
 Group=roee
 
-# Set the working directory to WHERE the script is. This is a robust practice.
+# Set the working directory to EXACTLY where server.py is located.
+# This automatically adds this directory to Python's import path.
 WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
-
-# CRITICAL FIX: Explicitly add the PARENT directory to the PYTHONPATH.
-# This allows Python to find the 'wma' package itself.
-Environment="PYTHONPATH=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training"
 
 # Standard data directory
 Environment="DATA_DIRECTORY=/var/data/wma_storage"
 
-# Execute the 'server' module within the 'wma' package.
-# This ensures relative imports inside the package are handled correctly.
-ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python -m wma.server
+# Execute the server.py file directly as a script.
+# This satisfies the absolute imports in the auto-generated gRPC files.
+ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python server.py
 
 Restart=always
 RestartSec=5
