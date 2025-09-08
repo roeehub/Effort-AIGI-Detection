@@ -14,9 +14,15 @@ import sys
 import os
 from concurrent import futures
 from typing import AsyncIterator, Dict, Any
-
 import grpc
 from grpc import aio
+
+# ==================== START: EASY FIX ====================
+# Add the script's own directory to the Python path.
+# This makes the 'except' block's imports (like 'from storage...') work reliably.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# ===================== END: EASY FIX =====================
+
 
 try:
     # --- Preferred relative imports for running as a package (e.g., with systemd) ---
