@@ -6,13 +6,17 @@ After=network.target
 User=roee
 Group=roee
 
-# CRITICAL CHANGE: Set WorkingDirectory to WHERE the script is.
+# Set the working directory to WHERE the script is.
 WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
 
-# Remove the PYTHONPATH line, it's not needed for this method.
+# THE FINAL FIX: Explicitly add the WorkingDirectory to the PYTHONPATH.
+# This forces Python to look for modules in the script's own directory.
+Environment="PYTHONPATH=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma"
+
+# Standard data directory
 Environment="DATA_DIRECTORY=/var/data/wma_storage"
 
-# CRITICAL CHANGE: Execute the server.py file directly. No '-m'.
+# Execute the server.py file directly as a script.
 ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python server.py
 
 Restart=always
