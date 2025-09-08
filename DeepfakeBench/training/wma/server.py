@@ -329,7 +329,11 @@ async def serve():
         ('grpc.max_send_message_length', 20 * 1024 * 1024)
     ]
 
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
+    # Pass the options to the server constructor
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        options=options
+    )
     shutdown_event = asyncio.Event()
 
     # Add service
