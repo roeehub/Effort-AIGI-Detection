@@ -9,14 +9,14 @@ After=network.target
 User=roee
 Group=roee
 
-# The directory CONTAINING the 'wma' package
+# The PARENT directory of the 'wma' package
 WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training
 
-# Run the 'server' module inside the 'wma' package
+# The ABSOLUTE path to the venv python + '-m' flag to run as a module
 ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python -m wma.server
 
-# Use an absolute path for storing data. This is much more robust.
-Environment="DATA_DIRECTORY=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data_storage"
+# Using an absolute path for data is the robust choice
+Environment="DATA_DIRECTORY=/var/data/wma_storage"
 
 # Restart the service if it crashes
 Restart=always
