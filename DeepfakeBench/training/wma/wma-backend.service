@@ -1,0 +1,27 @@
+# /etc/systemd/system/wma-backend.service
+
+[Unit]
+Description=WMA Streaming Backend Service
+After=network.target
+
+[Service]
+# The user that will run the service
+User=roee
+Group=roee
+
+# The root directory of your WMA project
+WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
+
+# The command to start the server.
+# NOTE: It's just 'server.py' because we are already in the WorkingDirectory.
+ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python server.py
+
+# Use an absolute path for storing data. This is much more robust.
+Environment="DATA_DIRECTORY=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data_storage"
+
+# Restart the service if it crashes
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

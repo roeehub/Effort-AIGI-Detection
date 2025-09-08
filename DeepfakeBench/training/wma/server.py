@@ -46,7 +46,16 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     
     def __init__(self):
         """Initialize the streaming service."""
-        data_directory = os.path.join(BASE_PATH, "data")
+        # Get data directory from environment variable, with a fallback for local dev
+        default_path = os.path.join(BASE_PATH, "data")
+        data_directory = os.getenv("DATA_DIRECTORY", default_path)
+
+        print(f"[Backend] Using data storage directory: {data_directory}")
+
+        # Ensure the directory exists before using it
+        if not os.path.exists(data_directory):
+            print(f"[Backend] Creating data directory: {data_directory}")
+            os.makedirs(data_directory)
         self.data_writer = BackendDataWriter(data_directory)
         self.banner_simulator = BannerSimulator(banner_probability=0.15)  # 15% chance
         
