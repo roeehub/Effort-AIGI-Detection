@@ -9,15 +9,18 @@ After=network.target
 User=roee
 Group=roee
 
-# Set the working directory to EXACTLY where server.py is located.
-# This automatically adds this directory to Python's import path.
+# Set the working directory to WHERE the script is.
 WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
+
+# THE FINAL FIX: Explicitly add the WorkingDirectory to the PYTHONPATH.
+# This forces Python to look for modules in the script's own directory.
+# This is the line that solves "ModuleNotFoundError: No module named 'storage'".
+Environment="PYTHONPATH=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma"
 
 # Standard data directory
 Environment="DATA_DIRECTORY=/var/data/wma_storage"
 
 # Execute the server.py file directly as a script.
-# This satisfies the absolute imports in the auto-generated gRPC files.
 ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python server.py
 
 Restart=always
