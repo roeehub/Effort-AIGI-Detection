@@ -7,7 +7,7 @@
 # It performs checks, copies files, and restarts the service.
 #
 # Run this from your repository root:
-# ./deploy.sh
+# deploy/deploy_wma.sh
 # ==============================================================================
 
 # --- Configuration ---

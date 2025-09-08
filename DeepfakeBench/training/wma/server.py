@@ -321,6 +321,14 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
 async def serve():
     """Start the gRPC server."""
+
+    # Define options to increase the max message size (e.g., to 20MB)
+    # The value is in bytes: 20 * 1024 * 1024 = 20971520
+    options = [
+        ('grpc.max_receive_message_length', 20 * 1024 * 1024),
+        ('grpc.max_send_message_length', 20 * 1024 * 1024)
+    ]
+
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
     shutdown_event = asyncio.Event()
 
