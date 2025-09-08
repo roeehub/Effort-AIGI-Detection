@@ -9,14 +9,18 @@ After=network.target
 User=roee
 Group=roee
 
-# Set the working directory to the PARENT of the 'wma' package.
-WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training
+# Set the working directory to WHERE the script is. This is a robust practice.
+WorkingDirectory=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma
+
+# CRITICAL FIX: Explicitly add the PARENT directory to the PYTHONPATH.
+# This allows Python to find the 'wma' package itself.
+Environment="PYTHONPATH=/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training"
 
 # Standard data directory
 Environment="DATA_DIRECTORY=/var/data/wma_storage"
 
-# Execute the 'server' module inside the 'wma' package.
-# This correctly handles all relative and absolute package imports.
+# Execute the 'server' module within the 'wma' package.
+# This ensures relative imports inside the package are handled correctly.
 ExecStart=/home/roee/repos/Effort-AIGI-Detection-Fork/venv/bin/python -m wma.server
 
 Restart=always
