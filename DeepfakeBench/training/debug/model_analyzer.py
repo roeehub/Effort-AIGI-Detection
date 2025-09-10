@@ -365,9 +365,9 @@ def analyze_anomaly_domain_shift(df_all_frames, output_dir):
     val_prefix = "gs://" + val_path
     test_prefix = "gs://" + test_path
 
-    df_val = df_all_frames[df_all_frames['video_path'].str.startswith(val_prefix.split('/', 3)[-1])]
+    df_val = df_all_frames[df_all_frames['video_path'].str.startswith(val_prefix.split('/', 3)[-1])].copy()
     df_val['source'] = 'veo3 (Validation)'
-    df_test = df_all_frames[df_all_frames['video_path'].str.startswith(test_prefix.split('/', 3)[-1])]
+    df_test = df_all_frames[df_all_frames['video_path'].str.startswith(test_prefix.split('/', 3)[-1])].copy()
     df_test['source'] = 'veo3 (Test)'
 
     if df_val.empty or df_test.empty:
@@ -668,10 +668,11 @@ def main():
         df_all_frames = pd.DataFrame(all_results)
 
         # Separate embeddings for saving in numpy format
-        clip_embeddings = np.stack(df_all_frames.pop('clip_embedding').values)
-        model_embeddings = np.stack(df_all_frames.pop('model_embedding').values)
+        clip_embeddings = np.stack(df_all_frames['clip_embedding'].values)
+        model_embeddings = np.stack(df_all_frames['model_embedding'].values)
 
-        df_all_frames.to_csv(frame_data_path, index=False)
+        # We need to drop the columns for the CSV, as it can't store arrays.
+        df_all_frames.drop(columns=['clip_embedding', 'model_embedding']).to_csv(frame_data_path, index=False)
         np.save(clip_emb_path, clip_embeddings)
         np.save(model_emb_path, model_embeddings)
         print(f"  Saved frame data and embeddings to {output_dir}")
