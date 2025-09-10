@@ -152,8 +152,8 @@ def discover_and_sample_gcs_data(gcs_client, quick_test=False):
                 sampled_videos.extend(video_list)
 
         if quick_test:
-            print("    QUICK TEST MODE: Using only 5 videos total.")
-            sampled_videos = random.sample(sampled_videos, min(5, len(sampled_videos)))
+            print("    QUICK TEST MODE: Using only 1 video per method.")
+            sampled_videos = random.sample(sampled_videos, min(1, len(sampled_videos)))
 
         # Create final "video units" with metadata
         for video_path, video_blobs in sampled_videos:
