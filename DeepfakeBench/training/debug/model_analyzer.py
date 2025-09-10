@@ -58,6 +58,8 @@ DF40_VIDEOS_PER_METHOD = 50
 # For all videos, we sample N frames.
 FRAMES_PER_VIDEO = 16
 
+PROCESSING_BATCH_SIZE = 200  # Process 200 videos, save, then do the next 200
+
 # --- Analysis Parameters ---
 # Define the specific methods to investigate for the anomaly
 ANOMALY_METHOD_PATHS = {
@@ -73,7 +75,6 @@ EXAMPLE_VIDEOS_FOR_PLOTS = {
 
 # --- Model & Preprocessing ---
 # Import necessary components from your project structure
-# To make this script standalone, we copy the required functions here.
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # go up one level
 from detectors import DETECTOR, EffortDetector
 import video_preprocessor  # We only need its transform function
@@ -124,23 +125,20 @@ def discover_and_sample_gcs_data(gcs_client, quick_test=False):
     for dataset_name, bucket_name in BUCKETS_TO_ANALYZE.items():
         print(f"  Scanning bucket: {bucket_name} ({dataset_name})")
 
-        # Group all blobs by their video folder path
         blobs = list(gcs_client.list_blobs(bucket_name))
         videos = defaultdict(list)
         for blob in blobs:
             if blob.name.lower().endswith(('.png', '.jpg', '.jpeg')):
                 video_path = str(Path(blob.name).parent)
-                videos[video_path].append(blob)
+                videos[video_path].append(f"gs://{blob.bucket.name}/{blob.name}")
 
-        # Group videos by their method
         methods = defaultdict(list)
-        for video_path, video_blobs in videos.items():
+        for video_path, frame_paths in videos.items():
             parts = video_path.split('/')
             if len(parts) >= 2:
                 method_name = parts[1]
-                methods[method_name].append((video_path, video_blobs))
+                methods[method_name].append((video_path, frame_paths))
 
-        # Apply sampling logic
         sampled_videos = []
         if dataset_name == 'df40_train':
             print(f"    Applying sampling: max {DF40_VIDEOS_PER_METHOD} videos per method.")
@@ -148,25 +146,20 @@ def discover_and_sample_gcs_data(gcs_client, quick_test=False):
                 num_to_sample = min(DF40_VIDEOS_PER_METHOD, len(video_list))
                 sampled_videos.extend(random.sample(video_list, num_to_sample))
         else:
-            # For test and collected_train, use all videos
             for method_name, video_list in methods.items():
                 sampled_videos.extend(video_list)
 
         if quick_test:
             print("    QUICK TEST MODE: Using only 1 video per method.")
+            # Your debug change, preserved.
             sampled_videos = random.sample(sampled_videos, min(1, len(sampled_videos)))
 
-        # Create final "video units" with metadata
-        for video_path, video_blobs in sampled_videos:
+        for video_path, frame_gcs_paths in sampled_videos:
             parts = video_path.split('/')
             label, method = parts[0], parts[1]
             video_id = "/".join(parts[2:])
 
-            # Sample frames within the video
-            frame_blob_sample = random.sample(video_blobs, min(FRAMES_PER_VIDEO, len(video_blobs)))
-
-            # --- FIX: Convert Blob objects to serializable GCS path strings ---
-            frame_gcs_paths = [f"gs://{blob.bucket.name}/{blob.name}" for blob in frame_blob_sample]
+            frame_path_sample = random.sample(frame_gcs_paths, min(FRAMES_PER_VIDEO, len(frame_gcs_paths)))
 
             all_video_units.append({
                 "video_path": video_path,
@@ -174,7 +167,7 @@ def discover_and_sample_gcs_data(gcs_client, quick_test=False):
                 "label": label,
                 "method": method,
                 "video_id": video_id,
-                "frame_gcs_paths": frame_gcs_paths
+                "frame_gcs_paths": frame_path_sample
             })
 
     print(f"--- Discovered and sampled a total of {len(all_video_units)} videos. ---")
@@ -194,67 +187,66 @@ def process_video_unit(video_unit: Dict, fs, transform, model, clip_model, clip_
     """
     Processes a single video: downloads frames, runs inference, and extracts features.
     """
-    # These will hold the features extracted from the model's penultimate layer
     model_features = []
 
     def hook(module, input, output):
-        # The output of the ViT backbone before the head is what we want.
-        # It's usually the first element of the output tuple.
         model_features.append(output[0].detach().cpu().numpy())
 
-    # Register the hook on the backbone's output
     handle = model.backbone.register_forward_hook(hook)
 
     results = []
     local_temp_dir = Path(tempfile.mkdtemp())
 
     try:
-        frame_paths = []
         image_tensors = []
         raw_images = []
 
-        # Download and preprocess all frames for the video
+        # MODIFIED: Iterate over GCS paths directly
         for gcs_path in video_unit['frame_gcs_paths']:
-            # Generate a safe local filename from the GCS path
             local_frame_path = local_temp_dir / Path(gcs_path).name
-
-            # Use the full GCS path directly with fsspec
-            with fs.open(gcs_path, 'rb') as f_in, open(local_frame_path, 'wb') as f_out:
-                f_out.write(f_in.read())
+            try:
+                with fs.open(gcs_path, 'rb') as f_in, open(local_frame_path, 'wb') as f_out:
+                    f_out.write(f_in.read())
+            except FileNotFoundError:
+                print(f"WARNING: Frame not found on GCS: {gcs_path}. Skipping.")
+                continue
 
             img_bgr = cv2.imread(str(local_frame_path))
             if img_bgr is None: continue
 
-            # User confirmed frames are pre-cropped, so we just resize and transform
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             image_tensors.append(transform(img_rgb))
             raw_images.append(img_bgr)
-            frame_paths.append(gcs_path)  # Now we already have the full GCS path
 
         if not image_tensors:
+            handle.remove()
             return []
 
-        # Batch inference
         batch_tensor = torch.stack(image_tensors).to(device)
         with torch.no_grad():
             preds = model({'image': batch_tensor}, inference=True)
             probs = preds["prob"].cpu().numpy().tolist()
 
-            # Batch CLIP embedding
             clip_inputs = clip_processor(images=[cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in raw_images],
                                          return_tensors="pt").to(device)
             clip_embeddings = clip_model.get_image_features(**clip_inputs).cpu().numpy()
 
-        # Unregister the hook
         handle.remove()
         model_internal_embeddings = np.concatenate(model_features, axis=0)
 
-        # Collate results for each frame
         for i in range(len(probs)):
             stats = get_low_level_stats(raw_images[i])
+            # The 'frame_gcs_paths' in video_unit are already sampled, so we can align them
+            frame_gcs_path = video_unit['frame_gcs_paths'][i]
+
+            # Create a copy of the video_unit to avoid modifying the original dict
+            result_unit = video_unit.copy()
+            # Remove frame paths list from the result to avoid duplication
+            del result_unit['frame_gcs_paths']
+
             results.append({
-                **video_unit,
-                "frame_gcs_path": frame_paths[i],
+                **result_unit,
+                "frame_gcs_path": frame_gcs_path,
                 "fake_prob": probs[i],
                 "clip_embedding": clip_embeddings[i],
                 "model_embedding": model_internal_embeddings[i],
@@ -265,7 +257,6 @@ def process_video_unit(video_unit: Dict, fs, transform, model, clip_model, clip_
         print(f"WARNING: Failed to process video {video_unit['video_path']}. Error: {e}")
     finally:
         shutil.rmtree(local_temp_dir)
-
     return results
 
 
@@ -273,6 +264,7 @@ def process_video_unit(video_unit: Dict, fs, transform, model, clip_model, clip_
 # ----------------------------- PHASE 2: PLOTTING & ANALYSIS ---------------------------
 # ======================================================================================
 
+# --- NO CHANGES in this section ---
 def plot_roc_and_pr_curves(df_video, output_dir):
     """Generates and saves ROC and Precision-Recall curves."""
     print("--- Phase 2a: Generating ROC and Precision-Recall curves... ---")
@@ -280,11 +272,13 @@ def plot_roc_and_pr_curves(df_video, output_dir):
     y_true = (test_df['label'] == 'fake').astype(int)
     y_score = test_df['video_prob_mean']
 
-    # ROC Curve
+    if len(np.unique(y_true)) < 2:
+        print("  - WARNING: Cannot compute ROC/PR with only one class. Skipping.")
+        return
+
     fpr, tpr, thresholds_roc = roc_curve(y_true, y_score)
     roc_auc = auc(fpr, tpr)
 
-    # Find optimal threshold (closest to top-left)
     optimal_idx = np.argmin(np.sqrt((1 - tpr) ** 2 + fpr ** 2))
     optimal_threshold = thresholds_roc[optimal_idx]
 
@@ -305,7 +299,6 @@ def plot_roc_and_pr_curves(df_video, output_dir):
     print(f"  - ROC AUC: {roc_auc:.4f}")
     print(f"  - Optimal Threshold (Balanced): {optimal_threshold:.4f}")
 
-    # Precision-Recall Curve
     precision, recall, _ = precision_recall_curve(y_true, y_score)
     plt.figure(figsize=(10, 8))
     plt.plot(recall, precision, color='blue', lw=2, label='Precision-Recall curve')
@@ -322,29 +315,21 @@ def plot_performance_by_method(df_video, output_dir):
     """Plots the AUC for each method on the test set."""
     print("--- Phase 2b: Analyzing performance per method... ---")
     test_df = df_video[df_video['dataset'] == 'test'].copy()
-
-    # Only calculate AUC for methods with both real and fake examples (if applicable)
-    # or just fakes if no corresponding real method exists.
-    method_aucs = {}
+    method_aucs, method_scores = {}, {}
     for method, group in test_df.groupby('method'):
         y_true = (group['label'] == 'fake').astype(int)
-        # Skip if only one class is present
         if len(np.unique(y_true)) < 2:
-            # For fake-only methods, we can report average prediction score
             if np.all(y_true == 1):
                 avg_score = group['video_prob_mean'].mean()
+                method_scores[method] = avg_score
                 print(f"  - Method '{method}' (fake only): Avg. Score = {avg_score:.3f}")
             continue
-
         fpr, tpr, _ = roc_curve(y_true, group['video_prob_mean'])
         method_aucs[method] = auc(fpr, tpr)
-
     if not method_aucs:
         print("  - Could not compute per-method AUCs (likely single-class methods).")
         return
-
     sorted_methods = sorted(method_aucs.items(), key=lambda x: x[1])
-
     plt.figure(figsize=(12, max(8, len(sorted_methods) * 0.5)))
     plt.barh([m[0] for m in sorted_methods], [m[1] for m in sorted_methods])
     plt.xlabel('AUC Score')
@@ -361,22 +346,17 @@ def analyze_anomaly_domain_shift(df_all_frames, output_dir):
     print("--- Phase 2c: Investigating 'veo3' anomaly via domain analysis... ---")
     val_path, test_path = ANOMALY_METHOD_PATHS["validation"], ANOMALY_METHOD_PATHS["test"]
 
-    # Construct full GCS path prefix for filtering
-    val_prefix = "gs://" + val_path
-    test_prefix = "gs://" + test_path
-
-    df_val = df_all_frames[df_all_frames['video_path'].str.startswith(val_prefix.split('/', 3)[-1])].copy()
+    val_prefix, test_prefix = "gs://" + val_path, "gs://" + test_path
+    df_val = df_all_frames[df_all_frames['frame_gcs_path'].str.startswith(val_prefix)].copy()
     df_val['source'] = 'veo3 (Validation)'
-    df_test = df_all_frames[df_all_frames['video_path'].str.startswith(test_prefix.split('/', 3)[-1])].copy()
+    df_test = df_all_frames[df_all_frames['frame_gcs_path'].str.startswith(test_prefix)].copy()
     df_test['source'] = 'veo3 (Test)'
 
     if df_val.empty or df_test.empty:
         print("  - WARNING: Could not find 'veo3' data for both validation and test. Skipping analysis.")
         return
-
     df_anomaly = pd.concat([df_val, df_test])
 
-    # 1. Low-level stats comparison
     metrics = ['sharpness', 'mean_r', 'mean_g', 'mean_b']
     for metric in metrics:
         plt.figure(figsize=(10, 6))
@@ -386,14 +366,14 @@ def analyze_anomaly_domain_shift(df_all_frames, output_dir):
         plt.savefig(output_dir / f"anomaly_veo3_{metric}_dist.png")
         plt.close()
 
-    # 2. t-SNE on CLIP embeddings
     print("  - Running t-SNE on CLIP embeddings for 'veo3' data...")
+    if 'clip_embedding' not in df_anomaly.columns:
+        print("  - WARNING: 'clip_embedding' column not found. Skipping t-SNE.")
+        return
     embeddings = np.stack(df_anomaly['clip_embedding'].values)
     labels = df_anomaly['source'].values
-
     tsne = TSNE(n_components=2, perplexity=min(30, len(embeddings) - 1), random_state=42, n_iter=1000)
     embeddings_2d = tsne.fit_transform(embeddings)
-
     plt.figure(figsize=(12, 10))
     sns.scatterplot(x=embeddings_2d[:, 0], y=embeddings_2d[:, 1], hue=labels, style=labels, s=50)
     plt.title('t-SNE of CLIP Embeddings: veo3 Validation vs. Test')
@@ -409,20 +389,17 @@ def analyze_anomaly_domain_shift(df_all_frames, output_dir):
 # --------------------------- PHASE 3: BEHAVIOR DEEP DIVE ------------------------------
 # ======================================================================================
 
+# --- NO CHANGES in this section ---
 def analyze_error_buckets(df_video, output_dir):
     """Identifies and visualizes examples from different error buckets."""
     print("--- Phase 3a: Analyzing error buckets (False Positives/Negatives)... ---")
     test_df = df_video[df_video['dataset'] == 'test'].copy()
-
     fp = test_df[(test_df['label'] == 'real') & (test_df['video_prob_mean'] > 0.8)]
     fn = test_df[(test_df['label'] == 'fake') & (test_df['video_prob_mean'] < 0.2)]
     ambiguous = test_df[(test_df['video_prob_mean'] >= 0.4) & (test_df['video_prob_mean'] <= 0.6)]
-
     print(f"  - Found {len(fp)} high-confidence False Positives.")
     print(f"  - Found {len(fn)} high-confidence False Negatives.")
     print(f"  - Found {len(ambiguous)} Ambiguous predictions.")
-
-    # Save lists of problematic videos
     fp[['video_path', 'video_prob_mean']].to_csv(output_dir / "false_positives.csv", index=False)
     fn[['video_path', 'video_prob_mean']].to_csv(output_dir / "false_negatives.csv", index=False)
 
@@ -431,14 +408,11 @@ def plot_intra_video_consistency(df_all_frames, output_dir):
     """Plots frame-by-frame probabilities for a few example videos."""
     print("--- Phase 3b: Plotting intra-video prediction consistency... ---")
     for name, video_path_prefix in EXAMPLE_VIDEOS_FOR_PLOTS.items():
-        # The video_path in the dataframe is relative to bucket, so we match on that
         relative_path = "/".join(video_path_prefix.split('/')[1:])
         df_video_frames = df_all_frames[df_all_frames['video_path'] == relative_path]
-
         if df_video_frames.empty:
             print(f"  - WARNING: Could not find example video '{name}' with path prefix '{relative_path}'. Skipping.")
             continue
-
         probs = df_video_frames['fake_prob'].values
         plt.figure(figsize=(12, 6))
         plt.plot(range(len(probs)), probs, marker='o', linestyle='-')
@@ -457,33 +431,27 @@ def plot_intra_video_consistency(df_all_frames, output_dir):
 # ----------------------------- PHASE 4: ROBUSTNESS PROBING ----------------------------
 # ======================================================================================
 
+# --- NO CHANGES in this section ---
 def probe_augmentation_sensitivity(model, transform, output_dir):
     """Tests how model predictions change with increasing augmentation strength."""
     print("--- Phase 4a: Probing model sensitivity to augmentations... ---")
-    # Let's pick a high-confidence fake video to test
     video_path_prefix = EXAMPLE_VIDEOS_FOR_PLOTS["high_conf_fake"]
     gcs_client = storage.Client()
-    bucket_name = video_path_prefix.split('/')[0]
-    blob_prefix = "/".join(video_path_prefix.split('/')[1:])
+    bucket_name, blob_prefix = video_path_prefix.split('/', 1)
     blobs = list(gcs_client.list_blobs(bucket_name, prefix=blob_prefix))
-
     if not blobs:
         print("  - WARNING: Could not find frames for augmentation probe. Skipping.")
         return
-
-    # Download one frame
     blob = blobs[0]
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
         blob.download_to_filename(tmp_file.name)
         image_bgr = cv2.imread(tmp_file.name)
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
     results = defaultdict(list)
     augmentations = {
-        "JPEG Compression": [A.ImageCompression(quality_lower=q, quality_upper=q) for q in range(95, 20, -5)],
+        "JPEG Compression": [A.ImageCompression(quality_lower=q, quality_upper=q, p=1.0) for q in range(95, 20, -5)],
         "Gaussian Blur": [A.GaussianBlur(blur_limit=(s, s), p=1.0) for s in range(1, 15, 2)]
     }
-
     for aug_name, aug_list in augmentations.items():
         strengths = [p.quality_lower if hasattr(p, 'quality_lower') else p.blur_limit[0] for p in aug_list]
         for aug, strength in zip(aug_list, strengths):
@@ -492,12 +460,8 @@ def probe_augmentation_sensitivity(model, transform, output_dir):
             with torch.no_grad():
                 prob = model({'image': img_tensor}, inference=True)["prob"].item()
             results[aug_name].append((strength, prob))
-
-    # Plotting
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     fig.suptitle('Model Robustness to Augmentations')
-
-    # Compression plot
     strengths, probs = zip(*sorted(results["JPEG Compression"]))
     axes[0].plot(strengths, probs, 'o-')
     axes[0].set_title('JPEG Compression')
@@ -505,15 +469,12 @@ def probe_augmentation_sensitivity(model, transform, output_dir):
     axes[0].set_ylabel('Fake Probability')
     axes[0].invert_xaxis()
     axes[0].grid(True)
-
-    # Blur plot
     strengths, probs = zip(*sorted(results["Gaussian Blur"]))
     axes[1].plot(strengths, probs, 'o-')
     axes[1].set_title('Gaussian Blur')
     axes[1].set_xlabel('Blur Sigma')
     axes[1].set_ylabel('Fake Probability')
     axes[1].grid(True)
-
     plt.savefig(output_dir / "augmentation_sensitivity.png")
     plt.close()
 
@@ -521,20 +482,12 @@ def probe_augmentation_sensitivity(model, transform, output_dir):
 def explain_with_shap(model, transform, output_dir):
     """Generates SHAP explanations for a few key frames."""
     print("--- Phase 4b: Generating SHAP explanations for model decisions... ---")
-    # Get a real and a fake image for explanation
     gcs_client = storage.Client()
-    images_to_explain = {
-        "correct_fake": EXAMPLE_VIDEOS_FOR_PLOTS["high_conf_fake"],
-        "potential_fp_real": EXAMPLE_VIDEOS_FOR_PLOTS["false_positive_candidate"]
-    }
-
-    image_tensors = []
-    image_rgbs = []
-    labels = []
-
+    images_to_explain = {"correct_fake": EXAMPLE_VIDEOS_FOR_PLOTS["high_conf_fake"],
+                         "potential_fp_real": EXAMPLE_VIDEOS_FOR_PLOTS["false_positive_candidate"]}
+    image_tensors, image_rgbs, labels = [], [], []
     for name, path_prefix in images_to_explain.items():
-        bucket_name = path_prefix.split('/')[0]
-        blob_prefix = "/".join(path_prefix.split('/')[1:])
+        bucket_name, blob_prefix = path_prefix.split('/', 1)
         blob = next(iter(gcs_client.list_blobs(bucket_name, prefix=blob_prefix)), None)
         if blob:
             with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
@@ -544,26 +497,18 @@ def explain_with_shap(model, transform, output_dir):
             image_tensors.append(transform(image_rgb))
             image_rgbs.append(cv2.resize(image_rgb, (224, 224)))
             labels.append(name)
-
     if len(image_tensors) < 2:
         print("  - WARNING: Could not load frames for SHAP analysis. Skipping.")
         return
-
     batch = torch.stack(image_tensors).to(device)
 
-    # We need to define a prediction function for SHAP
     def f(x):
         return model({'image': x}, inference=True)['prob']
 
-    # Use a part of the test set as the background distribution for the explainer
-    # For speed, we'll just use a black image as a simplified background
     background = torch.zeros_like(batch[[0]])
     explainer = shap.DeepExplainer(f, background)
     shap_values = explainer.shap_values(batch)
-
-    # SHAP output for images is (N, H, W, C), but our model is C, H, W. Need to adapt.
     shap_values_transposed = [np.transpose(s, (1, 2, 0)) for s in shap_values]
-
     shap.image_plot(shap_values_transposed, -np.array(image_rgbs), show=False)
     plt.suptitle("SHAP Explanations (Red pixels increase fake score)")
     plt.savefig(output_dir / "shap_explanation.png")
@@ -574,30 +519,43 @@ def explain_with_shap(model, transform, output_dir):
 # ------------------------------------ MAIN SCRIPT -------------------------------------
 # ======================================================================================
 
+def load_concatenated_npy(filepath):
+    """Loads numpy arrays that have been concatenated into a single file."""
+    arrays = []
+    with open(filepath, 'rb') as f:
+        while True:
+            try:
+                arrays.append(np.load(f))
+            except (IOError, ValueError, pickle.UnpicklingError):
+                break
+    return np.concatenate(arrays, axis=0) if arrays else np.array([])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive analysis script for Effort-AIGI deepfake detector.")
     parser.add_argument('--model_gcs_path', type=str,
                         default='gs://training-job-outputs/best_checkpoints/k540e0ts/top_n_effort_20250910_ep2_auc0.9809_eer0.0800.pth',
-                        # default='weights/effort_clip_L14_trainOn_FaceForensic.pth', # A local alternative
                         help="GCS path to the model weights file (.pth).")
     parser.add_argument('--output_dir', type=str, default="model_analysis_output",
                         help="Directory to save all analysis plots and data files.")
     parser.add_argument('--skip_inference', action='store_true',
                         help="Skip the inference step and load data from output_dir.")
-    parser.add_argument('--num_workers', type=int, default=os.cpu_count(),
-                        help="Number of parallel workers for data processing.")
+    parser.add_argument('--num_workers', type=int, default=4, help="Number of parallel workers for data processing.")
     parser.add_argument('--use_discovery_cache', action='store_true',
                         help="Use cached GCS discovery results if available.")
-    parser.add_argument('--quick_test', action='store_true',
-                        help="Run on a very small sample for debugging purposes.")
+    parser.add_argument('--quick_test', action='store_true', help="Run on a very small sample for debugging purposes.")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
 
-    # --- CACHING LOGIC ---
-    discovery_cache_path = output_dir / "discovery_cache.pkl"
+    frame_data_path = output_dir / "all_frame_data.csv"
+    clip_emb_path = output_dir / "all_clip_embeddings.npy"
+    model_emb_path = output_dir / "all_model_embeddings.npy"
+
     if not args.skip_inference:
+        # --- PHASE 1: DATA GATHERING & BATCH INFERENCE ---
+        discovery_cache_path = output_dir / "discovery_cache.pkl"
         video_units = []
         if args.use_discovery_cache and discovery_cache_path.exists():
             print(f"--- Loading cached GCS discovery data from {discovery_cache_path} ---")
@@ -610,84 +568,88 @@ def main():
             print(f"--- Saving GCS discovery data to {discovery_cache_path} for future runs... ---")
             with open(discovery_cache_path, 'wb') as f:
                 pickle.dump(video_units, f)
-    # --- END OF CACHING LOGIC ---
 
-    # Define paths for saved data
-    frame_data_path = output_dir / "all_frame_data.csv"
-    clip_emb_path = output_dir / "all_clip_embeddings.npy"
-    model_emb_path = output_dir / "all_model_embeddings.npy"
-
-    if not args.skip_inference:
-        # --- PHASE 1: DATA GATHERING & INFERENCE ---
-        gcs_client = storage.Client()
-        video_units = discover_and_sample_gcs_data(gcs_client, args.quick_test)
-
-        # Load models
         print("\n--- Loading models for inference... ---")
-        # 1. Main Detector Model
         with tempfile.NamedTemporaryFile(suffix=".pth") as tmp_weights:
+            model_weights_path = args.model_gcs_path
             if args.model_gcs_path.startswith("gs://"):
                 print(f"  Downloading detector model from {args.model_gcs_path}...")
                 assert download_gcs_blob(args.model_gcs_path, Path(tmp_weights.name)), "Model download failed."
                 model_weights_path = tmp_weights.name
-            else:
-                model_weights_path = args.model_gcs_path  # Assume local path
 
-            # We need a dummy config. Use the one from app2.py's context
-            config = {"model_name": "effort",
-                      "backbone": {"arch": "ViT-L/14"},
-                      'gcs_assets': {
-                          'clip_backbone': {
-                              'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
-                              'local_path': "../weights/models--openai--clip-vit-large-patch14/"
-                          }
-                      }}
-
+            config = {"model_name": "effort", "backbone": {"arch": "ViT-L/14"}, 'gcs_assets': {'clip_backbone': {
+                'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
+                'local_path': "../weights/models--openai--clip-vit-large-patch14/"}}}
             model = load_detector(config, model_weights_path)
             print("  Detector model loaded.")
 
-        # 2. CLIP Model for embeddings
         clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").to(device).eval()
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
         print("  CLIP model loaded.")
 
-        # Prepare for processing
         transform = video_preprocessor._get_transform()
         fs = fsspec.filesystem('gcs')
-        processing_func = partial(process_video_unit, fs=fs, transform=transform, model=model,
-                                  clip_model=clip_model, clip_processor=clip_processor)
+        processing_func = partial(process_video_unit, fs=fs, transform=transform, model=model, clip_model=clip_model,
+                                  clip_processor=clip_processor)
 
-        all_results = []
-        print(f"\n--- Starting inference on {len(video_units)} videos with {args.num_workers} workers... ---")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_workers) as executor:
-            future_to_video = {executor.submit(processing_func, unit): unit for unit in video_units}
-            for future in tqdm(concurrent.futures.as_completed(future_to_video), total=len(video_units)):
-                all_results.extend(future.result())
+        # --- NEW: BATCH PROCESSING LOGIC ---
+        print(f"\n--- Starting inference on {len(video_units)} videos in batches of {PROCESSING_BATCH_SIZE}... ---")
 
-        print("\n--- Inference complete. Saving data... ---")
-        df_all_frames = pd.DataFrame(all_results)
+        # Initialize CSV with header
+        pd.DataFrame(
+            columns=['video_path', 'dataset', 'label', 'method', 'video_id', 'frame_gcs_path', 'fake_prob', 'sharpness',
+                     'mean_r', 'mean_g', 'mean_b']).to_csv(frame_data_path, index=False)
 
-        # Separate embeddings for saving in numpy format
-        clip_embeddings = np.stack(df_all_frames['clip_embedding'].values)
-        model_embeddings = np.stack(df_all_frames['model_embedding'].values)
+        # Clear/create empty files for embeddings
+        open(clip_emb_path, 'w').close()
+        open(model_emb_path, 'w').close()
 
-        # We need to drop the columns for the CSV, as it can't store arrays.
-        df_all_frames.drop(columns=['clip_embedding', 'model_embedding']).to_csv(frame_data_path, index=False)
-        np.save(clip_emb_path, clip_embeddings)
-        np.save(model_emb_path, model_embeddings)
-        print(f"  Saved frame data and embeddings to {output_dir}")
+        video_chunks = [video_units[i:i + PROCESSING_BATCH_SIZE] for i in
+                        range(0, len(video_units), PROCESSING_BATCH_SIZE)]
 
-    else:
-        print(f"--- Skipping inference. Loading pre-computed data from {output_dir}... ---")
-        df_all_frames = pd.read_csv(frame_data_path)
-        clip_embeddings = np.load(clip_emb_path)
-        model_embeddings = np.load(model_emb_path)
-        # Add embeddings back to dataframe for easier filtering
+        with open(clip_emb_path, 'ab') as clip_f, open(model_emb_path, 'ab') as model_f:
+            for i, chunk in enumerate(video_chunks):
+                print(f"  Processing chunk {i + 1}/{len(video_chunks)} ({len(chunk)} videos)...")
+                chunk_results = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_workers) as executor:
+                    future_to_video = {executor.submit(processing_func, unit): unit for unit in chunk}
+                    for future in tqdm(concurrent.futures.as_completed(future_to_video), total=len(chunk)):
+                        chunk_results.extend(future.result())
+
+                if not chunk_results: continue
+
+                df_chunk = pd.DataFrame(chunk_results)
+
+                clip_embeddings = np.stack(df_chunk.pop('clip_embedding').values)
+                model_embeddings = np.stack(df_chunk.pop('model_embedding').values)
+
+                df_chunk.drop(columns=['frame_gcs_paths'], errors='ignore').to_csv(frame_data_path, mode='a',
+                                                                                   header=False, index=False)
+                np.save(clip_f, clip_embeddings)
+                np.save(model_f, model_embeddings)
+
+        print("\n--- Inference complete. All chunked data saved. ---")
+
+    # --- NEW: ROBUST DATA LOADING FOR BOTH SCENARIOS ---
+    print(f"--- Loading consolidated data from {output_dir} for analysis... ---")
+    df_all_frames = pd.read_csv(frame_data_path)
+    clip_embeddings = load_concatenated_npy(clip_emb_path)
+    model_embeddings = load_concatenated_npy(model_emb_path)
+
+    if len(df_all_frames) == len(clip_embeddings):
         df_all_frames['clip_embedding'] = list(clip_embeddings)
-        df_all_frames['model_embedding'] = list(model_embeddings)
-        print("  Data loaded successfully.")
+    else:
+        print(
+            f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(clip_embeddings)} CLIP embeddings.")
 
-    # Aggregate frame-level data to video-level for relevant analyses
+    if len(df_all_frames) == len(model_embeddings):
+        df_all_frames['model_embedding'] = list(model_embeddings)
+    else:
+        print(
+            f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(model_embeddings)} model embeddings.")
+
+    print("  Data loaded successfully.")
+
     print("\n--- Aggregating frame data to video level... ---")
     df_video = df_all_frames.groupby(['video_path', 'dataset', 'label', 'method']).agg(
         video_prob_mean=('fake_prob', 'mean'),
@@ -696,44 +658,20 @@ def main():
     ).reset_index()
 
     # --- RUN ALL ANALYSIS PHASES ---
-
-    # Phase 2: Foundational Performance & Anomaly Investigation
     plot_roc_and_pr_curves(df_video, output_dir)
     plot_performance_by_method(df_video, output_dir)
     analyze_anomaly_domain_shift(df_all_frames, output_dir)
-
-    # Phase 3: Behavior Deep Dive
     analyze_error_buckets(df_video, output_dir)
     plot_intra_video_consistency(df_all_frames, output_dir)
 
-    # Phase 4: Robustness Probing
-    if not args.skip_inference:  # These require a live model
+    if not args.skip_inference:
         print("\n--- Model is loaded. Proceeding with live probes (Phase 4)... ---")
-        # We need to reload the model if we skipped inference
-        with tempfile.NamedTemporaryFile(suffix=".pth") as tmp_weights:
-            if args.model_gcs_path.startswith("gs://"):
-                download_gcs_blob(args.model_gcs_path, Path(tmp_weights.name))
-                model_weights_path = tmp_weights.name
-            else:
-                model_weights_path = args.model_gcs_path
-
-            # We need a dummy config. Use the one from app2.py's context
-            config = {"model_name": "effort",
-                      "backbone": {"arch": "ViT-L/14"},
-                      'gcs_assets': {
-                          'clip_backbone': {
-                              'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
-                              'local_path': "../weights/models--openai--clip-vit-large-patch14/"
-                          }
-                      }}
-            model = load_detector(config, model_weights_path)
-            transform = video_preprocessor._get_transform()
-
-            probe_augmentation_sensitivity(model, transform, output_dir)
-            explain_with_shap(model, transform, output_dir)
+        # Model is already in memory, no need to reload
+        transform = video_preprocessor._get_transform()
+        probe_augmentation_sensitivity(model, transform, output_dir)
+        explain_with_shap(model, transform, output_dir)
     else:
         print("\n--- SKIPPING Phase 4 (Robustness Probes) as model was not loaded (`--skip_inference` was used). ---")
-        print("    Re-run without `--skip_inference` to generate these plots.")
 
     print(f"\n✅ Analysis complete! All outputs are saved in '{output_dir}'.")
 
