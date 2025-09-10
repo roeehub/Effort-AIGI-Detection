@@ -577,9 +577,14 @@ def main():
                 assert download_gcs_blob(args.model_gcs_path, Path(tmp_weights.name)), "Model download failed."
                 model_weights_path = tmp_weights.name
 
-            config = {"model_name": "effort", "backbone": {"arch": "ViT-L/14"}, 'gcs_assets': {'clip_backbone': {
-                'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
-                'local_path': "../weights/models--openai--clip-vit-large-patch14/"}}}
+            config = {"model_name": "effort",
+                      "backbone": {"arch": "ViT-L/14"},
+                      'gcs_assets': {
+                          'clip_backbone': {
+                              'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
+                              'local_path': "../weights/models--openai--clip-vit-large-patch14/"
+                          }
+                      }}
             model = load_detector(config, model_weights_path)
             print("  Detector model loaded.")
 
