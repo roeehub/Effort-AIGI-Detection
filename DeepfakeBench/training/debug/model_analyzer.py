@@ -54,7 +54,7 @@ BUCKETS_TO_ANALYZE = {
 
 # --- Sampling Parameters ---
 # For the large df40 bucket, we sample to keep the analysis manageable.
-DF40_VIDEOS_PER_METHOD = 100
+DF40_VIDEOS_PER_METHOD = 50
 # For all videos, we sample N frames.
 FRAMES_PER_VIDEO = 16
 
