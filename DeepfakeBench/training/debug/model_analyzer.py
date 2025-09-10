@@ -163,7 +163,10 @@ def discover_and_sample_gcs_data(gcs_client, quick_test=False):
             video_id = "/".join(parts[2:])
 
             # Sample frames within the video
-            frame_sample = random.sample(video_blobs, min(FRAMES_PER_VIDEO, len(video_blobs)))
+            frame_blob_sample = random.sample(video_blobs, min(FRAMES_PER_VIDEO, len(video_blobs)))
+
+            # --- FIX: Convert Blob objects to serializable GCS path strings ---
+            frame_gcs_paths = [f"gs://{blob.bucket.name}/{blob.name}" for blob in frame_blob_sample]
 
             all_video_units.append({
                 "video_path": video_path,
@@ -171,7 +174,7 @@ def discover_and_sample_gcs_data(gcs_client, quick_test=False):
                 "label": label,
                 "method": method,
                 "video_id": video_id,
-                "frame_blobs": frame_sample
+                "frame_gcs_paths": frame_gcs_paths
             })
 
     print(f"--- Discovered and sampled a total of {len(all_video_units)} videos. ---")
@@ -211,9 +214,12 @@ def process_video_unit(video_unit: Dict, fs, transform, model, clip_model, clip_
         raw_images = []
 
         # Download and preprocess all frames for the video
-        for blob in video_unit['frame_blobs']:
-            local_frame_path = local_temp_dir / blob.name.replace('/', '_')
-            with fs.open(f"{blob.bucket.name}/{blob.name}", 'rb') as f_in, open(local_frame_path, 'wb') as f_out:
+        for gcs_path in video_unit['frame_gcs_paths']:
+            # Generate a safe local filename from the GCS path
+            local_frame_path = local_temp_dir / Path(gcs_path).name
+
+            # Use the full GCS path directly with fsspec
+            with fs.open(gcs_path, 'rb') as f_in, open(local_frame_path, 'wb') as f_out:
                 f_out.write(f_in.read())
 
             img_bgr = cv2.imread(str(local_frame_path))
@@ -223,7 +229,7 @@ def process_video_unit(video_unit: Dict, fs, transform, model, clip_model, clip_
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             image_tensors.append(transform(img_rgb))
             raw_images.append(img_bgr)
-            frame_paths.append(f"gs://{blob.bucket.name}/{blob.name}")
+            frame_paths.append(gcs_path)  # Now we already have the full GCS path
 
         if not image_tensors:
             return []
