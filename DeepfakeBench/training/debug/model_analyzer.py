@@ -59,7 +59,7 @@ DF40_VIDEOS_PER_METHOD = 50
 # For all videos, we sample N frames.
 FRAMES_PER_VIDEO = 16
 
-PROCESSING_BATCH_SIZE = 200  # Process 200 videos, save, then do the next 200
+PROCESSING_BATCH_SIZE = 50
 
 # --- Analysis Parameters ---
 # Define the specific methods to investigate for the anomaly
