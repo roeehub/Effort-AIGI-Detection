@@ -716,7 +716,16 @@ def main():
                 model_weights_path = tmp_weights.name
             else:
                 model_weights_path = args.model_gcs_path
-            config = {"model_name": "EffortDetector", "backbone": {"arch": "ViT-L/14"}}
+
+            # We need a dummy config. Use the one from app2.py's context
+            config = {"model_name": "effort",
+                      "backbone": {"arch": "ViT-L/14"},
+                      'gcs_assets': {
+                          'clip_backbone': {
+                              'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
+                              'local_path': "../weights/models--openai--clip-vit-large-patch14/"
+                          }
+                      }}
             model = load_detector(config, model_weights_path)
             transform = video_preprocessor._get_transform()
 
