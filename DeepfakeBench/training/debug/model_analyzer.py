@@ -596,7 +596,7 @@ def main():
                     open(chunk_model_path, 'ab') as model_f, \
                     open(chunk_csv_path, 'a', newline='') as csv_f:
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                     future_to_video = {executor.submit(processing_func, unit): unit for unit in chunk}
 
                     # Process results as they complete to keep memory usage low
