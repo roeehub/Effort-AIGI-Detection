@@ -38,3 +38,4 @@ data_analysis_results.csv
 frame_manifest.json
 frame_properties.parquet
 data_analysis_plots/
+debug/

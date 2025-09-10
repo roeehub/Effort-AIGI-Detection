@@ -3,3 +3,5 @@ weights/
 effortvenv/
 partial_manifest.json
 requirements_effort.txt
+debug/
+data_analysis_plots/
