@@ -499,13 +499,91 @@ def explain_with_shap(model, transform, output_dir):
 
 
 # ======================================================================================
+# ----------------------------- PHASE 5: DEEPFAKE METHOD ANALYSIS ----------------------
+# ======================================================================================
+
+def analyze_tiktok_distribution(df_all_frames, output_dir):
+    """
+    Analyzes the 'tiktok' method from the test set by comparing its data distribution
+    against the entire training set to identify potential domain shift.
+    This is wrapped in a try-except block to prevent crashes.
+    """
+    print("--- Phase 5: Investigating 'tiktok' method distribution shift... ---")
+    try:
+        # 1. Isolate the data for comparison
+        df_tiktok = df_all_frames[
+            (df_all_frames['dataset'] == 'test') &
+            (df_all_frames['method'] == 'tiktok')
+            ].copy()
+        df_tiktok['source'] = 'tiktok (Test)'
+
+        # Combine both training buckets to form the training set distribution
+        df_train = df_all_frames[
+            df_all_frames['dataset'].isin(['df40_train', 'collected_train'])
+        ].copy()
+        df_train['source'] = 'Training Data'
+
+        # 2. Robustness Check: Ensure we have data to analyze
+        if df_tiktok.empty or df_train.empty:
+            print("  - WARNING: Could not find sufficient data for 'tiktok' or training sets. Skipping analysis.")
+            return
+
+        print(f"  - Comparing {len(df_tiktok)} 'tiktok' frames against {len(df_train)} training frames.")
+        df_comparison = pd.concat([df_tiktok, df_train])
+
+        # 3. Analyze low-level image statistics
+        metrics_to_plot = ['sharpness', 'mean_r', 'mean_g', 'mean_b', 'fake_prob']
+        for metric in metrics_to_plot:
+            plt.figure(figsize=(10, 6))
+            sns.kdeplot(data=df_comparison, x=metric, hue='source', fill=True, common_norm=False, cut=0)
+            plt.title(f"Distribution of '{metric.title()}' for TikTok vs. Training Data")
+            plt.grid(True)
+            plt.savefig(output_dir / f"tiktok_vs_train_{metric}_dist.png")
+            plt.close()
+
+        # 4. Analyze high-level CLIP embedding space
+        if 'clip_embedding' not in df_comparison.columns:
+            print("  - WARNING: 'clip_embedding' column not found. Skipping t-SNE analysis for tiktok.")
+            return
+
+        print("  - Running t-SNE on CLIP embeddings for 'tiktok' vs. training data...")
+        # To make t-SNE manageable, sample if the dataset is too large
+        if len(df_comparison) > 5000:
+            print(f"    Dataset is large ({len(df_comparison)} samples), taking a random sample of 5000 for t-SNE.")
+            df_comparison_sample = df_comparison.sample(n=5000, random_state=42)
+        else:
+            df_comparison_sample = df_comparison
+
+        embeddings = np.stack(df_comparison_sample['clip_embedding'].values)
+        labels = df_comparison_sample['source'].values
+
+        tsne = TSNE(n_components=2, perplexity=min(30, len(embeddings) - 1), random_state=42, n_iter=1000, init='pca')
+        embeddings_2d = tsne.fit_transform(embeddings)
+
+        plt.figure(figsize=(12, 10))
+        sns.scatterplot(x=embeddings_2d[:, 0], y=embeddings_2d[:, 1], hue=labels, style=labels, s=40, alpha=0.7)
+        plt.title('t-SNE of CLIP Embeddings: TikTok (Test) vs. Training Data')
+        plt.xlabel('t-SNE Dimension 1')
+        plt.ylabel('t-SNE Dimension 2')
+        plt.legend(title='Data Source')
+        plt.grid(True)
+        plt.savefig(output_dir / "tiktok_vs_train_tsne_clip.png")
+        plt.close()
+
+    except Exception as e:
+        print(f"  - ERROR: An unexpected error occurred during the tiktok analysis: {e}")
+        print("  - Continuing with the rest of the script.")
+
+
+# ======================================================================================
 # ------------------------------------ MAIN SCRIPT -------------------------------------
 # ======================================================================================
 
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive analysis script for Effort-AIGI deepfake detector.")
     parser.add_argument('--model_gcs_path', type=str,
-                        default='gs://training-job-outputs/best_checkpoints/k540e0ts/top_n_effort_20250910_ep2_auc0.9809_eer0.0800.pth',
+                        default='gs://training-job-outputs/best_checkpoints/w5cc8v6x/top_n_effort_20250910_ep1_auc0.9697_eer0.1055.pth',
+                        # default='gs://training-job-outputs/best_checkpoints/k540e0ts/top_n_effort_20250910_ep2_auc0.9809_eer0.0800.pth',
                         help="GCS path to the model weights file (.pth).")
     parser.add_argument('--output_dir', type=str, default="model_analysis_output",
                         help="Directory to save all analysis plots and data files.")
@@ -677,6 +755,7 @@ def main():
     analyze_anomaly_domain_shift(df_all_frames, output_dir)
     analyze_error_buckets(df_video, output_dir)
     plot_intra_video_consistency(df_all_frames, output_dir)
+    analyze_tiktok_distribution(df_all_frames, output_dir)
 
     model_is_loaded = 'model' in locals()
 
