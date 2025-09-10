@@ -639,7 +639,7 @@ def main():
                       'gcs_assets': {
                           'clip_backbone': {
                               'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
-                              'local_path': "./weights/models--openai--clip-vit-large-patch14/"
+                              'local_path': "../weights/models--openai--clip-vit-large-patch14/"
                           }
                       }}
 
