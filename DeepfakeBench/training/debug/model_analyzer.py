@@ -4,6 +4,7 @@ import random
 import tempfile
 import shutil
 import time
+import pickle
 import sys
 import warnings
 from pathlib import Path
@@ -579,12 +580,31 @@ def main():
                         help="Skip the inference step and load data from output_dir.")
     parser.add_argument('--num_workers', type=int, default=os.cpu_count(),
                         help="Number of parallel workers for data processing.")
+    parser.add_argument('--use_discovery_cache', action='store_true',
+                        help="Use cached GCS discovery results if available.")
     parser.add_argument('--quick_test', action='store_true',
                         help="Run on a very small sample for debugging purposes.")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
+
+    # --- CACHING LOGIC ---
+    discovery_cache_path = output_dir / "discovery_cache.pkl"
+    if not args.skip_inference:
+        video_units = []
+        if args.use_discovery_cache and discovery_cache_path.exists():
+            print(f"--- Loading cached GCS discovery data from {discovery_cache_path} ---")
+            with open(discovery_cache_path, 'rb') as f:
+                video_units = pickle.load(f)
+            print(f"  Loaded {len(video_units)} video units from cache.")
+        else:
+            gcs_client = storage.Client()
+            video_units = discover_and_sample_gcs_data(gcs_client, args.quick_test)
+            print(f"--- Saving GCS discovery data to {discovery_cache_path} for future runs... ---")
+            with open(discovery_cache_path, 'wb') as f:
+                pickle.dump(video_units, f)
+    # --- END OF CACHING LOGIC ---
 
     # Define paths for saved data
     frame_data_path = output_dir / "all_frame_data.csv"
@@ -608,7 +628,7 @@ def main():
                 model_weights_path = args.model_gcs_path  # Assume local path
 
             # We need a dummy config. Use the one from app2.py's context
-            config = {"model_name": "EffortDetector", "backbone": {"arch": "ViT-L/14"}}
+            config = {"model_name": "effort", "backbone": {"arch": "ViT-L/14"}}
             model = load_detector(config, model_weights_path)
             print("  Detector model loaded.")
 
