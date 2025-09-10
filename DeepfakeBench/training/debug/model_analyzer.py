@@ -566,7 +566,7 @@ def main():
         processing_func = partial(process_video_unit, fs=fs, transform=transform, model=model, clip_model=clip_model,
                                   clip_processor=clip_processor)
 
-        # <<< FINALIZED: RESUMABLE AND MEMORY-EFFICIENT BATCH PROCESSING LOGIC >>>
+        # <<< CORRECTED: RESUMABLE AND MEMORY-EFFICIENT BATCH PROCESSING LOGIC >>>
         print(
             f"\n--- Starting resumable inference on {len(video_units)} videos in batches of {PROCESSING_BATCH_SIZE}... ---")
         chunk_output_dir.mkdir(exist_ok=True)
@@ -579,50 +579,44 @@ def main():
             chunk_clip_path = chunk_output_dir / f"chunk_{i}_clip.npy"
             chunk_model_path = chunk_output_dir / f"chunk_{i}_model.npy"
 
-            # Check if this chunk is already fully processed
+            # Check if this chunk is already fully processed and saved correctly
             if chunk_csv_path.exists() and chunk_clip_path.exists() and chunk_model_path.exists():
                 print(f"  Chunk {i + 1}/{len(video_chunks)} already processed. Skipping.")
                 continue
 
             print(f"  Processing chunk {i + 1}/{len(video_chunks)} ({len(chunk)} videos)...")
 
-            # Write header for the chunk's CSV file
-            header = ['video_path', 'dataset', 'label', 'method', 'video_id', 'frame_gcs_path',
-                      'fake_prob', 'sharpness', 'mean_r', 'mean_g', 'mean_b']
-            pd.DataFrame(columns=header).to_csv(chunk_csv_path, index=False)
+            chunk_frame_results = []
 
-            # Open files for appending. numpy files use binary append ('ab').
-            with open(chunk_clip_path, 'ab') as clip_f, \
-                    open(chunk_model_path, 'ab') as model_f, \
-                    open(chunk_csv_path, 'a', newline='') as csv_f:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_workers) as executor:
+                future_to_video = {executor.submit(processing_func, unit): unit for unit in chunk}
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    future_to_video = {executor.submit(processing_func, unit): unit for unit in chunk}
+                for future in tqdm(concurrent.futures.as_completed(future_to_video), total=len(chunk),
+                                   desc=f"Chunk {i + 1}"):
+                    try:
+                        video_results = future.result()
+                        if video_results:
+                            chunk_frame_results.extend(video_results)
+                    except Exception as exc:
+                        video_unit = future_to_video[future]
+                        print(f"\nWARNING: Video {video_unit['video_path']} generated an exception: {exc}")
 
-                    # Process results as they complete to keep memory usage low
-                    for future in tqdm(concurrent.futures.as_completed(future_to_video), total=len(chunk),
-                                       desc=f"Chunk {i + 1}"):
-                        try:
-                            video_results = future.result()
-                            if not video_results:
-                                continue
+            if not chunk_frame_results:
+                print(f"  Chunk {i + 1} yielded no results. Moving to next.")
+                continue
 
-                            # Process one video's results at a time
-                            df_video_results = pd.DataFrame(video_results)
+            # Now, process and save the entire chunk's data at once
+            df_chunk = pd.DataFrame(chunk_frame_results)
 
-                            clip_embeddings = np.stack(df_video_results.pop('clip_embedding').values)
-                            model_embeddings = np.stack(df_video_results.pop('model_embedding').values)
+            # Pop embeddings before saving the CSV
+            clip_embeddings_chunk = np.stack(df_chunk.pop('clip_embedding').values)
+            model_embeddings_chunk = np.stack(df_chunk.pop('model_embedding').values)
 
-                            # Append data to files immediately, without header
-                            df_video_results.drop(columns=['frame_gcs_paths'], errors='ignore').to_csv(csv_f,
-                                                                                                       header=False,
-                                                                                                       index=False)
-                            np.save(clip_f, clip_embeddings)
-                            np.save(model_f, model_embeddings)
-
-                        except Exception as exc:
-                            video_unit = future_to_video[future]
-                            print(f"\nWARNING: Video {video_unit['video_path']} generated an exception: {exc}")
+            # Save files correctly
+            df_chunk.to_csv(chunk_csv_path, index=False)
+            np.save(chunk_clip_path, clip_embeddings_chunk)
+            np.save(chunk_model_path, model_embeddings_chunk)
+            print(f"  Chunk {i + 1} saved successfully.")
 
         print("\n--- Inference complete. All chunks are processed and saved. ---")
 
