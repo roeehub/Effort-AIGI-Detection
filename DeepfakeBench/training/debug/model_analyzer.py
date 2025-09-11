@@ -463,49 +463,87 @@ def plot_intra_video_consistency(df_all_frames, output_dir, example_videos: Dict
 def probe_augmentation_sensitivity(model, transform, output_dir, example_videos: Dict[str, str]):
     """Tests how model predictions change with increasing augmentation strength."""
     print("--- Phase 4a: Probing model sensitivity to augmentations... ---")
+
     video_path_prefix = example_videos.get("high_conf_fake")
     if not video_path_prefix:
         print("  - WARNING: 'high_conf_fake' example not found for augmentation probe. Skipping.")
         return
+
     gcs_client = storage.Client()
-    bucket_name, blob_prefix = video_path_prefix.split('/', 1)
-    blobs = list(gcs_client.list_blobs(bucket_name, prefix=blob_prefix))
-    if not blobs:
-        print("  - WARNING: Could not find frames for augmentation probe. Skipping.")
+    try:
+        bucket_name, blob_prefix = video_path_prefix.split('/', 1)
+        blobs = list(gcs_client.list_blobs(bucket_name, prefix=blob_prefix))
+        if not blobs:
+            print(f"  - WARNING: Could not find frames for augmentation probe at {video_path_prefix}. Skipping.")
+            return
+        blob = blobs[0]
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
+            blob.download_to_filename(tmp_file.name)
+            image_bgr = cv2.imread(tmp_file.name)
+        if image_bgr is None:
+            print("  - WARNING: Failed to read image for augmentation probe. Skipping.")
+            return
+    except Exception as e:
+        print(f"  - WARNING: Failed to download or process image for augmentation probe. Error: {e}. Skipping.")
         return
-    blob = blobs[0]
-    with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
-        blob.download_to_filename(tmp_file.name)
-        image_bgr = cv2.imread(tmp_file.name)
+
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     results = defaultdict(list)
+
+    # --- CORRECTED AUGMENTATION DEFINITIONS & STRENGTH RETRIEVAL ---
     augmentations = {
-        "JPEG Compression": [A.ImageCompression(quality_lower=q, quality_upper=q, p=1.0) for q in range(95, 20, -5)],
-        "Gaussian Blur": [A.GaussianBlur(blur_limit=(s, s), p=1.0) for s in range(1, 15, 2)]
+        "JPEG Compression": {
+            "augs": [A.ImageCompression(quality=q, p=1.0) for q in range(95, 20, -5)],
+            "strength_attr": "quality"
+        },
+        "Gaussian Blur": {
+            "augs": [A.GaussianBlur(blur_limit=(s, s), p=1.0) for s in range(1, 15, 2)],
+            "strength_attr": "blur_limit"
+        }
     }
-    for aug_name, aug_list in augmentations.items():
-        strengths = [p.quality_lower if hasattr(p, 'quality_lower') else p.blur_limit[0] for p in aug_list]
-        for aug, strength in zip(aug_list, strengths):
+
+    for aug_name, aug_info in augmentations.items():
+        aug_list = aug_info["augs"]
+        strength_attr = aug_info["strength_attr"]
+
+        for aug in aug_list:
+            # Get the strength value correctly
+            strength_val = getattr(aug, strength_attr)
+            if isinstance(strength_val, tuple):  # For blur_limit which is a tuple
+                strength_val = strength_val[0]
+
             aug_image = aug(image=image_rgb)['image']
             img_tensor = transform(aug_image).unsqueeze(0).to(device)
             with torch.no_grad():
                 prob = model({'image': img_tensor}, inference=True)["prob"].item()
-            results[aug_name].append((strength, prob))
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+            results[aug_name].append((strength_val, prob))
+
+    # --- PLOTTING LOGIC (REMAINS THE SAME) ---
+    if not results:
+        print("  - No augmentation results to plot.")
+        return
+
+    fig, axes = plt.subplots(1, len(results), figsize=(8 * len(results), 6))
     fig.suptitle('Model Robustness to Augmentations')
-    strengths, probs = zip(*sorted(results["JPEG Compression"]))
-    axes[0].plot(strengths, probs, 'o-')
-    axes[0].set_title('JPEG Compression')
-    axes[0].set_xlabel('JPEG Quality')
-    axes[0].set_ylabel('Fake Probability')
-    axes[0].invert_xaxis()
-    axes[0].grid(True)
-    strengths, probs = zip(*sorted(results["Gaussian Blur"]))
-    axes[1].plot(strengths, probs, 'o-')
-    axes[1].set_title('Gaussian Blur')
-    axes[1].set_xlabel('Blur Sigma')
-    axes[1].set_ylabel('Fake Probability')
-    axes[1].grid(True)
+
+    # Ensure axes is always a list for consistent indexing
+    if len(results) == 1:
+        axes = [axes]
+
+    for ax, (aug_name, data) in zip(axes, results.items()):
+        if not data: continue
+        strengths, probs = zip(*sorted(data))
+        ax.plot(strengths, probs, 'o-')
+        ax.set_title(aug_name)
+        ax.set_ylabel('Fake Probability')
+        ax.grid(True)
+        if "Compression" in aug_name:
+            ax.set_xlabel('JPEG Quality')
+            ax.invert_xaxis()
+        elif "Blur" in aug_name:
+            ax.set_xlabel('Blur Sigma')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(output_dir / "augmentation_sensitivity.png")
     plt.close()
 
