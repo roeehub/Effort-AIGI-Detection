@@ -41,6 +41,7 @@ from google.api_core import exceptions
 # --- Suppress common warnings for cleaner output ---
 warnings.filterwarnings("ignore", category=UserWarning, module='torchvision')
 warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning, module='shap')  # Suppress SHAP TF version warning
 
 # ======================================================================================
 # ----------------------------- CONFIGURATION & SETUP ----------------------------------
@@ -48,7 +49,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # --- GCS Buckets ---
 BUCKETS_TO_ANALYZE = {
-    "df40_train": "df40-frames-recropped-rfa85",
+    "df40_train": "df40-frames-recrolled-rfa85",
     "collected_train": "effort-collected-data",
     "test": "deep-fake-test-10-08-25-frames-yolo-recropped-rfa85",
 }
@@ -493,10 +494,8 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     # --- Redesigned augmentation logic to be robust and use correct parameters ---
     augmentations = {
         "JPEG Compression": {
-            # Store (augmentation, strength) tuples to avoid relying on internal attributes.
-            # Use quality_lower and quality_upper as per albumentations spec.
             "augs_with_strength": [
-                (A.ImageCompression(quality_lower=q, quality_upper=q, p=1.0), q)
+                (A.ImageCompression(quality=q, p=1.0), q)  # Use 'quality' for older albumentations versions
                 for q in range(95, 20, -5)
             ]
         },
@@ -512,14 +511,16 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
         aug_list_with_strength = aug_info["augs_with_strength"]
 
         for aug, strength_val in aug_list_with_strength:
-            # We now have the augmentation object 'aug' and its strength 'strength_val' directly.
-            aug_image = aug(image=image_rgb)['image']
-            img_tensor = transform(aug_image).unsqueeze(0).to(device)
-            with torch.no_grad():
-                prob = model({'image': img_tensor}, inference=True)["prob"].item()
-            results[aug_name].append((strength_val, prob))
+            try:
+                aug_image = aug(image=image_rgb)['image']
+                img_tensor = transform(aug_image).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    prob = model({'image': img_tensor}, inference=True)["prob"].item()
+                results[aug_name].append((strength_val, prob))
+            except Exception as e:
+                # Catch potential errors from specific augmentations and print a warning
+                print(f"  - WARNING: Augmentation '{aug_name}' failed at strength {strength_val}. Error: {e}")
 
-    # --- PLOTTING LOGIC (REMAINS THE SAME) ---
     if not results:
         print("  - No augmentation results to plot.")
         return
@@ -539,7 +540,6 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
         ax.grid(True)
         if "Compression" in aug_name:
             ax.set_xlabel('JPEG Quality')
-            # Higher quality (strength) should be on the right
             ax.invert_xaxis()
         elif "Blur" in aug_name:
             ax.set_xlabel('Blur Sigma')
@@ -547,6 +547,24 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(output_dir / "augmentation_sensitivity.png")
     plt.close()
+
+
+# --- SHAP WRAPPER FOR PYTORCH MODEL ---
+class ShapModelWrapper(nn.Module):
+    """
+    Wrapper for a PyTorch model to make it compatible with SHAP's DeepExplainer.
+    SHAP expects a model that takes a tensor and returns a tensor.
+    This wrapper handles the dictionary-based input/output of the EffortDetector.
+    """
+
+    def __init__(self, model):
+        super(ShapModelWrapper, self).__init__()
+        self.model = model
+
+    def forward(self, x):
+        # The model expects a dictionary {'image': tensor}
+        # and returns a dictionary {'prob': tensor, ...}
+        return self.model({'image': x}, inference=True)['prob']
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
@@ -579,12 +597,19 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
         return
     batch = torch.stack(image_tensors).to(device)
 
-    def f(x):
-        return model({'image': x}, inference=True)['prob']
+    # --- CORRECTED SHAP LOGIC ---
+    # 1. Wrap the model in our nn.Module wrapper for SHAP compatibility.
+    wrapped_model = ShapModelWrapper(model)
 
+    # 2. Create a background distribution for the explainer.
+    #    A tensor of zeros is a common choice for a 'neutral' background.
     background = torch.zeros_like(batch[[0]])
-    explainer = shap.DeepExplainer(f, background)
-    shap_values = explainer.shap_values(batch)
+
+    # 3. Pass the wrapped model (an nn.Module) to the explainer, not a function.
+    explainer = shap.DeepExplainer(wrapped_model, background)
+    shap_values = explainer.shap_values(batch.cpu().numpy())  # DeepExplainer might prefer numpy input for values
+
+    # The rest of the plotting logic remains the same
     shap_values_transposed = [np.transpose(s, (1, 2, 0)) for s in shap_values]
     shap.image_plot(shap_values_transposed, -np.array(image_rgbs), show=False)
     plt.suptitle("SHAP Explanations (Red pixels increase fake score)")
@@ -694,13 +719,87 @@ def main():
     parser.add_argument('--use_discovery_cache', action='store_true',
                         help="Use cached GCS discovery results if available.")
     parser.add_argument('--quick_test', action='store_true', help="Run on a very small sample for debugging purposes.")
+    # --- NEW ARGUMENT FOR FAST DEBUGGING ---
+    parser.add_argument('--skip_to_probes', action='store_true',
+                        help="Skip inference and analysis, load model and jump straight to live probes (Phase 4).")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
-
     chunk_output_dir = output_dir / "inference_chunks"
 
+    # --- HANDLE --skip_to_probes FOR FAST DEBUGGING ---
+    if args.skip_to_probes:
+        print("--- Fast Debug Mode: Skipping to Phase 4 (Live Probes) ---")
+
+        # 1. Load the model
+        print("\n--- Loading model for probes... ---")
+        with tempfile.NamedTemporaryFile(suffix=".pth") as tmp_weights:
+            model_weights_path = args.model_gcs_path
+            if args.model_gcs_path.startswith("gs://"):
+                print(f"  Downloading detector model from {args.model_gcs_path}...")
+                assert download_gcs_blob(args.model_gcs_path, Path(tmp_weights.name)), "Model download failed."
+                model_weights_path = tmp_weights.name
+
+            config = {"model_name": "effort",
+                      "backbone": {"arch": "ViT-L/14"},
+                      'gcs_assets': {
+                          'clip_backbone': {
+                              'gcs_path': "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/",
+                              'local_path': "../weights/models--openai--clip-vit-large-patch14/"
+                          }
+                      }}
+            model = load_detector(config, model_weights_path)
+            print("  Detector model loaded.")
+
+        # 2. Load aggregated data to find example videos
+        print("\n--- Loading aggregated data to find example videos... ---")
+        chunk_csv_files = sorted(glob.glob(str(chunk_output_dir / "chunk_*_data.csv")))
+        if not chunk_csv_files:
+            print("ERROR: No inference chunk data found. Cannot find examples for probes.")
+            print("Please run the script without '--skip_inference' or '--skip_to_probes' at least once.")
+            sys.exit(1)
+
+        video_agg_data = []
+        for csv_file in tqdm(chunk_csv_files, desc="Aggregating video stats"):
+            df_chunk = pd.read_csv(csv_file)
+            agg = df_chunk.groupby(['video_path', 'dataset', 'label', 'method']).agg(
+                video_prob_mean=('fake_prob', 'mean')
+            ).reset_index()
+            video_agg_data.append(agg)
+        df_video = pd.concat(video_agg_data, ignore_index=True)
+
+        # 3. Find dynamic example videos
+        print("\n--- Finding dynamic example videos for deep-dive analysis... ---")
+        dynamic_example_videos = {}
+        test_df_video = df_video[df_video['dataset'] == 'test']
+        test_bucket_name = BUCKETS_TO_ANALYZE["test"]
+        try:
+            fakes = test_df_video[test_df_video['label'] == 'fake'].sort_values('video_prob_mean', ascending=False)
+            if not fakes.empty:
+                high_conf_path = fakes.iloc[0]['video_path']
+                dynamic_example_videos["high_conf_fake"] = f"{test_bucket_name}/{high_conf_path}"
+                print(f"  - Found high-confidence fake: {high_conf_path}")
+        except Exception:
+            pass
+        try:
+            reals = test_df_video[test_df_video['label'] == 'real'].sort_values('video_prob_mean', ascending=False)
+            if not reals.empty:
+                fp_cand_path = reals.iloc[0]['video_path']
+                dynamic_example_videos["false_positive_candidate"] = f"{test_bucket_name}/{fp_cand_path}"
+                print(f"  - Found FP candidate: {fp_cand_path}")
+        except Exception:
+            pass
+
+        # 4. Run the probes
+        print("\n--- Running live probes (Phase 4)... ---")
+        transform = video_preprocessor._get_transform()
+        probe_augmentation_sensitivity(model, transform, output_dir, example_videos=dynamic_example_videos)
+        explain_with_shap(model, transform, output_dir, example_videos=dynamic_example_videos)
+        print(f"\n✅ Probe analysis complete! Outputs saved in '{output_dir}'.")
+        return  # Exit the script
+
+    # --- NORMAL EXECUTION FLOW ---
     if not args.skip_inference:
         # --- PHASE 1: DATA GATHERING & BATCH INFERENCE ---
         discovery_cache_path = output_dir / "discovery_cache.pkl"
@@ -745,11 +844,9 @@ def main():
         processing_func = partial(process_video_unit, fs=fs, transform=transform, model=model, clip_model=clip_model,
                                   clip_processor=clip_processor)
 
-        # <<< CORRECTED: RESUMABLE AND MEMORY-EFFICIENT BATCH PROCESSING LOGIC >>>
         print(
             f"\n--- Starting resumable inference on {len(video_units)} videos in batches of {PROCESSING_BATCH_SIZE}... ---")
         chunk_output_dir.mkdir(exist_ok=True)
-
         video_chunks = [video_units[i:i + PROCESSING_BATCH_SIZE] for i in
                         range(0, len(video_units), PROCESSING_BATCH_SIZE)]
 
@@ -757,19 +854,14 @@ def main():
             chunk_csv_path = chunk_output_dir / f"chunk_{i}_data.csv"
             chunk_clip_path = chunk_output_dir / f"chunk_{i}_clip.npy"
             chunk_model_path = chunk_output_dir / f"chunk_{i}_model.npy"
-
-            # Check if this chunk is already fully processed and saved correctly
             if chunk_csv_path.exists() and chunk_clip_path.exists() and chunk_model_path.exists():
                 print(f"  Chunk {i + 1}/{len(video_chunks)} already processed. Skipping.")
                 continue
 
             print(f"  Processing chunk {i + 1}/{len(video_chunks)} ({len(chunk)} videos)...")
-
             chunk_frame_results = []
-
             with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_workers) as executor:
                 future_to_video = {executor.submit(processing_func, unit): unit for unit in chunk}
-
                 for future in tqdm(concurrent.futures.as_completed(future_to_video), total=len(chunk),
                                    desc=f"Chunk {i + 1}"):
                     try:
@@ -784,32 +876,23 @@ def main():
                 print(f"  Chunk {i + 1} yielded no results. Moving to next.")
                 continue
 
-            # Now, process and save the entire chunk's data at once
             df_chunk = pd.DataFrame(chunk_frame_results)
-
-            # Pop embeddings before saving the CSV
             clip_embeddings_chunk = np.stack(df_chunk.pop('clip_embedding').values)
             model_embeddings_chunk = np.stack(df_chunk.pop('model_embedding').values)
-
-            # Save files correctly
             df_chunk.to_csv(chunk_csv_path, index=False)
             np.save(chunk_clip_path, clip_embeddings_chunk)
             np.save(chunk_model_path, model_embeddings_chunk)
             print(f"  Chunk {i + 1} saved successfully.")
-
         print("\n--- Inference complete. All chunks are processed and saved. ---")
 
     # --- MEMORY-EFFICIENT CONSOLIDATION & ANALYSIS ---
     print(f"--- Consolidating data from chunk files in {chunk_output_dir} for analysis... ---")
-
-    # Check if data exists before proceeding
     chunk_csv_files = sorted(glob.glob(str(chunk_output_dir / "chunk_*_data.csv")))
     if not chunk_csv_files:
         print("ERROR: No inference chunk data found. Cannot proceed with analysis.")
         print("Please run the script without '--skip_inference' first.")
         sys.exit(1)
 
-    # --- Step 1: Aggregate video-level stats first (most memory-light operation) ---
     print("\n--- Aggregating frame data to video level... ---")
     video_agg_data = []
     for csv_file in tqdm(chunk_csv_files, desc="Aggregating video stats"):
@@ -820,73 +903,51 @@ def main():
             frame_count=('fake_prob', 'count')
         ).reset_index()
         video_agg_data.append(agg)
-
     df_video = pd.concat(video_agg_data, ignore_index=True)
-    # df_video is small and can be kept in memory
     print("  Video-level aggregation complete.")
 
-    # --- Step 2: Run analyses that only need the lightweight aggregated data ---
     plot_roc_and_pr_curves(df_video, output_dir)
     plot_performance_by_method(df_video, output_dir)
     analyze_error_buckets(df_video, output_dir)
 
-    # --- Step 3: Stream frame-level data for analyses that need it ---
-    # We will load all frame data once for the remaining plots to avoid re-reading files.
-    # This is still a memory-heavy step, but we only load what's essential.
     print("\n--- Loading all frame data for deep-dive analysis... ---")
-
     all_frame_dfs = []
-    # We load only the columns we absolutely need for the remaining plots
     required_cols = ['video_path', 'dataset', 'label', 'method', 'frame_gcs_path',
                      'fake_prob', 'sharpness', 'mean_r', 'mean_g', 'mean_b']
-
     for csv_file in tqdm(chunk_csv_files, desc="Loading frame data"):
         all_frame_dfs.append(pd.read_csv(csv_file, usecols=lambda c: c in required_cols))
-
     df_all_frames = pd.concat(all_frame_dfs, ignore_index=True)
 
-    # Now we load the embeddings separately ONLY for the functions that need them.
     try:
         print("  Loading CLIP embeddings for domain shift analysis...")
-        all_clip_embeddings = []
-        for npy_file in sorted(glob.glob(str(chunk_output_dir / "chunk_*_clip.npy"))):
-            # Use mmap_mode to avoid loading the whole file into RAM if it's huge
-            all_clip_embeddings.append(np.load(npy_file, allow_pickle=True, mmap_mode='r'))
-
+        all_clip_embeddings = [np.load(f, allow_pickle=True, mmap_mode='r') for f in
+                               sorted(glob.glob(str(chunk_output_dir / "chunk_*_clip.npy")))]
         clip_embeddings = np.concatenate(all_clip_embeddings, axis=0)
-
         if len(df_all_frames) == len(clip_embeddings):
             df_all_frames['clip_embedding'] = list(clip_embeddings)
             print("  CLIP embeddings attached successfully.")
         else:
             print(
-                f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(clip_embeddings)} CLIP embeddings. Skipping embedding-dependent analyses.")
+                f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(clip_embeddings)} CLIP embeddings.")
     except Exception as e:
-        print(f"WARNING: Failed to load or attach embeddings. Error: {e}. Skipping embedding-dependent analyses.")
-
+        print(f"WARNING: Failed to load or attach embeddings. Error: {e}.")
     print("  Frame-level data loaded.")
 
-    # --- Step 4: Dynamically find best examples for deep-dive plots ---
     print("\n--- Finding dynamic example videos for deep-dive analysis... ---")
     dynamic_example_videos = {}
     test_df_video = df_video[df_video['dataset'] == 'test']
     test_bucket_name = BUCKETS_TO_ANALYZE["test"]
-
     try:
-        # Find best fake examples
         fakes = test_df_video[test_df_video['label'] == 'fake'].sort_values('video_prob_mean', ascending=False)
         if not fakes.empty:
-            high_conf_path = fakes.iloc[0]['video_path']
-            low_conf_path = fakes.iloc[-1]['video_path']
+            high_conf_path, low_conf_path = fakes.iloc[0]['video_path'], fakes.iloc[-1]['video_path']
             dynamic_example_videos["high_conf_fake"] = f"{test_bucket_name}/{high_conf_path}"
             dynamic_example_videos["low_conf_fake"] = f"{test_bucket_name}/{low_conf_path}"
             print(f"  - Found high-confidence fake: {high_conf_path} (Score: {fakes.iloc[0]['video_prob_mean']:.3f})")
             print(f"  - Found low-confidence fake: {low_conf_path} (Score: {fakes.iloc[-1]['video_prob_mean']:.3f})")
     except Exception as e:
         print(f"  - WARNING: Could not find fake examples. {e}")
-
     try:
-        # Find best false positive candidate
         reals = test_df_video[test_df_video['label'] == 'real'].sort_values('video_prob_mean', ascending=False)
         if not reals.empty:
             fp_cand_path = reals.iloc[0]['video_path']
@@ -895,17 +956,12 @@ def main():
     except Exception as e:
         print(f"  - WARNING: Could not find real examples for FP analysis. {e}")
 
-    # --- Step 5: Run the remaining analyses on the full (but selective) dataframe ---
     analyze_anomaly_domain_shift(df_all_frames, output_dir)
     plot_intra_video_consistency(df_all_frames, output_dir, example_videos=dynamic_example_videos)
-
-    # Analyze specific underperforming methods against the training set
     analyze_specific_method_distribution(df_all_frames, output_dir, method_name="tiktok")
     analyze_specific_method_distribution(df_all_frames, output_dir, method_name="in the wild social media")
 
-    # --- Step 6: Handle Phase 4 (live probes) ---
     model_is_loaded = 'model' in locals() or 'model' in globals()
-
     if not args.skip_inference and model_is_loaded:
         print("\n--- Model is loaded. Proceeding with live probes (Phase 4)... ---")
         transform = video_preprocessor._get_transform()
