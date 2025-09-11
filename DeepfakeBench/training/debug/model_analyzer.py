@@ -490,28 +490,29 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     results = defaultdict(list)
 
-    # --- CORRECTED AUGMENTATION DEFINITIONS & STRENGTH RETRIEVAL ---
+    # --- Redesigned augmentation logic to be robust and use correct parameters ---
     augmentations = {
         "JPEG Compression": {
-            "augs": [A.ImageCompression(quality=q, p=1.0) for q in range(95, 20, -5)],
-            "strength_attr": "quality"
+            # Store (augmentation, strength) tuples to avoid relying on internal attributes.
+            # Use quality_lower and quality_upper as per albumentations spec.
+            "augs_with_strength": [
+                (A.ImageCompression(quality_lower=q, quality_upper=q, p=1.0), q)
+                for q in range(95, 20, -5)
+            ]
         },
         "Gaussian Blur": {
-            "augs": [A.GaussianBlur(blur_limit=(s, s), p=1.0) for s in range(1, 15, 2)],
-            "strength_attr": "blur_limit"
+            "augs_with_strength": [
+                (A.GaussianBlur(blur_limit=(s, s), p=1.0), s)
+                for s in range(1, 15, 2)
+            ]
         }
     }
 
     for aug_name, aug_info in augmentations.items():
-        aug_list = aug_info["augs"]
-        strength_attr = aug_info["strength_attr"]
+        aug_list_with_strength = aug_info["augs_with_strength"]
 
-        for aug in aug_list:
-            # Get the strength value correctly
-            strength_val = getattr(aug, strength_attr)
-            if isinstance(strength_val, tuple):  # For blur_limit which is a tuple
-                strength_val = strength_val[0]
-
+        for aug, strength_val in aug_list_with_strength:
+            # We now have the augmentation object 'aug' and its strength 'strength_val' directly.
             aug_image = aug(image=image_rgb)['image']
             img_tensor = transform(aug_image).unsqueeze(0).to(device)
             with torch.no_grad():
@@ -523,22 +524,22 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
         print("  - No augmentation results to plot.")
         return
 
-    fig, axes = plt.subplots(1, len(results), figsize=(8 * len(results), 6))
+    fig, axes = plt.subplots(1, len(results), figsize=(8 * len(results), 6), squeeze=False)
+    axes = axes.flatten()  # Ensure axes is always a flat array for consistent indexing
     fig.suptitle('Model Robustness to Augmentations')
-
-    # Ensure axes is always a list for consistent indexing
-    if len(results) == 1:
-        axes = [axes]
 
     for ax, (aug_name, data) in zip(axes, results.items()):
         if not data: continue
-        strengths, probs = zip(*sorted(data))
+        # Sort data by strength before plotting
+        data.sort(key=lambda x: x[0])
+        strengths, probs = zip(*data)
         ax.plot(strengths, probs, 'o-')
         ax.set_title(aug_name)
         ax.set_ylabel('Fake Probability')
         ax.grid(True)
         if "Compression" in aug_name:
             ax.set_xlabel('JPEG Quality')
+            # Higher quality (strength) should be on the right
             ax.invert_xaxis()
         elif "Blur" in aug_name:
             ax.set_xlabel('Blur Sigma')
@@ -595,20 +596,22 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
 # ----------------------------- PHASE 5: DEEPFAKE METHOD ANALYSIS ----------------------
 # ======================================================================================
 
-def analyze_tiktok_distribution(df_all_frames, output_dir):
+
+def analyze_specific_method_distribution(df_all_frames, output_dir, method_name: str):
     """
-    Analyzes the 'tiktok' method from the test set by comparing its data distribution
+    Analyzes a specific method from the test set by comparing its data distribution
     against the entire training set to identify potential domain shift.
     This is wrapped in a try-except block to prevent crashes.
     """
-    print("--- Phase 5: Investigating 'tiktok' method distribution shift... ---")
+    clean_method_name = method_name.replace(" ", "_")  # for clean filenames
+    print(f"--- Phase 5: Investigating '{method_name}' method distribution shift... ---")
     try:
         # 1. Isolate the data for comparison
-        df_tiktok = df_all_frames[
+        df_method = df_all_frames[
             (df_all_frames['dataset'] == 'test') &
-            (df_all_frames['method'] == 'tiktok')
+            (df_all_frames['method'] == method_name)
             ].copy()
-        df_tiktok['source'] = 'tiktok (Test)'
+        df_method['source'] = f'{method_name} (Test)'
 
         # Combine both training buckets to form the training set distribution
         df_train = df_all_frames[
@@ -617,33 +620,38 @@ def analyze_tiktok_distribution(df_all_frames, output_dir):
         df_train['source'] = 'Training Data'
 
         # 2. Robustness Check: Ensure we have data to analyze
-        if df_tiktok.empty or df_train.empty:
-            print("  - WARNING: Could not find sufficient data for 'tiktok' or training sets. Skipping analysis.")
+        if df_method.empty or df_train.empty:
+            print(
+                f"  - WARNING: Could not find sufficient data for '{method_name}' or training sets. Skipping analysis.")
             return
 
-        print(f"  - Comparing {len(df_tiktok)} 'tiktok' frames against {len(df_train)} training frames.")
-        df_comparison = pd.concat([df_tiktok, df_train])
+        print(f"  - Comparing {len(df_method)} '{method_name}' frames against {len(df_train)} training frames.")
+        df_comparison = pd.concat([df_method, df_train])
 
         # 3. Analyze low-level image statistics
         metrics_to_plot = ['sharpness', 'mean_r', 'mean_g', 'mean_b', 'fake_prob']
         for metric in metrics_to_plot:
             plt.figure(figsize=(10, 6))
             sns.kdeplot(data=df_comparison, x=metric, hue='source', fill=True, common_norm=False, cut=0)
-            plt.title(f"Distribution of '{metric.title()}' for TikTok vs. Training Data")
+            plt.title(f"Distribution of '{metric.title()}' for {method_name.title()} vs. Training Data")
             plt.grid(True)
-            plt.savefig(output_dir / f"tiktok_vs_train_{metric}_dist.png")
+            plt.savefig(output_dir / f"{clean_method_name}_vs_train_{metric}_dist.png")
             plt.close()
 
         # 4. Analyze high-level CLIP embedding space
         if 'clip_embedding' not in df_comparison.columns:
-            print("  - WARNING: 'clip_embedding' column not found. Skipping t-SNE analysis for tiktok.")
+            print(f"  - WARNING: 'clip_embedding' column not found. Skipping t-SNE analysis for {method_name}.")
             return
 
-        print("  - Running t-SNE on CLIP embeddings for 'tiktok' vs. training data...")
+        print(f"  - Running t-SNE on CLIP embeddings for '{method_name}' vs. training data...")
         # To make t-SNE manageable, sample if the dataset is too large
-        if len(df_comparison) > 5000:
-            print(f"    Dataset is large ({len(df_comparison)} samples), taking a random sample of 5000 for t-SNE.")
-            df_comparison_sample = df_comparison.sample(n=5000, random_state=42)
+        sample_size = 5000
+        if len(df_comparison) > sample_size:
+            print(
+                f"    Dataset is large ({len(df_comparison)} samples), taking a random sample of {sample_size} for t-SNE.")
+            # Stratified sampling to ensure both groups are represented
+            df_comparison_sample = df_comparison.groupby('source', group_keys=False).apply(
+                lambda x: x.sample(min(len(x), sample_size // 2)))
         else:
             df_comparison_sample = df_comparison
 
@@ -655,16 +663,16 @@ def analyze_tiktok_distribution(df_all_frames, output_dir):
 
         plt.figure(figsize=(12, 10))
         sns.scatterplot(x=embeddings_2d[:, 0], y=embeddings_2d[:, 1], hue=labels, style=labels, s=40, alpha=0.7)
-        plt.title('t-SNE of CLIP Embeddings: TikTok (Test) vs. Training Data')
+        plt.title(f't-SNE of CLIP Embeddings: {method_name.title()} (Test) vs. Training Data')
         plt.xlabel('t-SNE Dimension 1')
         plt.ylabel('t-SNE Dimension 2')
         plt.legend(title='Data Source')
         plt.grid(True)
-        plt.savefig(output_dir / "tiktok_vs_train_tsne_clip.png")
+        plt.savefig(output_dir / f"{clean_method_name}_vs_train_tsne_clip.png")
         plt.close()
 
     except Exception as e:
-        print(f"  - ERROR: An unexpected error occurred during the tiktok analysis: {e}")
+        print(f"  - ERROR: An unexpected error occurred during the {method_name} analysis: {e}")
         print("  - Continuing with the rest of the script.")
 
 
@@ -890,7 +898,10 @@ def main():
     # --- Step 5: Run the remaining analyses on the full (but selective) dataframe ---
     analyze_anomaly_domain_shift(df_all_frames, output_dir)
     plot_intra_video_consistency(df_all_frames, output_dir, example_videos=dynamic_example_videos)
-    analyze_tiktok_distribution(df_all_frames, output_dir)
+
+    # Analyze specific underperforming methods against the training set
+    analyze_specific_method_distribution(df_all_frames, output_dir, method_name="tiktok")
+    analyze_specific_method_distribution(df_all_frames, output_dir, method_name="in the wild social media")
 
     # --- Step 6: Handle Phase 4 (live probes) ---
     model_is_loaded = 'model' in locals() or 'model' in globals()
