@@ -260,74 +260,119 @@ def process_video_unit(video_unit: Dict, fs, transform, model, clip_model, clip_
 # ======================================================================================
 
 def plot_roc_and_pr_curves(df_video, output_dir):
-    """Generates and saves ROC and Precision-Recall curves."""
-    print("--- Phase 2a: Generating ROC and Precision-Recall curves... ---")
-    test_df = df_video[df_video['dataset'] == 'test']
-    y_true = (test_df['label'] == 'fake').astype(int)
-    y_score = test_df['video_prob_mean']
-    if len(np.unique(y_true)) < 2:
-        print("  - WARNING: Cannot compute ROC/PR with only one class. Skipping.")
-        return
-    fpr, tpr, thresholds_roc = roc_curve(y_true, y_score)
-    roc_auc = auc(fpr, tpr)
-    optimal_idx = np.argmin(np.sqrt((1 - tpr) ** 2 + fpr ** 2))
-    optimal_threshold = thresholds_roc[optimal_idx]
-    plt.figure(figsize=(10, 8))
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:0.3f})')
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    plt.scatter(fpr[optimal_idx], tpr[optimal_idx], marker='o', color='red', s=100,
-                label=f'Optimal Threshold = {optimal_threshold:.3f}')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic (ROC) Curve')
-    plt.legend(loc="lower right")
-    plt.grid(True)
-    plt.savefig(output_dir / "roc_curve.png")
-    plt.close()
-    print(f"  - ROC AUC: {roc_auc:.4f}")
-    print(f"  - Optimal Threshold (Balanced): {optimal_threshold:.4f}")
-    precision, recall, _ = precision_recall_curve(y_true, y_score)
-    plt.figure(figsize=(10, 8))
-    plt.plot(recall, precision, color='blue', lw=2, label='Precision-Recall curve')
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.title('Precision-Recall Curve')
-    plt.legend(loc="lower left")
-    plt.grid(True)
-    plt.savefig(output_dir / "pr_curve.png")
-    plt.close()
+    """Generates and saves ROC and Precision-Recall curves for each dataset."""
+    print("--- Phase 2a: Generating ROC and Precision-Recall curves for each dataset... ---")
+
+    # We will analyze train and test datasets. Combine training buckets for a single 'train' ROC.
+    df_video['dataset_group'] = df_video['dataset'].replace({'df40_train': 'train', 'collected_train': 'train'})
+
+    for dataset_name, group_df in df_video.groupby('dataset_group'):
+        print(f"  - Processing dataset: '{dataset_name}'")
+        y_true = (group_df['label'] == 'fake').astype(int)
+        y_score = group_df['video_prob_mean']
+
+        if len(np.unique(y_true)) < 2:
+            print(f"    - WARNING: Cannot compute ROC/PR for '{dataset_name}' with only one class. Skipping.")
+            continue
+
+        # ROC Curve
+        fpr, tpr, thresholds_roc = roc_curve(y_true, y_score)
+        roc_auc = auc(fpr, tpr)
+
+        # Find optimal threshold based on G-Mean
+        gmeans = np.sqrt(tpr * (1 - fpr))
+        optimal_idx = np.argmax(gmeans)
+        optimal_threshold = thresholds_roc[optimal_idx]
+
+        plt.figure(figsize=(10, 8))
+        plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:0.3f})')
+        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+        plt.scatter(fpr[optimal_idx], tpr[optimal_idx], marker='o', color='red', s=100,
+                    label=f'Optimal Threshold (G-Mean) = {optimal_threshold:.3f}')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(f'Receiver Operating Characteristic (ROC) Curve - {dataset_name.title()} Set')
+        plt.legend(loc="lower right")
+        plt.grid(True)
+        plt.savefig(output_dir / f"roc_curve_{dataset_name}.png")
+        plt.close()
+
+        print(f"    - ROC AUC: {roc_auc:.4f}")
+        print(f"    - Optimal Threshold (from G-Mean): {optimal_threshold:.4f}")
+
+        # Precision-Recall Curve
+        precision, recall, _ = precision_recall_curve(y_true, y_score)
+        pr_auc = auc(recall, precision)
+        plt.figure(figsize=(10, 8))
+        plt.plot(recall, precision, color='blue', lw=2, label=f'PR curve (AUC = {pr_auc:0.3f})')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title(f'Precision-Recall Curve - {dataset_name.title()} Set')
+        plt.legend(loc="lower left")
+        plt.grid(True)
+        plt.savefig(output_dir / f"pr_curve_{dataset_name}.png")
+        plt.close()
 
 
 def plot_performance_by_method(df_video, output_dir):
-    """Plots the AUC for each method on the test set."""
+    """
+    Plots the AUC for methods with mixed labels and score distributions
+    for fake-only methods on the test set.
+    """
     print("--- Phase 2b: Analyzing performance per method... ---")
     test_df = df_video[df_video['dataset'] == 'test'].copy()
-    method_aucs, method_scores = {}, {}
+
+    method_aucs = {}
+    fake_only_methods_df = []
+
     for method, group in test_df.groupby('method'):
         y_true = (group['label'] == 'fake').astype(int)
+
         if len(np.unique(y_true)) < 2:
             if np.all(y_true == 1):
+                # This is a fake-only method
+                fake_only_methods_df.append(group)
                 avg_score = group['video_prob_mean'].mean()
-                method_scores[method] = avg_score
                 print(f"  - Method '{method}' (fake only): Avg. Score = {avg_score:.3f}")
             continue
+
+        # This method has real and fake examples
         fpr, tpr, _ = roc_curve(y_true, group['video_prob_mean'])
         method_aucs[method] = auc(fpr, tpr)
-    if not method_aucs:
-        print("  - Could not compute per-method AUCs (likely single-class methods).")
-        return
-    sorted_methods = sorted(method_aucs.items(), key=lambda x: x[1])
-    plt.figure(figsize=(12, max(8, len(sorted_methods) * 0.5)))
-    plt.barh([m[0] for m in sorted_methods], [m[1] for m in sorted_methods])
-    plt.xlabel('AUC Score')
-    plt.title('Model Performance (AUC) by Method on Test Set')
-    plt.xlim([0, 1])
-    plt.grid(axis='x')
-    plt.tight_layout()
-    plt.savefig(output_dir / "performance_by_method.png")
-    plt.close()
+
+    # Plot 1: AUC for methods with mixed labels
+    if method_aucs:
+        sorted_methods = sorted(method_aucs.items(), key=lambda x: x[1])
+        plt.figure(figsize=(12, max(6, len(sorted_methods) * 0.5)))
+        plt.barh([m[0] for m in sorted_methods], [m[1] for m in sorted_methods])
+        plt.xlabel('AUC Score')
+        plt.title('Model Performance (AUC) by Method on Test Set')
+        plt.xlim([0, 1])
+        plt.grid(axis='x')
+        plt.tight_layout()
+        plt.savefig(output_dir / "performance_by_method_auc.png")
+        plt.close()
+    else:
+        print("  - No test methods with mixed real/fake labels found for AUC plot.")
+
+    # Plot 2: Score distribution for fake-only methods
+    if fake_only_methods_df:
+        df_fakes_only = pd.concat(fake_only_methods_df)
+        plt.figure(figsize=(12, 8))
+        sns.boxplot(data=df_fakes_only, x='video_prob_mean', y='method', orient='h')
+        plt.axvline(x=0.5, color='r', linestyle='--', label='Decision Threshold (0.5)')
+        plt.xlabel('Predicted Fake Probability')
+        plt.ylabel('Method')
+        plt.title('Score Distributions for Fake-Only Methods on Test Set')
+        plt.legend()
+        plt.grid(axis='x')
+        plt.tight_layout()
+        plt.savefig(output_dir / "performance_by_method_fakes_dist.png")
+        plt.close()
+    else:
+        print("  - No fake-only test methods found for distribution plot.")
 
 
 def analyze_anomaly_domain_shift(df_all_frames, output_dir):
