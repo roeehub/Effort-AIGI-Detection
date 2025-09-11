@@ -546,15 +546,15 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     plt.close()
 
 
-from torch.cuda.amp import autocast  # <-- Add this import at the top of your file
+from torch.cuda.amp import autocast
 
 
 # --- SHAP WRAPPER FOR PYTORCH MODEL ---
 class ShapModelWrapper(nn.Module):
     """
     Wrapper for SHAP compatibility.
-    This version uses torch.cuda.amp.autocast to run the model in mixed precision
-    and reshapes the output to be 2D [N, 1] as expected by the SHAP library.
+    This version uses autocast and ensures the output is 2D WITHOUT up-casting to float32,
+    preserving memory savings for the backward pass.
     """
 
     def __init__(self, model):
@@ -564,11 +564,11 @@ class ShapModelWrapper(nn.Module):
     def forward(self, x):
         with autocast():
             outputs = self.model({'image': x}, inference=True)
-            prob_tensor = outputs['prob']  # This has shape [N]
+            prob_tensor = outputs['prob']  # This is float16 inside autocast
 
-            # SHAP expects a 2D tensor of shape [N, 1]. We use unsqueeze(1) to add the dimension.
-            # This directly fixes the IndexError.
-            return prob_tensor.unsqueeze(1).float()
+            # SHAP expects a 2D tensor of shape [N, 1].
+            # We return it as float16 to save memory during gradient calculation.
+            return prob_tensor.unsqueeze(1)
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
