@@ -357,7 +357,7 @@ def analyze_anomaly_domain_shift(df_all_frames, output_dir):
         return
     embeddings = np.stack(df_anomaly['clip_embedding'].values)
     labels = df_anomaly['source'].values
-    tsne = TSNE(n_components=2, perplexity=min(30, len(embeddings) - 1), random_state=42, n_iter=1000)
+    tsne = TSNE(n_components=2, perplexity=min(30, len(embeddings) - 1), random_state=42, max_iter=1000)
     embeddings_2d = tsne.fit_transform(embeddings)
     plt.figure(figsize=(12, 10))
     sns.scatterplot(x=embeddings_2d[:, 0], y=embeddings_2d[:, 1], hue=labels, style=labels, s=50)
@@ -557,7 +557,7 @@ def analyze_tiktok_distribution(df_all_frames, output_dir):
         embeddings = np.stack(df_comparison_sample['clip_embedding'].values)
         labels = df_comparison_sample['source'].values
 
-        tsne = TSNE(n_components=2, perplexity=min(30, len(embeddings) - 1), random_state=42, n_iter=1000, init='pca')
+        tsne = TSNE(n_components=2, perplexity=min(30, len(embeddings) - 1), random_state=42, max_iter=1000, init='pca')
         embeddings_2d = tsne.fit_transform(embeddings)
 
         plt.figure(figsize=(12, 10))
