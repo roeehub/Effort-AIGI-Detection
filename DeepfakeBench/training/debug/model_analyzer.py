@@ -491,26 +491,26 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     results = defaultdict(list)
 
+    # Define augmentations with varying strengths
     augmentations = {
-        "JPEG Compression": {
-            "augs_with_strength": [
-                (A.ImageCompression(quality=q, p=1.0), q)  # Use 'quality' for older albumentations versions
-                for q in range(95, 20, -5)
-            ]
-        },
-        "Gaussian Blur": {
-            "augs_with_strength": [
-                (A.GaussianBlur(blur_limit=(s, s), p=1.0), s)
-                for s in range(1, 15, 2)
-            ]
-        }
+        "JPEG Compression": [q for q in range(95, 20, -5)],
+        "Gaussian Blur": [s for s in range(1, 15, 2)]
     }
 
-    for aug_name, aug_info in augmentations.items():
-        aug_list_with_strength = aug_info["augs_with_strength"]
-
-        for aug, strength_val in aug_list_with_strength:
+    for aug_name, strengths in augmentations.items():
+        for strength_val in strengths:
             try:
+                # --- ROBUST AUGMENTATION LOGIC ---
+                if aug_name == "JPEG Compression":
+                    try:
+                        # For modern albumentations versions
+                        aug = A.ImageCompression(quality_lower=strength_val, quality_upper=strength_val, p=1.0)
+                    except TypeError:
+                        # Fallback for older albumentations versions
+                        aug = A.ImageCompression(quality=strength_val, p=1.0)
+                elif aug_name == "Gaussian Blur":
+                    aug = A.GaussianBlur(blur_limit=(strength_val, strength_val), p=1.0)
+
                 aug_image = aug(image=image_rgb)['image']
                 img_tensor = transform(aug_image).unsqueeze(0).to(device)
                 with torch.no_grad():
@@ -549,9 +549,9 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
 # --- SHAP WRAPPER FOR PYTORCH MODEL ---
 class ShapModelWrapper(nn.Module):
     """
-    Wrapper for a PyTorch model to make it compatible with SHAP's DeepExplainer.
-    This wrapper handles the dictionary-based input/output and reshapes the
-    output to be 2D for SHAP compatibility.
+    Wrapper for SHAP compatibility.
+    It returns the model's raw logits, as this is more numerically stable
+    for explainers like GradientExplainer.
     """
 
     def __init__(self, model):
@@ -559,15 +559,15 @@ class ShapModelWrapper(nn.Module):
         self.model = model
 
     def forward(self, x):
-        # The model expects a dictionary {'image': tensor}
-        probs = self.model({'image': x}, inference=True)['prob']
-        # SHAP expects a 2D output of shape [batch_size, num_classes] or [batch_size, 1].
-        # Our model returns a 1D tensor [batch_size], so we unsqueeze it to [batch_size, 1].
-        return probs.unsqueeze(1)
+        # The model returns a dict. We extract the logit.
+        # Your model's output dictionary should contain 'logit'.
+        # If it doesn't, you might need to return model(...)['prob'] and handle potential instability.
+        outputs = self.model({'image': x}, inference=True)
+        return outputs['logit']
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
-    """Generates SHAP explanations for a few key frames."""
+    """Generates SHAP explanations using the more robust GradientExplainer."""
     print("--- Phase 4b: Generating SHAP explanations for model decisions... ---")
     gcs_client = storage.Client()
     images_to_explain = {
@@ -592,34 +592,32 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
             image_rgbs.append(cv2.resize(image_rgb, (224, 224)))
             labels.append(name)
 
-    if len(image_tensors) < 2:
-        print("  - WARNING: Could not load frames for SHAP analysis. Skipping.")
+    if not image_tensors:
+        print("  - WARNING: Could not load any frames for SHAP analysis. Skipping.")
         return
     batch = torch.stack(image_tensors).to(device)
 
-    # --- CORRECTED SHAP LOGIC ---
+    # --- ROBUST SHAP LOGIC USING GRADIENTEXPLAINER ---
     wrapped_model = ShapModelWrapper(model)
+    # A tensor of zeros is a standard background for GradientExplainer.
     background = torch.zeros_like(batch[[0]])
 
-    # Pass the wrapped model and background tensor to the explainer.
-    explainer = shap.DeepExplainer(wrapped_model, background)
-    # The explainer expects a PyTorch tensor for explanation.
+    # Use GradientExplainer, which is more robust than DeepExplainer for complex models.
+    explainer = shap.GradientExplainer(wrapped_model, background)
     shap_values = explainer.shap_values(batch)
 
     # The output of shap_values for a single-output model is a single numpy array.
-    # We need to reshape it for plotting if it comes out with an extra dimension.
-    # The expected shape for shap.image_plot is (num_images, height, width, channels).
-    if isinstance(shap_values, list):  # Should not happen for single output, but good practice
-        shap_values = shap_values[0]
-
     # The SHAP values for a PyTorch model are often returned in (N, C, H, W) format.
     # We need to transpose them to (N, H, W, C) for plotting.
-    if shap_values.ndim == 4 and shap_values.shape[1] in [1, 3]:  # Check if channels-first
+    if shap_values.ndim == 4 and shap_values.shape[1] in [1, 3]:
         shap_values_transposed = np.transpose(shap_values, (0, 2, 3, 1))
     else:
         shap_values_transposed = shap_values
 
-    shap.image_plot(shap_values_transposed, -np.array(image_rgbs), show=False)
+    # Convert images to a numpy array for plotting
+    plot_images = np.array(image_rgbs) / 255.0  # Normalize for better visualization
+
+    shap.image_plot(shap_values_transposed, -plot_images, show=False)
     plt.suptitle("SHAP Explanations (Red pixels increase fake score)")
     plt.savefig(output_dir / "shap_explanation.png")
     plt.close()
