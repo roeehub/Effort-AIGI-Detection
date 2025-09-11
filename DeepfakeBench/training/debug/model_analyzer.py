@@ -433,10 +433,10 @@ def analyze_error_buckets(df_video, output_dir):
     fn[['video_path', 'video_prob_mean']].to_csv(output_dir / "false_negatives.csv", index=False)
 
 
-def plot_intra_video_consistency(df_all_frames, output_dir):
+def plot_intra_video_consistency(df_all_frames, output_dir, example_videos: Dict[str, str]):
     """Plots frame-by-frame probabilities for a few example videos."""
     print("--- Phase 3b: Plotting intra-video prediction consistency... ---")
-    for name, video_path_prefix in EXAMPLE_VIDEOS_FOR_PLOTS.items():
+    for name, video_path_prefix in example_videos.items():
         relative_path = "/".join(video_path_prefix.split('/')[1:])
         df_video_frames = df_all_frames[df_all_frames['video_path'] == relative_path]
         if df_video_frames.empty:
@@ -460,10 +460,13 @@ def plot_intra_video_consistency(df_all_frames, output_dir):
 # ----------------------------- PHASE 4: ROBUSTNESS PROBING ----------------------------
 # ======================================================================================
 
-def probe_augmentation_sensitivity(model, transform, output_dir):
+def probe_augmentation_sensitivity(model, transform, output_dir, example_videos: Dict[str, str]):
     """Tests how model predictions change with increasing augmentation strength."""
     print("--- Phase 4a: Probing model sensitivity to augmentations... ---")
-    video_path_prefix = EXAMPLE_VIDEOS_FOR_PLOTS["high_conf_fake"]
+    video_path_prefix = example_videos.get("high_conf_fake")
+    if not video_path_prefix:
+        print("  - WARNING: 'high_conf_fake' example not found for augmentation probe. Skipping.")
+        return
     gcs_client = storage.Client()
     bucket_name, blob_prefix = video_path_prefix.split('/', 1)
     blobs = list(gcs_client.list_blobs(bucket_name, prefix=blob_prefix))
@@ -507,12 +510,19 @@ def probe_augmentation_sensitivity(model, transform, output_dir):
     plt.close()
 
 
-def explain_with_shap(model, transform, output_dir):
+def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
     """Generates SHAP explanations for a few key frames."""
     print("--- Phase 4b: Generating SHAP explanations for model decisions... ---")
     gcs_client = storage.Client()
-    images_to_explain = {"correct_fake": EXAMPLE_VIDEOS_FOR_PLOTS["high_conf_fake"],
-                         "potential_fp_real": EXAMPLE_VIDEOS_FOR_PLOTS["false_positive_candidate"]}
+    images_to_explain = {
+        "correct_fake": example_videos.get("high_conf_fake"),
+        "potential_fp_real": example_videos.get("false_positive_candidate")
+    }
+    # Filter out any examples that weren't found
+    images_to_explain = {k: v for k, v in images_to_explain.items() if v}
+    if not images_to_explain:
+        print("  - WARNING: No suitable example videos found for SHAP analysis. Skipping.")
+        return
     image_tensors, image_rgbs, labels = [], [], []
     for name, path_prefix in images_to_explain.items():
         bucket_name, blob_prefix = path_prefix.split('/', 1)
@@ -810,19 +820,48 @@ def main():
 
     print("  Frame-level data loaded.")
 
-    # --- Step 4: Run the remaining analyses on the full (but selective) dataframe ---
+    # --- Step 4: Dynamically find best examples for deep-dive plots ---
+    print("\n--- Finding dynamic example videos for deep-dive analysis... ---")
+    dynamic_example_videos = {}
+    test_df_video = df_video[df_video['dataset'] == 'test']
+    test_bucket_name = BUCKETS_TO_ANALYZE["test"]
+
+    try:
+        # Find best fake examples
+        fakes = test_df_video[test_df_video['label'] == 'fake'].sort_values('video_prob_mean', ascending=False)
+        if not fakes.empty:
+            high_conf_path = fakes.iloc[0]['video_path']
+            low_conf_path = fakes.iloc[-1]['video_path']
+            dynamic_example_videos["high_conf_fake"] = f"{test_bucket_name}/{high_conf_path}"
+            dynamic_example_videos["low_conf_fake"] = f"{test_bucket_name}/{low_conf_path}"
+            print(f"  - Found high-confidence fake: {high_conf_path} (Score: {fakes.iloc[0]['video_prob_mean']:.3f})")
+            print(f"  - Found low-confidence fake: {low_conf_path} (Score: {fakes.iloc[-1]['video_prob_mean']:.3f})")
+    except Exception as e:
+        print(f"  - WARNING: Could not find fake examples. {e}")
+
+    try:
+        # Find best false positive candidate
+        reals = test_df_video[test_df_video['label'] == 'real'].sort_values('video_prob_mean', ascending=False)
+        if not reals.empty:
+            fp_cand_path = reals.iloc[0]['video_path']
+            dynamic_example_videos["false_positive_candidate"] = f"{test_bucket_name}/{fp_cand_path}"
+            print(f"  - Found FP candidate: {fp_cand_path} (Score: {reals.iloc[0]['video_prob_mean']:.3f})")
+    except Exception as e:
+        print(f"  - WARNING: Could not find real examples for FP analysis. {e}")
+
+    # --- Step 5: Run the remaining analyses on the full (but selective) dataframe ---
     analyze_anomaly_domain_shift(df_all_frames, output_dir)
-    plot_intra_video_consistency(df_all_frames, output_dir)
+    plot_intra_video_consistency(df_all_frames, output_dir, example_videos=dynamic_example_videos)
     analyze_tiktok_distribution(df_all_frames, output_dir)
 
-    # --- Step 5: Handle Phase 4 (live probes) ---
+    # --- Step 6: Handle Phase 4 (live probes) ---
     model_is_loaded = 'model' in locals() or 'model' in globals()
 
     if not args.skip_inference and model_is_loaded:
         print("\n--- Model is loaded. Proceeding with live probes (Phase 4)... ---")
         transform = video_preprocessor._get_transform()
-        probe_augmentation_sensitivity(model, transform, output_dir)
-        explain_with_shap(model, transform, output_dir)
+        probe_augmentation_sensitivity(model, transform, output_dir, example_videos=dynamic_example_videos)
+        explain_with_shap(model, transform, output_dir, example_videos=dynamic_example_videos)
     else:
         print("\n--- SKIPPING Phase 4 (Robustness Probes) as model was not loaded (`--skip_inference` was used). ---")
 
