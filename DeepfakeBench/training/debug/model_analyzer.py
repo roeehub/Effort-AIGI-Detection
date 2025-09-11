@@ -49,7 +49,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module='shap')  # Suppre
 
 # --- GCS Buckets ---
 BUCKETS_TO_ANALYZE = {
-    "df40_train": "df40-frames-recrolled-rfa85",
+    "df40_train": "df40-frames-recropped-rfa85",
     "collected_train": "effort-collected-data",
     "test": "deep-fake-test-10-08-25-frames-yolo-recropped-rfa85",
 }
@@ -491,7 +491,6 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     results = defaultdict(list)
 
-    # --- Redesigned augmentation logic to be robust and use correct parameters ---
     augmentations = {
         "JPEG Compression": {
             "augs_with_strength": [
@@ -518,7 +517,6 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
                     prob = model({'image': img_tensor}, inference=True)["prob"].item()
                 results[aug_name].append((strength_val, prob))
             except Exception as e:
-                # Catch potential errors from specific augmentations and print a warning
                 print(f"  - WARNING: Augmentation '{aug_name}' failed at strength {strength_val}. Error: {e}")
 
     if not results:
@@ -526,12 +524,11 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
         return
 
     fig, axes = plt.subplots(1, len(results), figsize=(8 * len(results), 6), squeeze=False)
-    axes = axes.flatten()  # Ensure axes is always a flat array for consistent indexing
+    axes = axes.flatten()
     fig.suptitle('Model Robustness to Augmentations')
 
     for ax, (aug_name, data) in zip(axes, results.items()):
         if not data: continue
-        # Sort data by strength before plotting
         data.sort(key=lambda x: x[0])
         strengths, probs = zip(*data)
         ax.plot(strengths, probs, 'o-')
@@ -553,8 +550,8 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
 class ShapModelWrapper(nn.Module):
     """
     Wrapper for a PyTorch model to make it compatible with SHAP's DeepExplainer.
-    SHAP expects a model that takes a tensor and returns a tensor.
-    This wrapper handles the dictionary-based input/output of the EffortDetector.
+    This wrapper handles the dictionary-based input/output and reshapes the
+    output to be 2D for SHAP compatibility.
     """
 
     def __init__(self, model):
@@ -563,8 +560,10 @@ class ShapModelWrapper(nn.Module):
 
     def forward(self, x):
         # The model expects a dictionary {'image': tensor}
-        # and returns a dictionary {'prob': tensor, ...}
-        return self.model({'image': x}, inference=True)['prob']
+        probs = self.model({'image': x}, inference=True)['prob']
+        # SHAP expects a 2D output of shape [batch_size, num_classes] or [batch_size, 1].
+        # Our model returns a 1D tensor [batch_size], so we unsqueeze it to [batch_size, 1].
+        return probs.unsqueeze(1)
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
@@ -575,11 +574,11 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
         "correct_fake": example_videos.get("high_conf_fake"),
         "potential_fp_real": example_videos.get("false_positive_candidate")
     }
-    # Filter out any examples that weren't found
     images_to_explain = {k: v for k, v in images_to_explain.items() if v}
     if not images_to_explain:
         print("  - WARNING: No suitable example videos found for SHAP analysis. Skipping.")
         return
+
     image_tensors, image_rgbs, labels = [], [], []
     for name, path_prefix in images_to_explain.items():
         bucket_name, blob_prefix = path_prefix.split('/', 1)
@@ -592,25 +591,34 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
             image_tensors.append(transform(image_rgb))
             image_rgbs.append(cv2.resize(image_rgb, (224, 224)))
             labels.append(name)
+
     if len(image_tensors) < 2:
         print("  - WARNING: Could not load frames for SHAP analysis. Skipping.")
         return
     batch = torch.stack(image_tensors).to(device)
 
     # --- CORRECTED SHAP LOGIC ---
-    # 1. Wrap the model in our nn.Module wrapper for SHAP compatibility.
     wrapped_model = ShapModelWrapper(model)
-
-    # 2. Create a background distribution for the explainer.
-    #    A tensor of zeros is a common choice for a 'neutral' background.
     background = torch.zeros_like(batch[[0]])
 
-    # 3. Pass the wrapped model (an nn.Module) to the explainer, not a function.
+    # Pass the wrapped model and background tensor to the explainer.
     explainer = shap.DeepExplainer(wrapped_model, background)
-    shap_values = explainer.shap_values(batch.cpu().numpy())  # DeepExplainer might prefer numpy input for values
+    # The explainer expects a PyTorch tensor for explanation.
+    shap_values = explainer.shap_values(batch)
 
-    # The rest of the plotting logic remains the same
-    shap_values_transposed = [np.transpose(s, (1, 2, 0)) for s in shap_values]
+    # The output of shap_values for a single-output model is a single numpy array.
+    # We need to reshape it for plotting if it comes out with an extra dimension.
+    # The expected shape for shap.image_plot is (num_images, height, width, channels).
+    if isinstance(shap_values, list):  # Should not happen for single output, but good practice
+        shap_values = shap_values[0]
+
+    # The SHAP values for a PyTorch model are often returned in (N, C, H, W) format.
+    # We need to transpose them to (N, H, W, C) for plotting.
+    if shap_values.ndim == 4 and shap_values.shape[1] in [1, 3]:  # Check if channels-first
+        shap_values_transposed = np.transpose(shap_values, (0, 2, 3, 1))
+    else:
+        shap_values_transposed = shap_values
+
     shap.image_plot(shap_values_transposed, -np.array(image_rgbs), show=False)
     plt.suptitle("SHAP Explanations (Red pixels increase fake score)")
     plt.savefig(output_dir / "shap_explanation.png")
@@ -620,7 +628,6 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
 # ======================================================================================
 # ----------------------------- PHASE 5: DEEPFAKE METHOD ANALYSIS ----------------------
 # ======================================================================================
-
 
 def analyze_specific_method_distribution(df_all_frames, output_dir, method_name: str):
     """
