@@ -547,11 +547,12 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
 
 
 # --- SHAP WRAPPER FOR PYTORCH MODEL ---
+# --- SHAP WRAPPER FOR PYTORCH MODEL ---
 class ShapModelWrapper(nn.Module):
     """
     Wrapper for SHAP compatibility.
-    It returns the model's raw logits, as this is more numerically stable
-    for explainers like GradientExplainer.
+    It returns the model's final probability score. While explaining logits can be more
+    stable, the model must provide them. Since this one provides 'prob', we'll use that.
     """
 
     def __init__(self, model):
@@ -559,11 +560,76 @@ class ShapModelWrapper(nn.Module):
         self.model = model
 
     def forward(self, x):
-        # The model returns a dict. We extract the logit.
-        # Your model's output dictionary should contain 'logit'.
-        # If it doesn't, you might need to return model(...)['prob'] and handle potential instability.
+        # The model returns a dict. We extract the probability tensor.
+        # This directly fixes the KeyError: 'logit' by using the available 'prob' key.
         outputs = self.model({'image': x}, inference=True)
-        return outputs['logit']
+        return outputs['prob']
+
+
+def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
+    """Generates SHAP explanations using the more robust GradientExplainer."""
+    print("--- Phase 4b: Generating SHAP explanations for model decisions... ---")
+    gcs_client = storage.Client()
+    images_to_explain = {
+        "correct_fake": example_videos.get("high_conf_fake"),
+        "potential_fp_real": example_videos.get("false_positive_candidate")
+    }
+    images_to_explain = {k: v for k, v in images_to_explain.items() if v}
+    if not images_to_explain:
+        print("  - WARNING: No suitable example videos found for SHAP analysis. Skipping.")
+        return
+
+    image_tensors, image_rgbs, labels = [], [], []
+    for name, path_prefix in images_to_explain.items():
+        try:
+            bucket_name, blob_prefix = path_prefix.split('/', 1)
+            blob = next(iter(gcs_client.list_blobs(bucket_name, prefix=blob_prefix)), None)
+            if blob:
+                with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
+                    blob.download_to_filename(tmp_file.name)
+                    image_bgr = cv2.imread(tmp_file.name)
+                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+                image_tensors.append(transform(image_rgb))
+                image_rgbs.append(cv2.resize(image_rgb, (224, 224)))
+                labels.append(name)
+            else:
+                print(f"  - WARNING: Could not find blob for {name} at {path_prefix}")
+        except Exception as e:
+            print(f"  - WARNING: Failed to load image for SHAP ({name}): {e}")
+
+    if not image_tensors:
+        print("  - WARNING: Could not load any frames for SHAP analysis. Skipping.")
+        return
+    batch = torch.stack(image_tensors).to(device)
+
+    # --- ROBUST SHAP LOGIC USING GRADIENTEXPLAINER ---
+    wrapped_model = ShapModelWrapper(model)
+    # A tensor of zeros is a standard background for GradientExplainer.
+    background = torch.zeros_like(batch[[0]])
+
+    # Use GradientExplainer, which is more robust than DeepExplainer for complex models.
+    explainer = shap.GradientExplainer(wrapped_model, background)
+    shap_values = explainer.shap_values(batch)
+
+    # The output of shap_values for a single-output model is a single numpy array.
+    # The SHAP values for a PyTorch model are often returned in (N, C, H, W) format.
+    # We need to transpose them to (N, H, W, C) for plotting.
+    if shap_values.ndim == 4 and shap_values.shape[1] in [1, 3]:
+        shap_values_transposed = np.transpose(shap_values, (0, 2, 3, 1))
+    else:
+        shap_values_transposed = shap_values
+
+    # Convert images to a numpy array for plotting
+    plot_images = np.array(image_rgbs) / 255.0  # Normalize for better visualization
+
+    # Adding a check because image_plot can fail if no images were loaded
+    if len(plot_images) > 0 and len(plot_images) == len(shap_values_transposed):
+        shap.image_plot(shap_values_transposed, -plot_images, show=False)
+        plt.suptitle("SHAP Explanations (Red pixels increase fake score)")
+        plt.savefig(output_dir / "shap_explanation.png")
+        plt.close()
+    else:
+        print("  - WARNING: Mismatch between images and SHAP values, cannot generate plot.")
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
