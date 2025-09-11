@@ -546,13 +546,15 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     plt.close()
 
 
-# --- SHAP WRAPPER FOR PYTORCH MODEL ---
+from torch.cuda.amp import autocast  # <-- Add this import at the top of your file
+
+
 # --- SHAP WRAPPER FOR PYTORCH MODEL ---
 class ShapModelWrapper(nn.Module):
     """
     Wrapper for SHAP compatibility.
-    It returns the model's final probability score. While explaining logits can be more
-    stable, the model must provide them. Since this one provides 'prob', we'll use that.
+    This version uses torch.cuda.amp.autocast to run the model in mixed precision,
+    drastically reducing memory usage to prevent CUDA OOM errors with large models.
     """
 
     def __init__(self, model):
@@ -560,10 +562,12 @@ class ShapModelWrapper(nn.Module):
         self.model = model
 
     def forward(self, x):
-        # The model returns a dict. We extract the probability tensor.
-        # This directly fixes the KeyError: 'logit' by using the available 'prob' key.
-        outputs = self.model({'image': x}, inference=True)
-        return outputs['prob']
+        # Use autocast for mixed-precision inference. This is the key to saving memory.
+        with autocast():
+            outputs = self.model({'image': x}, inference=True)
+            # The output from the autocast context might be float16.
+            # It's safer to cast it back to float32 for SHAP, just in case.
+            return outputs['prob'].float()
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
