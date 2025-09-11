@@ -698,66 +698,80 @@ def main():
 
         print("\n--- Inference complete. All chunks are processed and saved. ---")
 
-    # --- CONSOLIDATE DATA FROM CHUNKS ---
+    # --- MEMORY-EFFICIENT CONSOLIDATION & ANALYSIS ---
     print(f"--- Consolidating data from chunk files in {chunk_output_dir} for analysis... ---")
 
-    all_chunk_dfs = []
-    for csv_file in sorted(glob.glob(str(chunk_output_dir / "chunk_*_data.csv"))):
-        all_chunk_dfs.append(pd.read_csv(csv_file))
-
-    all_clip_embeddings = []
-    for npy_file in sorted(glob.glob(str(chunk_output_dir / "chunk_*_clip.npy"))):
-        all_clip_embeddings.append(np.load(npy_file, allow_pickle=True))
-
-    all_model_embeddings = []
-    for npy_file in sorted(glob.glob(str(chunk_output_dir / "chunk_*_model.npy"))):
-        all_model_embeddings.append(np.load(npy_file, allow_pickle=True))
-
-    if not all_chunk_dfs:
-        print("ERROR: No inference data found. Cannot proceed with analysis.")
+    # Check if data exists before proceeding
+    chunk_csv_files = sorted(glob.glob(str(chunk_output_dir / "chunk_*_data.csv")))
+    if not chunk_csv_files:
+        print("ERROR: No inference chunk data found. Cannot proceed with analysis.")
         print("Please run the script without '--skip_inference' first.")
         sys.exit(1)
 
-    df_all_frames = pd.concat(all_chunk_dfs, ignore_index=True)
-    clip_embeddings = np.concatenate(all_clip_embeddings, axis=0)
-    model_embeddings = np.concatenate(all_model_embeddings, axis=0)
-
-    if len(df_all_frames) == len(clip_embeddings):
-        df_all_frames['clip_embedding'] = list(clip_embeddings)
-    else:
-        print(
-            f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(clip_embeddings)} CLIP embeddings.")
-
-    if len(df_all_frames) == len(model_embeddings):
-        df_all_frames['model_embedding'] = list(model_embeddings)
-    else:
-        print(
-            f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(model_embeddings)} model embeddings.")
-
-    print("  Data loaded and consolidated successfully.")
-
-    # Save the consolidated files
-    df_all_frames.to_csv(output_dir / "all_frame_data.csv", index=False)
-    np.save(output_dir / "all_clip_embeddings.npy", clip_embeddings)
-    np.save(output_dir / "all_model_embeddings.npy", model_embeddings)
-    print(f"  Final consolidated data saved to {output_dir}")
-
+    # --- Step 1: Aggregate video-level stats first (most memory-light operation) ---
     print("\n--- Aggregating frame data to video level... ---")
-    df_video = df_all_frames.groupby(['video_path', 'dataset', 'label', 'method']).agg(
-        video_prob_mean=('fake_prob', 'mean'),
-        video_prob_median=('fake_prob', 'median'),
-        frame_count=('fake_prob', 'count')
-    ).reset_index()
+    video_agg_data = []
+    for csv_file in tqdm(chunk_csv_files, desc="Aggregating video stats"):
+        df_chunk = pd.read_csv(csv_file)
+        agg = df_chunk.groupby(['video_path', 'dataset', 'label', 'method']).agg(
+            video_prob_mean=('fake_prob', 'mean'),
+            video_prob_median=('fake_prob', 'median'),
+            frame_count=('fake_prob', 'count')
+        ).reset_index()
+        video_agg_data.append(agg)
 
-    # --- RUN ALL ANALYSIS PHASES ---
+    df_video = pd.concat(video_agg_data, ignore_index=True)
+    # df_video is small and can be kept in memory
+    print("  Video-level aggregation complete.")
+
+    # --- Step 2: Run analyses that only need the lightweight aggregated data ---
     plot_roc_and_pr_curves(df_video, output_dir)
     plot_performance_by_method(df_video, output_dir)
-    analyze_anomaly_domain_shift(df_all_frames, output_dir)
     analyze_error_buckets(df_video, output_dir)
+
+    # --- Step 3: Stream frame-level data for analyses that need it ---
+    # We will load all frame data once for the remaining plots to avoid re-reading files.
+    # This is still a memory-heavy step, but we only load what's essential.
+    print("\n--- Loading all frame data for deep-dive analysis... ---")
+
+    all_frame_dfs = []
+    # We load only the columns we absolutely need for the remaining plots
+    required_cols = ['video_path', 'dataset', 'label', 'method', 'frame_gcs_path',
+                     'fake_prob', 'sharpness', 'mean_r', 'mean_g', 'mean_b']
+
+    for csv_file in tqdm(chunk_csv_files, desc="Loading frame data"):
+        all_frame_dfs.append(pd.read_csv(csv_file, usecols=lambda c: c in required_cols))
+
+    df_all_frames = pd.concat(all_frame_dfs, ignore_index=True)
+
+    # Now we load the embeddings separately ONLY for the functions that need them.
+    try:
+        print("  Loading CLIP embeddings for domain shift analysis...")
+        all_clip_embeddings = []
+        for npy_file in sorted(glob.glob(str(chunk_output_dir / "chunk_*_clip.npy"))):
+            # Use mmap_mode to avoid loading the whole file into RAM if it's huge
+            all_clip_embeddings.append(np.load(npy_file, allow_pickle=True, mmap_mode='r'))
+
+        clip_embeddings = np.concatenate(all_clip_embeddings, axis=0)
+
+        if len(df_all_frames) == len(clip_embeddings):
+            df_all_frames['clip_embedding'] = list(clip_embeddings)
+            print("  CLIP embeddings attached successfully.")
+        else:
+            print(
+                f"WARNING: Mismatch! DataFrame has {len(df_all_frames)} rows, but found {len(clip_embeddings)} CLIP embeddings. Skipping embedding-dependent analyses.")
+    except Exception as e:
+        print(f"WARNING: Failed to load or attach embeddings. Error: {e}. Skipping embedding-dependent analyses.")
+
+    print("  Frame-level data loaded.")
+
+    # --- Step 4: Run the remaining analyses on the full (but selective) dataframe ---
+    analyze_anomaly_domain_shift(df_all_frames, output_dir)
     plot_intra_video_consistency(df_all_frames, output_dir)
     analyze_tiktok_distribution(df_all_frames, output_dir)
 
-    model_is_loaded = 'model' in locals()
+    # --- Step 5: Handle Phase 4 (live probes) ---
+    model_is_loaded = 'model' in locals() or 'model' in globals()
 
     if not args.skip_inference and model_is_loaded:
         print("\n--- Model is loaded. Proceeding with live probes (Phase 4)... ---")
