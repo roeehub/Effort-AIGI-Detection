@@ -546,15 +546,12 @@ def probe_augmentation_sensitivity(model, transform, output_dir, example_videos:
     plt.close()
 
 
-from torch.cuda.amp import autocast
-
-
-# --- SHAP WRAPPER FOR PYTORCH MODEL ---
+# --- SHAP WRAPPER FOR PYTORCH MODEL (AGGRESSIVE VERSION) ---
 class ShapModelWrapper(nn.Module):
     """
     Wrapper for SHAP compatibility.
-    This version uses autocast and ensures the output is 2D WITHOUT up-casting to float32,
-    preserving memory savings for the backward pass.
+    This version assumes the model has already been converted with .half()
+    and ensures the input tensor is also converted to half precision.
     """
 
     def __init__(self, model):
@@ -562,13 +559,14 @@ class ShapModelWrapper(nn.Module):
         self.model = model
 
     def forward(self, x):
-        with autocast():
-            outputs = self.model({'image': x}, inference=True)
-            prob_tensor = outputs['prob']  # This is float16 inside autocast
+        # The model is already in float16, so we must convert the input to match.
+        # We remove the autocast context manager as it's now redundant.
+        outputs = self.model({'image': x.half()}, inference=True)
+        prob_tensor = outputs['prob']
 
-            # SHAP expects a 2D tensor of shape [N, 1].
-            # We return it as float16 to save memory during gradient calculation.
-            return prob_tensor.unsqueeze(1)
+        # We cast the FINAL output back to float32, as autograd may be more stable
+        # with it, and the memory-heavy part is already done.
+        return prob_tensor.unsqueeze(1).float()
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
@@ -849,6 +847,7 @@ def main():
                           }
                       }}
             model = load_detector(config, model_weights_path)
+            model.half()
             print("  Detector model loaded.")
 
         # 2. Load aggregated data to find example videos
