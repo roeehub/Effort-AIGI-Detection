@@ -579,7 +579,8 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
         print("  - WARNING: No suitable example videos found for SHAP analysis. Skipping.")
         return
 
-    image_tensors, image_rgbs, labels = [], [], []
+    # Load the images and their corresponding tensors first
+    image_data_pairs = []
     for name, path_prefix in images_to_explain.items():
         try:
             bucket_name, blob_prefix = path_prefix.split('/', 1)
@@ -589,29 +590,52 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
                     blob.download_to_filename(tmp_file.name)
                     image_bgr = cv2.imread(tmp_file.name)
                 image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-                image_tensors.append(transform(image_rgb))
-                image_rgbs.append(cv2.resize(image_rgb, (224, 224)))
-                labels.append(name)
+                image_tensor = transform(image_rgb)
+                plot_image_rgb = cv2.resize(image_rgb, (224, 224))
+                image_data_pairs.append((image_tensor, plot_image_rgb))
             else:
                 print(f"  - WARNING: Could not find blob for {name} at {path_prefix}")
         except Exception as e:
             print(f"  - WARNING: Failed to load image for SHAP ({name}): {e}")
 
-    if not image_tensors:
+    if not image_data_pairs:
         print("  - WARNING: Could not load any frames for SHAP analysis. Skipping.")
         return
-    batch = torch.stack(image_tensors).to(device)
 
-    # --- ROBUST SHAP LOGIC USING GRADIENTEXPLAINER ---
     wrapped_model = ShapModelWrapper(model)
-    # A tensor of zeros is a standard background for GradientExplainer.
-    background = torch.zeros_like(batch[[0]])
+    all_shap_values = []
+    all_plot_images = []
 
-    # Use GradientExplainer, which is more robust than DeepExplainer for complex models.
-    explainer = shap.GradientExplainer(wrapped_model, background)
-    shap_values = explainer.shap_values(batch)
+    # --- MEMORY-EFFICIENT SHAP LOGIC ---
+    # Process one image at a time to prevent CUDA OOM errors.
+    print(f"  - Explaining {len(image_data_pairs)} images individually to conserve memory...")
+    for i, (image_tensor, plot_image) in enumerate(image_data_pairs):
+        print(f"    - Processing image {i + 1}/{len(image_data_pairs)}...")
 
-    # The output of shap_values for a single-output model is a single numpy array.
+        # Create a batch of size 1 and move it to the GPU
+        single_image_batch = image_tensor.unsqueeze(0).to(device)
+
+        # A tensor of zeros is a standard background for GradientExplainer.
+        # It must match the shape of the input batch.
+        background = torch.zeros_like(single_image_batch)
+
+        # Initialize the explainer and compute SHAP values for the single image
+        explainer = shap.GradientExplainer(wrapped_model, background)
+        shap_values_single = explainer.shap_values(single_image_batch)
+
+        all_shap_values.append(shap_values_single)
+        all_plot_images.append(plot_image)
+
+        # Explicitly clear the cache after each heavy operation
+        torch.cuda.empty_cache()
+
+    # Now, combine the results from the loop
+    if not all_shap_values:
+        print("  - WARNING: SHAP analysis produced no results.")
+        return
+
+    shap_values = np.concatenate(all_shap_values, axis=0)
+
     # The SHAP values for a PyTorch model are often returned in (N, C, H, W) format.
     # We need to transpose them to (N, H, W, C) for plotting.
     if shap_values.ndim == 4 and shap_values.shape[1] in [1, 3]:
@@ -620,9 +644,8 @@ def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, st
         shap_values_transposed = shap_values
 
     # Convert images to a numpy array for plotting
-    plot_images = np.array(image_rgbs) / 255.0  # Normalize for better visualization
+    plot_images = np.array(all_plot_images) / 255.0  # Normalize for better visualization
 
-    # Adding a check because image_plot can fail if no images were loaded
     if len(plot_images) > 0 and len(plot_images) == len(shap_values_transposed):
         shap.image_plot(shap_values_transposed, -plot_images, show=False)
         plt.suptitle("SHAP Explanations (Red pixels increase fake score)")
