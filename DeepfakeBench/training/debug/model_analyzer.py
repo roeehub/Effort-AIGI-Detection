@@ -553,8 +553,8 @@ from torch.cuda.amp import autocast  # <-- Add this import at the top of your fi
 class ShapModelWrapper(nn.Module):
     """
     Wrapper for SHAP compatibility.
-    This version uses torch.cuda.amp.autocast to run the model in mixed precision,
-    drastically reducing memory usage to prevent CUDA OOM errors with large models.
+    This version uses torch.cuda.amp.autocast to run the model in mixed precision
+    and reshapes the output to be 2D [N, 1] as expected by the SHAP library.
     """
 
     def __init__(self, model):
@@ -562,12 +562,13 @@ class ShapModelWrapper(nn.Module):
         self.model = model
 
     def forward(self, x):
-        # Use autocast for mixed-precision inference. This is the key to saving memory.
         with autocast():
             outputs = self.model({'image': x}, inference=True)
-            # The output from the autocast context might be float16.
-            # It's safer to cast it back to float32 for SHAP, just in case.
-            return outputs['prob'].float()
+            prob_tensor = outputs['prob']  # This has shape [N]
+
+            # SHAP expects a 2D tensor of shape [N, 1]. We use unsqueeze(1) to add the dimension.
+            # This directly fixes the IndexError.
+            return prob_tensor.unsqueeze(1).float()
 
 
 def explain_with_shap(model, transform, output_dir, example_videos: Dict[str, str]):
