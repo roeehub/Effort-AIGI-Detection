@@ -460,7 +460,7 @@ async def check_video(
             str(tmp_path), pre_method="yolo", debug_save_path=debug_path
         )
 
-        if video_tensor is None or video_tensor.shape[0] == 0:
+        if video_tensor is None or video_tensor.shape[1] == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Video could not be processed. This can happen if the video is too short or if a face cannot be consistently detected."
@@ -519,7 +519,7 @@ async def check_video_from_gcp(
             str(tmp_path), pre_method="yolo", debug_save_path=debug_path
         )
 
-        if video_tensor is None or video_tensor.shape[0] == 0:
+        if video_tensor is None or video_tensor.shape[1] == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Video could not be processed. This can happen if the video is too short or if a face cannot be consistently detected."

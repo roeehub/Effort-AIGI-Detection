@@ -155,8 +155,8 @@ def _get_yolo_face_box(frame_bgr: np.ndarray, model=None) -> Optional[np.ndarray
 # --- Method 2: YOLO (Simple Crop) ---
 def extract_yolo_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
     """Detects and crops one face using YOLOv8 with a simple square crop."""
-    model = initialize_yolo_model() # Initialize the model here
-    box = _get_yolo_face_box(frame_bgr, model=model) # Pass the model
+    model = initialize_yolo_model()  # Initialize the model here
+    box = _get_yolo_face_box(frame_bgr, model=model)  # Pass the model
     if box is None: return None
     x0, y0, x1, y1 = box.astype(int)
     h, w = frame_bgr.shape[:2]
@@ -229,7 +229,11 @@ def _find_and_prepare_faces(
         pre_method: str,
         debug_save_path: Optional[str] = None
 ) -> Optional[List[np.ndarray]]:
-    """Internal helper to sample a video and return a list of processed face images."""
+    """
+    Internal helper to sample a video and return a list of processed face images.
+    This implementation is designed to be robust, attempting to find up to
+    NUM_SAMPLES faces by checking a larger number of frames spread throughout the video.
+    """
     if debug_save_path:
         os.makedirs(debug_save_path, exist_ok=True)
         print(f"[*] Debug mode ON. Saving processed faces to: {debug_save_path}")
@@ -240,55 +244,49 @@ def _find_and_prepare_faces(
         return None
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if total_frames < NUM_SAMPLES:
+    collected_faces = []
+
+    # To improve robustness, we check more frames than we strictly need.
+    # This avoids failing if a few frames/segments are bad (e.g., person turns away).
+    # We check up to 3x the number of samples, or all frames if the video is short.
+    frames_to_check_count = min(total_frames, NUM_SAMPLES * 3)
+    if frames_to_check_count == 0:
         cap.release()
         return None
 
-    collected_faces, segment_len = [], total_frames / NUM_SAMPLES
-    search_points = [0.5, 0.25, 0.75, 0.1, 0.9]
+    # Generate a list of evenly spaced frame indices to inspect.
+    frame_indices = np.linspace(0, total_frames - 1, frames_to_check_count, dtype=int)
 
-    for i in range(NUM_SAMPLES):
-        found_in_segment = False
-        for point in search_points:
-            frame_idx = int(i * segment_len + point * segment_len)
-            if frame_idx >= total_frames: continue
+    for frame_idx in frame_indices:
+        # Stop once we've collected enough faces.
+        if len(collected_faces) >= NUM_SAMPLES:
+            break
 
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if not ret: continue
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+        ret, frame = cap.read()
+        if not ret:
+            continue
 
-            if pre_method == 'dlib':
-                face = extract_aligned_face(frame)
-            elif pre_method == 'yolo':
-                face = extract_yolo_face(frame)
-            else:  # yolo_haar
-                face = extract_yolo_haar_face(frame)
+        if pre_method == 'dlib':
+            face = extract_aligned_face(frame)
+        elif pre_method == 'yolo':
+            face = extract_yolo_face(frame)
+        else:  # yolo_haar
+            face = extract_yolo_haar_face(frame)
 
-            if face is not None:
-                collected_faces.append(face)
-                found_in_segment = True
-                if debug_save_path:
-                    save_name = f"{Path(video_path).stem}_seg{i + 1}_frame{frame_idx}_{pre_method}.jpg"
-                    cv2.imwrite(os.path.join(debug_save_path, save_name), face)
-                break
-
-        if not found_in_segment:
-            cap.release()
-            print(f"[*] Preprocessing failed: No valid face in segment {i + 1} using '{pre_method}'.")
-            return None
+        if face is not None:
+            collected_faces.append(face)
+            if debug_save_path:
+                save_name = f"{Path(video_path).stem}_found{len(collected_faces)}_frame{frame_idx}_{pre_method}.jpg"
+                cv2.imwrite(os.path.join(debug_save_path, save_name), face)
 
     cap.release()
+
+    if not collected_faces:
+        print(f"[*] Preprocessing failed: No valid faces found in video using '{pre_method}'.")
+        return None
+
     return collected_faces
-
-
-def _get_transform():
-    """Returns a cached torchvision transform pipeline."""
-    if 'transform' not in _transform_cache:
-        _transform_cache['transform'] = T.Compose([
-            T.ToTensor(),
-            T.Normalize(mean=MODEL_NORM_MEAN, std=MODEL_NORM_STD),
-        ])
-    return _transform_cache['transform']
 
 
 def preprocess_video_for_effort_model(
@@ -301,7 +299,8 @@ def preprocess_video_for_effort_model(
 
     selected_faces = _find_and_prepare_faces(video_path, pre_method, debug_save_path=debug_save_path)
     if not selected_faces:
-        print(f"[*] Video rejected: Failed to sample {NUM_SAMPLES} valid faces.")
+        # _find_and_prepare_faces already logs the specific failure reason.
+        print(f"[*] Video rejected: Could not extract any valid faces.")
         return None
 
     print(f"[*] Successfully processed {len(selected_faces)} faces. Creating tensor.")
@@ -311,3 +310,13 @@ def preprocess_video_for_effort_model(
     final_tensor = torch.stack(tensor_frames, dim=0).unsqueeze(0)
     print(f"[*] Preprocessing complete. Final tensor shape: {final_tensor.shape}")
     return final_tensor
+
+
+def _get_transform():
+    """Returns a cached torchvision transform pipeline."""
+    if 'transform' not in _transform_cache:
+        _transform_cache['transform'] = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean=MODEL_NORM_MEAN, std=MODEL_NORM_STD),
+        ])
+    return _transform_cache['transform']
