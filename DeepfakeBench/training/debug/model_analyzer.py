@@ -826,7 +826,7 @@ def main():
         print("\n--- Running live probes (Phase 4)... ---")
         transform = video_preprocessor._get_transform()
         probe_augmentation_sensitivity(model, transform, output_dir, example_videos=dynamic_example_videos)
-        explain_with_shap(model, transform, output_dir, example_videos=dynamic_example_videos)
+        # explain_with_shap(model, transform, output_dir, example_videos=dynamic_example_videos)
         print(f"\n✅ Probe analysis complete! Outputs saved in '{output_dir}'.")
         return  # Exit the script
 
@@ -997,7 +997,7 @@ def main():
         print("\n--- Model is loaded. Proceeding with live probes (Phase 4)... ---")
         transform = video_preprocessor._get_transform()
         probe_augmentation_sensitivity(model, transform, output_dir, example_videos=dynamic_example_videos)
-        explain_with_shap(model, transform, output_dir, example_videos=dynamic_example_videos)
+        # explain_with_shap(model, transform, output_dir, example_videos=dynamic_example_videos)
     else:
         print("\n--- SKIPPING Phase 4 (Robustness Probes) as model was not loaded (`--skip_inference` was used). ---")
 
