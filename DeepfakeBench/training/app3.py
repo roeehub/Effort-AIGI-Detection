@@ -176,7 +176,7 @@ class FrameCountResults(BaseModel):
     frames_8: PolicySet = Field(..., alias="8_frames")
     frames_16: PolicySet = Field(..., alias="16_frames")
     frames_32: PolicySet = Field(..., alias="32_frames")
-    frames_64: PolicySet = Field(..., alias="64_frames")
+    # frames_64: PolicySet = Field(..., alias="64_frames")
 
 
 class VideoAnalysisResponse(BaseModel):
@@ -189,7 +189,7 @@ def calculate_analysis(frame_probs: List[float], threshold: float) -> VideoAnaly
     """Performs the full analysis matrix on a list of frame probabilities."""
     analysis: Dict[str, Any] = {}
 
-    for n_frames in [8, 16, 32, 64]:
+    for n_frames in [8, 16, 32]:
         # Use up to n_frames, but don't fail if fewer are available
         sample_probs = frame_probs[:n_frames]
 
