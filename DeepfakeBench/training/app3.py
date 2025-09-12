@@ -457,7 +457,7 @@ async def check_video(
 
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
-            str(tmp_path), pre_method="yolo", num_frames=64, debug_save_path=debug_path
+            str(tmp_path), pre_method="yolo", debug_save_path=debug_path
         )
 
         if video_tensor is None or video_tensor.shape[0] == 0:
@@ -516,7 +516,7 @@ async def check_video_from_gcp(
 
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
-            str(tmp_path), pre_method="yolo", num_frames=64, debug_save_path=debug_path
+            str(tmp_path), pre_method="yolo", debug_save_path=debug_path
         )
 
         if video_tensor is None or video_tensor.shape[0] == 0:
