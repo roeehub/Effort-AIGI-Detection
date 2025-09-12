@@ -43,7 +43,8 @@ YOLO_CONF_THRESHOLD = 0.20
 # Path is resolved automatically from cv2 library
 
 # --- Frame Sampling Settings for Video ---
-NUM_SAMPLES = 32
+# NUM_SAMPLES = 32
+NUM_SAMPLES = 64
 
 # --- Model Input Settings ---
 MODEL_NORM_MEAN = [0.48145466, 0.4578275, 0.40821073]
