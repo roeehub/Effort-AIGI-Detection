@@ -24,7 +24,7 @@ except ImportError:
 # 📍 Global Configuration
 # ──────────────────────────
 # --- Processing Parameters ---
-NUM_CORES = 8
+NUM_CORES = 4
 FRAMES_TO_SAMPLE = 35
 FRAMES_TO_KEEP = 32
 FAILURE_TOLERANCE = FRAMES_TO_SAMPLE - FRAMES_TO_KEEP
