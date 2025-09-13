@@ -9,6 +9,7 @@ Key Features:
 - Aggregates frame paths from multiple GCS buckets and local directories.
 - Caches the GCS path list to a JSON file to avoid slow, costly rescans.
 - Appends to an existing manifest, skipping already-processed paths (--existing-manifest).
+- Supports adding only frames from newly discovered methods (--add-new-methods).
 - Standardizes method names (e.g., "Hey Gen" -> "hey_gen") for consistency.
 - Calculates properties (sharpness, file_size_kb, video_id, clip_id) in parallel.
 - Adds a 'method_category' column for simplified downstream sampling.
@@ -105,6 +106,21 @@ def calculate_sharpness(image_bytes: bytes) -> float:
         return float(cv2.Laplacian(cv_image, cv2.CV_64F).var())
     except (UnidentifiedImageError, cv2.error):
         return -1.0
+
+
+# *** NEW UTILITY FUNCTION ***
+def get_method_from_path(path_str: str) -> Optional[str]:
+    """
+    Quickly extracts and standardizes the method name from a path string.
+    Assumes path structure: .../{label}/{method}/{video_id}/{frame_name}.png
+    """
+    try:
+        # parts[-1] is filename, parts[-2] is video_id, parts[-3] is method
+        method_raw = Path(path_str).parts[-3]
+        return standardize_method_name(method_raw)
+    except IndexError:
+        log.warning(f"Could not extract method from malformed path: {path_str}")
+        return None
 
 
 def process_path(path_str: str) -> Optional[Dict]:
@@ -254,7 +270,15 @@ def main():
                         help="Process only the first N new records for testing.")
     parser.add_argument("--force-rescan", action="store_true",
                         help="Ignore the GCS path cache and force a full rescan of all GCS buckets.")
+    # *** NEW ARGUMENT ***
+    parser.add_argument("--add-new-methods", action="store_true",
+                        help="Only process and add frames from methods not present in the --existing-manifest. "
+                             "This ignores all new frames from existing methods.")
     args = parser.parse_args()
+
+    # *** NEW VALIDATION LOGIC ***
+    if args.add_new_methods and not args.existing_manifest:
+        parser.error("--add-new-methods requires --existing-manifest to be specified.")
 
     if not args.buckets and not args.local_dirs:
         parser.error("You must provide at least one data source: --buckets or --local-dirs")
@@ -262,13 +286,16 @@ def main():
     # --- 1. Load Existing Manifest (if provided) ---
     existing_df = None
     existing_paths: Set[str] = set()
+    existing_methods: Set[str] = set()  # *** NEW ***
     if args.existing_manifest:
         existing_path = Path(args.existing_manifest)
         if existing_path.exists():
             log.info(f"Loading existing manifest from '{existing_path}' to append data.")
             existing_df = pd.read_parquet(existing_path)
             existing_paths = set(existing_df['path'])
-            log.info(f"Found {len(existing_paths):,} paths in the existing manifest.")
+            existing_methods = set(existing_df['method'])  # *** NEW ***
+            log.info(
+                f"Found {len(existing_paths):,} paths and {len(existing_methods)} unique methods in the existing manifest.")
         else:
             log.warning(f"Existing manifest '{existing_path}' not found. A new one will be created.")
 
@@ -284,11 +311,31 @@ def main():
 
     log.info(f"Total paths found from all sources: {len(all_new_source_paths):,}")
 
-    # --- 3. Filter Out Duplicates ---
-    paths_to_process = [p for p in all_new_source_paths if p not in existing_paths]
-    num_skipped = len(all_new_source_paths) - len(paths_to_process)
-    if num_skipped > 0:
-        log.info(f"Skipping {num_skipped:,} paths that are already in the existing manifest.")
+    # --- 3. Filter Out Duplicates (based on selected mode) ---
+    paths_to_process = []
+
+    # *** REVISED FILTERING LOGIC ***
+    if args.add_new_methods:
+        log.info("Filtering mode: --add-new-methods. Will only process frames from newly discovered methods.")
+        newly_discovered_methods = set()
+        for path in tqdm(all_new_source_paths, desc="Discovering new methods"):
+            method = get_method_from_path(path)
+            if method and method not in existing_methods:
+                paths_to_process.append(path)
+                newly_discovered_methods.add(method)
+
+        if newly_discovered_methods:
+            log.info(
+                f"Discovery complete! Found {len(newly_discovered_methods)} new methods to add: {sorted(list(newly_discovered_methods))}")
+        else:
+            log.info("Discovery complete. No new methods found in the source paths.")
+
+    else:
+        log.info("Filtering mode: Standard append. Will skip any paths already in the manifest.")
+        paths_to_process = [p for p in all_new_source_paths if p not in existing_paths]
+        num_skipped = len(all_new_source_paths) - len(paths_to_process)
+        if num_skipped > 0:
+            log.info(f"Skipping {num_skipped:,} paths that are already in the existing manifest.")
 
     if not paths_to_process:
         log.info("No new paths to process. Exiting.")
