@@ -441,7 +441,7 @@ async def check_video(
         request: Request,
         file: UploadFile = File(...),
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
-        threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
+        threshold: float = Query(0.46, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         debug: bool = False
 ) -> VideoAnalysisResponse:
     ext = Path(file.filename).suffix.lower()
