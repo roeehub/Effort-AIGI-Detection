@@ -163,20 +163,20 @@ class AggregationResult(BaseModel):
 class AggregationSet(BaseModel):
     mean: AggregationResult
     median: AggregationResult
-    std: AggregationResult
+    std: Optional[AggregationResult] = None
     majority_vote: AggregationResult
 
 
 class PolicySet(BaseModel):
     unsure_policy_off: AggregationSet
-    unsure_policy_on: AggregationSet
+    unsure_policy_on: Optional[AggregationSet] = None
 
 
 class FrameCountResults(BaseModel):
-    frames_8: PolicySet = Field(..., alias="8_frames")
-    frames_16: PolicySet = Field(..., alias="16_frames")
+    frames_8: Optional[PolicySet] = Field(None, alias="8_frames")
+    frames_16: Optional[PolicySet] = Field(None, alias="16_frames")
     frames_32: PolicySet = Field(..., alias="32_frames")
-    # frames_64: PolicySet = Field(..., alias="64_frames")
+    # frames_64: Optional[PolicySet] = Field(None, alias="64_frames")
 
 
 class VideoAnalysisResponse(BaseModel):
