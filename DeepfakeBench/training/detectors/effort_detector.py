@@ -26,6 +26,61 @@ from transformers import AutoProcessor, CLIPModel, ViTModel, ViTConfig  # noqa
 logger = logging.getLogger(__name__)
 
 
+class ArcMarginProduct(nn.Module):
+    """
+    Implementation of ArcFace head for binary classification.
+    This module replaces the final nn.Linear layer.
+    """
+
+    def __init__(self, in_features, out_features, s=30.0, m=0.35):
+        super(ArcMarginProduct, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.s = s
+        self.m = m
+        # The weight parameter is equivalent to the class centers in the feature space
+        self.weight = nn.Parameter(torch.FloatTensor(out_features, in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+    def forward(self, features, label=None):
+        # 1. Normalize feature vectors and weight vectors
+        cosine = F.linear(F.normalize(features), F.normalize(self.weight))
+
+        # If no label is provided (i.e., during inference), we can't add a margin.
+        # We return the scaled cosine similarity, which is a valid logit for ranking.
+        if label is None:
+            return cosine * self.s
+
+        # 2. Calculate the angle (theta) from the cosine similarity
+        # Add a small epsilon for numerical stability
+        theta = torch.acos(torch.clamp(cosine, -1.0 + 1e-7, 1.0 - 1e-7))
+
+        # 3. Add the angular margin 'm' to the angle of the correct class
+        # Create a one-hot vector from the labels
+        one_hot = torch.zeros(cosine.size(), device=features.device)
+        one_hot.scatter_(1, label.view(-1, 1).long(), 1)
+
+        # Add margin 'm' where the one_hot vector is 1
+        # M_theta = theta + m * one_hot
+        M_theta = torch.where(one_hot.bool(), theta + self.m, theta)
+
+        # 4. Convert the new angle back to a cosine value
+        marginal_target_logit = torch.cos(M_theta)
+
+        # 5. Scale the logits
+        # This sharpens the distribution and helps convergence
+        logits = self.s * marginal_target_logit
+
+        return logits
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(' \
+            + 'in_features=' + str(self.in_features) \
+            + ', out_features=' + str(self.out_features) \
+            + ', s=' + str(self.s) \
+            + ', m=' + str(self.m) + ')'
+
+
 class FocalLoss(nn.Module):
     """
     Focal Loss, as described in https://arxiv.org/abs/1708.02002.
@@ -35,16 +90,22 @@ class FocalLoss(nn.Module):
     def __init__(self, gamma=2.0, alpha=None, reduction='mean'):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
-        self.alpha = alpha  # Weight for the positive class (fake=1)
+        self.alpha = alpha
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
+    # ++ MODIFIED SIGNATURE: Added optional 'reduction' argument ++
+    def forward(self, inputs, targets, reduction=None):
         """
         Args:
             inputs: model predictions (logits) of shape [N, C]
             targets: ground truth labels of shape [N]
+            reduction (str, optional): Overrides the default reduction method.
+                                       Can be 'mean', 'sum', or 'none'.
         """
-        # Calculate cross-entropy loss without reduction
+        # Determine which reduction to use: the one passed in, or the default
+        reduction = reduction if reduction is not None else self.reduction
+
+        # Calculate cross-entropy loss without reduction (this part is correct)
         ce_loss = F.cross_entropy(inputs, targets, reduction='none')
 
         # Get the probability of the correct class
@@ -55,18 +116,39 @@ class FocalLoss(nn.Module):
 
         # Apply alpha weighting for class imbalance
         if self.alpha is not None:
-            # Assumes binary classification with labels 0 and 1
-            # alpha_t is alpha for the positive class and (1-alpha) for the negative class
             alpha_t = torch.where(targets == 1, self.alpha, 1 - self.alpha)
             focal_loss = alpha_t * focal_loss
 
-        # Apply reduction
-        if self.reduction == 'mean':
+        # Apply the determined reduction
+        if reduction == 'mean':
             return focal_loss.mean()
-        elif self.reduction == 'sum':
+        elif reduction == 'sum':
             return focal_loss.sum()
-        else:
+        else:  # This handles 'none'
             return focal_loss
+
+
+class CrossEntropyLossWithReduction(nn.Module):
+    """
+    Standard CrossEntropyLoss that allows the 'reduction' parameter
+    to be passed during the forward call. This is necessary for training
+    strategies like Group-DRO that require per-sample losses.
+    """
+
+    def __init__(self, reduction='mean'):
+        super(CrossEntropyLossWithReduction, self).__init__()
+        self.default_reduction = reduction
+
+    def forward(self, inputs, targets, reduction=None):
+        """
+        Args:
+            inputs: model predictions (logits) of shape [N, C]
+            targets: ground truth labels of shape [N]
+            reduction (str, optional): Overrides the default reduction method.
+                                       Can be 'mean', 'sum', or 'none'.
+        """
+        reduction_to_use = reduction if reduction is not None else self.default_reduction
+        return F.cross_entropy(inputs, targets, reduction=reduction_to_use)
 
 
 @DETECTOR.register_module(module_name='effort')
@@ -78,20 +160,34 @@ class EffortDetector(nn.Module):
         self.rank = config.get('rank', 1023)
         self.clip_backbone_path = config['gcs_assets']['clip_backbone']['local_path']
         self.backbone = self.build_backbone(config)  # Initialize Backbone model
-        self.head = nn.Linear(1024, 2)
 
-        # --- MODIFICATION START ---
-        # Controlled initialization of the loss function
-        self.use_focal_loss = config.get('use_focal_loss', False)
-        if self.use_focal_loss:
-            gamma = config.get('focal_loss_gamma', 2.0)
-            alpha = config.get('focal_loss_alpha', None)  # e.g., 0.25 is a common value
-            logger.info(f"Using Focal Loss with gamma={gamma} and alpha={alpha}")
-            self.loss_func = FocalLoss(gamma=gamma, alpha=alpha)
+        # Controlled initialization of the head based on config
+        self.use_arcface_head = config.get('use_arcface_head', False)
+        if self.use_arcface_head:
+            s = config.get('arcface_s', 30.0)
+            m = config.get('arcface_m', 0.35)
+            logger.info(f"Using ArcFace head with s={s} and m={m}")
+            self.head = ArcMarginProduct(in_features=1024, out_features=2, s=s, m=m)
         else:
-            logger.info("Using standard CrossEntropyLoss")
-            self.loss_func = nn.CrossEntropyLoss()
-        # --- MODIFICATION END ---
+            logger.info("Using standard Linear head")
+            self.head = nn.Linear(1024, 2)
+
+        # Controlled initialization of the loss function
+        # If ArcFace is used, we MUST use CrossEntropyLoss, not FocalLoss.
+        # The margin 'm' in ArcFace serves a similar purpose to Focal Loss's gamma.
+        if self.use_arcface_head:
+            logger.info("ArcFace head is active. Switching to standard CrossEntropyLoss.")
+            self.loss_func = CrossEntropyLossWithReduction()
+        else:
+            self.use_focal_loss = config.get('use_focal_loss', False)
+            if self.use_focal_loss:
+                gamma = config.get('focal_loss_gamma', 2.0)
+                alpha = config.get('focal_loss_alpha', None)
+                logger.info(f"Using Focal Loss with gamma={gamma} and alpha={alpha}")
+                self.loss_func = FocalLoss(gamma=gamma, alpha=alpha)
+            else:
+                logger.info("Using standard CrossEntropyLoss")
+                self.loss_func = CrossEntropyLossWithReduction()
 
         self.prob, self.label = [], []
         self.correct, self.total = 0, 0
@@ -212,67 +308,94 @@ class EffortDetector(nn.Module):
     #     }
     #     return loss_dict
 
-    def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
+    def get_losses(self, data_dict: dict, pred_dict: dict, reduction: str = 'mean') -> dict:
+        """
+        Calculates losses. Supports both mean reduction (default) and per-sample
+        reduction for advanced training strategies like Group-DRO.
+
+        Args:
+            data_dict (dict): Dictionary containing ground truth labels.
+            pred_dict (dict): Dictionary containing model predictions.
+            reduction (str): The reduction to apply to the loss.
+                             'mean': returns a single scalar loss.
+                             'none': returns a loss for each sample in the batch.
+
+        Returns:
+            dict: A dictionary of losses. The 'overall' key will contain a
+                  scalar or a tensor depending on the reduction method.
+        """
         label = data_dict['label']
         pred = pred_dict['cls']
 
-        # Check if the batch was originally 5D by comparing label and pred batch sizes
-        # If len(pred) > len(label), it means we reshaped a video batch
+        # Handle reshaped video batches by repeating labels for each frame
         if pred.shape[0] > label.shape[0]:
             B = label.shape[0]
-            # Calculate T (number of frames) from the discrepancy
             T = pred.shape[0] // B
-            # Repeat each label T times to match the reshaped predictions
             label = label.repeat_interleave(T)
 
-        # The rest of the loss calculation logic remains the same
-        # It now works correctly for both 4D and 5D original inputs
-
-        # Compute overall loss using all samples
-        loss = self.loss_func(pred, label)
-
-        # ======================================================================
-        # == RESTORED REGULARIZATION BLOCK TO PREVENT OVERFITTING ==
-        # This block enforces structural and magnitude constraints on the weight
-        # updates, which is critical for stable fine-tuning.
-        # ======================================================================
+        # --- Calculate Regularization Term (as a scalar) ---
+        reg_term = torch.tensor(0.0, device=pred.device)
         if self.training:
-            # Regularization term
-            lambda_reg = self.lambda_reg  # Default to 1.0 if not in config
-            reg_term = 0.0
+            lambda_reg = self.lambda_reg
             num_reg = 0
+            current_reg_term = 0.0
             for module in self.backbone.modules():
                 if isinstance(module, SVDResidualLinear):
-                    reg_term += module.compute_orthogonal_loss()
-                    reg_term += module.compute_keepsv_loss()
+                    current_reg_term += module.compute_orthogonal_loss()
+                    current_reg_term += module.compute_keepsv_loss()
                     num_reg += 1
-
-            # Add the averaged regularization term to the main loss
             if num_reg > 0:
-                loss += lambda_reg * reg_term / num_reg
-        # ======================================================================
+                reg_term = lambda_reg * current_reg_term / num_reg
 
-        # Create masks for real and fake classes
-        mask_real = label == 0
-        mask_fake = label == 1
+        # --- Main Loss Calculation based on reduction type ---
+        if reduction == 'mean':
+            # --- DEFAULT BEHAVIOR: Return a single scalar loss ---
+            loss = self.loss_func(pred, label)  # Assumes self.loss_func defaults to 'mean'
 
-        # Compute loss for real class
-        if mask_real.sum() > 0:
-            loss_real = self.loss_func(pred[mask_real], label[mask_real])
+            # Add scalar regularization term
+            if self.training:
+                loss += reg_term
+
+            # For logging, calculate separate real/fake losses
+            mask_real = label == 0
+            mask_fake = label == 1
+            loss_real = self.loss_func(pred[mask_real], label[mask_real]) if mask_real.sum() > 0 else torch.tensor(0.0,
+                                                                                                                   device=pred.device)
+            loss_fake = self.loss_func(pred[mask_fake], label[mask_fake]) if mask_fake.sum() > 0 else torch.tensor(0.0,
+                                                                                                                   device=pred.device)
+
+            loss_dict = {
+                'overall': loss,
+                'real_loss': loss_real,
+                'fake_loss': loss_fake,
+            }
+
+        elif reduction == 'none':
+            # --- NEW BEHAVIOR: Return per-sample losses for Group-DRO ---
+            # CRITICAL: Assumes self.loss_func (e.g., nn.CrossEntropyLoss, FocalLoss)
+            # supports the `reduction` argument. This is standard in PyTorch.
+            per_sample_loss = self.loss_func(pred, label, reduction='none')
+
+            # Add scalar regularization term (PyTorch broadcasts this correctly)
+            if self.training:
+                per_sample_loss += reg_term
+
+            # For logging, calculate the mean of the per-sample losses for each class
+            mask_real = label == 0
+            mask_fake = label == 1
+            loss_real = per_sample_loss[mask_real].mean() if mask_real.sum() > 0 else torch.tensor(0.0,
+                                                                                                   device=pred.device)
+            loss_fake = per_sample_loss[mask_fake].mean() if mask_fake.sum() > 0 else torch.tensor(0.0,
+                                                                                                   device=pred.device)
+
+            loss_dict = {
+                'overall': per_sample_loss,  # This is a TENSOR
+                'real_loss': loss_real.detach(),  # Scalar for logging
+                'fake_loss': loss_fake.detach(),  # Scalar for logging
+            }
         else:
-            loss_real = torch.tensor(0.0, device=pred.device)
+            raise ValueError(f"Unsupported reduction type: '{reduction}'. Must be 'mean' or 'none'.")
 
-        # Compute loss for fake class
-        if mask_fake.sum() > 0:
-            loss_fake = self.loss_func(pred[mask_fake], label[mask_fake])
-        else:
-            loss_fake = torch.tensor(0.0, device=pred.device)
-
-        loss_dict = {
-            'overall': loss,
-            'real_loss': loss_real,
-            'fake_loss': loss_fake,
-        }
         return loss_dict
 
     def get_train_metrics(self, data_dict: dict, pred_dict: dict) -> dict:
@@ -297,6 +420,7 @@ class EffortDetector(nn.Module):
 
     def forward(self, data_dict: dict, inference=False) -> dict:
         image = data_dict['image']
+        label = data_dict.get('label', None)  # Get label, if available
 
         # Check if the input is a 5D tensor (batch of videos)
         if image.dim() == 5:
@@ -304,6 +428,9 @@ class EffortDetector(nn.Module):
             B, T, C, H, W = image.shape
             # Reshape to treat every frame as a separate sample: [B * T, C, H, W]
             image = image.view(B * T, C, H, W)
+            # --- Ensure labels are also expanded if present ---
+            if label is not None:
+                label = label.repeat_interleave(T)
 
         # Create a temporary dict for the backbone
         temp_data_dict = {'image': image}
@@ -311,9 +438,16 @@ class EffortDetector(nn.Module):
         # Now the backbone receives a 4D tensor as expected
         features = self.features(temp_data_dict)
 
-        # get the prediction by classifier
-        pred = self.classifier(features)
-        # get the probability of the pred
+        # The logic for calling the head must now be inside the forward pass,
+        # because the ArcFace head requires the label during training.
+        if self.use_arcface_head:
+            # Pass the label to the head during training.
+            # During inference, label might be None, and the head is designed to handle this.
+            pred = self.head(features, label)
+        else:
+            # The standard linear head does not need the label.
+            pred = self.classifier(features)
+
         prob = torch.softmax(pred, dim=1)[:, 1]
         # build the prediction dict for each output
         pred_dict = {'cls': pred, 'prob': prob, 'feat': features}
