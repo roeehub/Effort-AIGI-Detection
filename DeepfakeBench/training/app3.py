@@ -189,12 +189,12 @@ def calculate_analysis(frame_probs: List[float], threshold: float) -> VideoAnaly
     """Performs the full analysis matrix on a list of frame probabilities."""
     analysis: Dict[str, Any] = {}
 
-    for n_frames in [8, 16, 32]:
+    for n_frames in [32]:  # [8, 16, 32, 64]
         # Use up to n_frames, but don't fail if fewer are available
         sample_probs = frame_probs[:n_frames]
 
         policy_results: Dict[str, Any] = {}
-        for policy in ["off", "on"]:
+        for policy in ["off"]:  # ["off", "on"]
             if not sample_probs:
                 # Handle case where initial list is empty
                 agg_set = {
@@ -230,12 +230,12 @@ def calculate_analysis(frame_probs: List[float], threshold: float) -> VideoAnaly
                     "frames_used": frames_used
                 }
                 # Std (decision based on mean)
-                std_score = np.std(np_probs)
-                agg_results["std"] = {
-                    "decision": "FAKE" if mean_score >= threshold else "REAL",
-                    "score": std_score,
-                    "frames_used": frames_used
-                }
+                # std_score = np.std(np_probs)
+                # agg_results["std"] = {
+                #     "decision": "FAKE" if mean_score >= threshold else "REAL",
+                #     "score": std_score,
+                #     "frames_used": frames_used
+                # }
                 # Majority Vote
                 fake_count = np.sum(np_probs >= threshold)
                 agg_results["majority_vote"] = {
