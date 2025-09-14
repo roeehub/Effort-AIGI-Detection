@@ -2,6 +2,8 @@ import math
 import os
 import sys
 import time
+import gc
+import contextlib
 
 current_file_path = os.path.abspath(__file__)
 parent_dir = os.path.dirname(os.path.dirname(current_file_path))
@@ -204,6 +206,10 @@ class Trainer(object):
         self.scaler.scale(losses['overall']).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
+
+        if self.scheduler is not None:
+            self.scheduler.step()
+
         return losses, predictions
 
     def _next_batch_from_group(self, method_name, loaders, iters):
@@ -276,38 +282,40 @@ class Trainer(object):
     ):
         self.logger.info(f"===> Epoch[{epoch + 1}] start!")
         strategy = self.config.get('dataloader_params', {}).get('strategy', 'per_method')
-        is_property_balancing = self.config.get('property_balancing', {}).get('enabled',
-                                                                              False)  # Check the specific flag
 
         if strategy == 'property_balancing':
-            effective_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
-            total_items = len(train_videos)  # train_videos is a list of frames (dicts)
-            epoch_len = math.ceil(total_items / effective_batch_size) if total_items > 0 else 0
+            dl_params = self.config.get('dataloader_params', {})
+            gpu_batch_size = dl_params.get('frames_per_batch', 64)
+            # A logical batch is always composed of 32 unique videos.
+            # Total logical frames = 32 videos * frames_per_video
+            # Total GPU batches for one logical step = Total logical frames / frames_per_gpu_batch
+            frames_per_video = dl_params.get('frames_per_video', 2)
+            accumulation_steps = max(1, round((32.0 * frames_per_video) / gpu_batch_size))
+            # `train_videos` is a list of frames (dicts) for this strategy
+            total_items = len(train_videos)
+            epoch_len = math.ceil(total_items / gpu_batch_size) if total_items > 0 else 0
         elif strategy == 'frame_level':
-            effective_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
-            # This assumes train_videos is a list of VideoInfo objects for this strategy
+            gpu_batch_size = self.config.get('dataloader_params', {}).get('frames_per_batch')
             total_frames = sum(len(v.frame_paths) for v in train_videos)
-            epoch_len = math.ceil(total_frames / effective_batch_size) if total_frames > 0 else 0
+            epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
+            accumulation_steps = 1  # No accumulation for this strategy
         else:  # Handles 'per_method' and 'video_level'
             effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
             total_train_videos = len(train_videos)
             epoch_len = math.ceil(total_train_videos / effective_batch_size) if total_train_videos > 0 else 0
+            accumulation_steps = 1  # No accumulation for these strategies
 
         self.logger.info(f"Training strategy: '{strategy}', Epoch length: {epoch_len} steps")
+        if accumulation_steps > 1:
+            self.logger.info(f"Using gradient accumulation with {accumulation_steps} steps.")
 
         # --- PRECISE EVALUATION SCHEDULING ---
         evaluation_frequency = self.config.get('data_params', {}).get('evaluation_frequency', 1)
-        if evaluation_frequency <= 0:
-            evaluation_frequency = 1  # Ensure at least one evaluation
-
+        if evaluation_frequency <= 0: evaluation_frequency = 1
         eval_steps = set()
         if epoch_len > 0:
-            # Calculate interval, ensuring it's at least 1
             interval = max(1, epoch_len // evaluation_frequency)
-            # Add evaluation points based on the interval
-            for i in range(1, evaluation_frequency):
-                eval_steps.add(i * interval)
-            # Always add the last step to guarantee a final evaluation
+            for i in range(1, evaluation_frequency): eval_steps.add(i * interval)
             eval_steps.add(epoch_len)
         self.logger.info(f"Scheduled evaluation at steps: {sorted(list(eval_steps))}")
 
@@ -316,16 +324,15 @@ class Trainer(object):
 
         # --- Conditional Training Loop based on strategy ---
         if strategy == 'per_method':
+            # This logic remains self-contained as it doesn't use gradient accumulation
             real_source_names = self.config['methods']['use_real_sources']
             all_method_names = train_loader.keys()
             real_method_names = [m for m in all_method_names if m in real_source_names]
             fake_method_names = [m for m in all_method_names if m not in real_source_names]
-
             real_video_counts, fake_video_counts = defaultdict(int), defaultdict(int)
             for v in train_videos:
                 (real_video_counts if v.method in real_source_names else fake_video_counts)[v.method] += 1
-            total_real_videos = sum(real_video_counts.values())
-            total_fake_videos = sum(fake_video_counts.values())
+            total_real_videos, total_fake_videos = sum(real_video_counts.values()), sum(fake_video_counts.values())
             real_weights = [real_video_counts[m] / total_real_videos for m in
                             real_method_names] if total_real_videos > 0 else []
             fake_weights = [fake_video_counts[m] / total_fake_videos for m in
@@ -336,27 +343,96 @@ class Trainer(object):
                 data_dict = self._train_per_method_step(train_loader, train_loader, real_method_names,
                                                         fake_method_names, real_weights, fake_weights)
                 if data_dict is None: continue
-
-                # Pass new timing/progress args
+                # This strategy uses the original, single-step logic.
                 self._run_train_step(data_dict, step_cnt, epoch, epoch_len, epoch_start_time)
                 step_cnt += 1
-
-                if (iteration + 1) in eval_steps:
-                    self._run_validation(epoch, iteration + 1, val_method_loaders)
+                if (iteration + 1) in eval_steps: self._run_validation(epoch, iteration + 1, val_method_loaders)
 
         elif strategy in ['video_level', 'frame_level', 'property_balancing']:
             pbar = tqdm(train_loader, desc=f"EPOCH ({strategy}): {epoch + 1}/{self.config['nEpochs']}", total=epoch_len)
-            # We use 'i' as the iteration counter from enumerate
+            self.optimizer.zero_grad()  # Zero gradients at the start of the epoch
+
             for i, data_dict in enumerate(pbar):
-                if i >= epoch_len:
-                    break  # Safety check to not exceed epoch length
+                if i >= epoch_len: break
 
-                # Pass new timing/progress args
-                self._run_train_step(data_dict, step_cnt, epoch, epoch_len, epoch_start_time)
-                step_cnt += 1
+                is_final_accumulation_step = (i + 1) % accumulation_steps == 0
+                is_ddp = type(self.model) is DDP
+                # Use DDP's no_sync context manager to avoid redundant gradient all-reduce calls.
+                # This is a significant speed-up for DDP with gradient accumulation.
+                context = self.model.no_sync() if is_ddp and not is_final_accumulation_step and accumulation_steps > 1 else contextlib.nullcontext()
 
-                if (i + 1) in eval_steps:
-                    self._run_validation(epoch, i)
+                with context:
+                    self.setTrain()
+                    for key in data_dict.keys():
+                        if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(
+                            self.model.device)
+                    # --- FORWARD PASS ---
+                    with autocast():
+                        predictions = self.model(data_dict)
+                        losses = self.model.module.get_losses(data_dict,
+                                                              predictions) if is_ddp else self.model.get_losses(
+                            data_dict, predictions)
+                    # Store unscaled loss for accurate logging
+                    unscaled_loss = losses['overall'].clone().detach()
+                    # Scale loss for accumulation
+                    if accumulation_steps > 1:
+                        losses['overall'] = losses['overall'] / accumulation_steps
+                    # --- BACKWARD PASS ---
+                    self.scaler.scale(losses['overall']).backward()
+
+                # --- OPTIMIZER STEP (conditional) ---
+                if is_final_accumulation_step or accumulation_steps == 1:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+
+                    if self.scheduler is not None:
+                        self.scheduler.step()
+
+                    self.optimizer.zero_grad()
+
+                # --- LOGGING (every GPU batch, using unscaled loss) ---
+                if self.wandb_run and self.config['local_rank'] == 0:
+                    log_dict = {"train/step": step_cnt, "epoch": epoch + 1}
+                    log_dict[f'train/loss/overall'] = unscaled_loss.item()
+                    for name, value in losses.items():
+                        if name != 'overall': log_dict[f'train/loss/{name}'] = value.item()
+
+                    batch_metrics = self.model.module.get_train_metrics(data_dict,
+                                                                        predictions) if is_ddp else self.model.get_train_metrics(
+                        data_dict, predictions)
+                    for name, value in batch_metrics.items(): log_dict[f'train/metric/{name}'] = value
+
+                    log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
+                    if (i % log_progress_steps == 0) or (i == epoch_len - 1):
+                        time_elapsed = time.time() - epoch_start_time
+                        steps_per_sec = (i + 1) / time_elapsed if time_elapsed > 0 else 0
+                        log_dict['train/steps_per_sec'] = steps_per_sec
+                        log_dict['train/probabilities'] = wandb.Histogram(predictions['prob'].detach().cpu().numpy())
+                        if epoch_len > 0:
+                            progress_pct = ((i + 1) / epoch_len) * 100
+                            log_dict['train/epoch_progress'] = progress_pct
+                            if steps_per_sec > 0:
+                                time_remaining_sec = (epoch_len - (i + 1)) / steps_per_sec
+                                log_dict['train/epoch_eta_min'] = time_remaining_sec / 60
+                        self.wandb_run.log(log_dict)
+                        self.logger.info(
+                            f"Epoch {epoch + 1}/{self.config['nEpochs']} | Step {i + 1}/{epoch_len} ({progress_pct:.1f}%) | Loss: {unscaled_loss.item():.4f} | Speed: {steps_per_sec:.2f} it/s")
+                    else:
+                        self.wandb_run.log({"train/loss/overall": unscaled_loss.item(), "train/step": step_cnt})
+
+                step_cnt += 1  # Global step counter increments with each GPU batch
+                if (i + 1) in eval_steps: self._run_validation(epoch, i)
+
+            # Perform a final optimizer step for any remaining gradients at the end of the epoch
+            if epoch_len > 0 and epoch_len % accumulation_steps != 0 and accumulation_steps > 1:
+                self.logger.info("Performing final optimizer step for dangling gradients at end of epoch.")
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+
+                if self.scheduler is not None:
+                    self.scheduler.step()
+
+                self.optimizer.zero_grad()
         else:
             raise ValueError(f"Unsupported training strategy: {strategy}")
 

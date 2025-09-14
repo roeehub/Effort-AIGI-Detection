@@ -2,7 +2,7 @@
 
 gcp:
   bucket_name: "df40-frames-recropped-rfa85"
-  ood_bucket_name: "deep-fake-test-10-08-25-frames-yolo-recropped-rfa85"
+  ood_bucket_name: "deep-fake-test-10-08-25-frames-v2"
 #  bucket_name: "df40-frames"
 #  ood_bucket_name: "deep-fake-test-10-08-25-frames-yolo"
 

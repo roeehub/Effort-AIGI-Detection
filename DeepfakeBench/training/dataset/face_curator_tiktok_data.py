@@ -19,6 +19,10 @@ import shutil
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import partial
+from multiprocessing import Pool
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -27,7 +31,6 @@ from ultralytics import YOLO
 import face_recognition
 from sklearn.cluster import DBSCAN
 from google.cloud import storage
-from google.api_core.exceptions import NotFound
 from skimage.metrics import structural_similarity as ssim
 
 # Platform-specific imports for reading single characters from the terminal
@@ -45,6 +48,10 @@ except ImportError:
 # ──────────────────────────
 # 📍 Default Configuration
 # ──────────────────────────
+# --- NEW: Processing parameters ---
+NUM_CORES = 4
+FRAMES_TO_SAMPLE = 64 * 3
+# --- END NEW ---
 MIN_FACE_SIZE = (80, 80)
 MIN_FRAMES_PER_CHUNK = 16
 MAX_FRAMES_PER_CHUNK = 32
@@ -61,7 +68,7 @@ STATIC_CONTENT_SSIM_THRESHOLD = 0.98
 CLUSTER_COMPACTNESS_THRESHOLD = 0.35
 DISAPPROVED_FILENAME = "disapproved.txt"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] - %(message)s",
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] [%(processName)s] - %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 
 
@@ -120,7 +127,7 @@ def draw_box_on_image(image: np.ndarray, box: tuple, color=(0, 0, 255), thicknes
 class VideoProcessor:
     def __init__(self, config: argparse.Namespace):
         self.config = config
-        self.yolo_model = YOLO(YOLO_MODEL_PATH)
+        self.yolo_model = YOLO(YOLO_MODEL_PATH)  # Model loaded once per process
         self.output_dir = Path(self.config.output_dir)
 
     def _filter_static_frames_from_chunk(self, faces: list[Face]) -> list[Face]:
@@ -157,21 +164,49 @@ class VideoProcessor:
                 dynamic_faces.append(face)
         return dynamic_faces
 
-    def _extract_faces_from_video(self, video_path: Path) -> list[Face]:
+    # --- MODIFIED: This is the core performance improvement ---
+    def _sample_and_extract_faces(self, video_path: Path) -> list[Face]:
+        """
+        Efficiently samples frames, runs batched YOLO, and extracts+encodes faces.
+        """
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
-            logging.error(f"Could not open video file: {video_path}");
+            logging.warning(f"Could not open video file: {video_path}");
             return []
 
-        extracted_faces, frame_num = [], 0
-        frame_h, frame_w = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames < self.config.min_frames:
+            cap.release()
+            return []
 
-        while cap.isOpened():
+        frame_indices_to_sample = np.linspace(0, total_frames - 1, self.config.frames_to_sample, dtype=int)
+
+        frames_for_yolo = []
+        original_bgr_frames_read = []
+        sampled_frame_numbers = []
+
+        for frame_idx in frame_indices_to_sample:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
-            if not ret: break
+            if ret:
+                original_bgr_frames_read.append(frame)
+                frames_for_yolo.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                sampled_frame_numbers.append(frame_idx)
+        cap.release()
 
-            results = self.yolo_model.predict(frame, conf=self.config.yolo_conf, verbose=False)
-            boxes = results[0].boxes.xyxy.cpu().numpy()
+        if not frames_for_yolo:
+            return []
+
+        # Process all collected frames in a single batch for huge speedup
+        results = self.yolo_model.predict(frames_for_yolo, conf=self.config.yolo_conf, verbose=False)
+
+        extracted_faces = []
+        frame_h, frame_w = original_bgr_frames_read[0].shape[:2]
+
+        for i, result in enumerate(results):
+            frame_bgr = original_bgr_frames_read[i]
+            frame_num = sampled_frame_numbers[i]
+            boxes = result.boxes.xyxy.cpu().numpy()
 
             for box in boxes:
                 x0, y0, x1, y1 = box
@@ -184,7 +219,7 @@ class VideoProcessor:
                 center_x, center_y, side = x0 + w / 2, y0 + h / 2, max(w, h)
                 sq_x0, sq_y0 = max(0, int(center_x - side / 2)), max(0, int(center_y - side / 2))
                 sq_x1, sq_y1 = min(frame_w, int(center_x + side / 2)), min(frame_h, int(center_y + side / 2))
-                face_crop = frame[sq_y0:sq_y1, sq_x0:sq_x1]
+                face_crop = frame_bgr[sq_y0:sq_y1, sq_x0:sq_x1]
                 if face_crop.size == 0: continue
 
                 final_face = cv2.resize(face_crop, (self.config.img_size, self.config.img_size),
@@ -197,23 +232,33 @@ class VideoProcessor:
 
                 if encodings:
                     extracted_faces.append(Face(final_face, encodings[0], frame_num, original_box))
-            frame_num += 1
-        cap.release()
+
         return extracted_faces
 
     def process_and_save_video(self, video_path: Path):
+        # This function's logic remains the same, but it calls the new, faster method
         logging.info(f"Processing video: {video_path.name}")
-        all_faces = self._extract_faces_from_video(video_path)
+        all_faces = self._sample_and_extract_faces(video_path)
         if not all_faces:
             logging.warning(f"No valid faces found in {video_path.name}. Skipping.");
             return
 
         encodings = [face.encoding for face in all_faces]
+        # Skip clustering if we don't have enough faces to meet the min_samples requirement
+        if len(encodings) < self.config.min_frames:
+            logging.warning(
+                f"Not enough faces ({len(encodings)}) found in {video_path.name} to form a cluster. Skipping.")
+            return
+
         clt = DBSCAN(metric="euclidean", eps=self.config.dbscan_eps, min_samples=self.config.min_frames)
         clt.fit(encodings)
         persons_in_video = defaultdict(list)
         for face, label in zip(all_faces, clt.labels_):
             if label != -1: persons_in_video[label].append(face)
+
+        if not persons_in_video:
+            logging.info(f"No stable person clusters identified in {video_path.name}.")
+            return
 
         logging.info(f"Identified {len(persons_in_video)} potential individuals in {video_path.name}.")
         for person_label, faces in persons_in_video.items():
@@ -244,6 +289,27 @@ class VideoProcessor:
                 cv2.imwrite(str(chunk_dir / f"{i:04d}.png"), face.frame_image)
 
 
+# --- NEW: Top-level worker function for multiprocessing ---
+_processor_cache = {}
+
+
+def process_video_worker(video_path: Path, config: argparse.Namespace):
+    """
+    Initializes a VideoProcessor in each worker process and processes one video.
+    This avoids pickling large model objects.
+    """
+    if 'processor' not in _processor_cache:
+        # Each process creates its own instance with its own model loaded in memory
+        _processor_cache['processor'] = VideoProcessor(config)
+
+    processor = _processor_cache['processor']
+    try:
+        processor.process_and_save_video(video_path)
+    except Exception as e:
+        logging.error(f"FATAL ERROR processing {video_path.name}: {e}", exc_info=True)
+
+
+# --- MODIFIED: The main 'process' command runner is now a parallel dispatcher ---
 def run_process(args):
     """Main function for the 'process' stage."""
     output_dir = Path(args.output_dir)
@@ -251,7 +317,7 @@ def run_process(args):
     output_dir.mkdir(exist_ok=True, parents=True)
 
     video_paths = []
-    # --- START OF MODIFIED LOGIC ---
+    # --- START OF UNMODIFIED LOGIC ---
     if args.in_bucket:
         logging.info(f"Connecting to GCP bucket: '{args.in_bucket}'")
         temp_dir.mkdir(exist_ok=True, parents=True)
@@ -280,18 +346,23 @@ def run_process(args):
         if args.sample:
             video_paths = all_files[:args.sample]
         logging.info(f"Found {len(video_paths)} videos to process.")
-    # --- END OF MODIFIED LOGIC ---
+    # --- END OF UNMODIFIED LOGIC ---
 
     if not video_paths:
         logging.info("No videos to process. Exiting.")
         return
 
-    processor = VideoProcessor(args)
-    for path in video_paths:
-        try:
-            processor.process_and_save_video(path)
-        except Exception as e:
-            logging.error(f"FATAL ERROR processing {path.name}: {e}", exc_info=True)
+    # --- NEW: Parallel processing logic ---
+    logging.info(f"Initializing {args.cores} workers to process {len(video_paths)} videos...")
+
+    # Use functools.partial to pass the static 'args' object to the worker
+    worker_func = partial(process_video_worker, config=args)
+
+    with Pool(processes=args.cores) as pool:
+        # Use tqdm to create a progress bar
+        list(tqdm(pool.imap_unordered(worker_func, video_paths), total=len(video_paths), desc="Processing Videos"))
+
+    logging.info("All videos have been processed.")
 
 
 # ──────────────────────────
@@ -393,47 +464,64 @@ def run_prune(args):
     logging.info("Pruning complete.")
 
 
-# ──────────────────────────
-# 🚀 STAGE 4: Upload
-# ──────────────────────────
 def run_upload(args):
-    """Upload curated directories to GCP under a specific label and optional method."""
+    """Upload curated directories to GCP in parallel."""
     local_dir = Path(args.dir)
     bucket_name = args.bucket
     label = args.label
-    method = args.method  # <-- New: Get the method from arguments
+    method = args.method
 
-    # Build a more descriptive log message
     log_message = f"--- Uploading results from '{local_dir}' to GCP Bucket '{bucket_name}' under label '{label}'"
     if method:
         log_message += f" with method '{method}'"
-    log_message += " ---"
+    log_message += f" using {args.workers} parallel workers ---"
     logging.info(log_message)
 
     try:
         storage_client = storage.Client()
         bucket = storage_client.bucket(bucket_name)
 
+        # --- MODIFIED: Step 1 - Collect all upload tasks first ---
+        upload_tasks = []
         person_dirs = [d for d in local_dir.iterdir() if d.is_dir() and d.name != "temp_videos"]
 
         for person_dir in person_dirs:
             for local_file in person_dir.rglob('*'):
                 if local_file.is_file():
-                    # --- MODIFIED LOGIC: Conditionally add the method to the path ---
                     base_path_parts = [label]
                     if method:
                         base_path_parts.append(method)
 
                     base_path = "/".join(base_path_parts)
                     remote_path = f"{base_path}/{person_dir.name}/{local_file.name}"
+                    upload_tasks.append((local_file, remote_path))
 
-                    logging.info(f"Uploading {local_file.name} to gs://{bucket_name}/{remote_path}")
-                    blob = bucket.blob(remote_path)
-                    blob.upload_from_filename(str(local_file))
+        if not upload_tasks:
+            logging.info("No files found to upload.")
+            return
+
+        logging.info(f"Found {len(upload_tasks)} files to upload. Starting parallel upload...")
+
+        # --- MODIFIED: Step 2 - Define a worker function for a single upload ---
+        def upload_worker(task_data):
+            """Uploads a single file given its local and remote path."""
+            local_file, remote_path = task_data
+            try:
+                blob = bucket.blob(remote_path)
+                blob.upload_from_filename(str(local_file))
+            except Exception as e:
+                # Log errors but don't crash the whole process
+                logging.error(f"Failed to upload {local_file.name} to {remote_path}: {e}")
+
+        # --- MODIFIED: Step 3 - Use ThreadPoolExecutor to run uploads in parallel ---
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            # Use tqdm to show a progress bar for the uploads
+            list(tqdm(executor.map(upload_worker, upload_tasks), total=len(upload_tasks), desc="Uploading Files"))
 
     except Exception as e:
-        logging.error(f"Failed to upload results to GCP: {e}");
+        logging.error(f"An error occurred during the upload process: {e}", exc_info=True)
         sys.exit(1)
+
     logging.info("Upload complete.")
 
 
@@ -442,17 +530,19 @@ def run_upload(args):
 # ──────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="A multi-stage tool for curating a face dataset.")
+    parser.add_argument('--cores', type=int, default=NUM_CORES, help='Number of CPU cores to use for processing.')
     subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
     # --- Parser for "process" ---
+    # ... (this section remains unchanged) ...
     p_process = subparsers.add_parser("process", help="Extract face chunks from videos.")
     p_process.add_argument("output_dir", type=str, help="Local directory to save the extracted face chunks.")
-
     input_group = p_process.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--in_bucket", type=str, help="GCP bucket to read videos from.")
     input_group.add_argument("--in_folder", type=Path, help="Local folder with videos.")
     p_process.add_argument("--sample", type=int, help="Optional: Process only a small sample of N videos for testing.")
-    # Add all tunable parameters to the process command
+    p_process.add_argument("--frames_to_sample", type=int, default=FRAMES_TO_SAMPLE,
+                           help="Number of frames to sparsely sample from each video.")
     p_process.set_defaults(min_face_size=MIN_FACE_SIZE, min_frames=MIN_FRAMES_PER_CHUNK,
                            max_frames=MAX_FRAMES_PER_CHUNK,
                            yolo_conf=YOLO_CONF_THRESHOLD, dbscan_eps=DBSCAN_EPS, margin=YOLO_BBOX_MARGIN,
@@ -461,10 +551,12 @@ def main():
                            ssim_threshold=STATIC_CONTENT_SSIM_THRESHOLD, compactness=CLUSTER_COMPACTNESS_THRESHOLD)
 
     # --- Parser for "review" ---
+    # ... (this section remains unchanged) ...
     p_review = subparsers.add_parser("review", help="Interactively review and approve/disapprove chunks.")
     p_review.add_argument("dir", type=str, help="The output directory from the 'process' stage.")
 
     # --- Parser for "prune" ---
+    # ... (this section remains unchanged) ...
     p_prune = subparsers.add_parser("prune", help="Delete all disapproved chunks.")
     p_prune.add_argument("dir", type=str, help="The output directory from the 'process' stage.")
 
@@ -474,6 +566,8 @@ def main():
     p_upload.add_argument("bucket", type=str, help="The destination GCP bucket name.")
     p_upload.add_argument("--label", type=str, help="The label for this dataset (e.g., 'real' or 'fake').")
     p_upload.add_argument("--method", type=str, help="Optional sub-folder for the source or method (e.g., 'tiktok').")
+    # --- NEW: Add a --workers argument for parallel uploads ---
+    p_upload.add_argument("--workers", type=int, default=16, help="Number of parallel threads for uploading files.")
 
     args = parser.parse_args()
 
@@ -488,7 +582,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # Ensure YOLO model exists
+    # ... (this section remains unchanged) ...
     if not Path(YOLO_MODEL_PATH).exists():
         logging.error(f"YOLO model not found at '{YOLO_MODEL_PATH}'.")
         logging.error("Download from: https://github.com/akanametov/yolo-face/releases/download/v8.0/yolov8s-face.pt")

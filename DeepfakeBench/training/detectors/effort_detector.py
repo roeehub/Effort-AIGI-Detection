@@ -26,6 +26,49 @@ from transformers import AutoProcessor, CLIPModel, ViTModel, ViTConfig  # noqa
 logger = logging.getLogger(__name__)
 
 
+class FocalLoss(nn.Module):
+    """
+    Focal Loss, as described in https://arxiv.org/abs/1708.02002.
+    It is used to address the issue of class imbalance and difficulty imbalance.
+    """
+
+    def __init__(self, gamma=2.0, alpha=None, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha  # Weight for the positive class (fake=1)
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        """
+        Args:
+            inputs: model predictions (logits) of shape [N, C]
+            targets: ground truth labels of shape [N]
+        """
+        # Calculate cross-entropy loss without reduction
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none')
+
+        # Get the probability of the correct class
+        pt = torch.exp(-ce_loss)
+
+        # Calculate the focal loss term
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+
+        # Apply alpha weighting for class imbalance
+        if self.alpha is not None:
+            # Assumes binary classification with labels 0 and 1
+            # alpha_t is alpha for the positive class and (1-alpha) for the negative class
+            alpha_t = torch.where(targets == 1, self.alpha, 1 - self.alpha)
+            focal_loss = alpha_t * focal_loss
+
+        # Apply reduction
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
+
 @DETECTOR.register_module(module_name='effort')
 class EffortDetector(nn.Module):
     def __init__(self, config=None):
@@ -36,7 +79,20 @@ class EffortDetector(nn.Module):
         self.clip_backbone_path = config['gcs_assets']['clip_backbone']['local_path']
         self.backbone = self.build_backbone(config)  # Initialize Backbone model
         self.head = nn.Linear(1024, 2)
-        self.loss_func = nn.CrossEntropyLoss()
+
+        # --- MODIFICATION START ---
+        # Controlled initialization of the loss function
+        self.use_focal_loss = config.get('use_focal_loss', False)
+        if self.use_focal_loss:
+            gamma = config.get('focal_loss_gamma', 2.0)
+            alpha = config.get('focal_loss_alpha', None)  # e.g., 0.25 is a common value
+            logger.info(f"Using Focal Loss with gamma={gamma} and alpha={alpha}")
+            self.loss_func = FocalLoss(gamma=gamma, alpha=alpha)
+        else:
+            logger.info("Using standard CrossEntropyLoss")
+            self.loss_func = nn.CrossEntropyLoss()
+        # --- MODIFICATION END ---
+
         self.prob, self.label = [], []
         self.correct, self.total = 0, 0
 
@@ -77,7 +133,7 @@ class EffortDetector(nn.Module):
     #    label = data_dict['label']
     #    pred = pred_dict['cls']
     #    loss = self.loss_func(pred, label)
-    #    
+    #
     #    if self.training:
     #        # Regularization term
     #        lambda_reg = 1.0
@@ -88,9 +144,9 @@ class EffortDetector(nn.Module):
     #                reg_term += module.compute_orthogonal_loss()
     #                reg_term += module.compute_keepsv_loss()
     #                num_reg += 1
-    #        
+    #
     #        loss += lambda_reg * reg_term / num_reg
-    #    
+    #
     #    loss_dict = {'overall': loss}
     #    return loss_dict
 

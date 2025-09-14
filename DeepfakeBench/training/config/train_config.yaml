@@ -16,10 +16,10 @@ gcs_assets:
     gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
     local_path: "./weights/models--openai--clip-vit-large-patch14/"
   frame_manifest_json:
-    gcs_path: 'gs://df40-frames/manifests/frame_manifest_v1.json'
+    gcs_path: 'gs://df40-frames/manifests/frame_manifest_v3.json'
     local_path: './frame_manifest.json'
   property_manifest_parquet:
-    gcs_path: 'gs://df40-frames/manifests/frame_properties_v2.parquet'
+    gcs_path: 'gs://df40-frames/manifests/frame_properties_v6.parquet'
     local_path: './frame_properties.parquet'
 
 

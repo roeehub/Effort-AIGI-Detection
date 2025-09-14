@@ -27,6 +27,7 @@ import face_recognition
 from sklearn.cluster import DBSCAN
 from google.cloud import storage
 from google.api_core.exceptions import NotFound
+from skimage.metrics import structural_similarity as ssim
 
 # ──────────────────────────
 # 📍 Default Configuration (can be overridden by CLI args)
@@ -50,6 +51,8 @@ STATIC_FRAME_COUNT_THRESHOLD = 5
 # How far a face's center can be from a static cluster's center to be removed (in pixels).
 STATIC_BOX_DISTANCE_THRESHOLD = 10.0
 BLUR_THRESHOLD = 100.0
+STATIC_CONTENT_SSIM_THRESHOLD = 0.98
+CLUSTER_COMPACTNESS_THRESHOLD = 0.35  # Max avg distance from a cluster's centroid
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -199,45 +202,56 @@ class VideoProcessor:
 
     def _filter_static_frames_from_chunk(self, faces: list[Face]) -> list[Face]:
         """
-        Scans a list of faces for a single person and removes any subset that
-        originates from a static image in the background.
+        Scans faces for a single person. Removes subsets that originate from a
+        true static image by checking both bounding box stability AND content similarity.
         """
         if len(faces) < self.config.static_frame_count:
-            return faces  # Not enough frames to analyze
+            return faces
 
-        # Group boxes by rounding their centers to handle minor detection jitter
         box_clusters = defaultdict(list)
         for face in faces:
             x0, y0, x1, y1 = face.box
-            center_x = int((x0 + x1) / 20)  # Discretize by 20px grid
+            center_x = int((x0 + x1) / 20);
             center_y = int((y0 + y1) / 20)
             box_clusters[(center_x, center_y)].append(face)
 
-        # Find potential static sources (clusters larger than threshold)
-        static_sources = [cluster for cluster in box_clusters.values() if
-                          len(cluster) >= self.config.static_frame_count]
-        if not static_sources:
-            return faces  # No dominant static source found
+        potential_static_sources = [
+            cluster for cluster in box_clusters.values()
+            if len(cluster) >= self.config.static_frame_count
+        ]
+        if not potential_static_sources:
+            return faces
 
-        # Calculate the average center of each static source
-        static_centers = []
-        for source in static_sources:
-            boxes = np.array([f.box for f in source])
-            avg_center = np.mean([(boxes[:, 0] + boxes[:, 2]) / 2, (boxes[:, 1] + boxes[:, 3]) / 2], axis=1)
-            static_centers.append(avg_center)
+        true_static_centers = []
+        for source_cluster in potential_static_sources:
+            # New Step: Check if the CONTENT inside the static boxes is also static
+            # Compare the first and last frame's image content in the cluster
+            img1_gray = cv2.cvtColor(source_cluster[0].frame_image, cv2.COLOR_BGR2GRAY)
+            img2_gray = cv2.cvtColor(source_cluster[-1].frame_image, cv2.COLOR_BGR2GRAY)
 
-        # Filter out any face that is too close to the center of a static source
+            similarity_index = ssim(img1_gray, img2_gray)
+
+            # Only if the content is highly similar do we classify it as a true static source
+            if similarity_index > self.config.ssim_threshold:
+                boxes = np.array([f.box for f in source_cluster])
+                avg_center = np.mean([(boxes[:, 0] + boxes[:, 2]) / 2, (boxes[:, 1] + boxes[:, 3]) / 2], axis=1)
+                true_static_centers.append(avg_center)
+                logging.info(f"    -> Confirmed a true static source (SSIM: {similarity_index:.2f}).")
+
+        if not true_static_centers:
+            return faces  # Found stationary boxes, but content was dynamic (e.g., talking head)
+
+        # Filter out any face that is too close to the center of a TRUE static source
         dynamic_faces = []
         for face in faces:
-            is_static = False
+            is_from_static_source = False
             face_box = face.box
             face_center = np.array([(face_box[0] + face_box[2]) / 2, (face_box[1] + face_box[3]) / 2])
-            for static_center in static_centers:
-                distance = np.linalg.norm(face_center - static_center)
-                if distance < self.config.static_frame_dist:
-                    is_static = True
+            for static_center in true_static_centers:
+                if np.linalg.norm(face_center - static_center) < self.config.static_frame_dist:
+                    is_from_static_source = True
                     break
-            if not is_static:
+            if not is_from_static_source:
                 dynamic_faces.append(face)
 
         num_removed = len(faces) - len(dynamic_faces)
@@ -265,9 +279,29 @@ class VideoProcessor:
         person_counter = 0
         successful_persons_examples = []
         for person_label, faces in persons_in_video.items():
-            # --- START OF CHANGED LOGIC ---
+            # --- START OF NEW/CHANGED LOGIC ---
 
-            # Filter 1: Quick check for entirely static chunks (e.g., a photo filling the screen)
+            # Filter 0: NEW - Check cluster compactness to discard polluted clusters
+            # A good cluster of one person should be "tight" in the embedding space.
+            if len(faces) > 1:  # Can't calculate variance on a single point
+                cluster_encodings = np.array([f.encoding for f in faces])
+                centroid = np.mean(cluster_encodings, axis=0)
+                # Calculate the average distance from each point to the centroid
+                distances = np.linalg.norm(cluster_encodings - centroid, axis=1)
+                avg_distance = np.mean(distances)
+
+                if avg_distance > self.config.compactness:
+                    logging.warning(
+                        f"  - Discarding loose cluster for person {person_label} (Compactness: {avg_distance:.3f} > {self.config.compactness}). Likely a mix of people."
+                    )
+                    if self.config.test_mode:
+                        self.test_stats['participants_dropped_for_low_compactness'] += 1
+                        self.test_examples[f"participant_dropped_loose_cluster_{person_label}"] = faces[0].frame_image
+                    continue  # This cluster is invalid, skip to the next one
+
+            # --- END OF NEW/CHANGED LOGIC ---
+
+            # Filter 1: Quick check for entirely static chunks
             boxes = np.array([face.box for face in faces])
             box_std_dev = np.mean(np.std(boxes, axis=0))
             if box_std_dev < self.config.static_threshold:
@@ -278,7 +312,7 @@ class VideoProcessor:
                     self.test_examples[f"participant_dropped_static_chunk_{person_label}"] = faces[0].frame_image
                 continue
 
-            # Filter 2: NEW - Clean out static frames from within a potentially dynamic chunk
+            # Filter 2: Clean out static frames from within a potentially dynamic chunk
             cleaned_faces = self._filter_static_frames_from_chunk(faces)
 
             # Filter 3: Check if enough frames remain *after* cleaning
@@ -287,10 +321,9 @@ class VideoProcessor:
                     f"  - Discarding person {person_label} (only {len(cleaned_faces)} dynamic frames remain, needs {self.config.min_frames}).")
                 if self.config.test_mode:
                     self.test_stats['participants_dropped_post_cleaning'] += 1
-                    self.test_examples[f"participant_dropped_post_cleaning_{person_label}"] = faces[0].frame_image
+                    if f"participant_dropped_post_cleaning_{person_label}" not in self.test_examples:
+                        self.test_examples[f"participant_dropped_post_cleaning_{person_label}"] = faces[0].frame_image
                 continue
-
-            # --- END OF CHANGED LOGIC ---
 
             # Sort, sample, and save the valid, cleaned chunk
             sorted_faces = sorted(cleaned_faces, key=lambda f: f.frame_number)
@@ -332,7 +365,7 @@ class VideoProcessor:
                 if 'no_face_detected' not in self.test_examples: self.test_examples['no_face_detected'] = frame
 
             for box in boxes:
-                # 1. Add margin to the initial bounding box
+                # 1. Add margin to the initial bounding box (logic is unchanged)
                 x0, y0, x1, y1 = box
                 x0 = max(0, x0 - self.config.margin)
                 y0 = max(0, y0 - self.config.margin)
@@ -340,7 +373,7 @@ class VideoProcessor:
                 y1 = min(frame_h, y1 + self.config.margin)
                 original_box_tuple = (int(x0), int(y0), int(x1), int(y1))
 
-                # Filter by size AFTER adding margin
+                # Filter by size AFTER adding margin (logic is unchanged)
                 w, h = x1 - x0, y1 - y0
                 if w < self.config.min_face_size[0] or h < self.config.min_face_size[1]:
                     if self.config.test_mode:
@@ -349,24 +382,31 @@ class VideoProcessor:
                             self.test_examples['face_too_small'] = draw_box_on_image(frame, original_box_tuple)
                     continue
 
-                # 2. Create a SQUARE crop centered on the face
+                # 2. Create a SQUARE crop centered on the face (logic is unchanged)
                 center_x, center_y = x0 + w / 2, y0 + h / 2
                 side_length = max(w, h)
                 sq_x0 = max(0, int(center_x - side_length / 2))
                 sq_y0 = max(0, int(center_y - side_length / 2))
                 sq_x1 = min(frame_w, int(center_x + side_length / 2))
                 sq_y1 = min(frame_h, int(center_y + side_length / 2))
-
                 face_crop_bgr = frame[sq_y0:sq_y1, sq_x0:sq_x1]
                 if face_crop_bgr.size == 0: continue
 
-                # 3. Resize to the final fixed model size
+                # 3. Resize to the final fixed model size (logic is unchanged)
                 final_face = cv2.resize(face_crop_bgr, (self.config.img_size, self.config.img_size),
                                         interpolation=cv2.INTER_AREA)
 
-                # Get embedding from the resized, square crop
+                # 4. Filter out blurry faces
+                if is_blurry(final_face, self.config.blur_threshold):
+                    if self.config.test_mode:
+                        self.test_stats['blurry_faces_dropped'] += 1
+                        if 'face_too_blurry' not in self.test_examples:
+                            # Save the blurry image so we can see what was dropped
+                            self.test_examples['face_too_blurry'] = final_face
+                    continue  # Skip this face and move to the next one
+
+                # Get embedding from the resized, square, NON-BLURRY crop
                 face_crop_rgb = cv2.cvtColor(final_face, cv2.COLOR_BGR2RGB)
-                # Location is the whole image since it's already cropped
                 face_locations = [(0, self.config.img_size, self.config.img_size, 0)]
                 encodings = face_recognition.face_encodings(face_crop_rgb, known_face_locations=face_locations)
 
@@ -379,7 +419,6 @@ class VideoProcessor:
         return extracted_faces
 
     def _cluster_embeddings(self, encodings: list[np.ndarray]) -> np.ndarray:
-        # (This method is unchanged)
         if not encodings: return np.array([])
         logging.info(f"Clustering {len(encodings)} embeddings with DBSCAN (eps={self.config.dbscan_eps})...")
         clt = DBSCAN(metric="euclidean", eps=self.config.dbscan_eps, min_samples=self.config.min_frames)
@@ -387,7 +426,6 @@ class VideoProcessor:
         return clt.labels_
 
     def consolidate_and_save(self):
-        # (This method is unchanged)
         if not self.all_processed_chunks:
             logging.warning("No valid chunks were processed. Nothing to save.")
             return
@@ -417,7 +455,7 @@ class VideoProcessor:
             chunk_dir.mkdir(parents=True, exist_ok=True)
             logging.info(f"Saving chunk to '{chunk_dir}'...")
             for i, face in enumerate(chunk.frames):
-                save_path = chunk_dir / f"{i:04d}.jpg"
+                save_path = chunk_dir / f"{i:04d}.png"  # Changed to .png
                 cv2.imwrite(str(save_path), face.frame_image)
         logging.info("Processing complete.")
 
@@ -429,7 +467,7 @@ class VideoProcessor:
         examples_dir.mkdir(parents=True, exist_ok=True)
 
         for name, img in self.test_examples.items():
-            path = examples_dir / f"{name}.jpg"
+            path = examples_dir / f"{name}.png"  # Changed to .png
             cv2.imwrite(str(path), img)
             logging.info(f"Saved example image: {path}")
 
@@ -447,7 +485,7 @@ class VideoProcessor:
 ## Visual Examples
 """
         for name in sorted(self.test_examples.keys()):
-            report += f"### {name.replace('_', ' ').title()}\n![{name}](examples/{name}.jpg)\n\n"
+            report += f"### {name.replace('_', ' ').title()}\n![{name}](examples/{name}.png)\n\n"  # Changed to .png
         report_path = report_dir / "report.md"
         with open(report_path, "w") as f:
             f.write(report)
@@ -482,6 +520,10 @@ def parse_arguments():
                         help="Pixel distance threshold for cleaning static frames from a chunk.")
     parser.add_argument("--blur_threshold", type=float, default=BLUR_THRESHOLD,
                         help="Blurriness threshold (variance of Laplacian). Lower values are more blurry. Higher threshold is stricter.")
+    parser.add_argument("--ssim_threshold", type=float, default=STATIC_CONTENT_SSIM_THRESHOLD,
+                        help="SSIM threshold to confirm if content is static.")
+    parser.add_argument("--compactness", type=float, default=CLUSTER_COMPACTNESS_THRESHOLD,
+                        help="Max average distance within a cluster to be considered valid (post-clustering check).")
     return parser.parse_args()
 
 
@@ -532,5 +574,17 @@ def main():
         logging.info("In test mode, results are saved locally. No upload to GCP was performed.")
 
 
+# gets local image, prints how blurry it is
+def debug_test_blur(image_path):
+    image = cv2.imread(image_path)
+    if image is None:
+        logging.error(f"Could not read image from {image_path}")
+        return
+    variance = cv2.Laplacian(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
+    logging.info(f"Image '{image_path}' has a blurriness variance of: {variance:.2f}")
+
+
 if __name__ == "__main__":
     main()
+    # test_image = "/Users/roeedar/Documents/repos/Effort-AIGI-Detection/DeepfakeBench/training/debug/temp4/streetinterviewsofficial_1743757311_3603219471234994607_50810791699_907074_person_0/0014.jpg"
+    # debug_test_blur(test_image)

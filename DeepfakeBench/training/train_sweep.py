@@ -17,6 +17,7 @@ from google.cloud.storage import Bucket  # noqa
 from detectors import DETECTOR  # noqa
 from PIL.ImageFilter import RankFilter  # noqa
 from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
+from transformers import get_cosine_schedule_with_warmup  # noqa
 
 import argparse
 import random
@@ -90,12 +91,32 @@ def choose_optimizer(model, config):
 
 
 def choose_scheduler(config, optimizer):
-    if config['lr_scheduler'] is None: return None
-    if config['lr_scheduler'] == 'cosine':
+    scheduler_type = config.get('lr_scheduler')  # Use .get for safety
+    if scheduler_type is None or scheduler_type.lower() == 'none' or scheduler_type.lower() == 'null':
+        return None
+
+    if scheduler_type == 'cosine':
+        # This branch remains for backward compatibility but is epoch-based
         return optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=config['nEpochs'], eta_min=config['optimizer']['adam']['lr'] / 100
         )
-    raise NotImplementedError('Scheduler {} is not implemented'.format(config['lr_scheduler']))
+    elif scheduler_type == 'cosine_with_warmup':
+        if not config.get('total_training_steps'):
+            raise ValueError("'total_training_steps' must be configured for the 'cosine_with_warmup' scheduler.")
+
+        warmup_steps = config.get('lr_scheduler_warmup_steps', 0)
+        total_steps = config['total_training_steps']
+
+        print(
+            f"INFO: Using cosine_with_warmup scheduler with {warmup_steps} warmup steps and {total_steps} total steps.")
+
+        return get_cosine_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps
+        )
+
+    raise NotImplementedError(f"Scheduler '{scheduler_type}' is not implemented")
 
 
 def choose_metric(config):
@@ -270,6 +291,21 @@ def main():
     config['nEpochs'] = wandb.config.nEpochs
     config['lambda_reg'] = wandb.config.lambda_reg  # Pass the sweep value to the main config
     config['rank'] = wandb.config.rank
+    config['lr_scheduler'] = wandb.config.get('lr_scheduler', None)
+    config['total_training_steps'] = wandb.config.get('total_training_steps', 35000)  # e.g., 35k
+    config['lr_scheduler_warmup_steps'] = wandb.config.get('lr_scheduler_warmup_steps', 1000)  # e.g., 1k
+
+    # --- Focal Loss params (from wandb.config) ---
+    config['use_focal_loss'] = wandb.config.get('use_focal_loss', False)
+    config['focal_loss_gamma'] = wandb.config.get('focal_loss_gamma', 2.0)
+    config['focal_loss_alpha'] = wandb.config.get('focal_loss_alpha', None)
+
+    # Robustly handle the 'null' case from W&B sweeps
+    focal_alpha = wandb.config.get('focal_loss_alpha', None)
+    if focal_alpha == 'null' or focal_alpha == 'None':
+        focal_alpha = None
+    config['focal_loss_alpha'] = focal_alpha
+
     config['early_stopping'] = {
         'enabled': wandb.config.get('early_stopping_enabled', False),
         'patience': wandb.config.get('early_stopping_patience', 3),
@@ -361,7 +397,7 @@ def main():
         logger.info(f"Augmentation settings: {config['augmentation_params']}")
     else:
         # Fallback to a default configuration if not provided, with a clear warning.
-        logger.warning("`augmentation_params` not found in the run's configuration. Using a default set.")
+        # logger.warning("`augmentation_params` not found in the run's configuration. Using a default set.")
         config['augmentation_params'] = {
             "use_geometric": True,
             "use_advanced_noise": False,
@@ -370,7 +406,18 @@ def main():
             "sharpness_adjust_prob": 0.6,
             "occlusion_prob": 0.4,
         }
-        logger.info(f"Default augmentation settings: {config['augmentation_params']}")
+
+    # NEW: Inject the top-level augmentation version into the params dict.
+    # This allows the dataloader to select the correct pipeline.
+    # Defaults to 'surgical' to maintain backward compatibility.
+    aug_version = wandb.config.get('augmentation_version')
+    if aug_version:
+        config['augmentation_params']['version'] = aug_version
+        logger.info(f"SET augmentation version to: {aug_version}")
+    else:
+        # Set a default if not specified in the sweep config
+        config['augmentation_params']['version'] = 'surgical'
+        logger.info("`augmentation_version` not in wandb config, defaulting to 'surgical'.")
 
     # --- 5. Dataset Method Override (from wandb.config) ---
     # This logic checks if the user has provided a method override in their
@@ -631,8 +678,6 @@ def main():
             epoch=epoch,
             train_videos=train_data
         )
-        if scheduler is not None:
-            scheduler.step()
 
         if trainer.early_stop_triggered:
             logger.info(f"Gracefully terminating training at epoch {epoch + 1} due to early stopping.")
