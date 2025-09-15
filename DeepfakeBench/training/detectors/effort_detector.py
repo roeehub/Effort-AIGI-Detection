@@ -446,7 +446,7 @@ class EffortDetector(nn.Module):
                 label = label.repeat_interleave(T)
 
         # 2. Extract features directly from the backbone
-        # This is the core fix: Pass the reshaped 'image' tensor directly
+        # This is the core fix: Pass the reshaped 'image' tensor directly (new)
         # to the backbone, avoiding the 'features' helper method and the
         # intermediate dictionary. This ensures the entire batch is processed.
         features = self.backbone(image)['pooler_output']
