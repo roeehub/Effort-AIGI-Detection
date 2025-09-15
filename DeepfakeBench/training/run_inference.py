@@ -187,10 +187,8 @@ def main(args):
     local_clip_path = args.clip_model_path
     if args.clip_model_path.startswith("gs://"):
         logger.info("Base CLIP model path is a GCS URI. Checking for a local copy...")
-        # Define a standard local directory for the base model
         local_clip_dir = Path("./base_models/clip-vit-large-patch14/")
 
-        # Check if the model is already downloaded by looking for a key file
         if (local_clip_dir / "config.json").exists() and not args.force_download:
             logger.info(f"Found existing local copy of base model at '{local_clip_dir}'.")
             local_clip_path = str(local_clip_dir)
@@ -200,7 +198,7 @@ def main(args):
                 client = storage.Client()
                 gcs_path = args.clip_model_path.replace("gs://", "")
                 bucket_name, prefix = gcs_path.split('/', 1)
-                if not prefix.endswith('/'): prefix += '/'  # Ensure prefix is treated as a folder
+                if not prefix.endswith('/'): prefix += '/'
 
                 bucket = client.bucket(bucket_name)
                 blobs = list(client.list_blobs(bucket, prefix=prefix))
@@ -211,9 +209,8 @@ def main(args):
 
                 local_clip_dir.mkdir(parents=True, exist_ok=True)
                 for blob in blobs:
-                    if blob.name.endswith('/'): continue  # Skip empty "folder" objects
+                    if blob.name.endswith('/'): continue
 
-                    # Construct destination path relative to the prefix
                     file_name = blob.name[len(prefix):]
                     destination_file_name = local_clip_dir / file_name
 
@@ -226,6 +223,15 @@ def main(args):
             except Exception as e:
                 logger.error(f"Failed to download base CLIP model from GCS: {e}")
                 return
+
+    # =====================================================================
+    # ========================= THE CRITICAL FIX ==========================
+    # Update the config dictionary with the correct, verified local path.
+    # This ensures that any model created using this config will use the
+    # right backbone path.
+    config['backbone']['clip_model_name'] = local_clip_path
+    logger.info(f"Updated config to use local CLIP model path: '{local_clip_path}'")
+    # =====================================================================
 
     # 4. Handle downloading the trained model WEIGHTS from GCS (if necessary)
     weights_path = args.weights
@@ -255,37 +261,30 @@ def main(args):
     # 5. Initialize Preprocessor Models
     video_preprocessor.initialize_yolo_model()
 
-    # 6. Load the Model (this now uses the guaranteed local_clip_path)
+    # 6. Load the Model (it will now receive the *updated* config)
     model = load_model(config, str(weights_path),
                        use_fused=args.use_fused_weights,
                        clip_model_path=local_clip_path)
 
-    # 7. Preprocess Video
+    # ... (Rest of the function is identical and correct)
     logger.info(f"Processing video file: {args.video}")
     video_tensor = video_preprocessor.preprocess_video_for_effort_model(
         video_path=args.video, pre_method="yolo"
     )
-
     if args.debug_save_frames:
         save_debug_frames(video_tensor, f"debug_frames/{Path(args.video).stem}")
-
     if video_tensor is None or video_tensor.shape[1] == 0:
         logger.error("Failed to process video. No faces might have been detected.")
         return
-
-    # 8. Run Inference
     logger.info(f"Running inference on {video_tensor.shape[1]} frames...")
     with torch.inference_mode():
         predictions = model({'image': video_tensor.to(device)}, inference=True)
         frame_probabilities = predictions["prob"].cpu().numpy().tolist()
-
-    # 9. Display Results
     print("\n--- Inference Results ---")
     if frame_probabilities:
         for i, prob in enumerate(frame_probabilities):
             decision = "FAKE" if prob >= 0.5 else "REAL"
             print(f"Frame {i + 1:02d}: Fake Probability = {prob:.8f} -> {decision}")
-
         avg_prob = sum(frame_probabilities) / len(frame_probabilities)
         avg_decision = "FAKE" if avg_prob >= 0.5 else "REAL"
         print(f"\nAverage Fake Probability across {len(frame_probabilities)} frames: {avg_prob:.8f} -> {avg_decision}")
