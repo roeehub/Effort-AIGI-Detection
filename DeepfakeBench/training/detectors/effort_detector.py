@@ -439,7 +439,7 @@ class EffortDetector(nn.Module):
             # data_dict['image'] has shape [B, T, C, H, W]
             B, T, C, H, W = image.shape
             # Reshape to treat every frame as a separate sample: [B * T, C, H, W]
-            image = image.view(B * T, C, H, W)
+            image = image.view(B * T, C, H, W).contiguous()
             # --- Ensure labels are also expanded if present ---
             if label is not None:
                 label = label.repeat_interleave(T)
