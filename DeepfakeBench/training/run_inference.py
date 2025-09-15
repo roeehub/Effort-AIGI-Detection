@@ -170,7 +170,7 @@ def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path
     # checkpoint (the trained residuals and head) while ignoring the
     # missing keys (the frozen backbone weights), keeping the base ones.
     logger.info("Loading state dict with strict=False to merge base and trained weights.")
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(state_dict, strict=True)
 
     model.eval()
     logger.info("✅ Model successfully assembled and set to evaluation mode.")
