@@ -223,7 +223,6 @@ def extract_yolo_haar_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 # 🎥 Video Preprocessing Logic
 # ──────────────────────────
 
-# ... (keep all code above this function the same) ...
 
 def _find_and_prepare_faces(
         video_path: str,
@@ -232,11 +231,9 @@ def _find_and_prepare_faces(
 ) -> Optional[List[np.ndarray]]:
     """
     Internal helper to sample a video and return a list of processed face images.
-    This implementation is designed to be robust, attempting to find up to
-    NUM_SAMPLES faces by checking a larger number of frames spread throughout the video.
 
-    This corrected version uses batched prediction to avoid model state issues and
-    improve performance.
+    This version uses a robust sequential reading method to avoid unreliable seeking
+    with `cv2.VideoCapture.set()`, which was the root cause of the duplicate frames.
     """
     if debug_save_path:
         os.makedirs(debug_save_path, exist_ok=True)
@@ -248,48 +245,58 @@ def _find_and_prepare_faces(
         return None
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    # We will try to find NUM_SAMPLES faces by checking up to 3x that many frames.
     frames_to_check_count = min(total_frames, NUM_SAMPLES * 3)
+
     if frames_to_check_count == 0:
         cap.release()
         return None
 
-    frame_indices = np.linspace(0, total_frames - 1, frames_to_check_count, dtype=int)
+    # --- START OF THE ROBUST FIX ---
+    # Generate a SET of frame indices we want to grab for fast O(1) lookups.
+    indices_to_grab = set(np.linspace(0, total_frames - 1, frames_to_check_count, dtype=int))
 
-    original_frames_read = []
-    for frame_idx in frame_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    frames_to_process = []
+    original_indices_processed = []  # For debug saving
+    current_frame_num = 0
+
+    # Sequentially read the entire video. This is the only 100% reliable method.
+    while len(frames_to_process) < len(indices_to_grab):
         ret, frame = cap.read()
-        if ret:
-            original_frames_read.append(frame)
-    cap.release()
+        if not ret:
+            # Reached the end of the video
+            break
 
-    if not original_frames_read:
+        # If the current frame is one we want, add it to our list.
+        if current_frame_num in indices_to_grab:
+            frames_to_process.append(frame)
+            original_indices_processed.append(current_frame_num)
+
+        current_frame_num += 1
+
+    cap.release()
+    # --- END OF THE ROBUST FIX ---
+
+    if not frames_to_process:
+        print(f"[*] Preprocessing failed: Could not read any target frames from the video.")
         return None
 
     collected_faces = []
 
-    # We use YOLO for all methods to get the initial bounding box.
     if pre_method in ['yolo', 'yolo_haar']:
         model = initialize_yolo_model()
-        # Process all collected frames in a single batch for efficiency and stability
-        results = model.predict(original_frames_read, conf=YOLO_CONF_THRESHOLD, iou=0.4, verbose=False)
+        results = model.predict(frames_to_process, conf=YOLO_CONF_THRESHOLD, iou=0.4, verbose=False)
 
-        for i, (frame_bgr, result) in enumerate(zip(original_frames_read, results)):
+        for i, (frame_bgr, result) in enumerate(zip(frames_to_process, results)):
             if len(collected_faces) >= NUM_SAMPLES:
                 break
 
             if result.boxes.shape[0] > 0:
-                # Find the largest face in the frame
                 boxes = result.boxes.xyxy.cpu().numpy()
                 areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
                 best_box = boxes[np.argmax(areas)]
 
-                # Apply the final cropping/alignment method
                 face = None
                 if pre_method == 'yolo':
-                    # Manually apply the square crop logic from extract_yolo_face
                     x0, y0, x1, y1 = best_box.astype(int)
                     h, w = frame_bgr.shape[:2]
                     width, height = x1 - x0, y1 - y0
@@ -302,36 +309,28 @@ def _find_and_prepare_faces(
                     cropped_face = frame_bgr[sq_y0:sq_y1, sq_x0:sq_x1]
                     if cropped_face.size > 0:
                         face = cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
-
                 elif pre_method == 'yolo_haar':
-                    # Fallback to the single-frame function for this more complex logic
                     face = extract_yolo_haar_face(frame_bgr)
 
                 if face is not None:
                     collected_faces.append(face)
                     if debug_save_path:
-                        frame_idx = frame_indices[i]  # Get original frame index for debug name
+                        frame_idx = original_indices_processed[i]
                         save_name = f"{Path(video_path).stem}_found{len(collected_faces)}_frame{frame_idx}_{pre_method}.jpg"
                         cv2.imwrite(os.path.join(debug_save_path, save_name), face)
 
-    # elif pre_method == 'dlib':
-    #     # Dlib doesn't support batching, so we must loop
-    #     for i, frame_bgr in enumerate(original_frames_read):
-    #         if len(collected_faces) >= NUM_SAMPLES:
-    #             break
-    #         face = extract_aligned_face(frame_bgr)
-    #         if face is not None:
-    #             collected_faces.append(face)
+    elif pre_method == 'dlib':
+        for frame_bgr in frames_to_process:
+            if len(collected_faces) >= NUM_SAMPLES: break
+            face = extract_aligned_face(frame_bgr)
+            if face is not None:
+                collected_faces.append(face)
 
     if not collected_faces:
         print(f"[*] Preprocessing failed: No valid faces found in video using '{pre_method}'.")
         return None
 
-    # Ensure we only return up to NUM_SAMPLES
     return collected_faces[:NUM_SAMPLES]
-
-
-# ... (rest of video_preprocessor.py remains the same) ...
 
 
 def preprocess_video_for_effort_model(
