@@ -259,6 +259,8 @@ def calculate_analysis(frame_probs: List[float], threshold: float) -> VideoAnaly
 # ──────────────────────────────────────────
 # Startup: Load Model(s) & Assert CUDA
 # ──────────────────────────────────────────
+# In app3.py
+
 @app.on_event("startup")
 def startup_event() -> None:
     # 0) Initialize state
@@ -323,6 +325,7 @@ def startup_event() -> None:
     if not base_weights_path.exists():
         raise RuntimeError(f"Base model weights file not found: {base_weights_path}")
     try:
+        # The base model always uses the default config
         app.state.models['base'] = load_detector(config, str(base_weights_path))
         app.state.loaded_weights_paths['base'] = str(base_weights_path)
         logger.info(f"✅ SUCCESS: Base detector model loaded from: {base_weights_path}")
@@ -336,13 +339,31 @@ def startup_event() -> None:
         if not custom_weights_path.exists():
             raise RuntimeError(
                 f"Custom model weights file does not exist after GCS download attempt: {custom_weights_path}")
+
+        # ───> START OF CHANGES <───
+        # Create a copy of the config to modify specifically for the custom model.
+        # This prevents affecting the base model's configuration.
+        custom_config = config.copy()
+
+        # Check for the new environment variable to toggle ArcFace head
+        use_arcface_env = os.getenv("CUSTOM_MODEL_USE_ARCFACE", "false").lower()
+        if use_arcface_env in ['true', '1', 't']:
+            logger.info("✅ CUSTOM_MODEL_USE_ARCFACE is 'true'. Overriding config to use ArcFace head.")
+            custom_config['use_arcface_head'] = True
+            # You could also add other env vars for s, m, etc. if needed
+            # custom_config['arcface_s'] = float(os.getenv("CUSTOM_MODEL_ARCFACE_S", 30.0))
+        else:
+            logger.info("CUSTOM_MODEL_USE_ARCFACE is not set or 'false'. Using default head from config file.")
+
         try:
-            app.state.models['custom'] = load_detector(config, str(custom_weights_path))
+            # Pass the potentially modified config to the loader function
+            app.state.models['custom'] = load_detector(custom_config, str(custom_weights_path))
             app.state.loaded_weights_paths['custom'] = str(custom_weights_path)
             logger.info(f"✅ SUCCESS: Custom detector model loaded from: {custom_weights_path}")
         except Exception as e:
             logger.exception("Failed to load CUSTOM detector model")
             raise e
+        # ───> END OF CHANGES <───
 
     # 8) Load Face Preprocessor Models (YOLO only)
     try:
