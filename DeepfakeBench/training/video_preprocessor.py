@@ -130,11 +130,10 @@ def extract_aligned_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
     return cv2.cvtColor(warped_rgb, cv2.COLOR_RGB2BGR)
 
 
-def _get_yolo_face_box(frame_bgr: np.ndarray, model=None) -> Optional[np.ndarray]:
+def _get_yolo_face_box(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
     """Internal helper to get the largest face box from YOLO."""
-    # If a model isn't passed, initialize it. Otherwise, use the provided one.
-    if model is None:
-        model = initialize_yolo_model()
+    # This function is now self-contained. It always gets the model from the cache.
+    model = initialize_yolo_model()
 
     h, w = frame_bgr.shape[:2]
     # Use the 'model' variable for prediction
@@ -155,8 +154,8 @@ def _get_yolo_face_box(frame_bgr: np.ndarray, model=None) -> Optional[np.ndarray
 # --- Method 2: YOLO (Simple Crop) ---
 def extract_yolo_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
     """Detects and crops one face using YOLOv8 with a simple square crop."""
-    model = initialize_yolo_model()  # Initialize the model here
-    box = _get_yolo_face_box(frame_bgr, model=model)  # Pass the model
+    # No longer need to initialize the model here; the helper function does it.
+    box = _get_yolo_face_box(frame_bgr)
     if box is None: return None
     x0, y0, x1, y1 = box.astype(int)
     h, w = frame_bgr.shape[:2]
