@@ -4,6 +4,7 @@ import logging
 import yaml
 from pathlib import Path
 from collections import OrderedDict
+import cv2
 
 import torch
 import torch.nn as nn
@@ -17,6 +18,52 @@ from detectors import DETECTOR, EffortDetector  # Make sure this import works
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] - %(message)s")
 logger = logging.getLogger(__name__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def save_debug_frames(tensor_batch: torch.Tensor, output_dir: str):
+    """
+    Denormalizes and saves a batch of preprocessed frames to disk for visual inspection.
+
+    Args:
+        tensor_batch: The input tensor for the model, shape [1, T, C, H, W].
+        output_dir: The directory where PNG files will be saved.
+    """
+    if tensor_batch is None:
+        logger.warning("Cannot save debug frames because input tensor is None.")
+        return
+
+    logger.info(f"--- Saving Debug Frames to '{output_dir}' ---")
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    # These are the standard CLIP normalization values.
+    # The denormalization process is the mathematical inverse of normalization.
+    mean = torch.tensor([0.48145466, 0.4578275, 0.40821073], device=tensor_batch.device).view(1, 3, 1, 1)
+    std = torch.tensor([0.26862954, 0.26130258, 0.27577711], device=tensor_batch.device).view(1, 3, 1, 1)
+
+    # Remove the batch dimension of size 1
+    frames = tensor_batch.squeeze(0)  # Shape becomes [T, C, H, W]
+
+    num_saved = 0
+    for i, frame_tensor in enumerate(frames):
+        # Denormalize: (tensor * std) + mean
+        denormalized_frame = frame_tensor.unsqueeze(0) * std + mean
+
+        # Un-scale from [0, 1] to [0, 255] and clamp values
+        denormalized_frame = torch.clamp(denormalized_frame * 255, 0, 255)
+
+        # Permute from [C, H, W] to [H, W, C] for saving
+        # Convert to a NumPy array with the correct data type for an image
+        image_np = denormalized_frame.squeeze(0).permute(1, 2, 0).byte().cpu().numpy()
+
+        # OpenCV expects BGR format, but our tensor is in RGB. We must convert it.
+        image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+
+        # Save the image
+        save_path = os.path.join(output_dir, f"frame_{i:02d}.png")
+        cv2.imwrite(save_path, image_bgr)
+        num_saved += 1
+
+    logger.info(f"✅ Successfully saved {num_saved} debug frames.")
 
 
 # =========================================================================
@@ -191,6 +238,14 @@ def main(args):
         pre_method="yolo"
     )
 
+    # --- ADD THIS DEBUGGING BLOCK ---
+    if args.debug_save_frames:
+        video_filename = Path(args.video).stem
+        debug_output_dir = os.path.join("debug_frames", video_filename)
+        save_debug_frames(video_tensor, debug_output_dir)
+        logger.info("Debug frames saved. Continuing with inference...")
+    # --- END OF DEBUGGING BLOCK ---
+
     if video_tensor is None or video_tensor.shape[1] == 0:
         logger.error("Failed to process video. No faces might have been detected.")
         return
@@ -232,6 +287,11 @@ if __name__ == '__main__':
         '--use-arcface-head',
         action='store_true',
         help='Specify this flag if the model was trained with the ArcFace head.'
+    )
+    parser.add_argument(
+        '--debug-save-frames',
+        action='store_true',
+        help='If specified, save the preprocessed frames to a debug directory before inference.'
     )
     parsed_args = parser.parse_args()
     main(parsed_args)
