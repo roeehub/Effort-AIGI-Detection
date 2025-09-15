@@ -95,106 +95,89 @@ class InferenceModel(nn.Module):
         return {'prob': prob, 'raw_logits': raw_logits, 'feat': features}
 
 
+# In run_inference.py
+
 def fuse_model_weights(original_model: EffortDetector) -> OrderedDict:
-    """Takes a loaded EffortDetector and returns a state_dict with fused weights."""
-    fused_state_dict = OrderedDict()
-    original_state_dict = original_model.state_dict()
-    logger.info("Starting weight fusion process...")
+    """
+    CORRECTED: Takes a loaded EffortDetector and returns a state_dict
+    with fused weights for a standard model.
+    """
+    logger.info("Starting corrected weight fusion process...")
+    # Get the state dict of a standard, non-SVD model to use as a template
+    # This ensures we have the correct keys (e.g., '...k_proj.weight')
 
-    # Step 1: Copy all parameters that DON'T need fusion (e.g., LayerNorms, embeddings, the head)
-    # This is a safe way to get all the non-SVD parameters into the new dict.
-    for key, value in original_state_dict.items():
-        if 'S_residual' in key or 'U_residual' in key or 'V_residual' in key or \
-                'weight_main' in key or '_fnorm' in key or '_r' in key:
-            continue  # Skip all SVD components for now
-        fused_state_dict[key] = value.clone().detach()
+    # Temporarily create a standard InferenceModel to get its state_dict keys
+    # We pass the clip_model_path from the original model's config
+    clip_path = original_model.config['gcs_assets']['clip_backbone']['local_path']
+    template_model = InferenceModel(use_arcface_head=original_model.use_arcface_head, clip_model_path=clip_path)
+    fused_state_dict = template_model.state_dict()
 
-    # Step 2: Iterate through the model's modules to find SVDResidualLinear instances
-    # and perform the fusion, creating the keys the InferenceModel expects.
-    for name, module in original_model.named_modules():
+    logger.info("Iterating through model modules to find and fuse SVD layers...")
+    # Iterate over all modules in the original model
+    for module_name, module in original_model.named_modules():
+        # Check if this module is one of our custom SVD layers
         if isinstance(module, SVDResidualLinear):
-            logger.info(f"  -> Fusing weights for: {name}")
-
-            # Calculate the final, fused weight
+            logger.info(f"  -> Fusing weights for: {module_name}")
+            # Compute the final, fused weight matrix
             fused_weight = module.compute_current_weight()
 
-            # Create the key that the standard nn.Linear layer expects
-            weight_key = name + '.weight'
+            # The key in the standard model is '.weight', not 'weight_main' etc.
+            weight_key = f"{module_name}.weight"
             fused_state_dict[weight_key] = fused_weight.clone().detach()
 
-            # The original module might have had a bias, which we copied in Step 1.
-            # We need to ensure it's present if the SVD layer has one too.
+            # Also copy the bias if it exists
             if module.bias is not None:
-                bias_key = name + '.bias'
-                if bias_key not in fused_state_dict:
-                    fused_state_dict[bias_key] = module.bias.clone().detach()
+                bias_key = f"{module_name}.bias"
+                fused_state_dict[bias_key] = module.bias.clone().detach()
 
-    logger.info("✅ Fusion calculation complete.")
+    # Copy the head weights which are not part of the SVD backbone
+    logger.info("  -> Copying head weights.")
+    fused_state_dict['head.weight'] = original_model.head.weight.clone().detach()
+    if original_model.head.bias is not None:
+        fused_state_dict['head.bias'] = original_model.head.bias.clone().detach()
+
+    logger.info("✅ Corrected fusion calculation complete.")
     return fused_state_dict
 
 
 def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path: str) -> nn.Module:
     """
-    EXPERIMENTAL version of load_model.
-    This function IGNORES the fusion logic and ALWAYS loads the original EffortDetector
-    to test if the fusion process itself is the problem.
+    Main model loading function. Handles both original and fused model paths.
     """
-    logger.warning("!!! RUNNING IN EXPERIMENTAL MODE: Bypassing fusion and using EffortDetector directly for inference. !!!")
+    if not use_fused:
+        # This path is unchanged
+        logger.info("Loading original model with custom SVD layers (use_fused=False).")
+        model = EffortDetector(config).to(device)
+        state_dict = torch.load(weights_path, map_location=device)
+        if list(state_dict.keys())[0].startswith('module.'):
+            state_dict = OrderedDict((k[7:], v) for k, v in state_dict.items())
+        model.load_state_dict(state_dict, strict=True)
+    else:
+        # This path is mostly the same, just passes the clip_model_path
+        original_path = Path(weights_path)
+        fused_path = original_path.with_name(f"fused_{original_path.name}")
 
-    # Always load the original model with custom SVD layers.
-    model = EffortDetector(config).to(device)
-    state_dict = torch.load(weights_path, map_location=device)
+        if not fused_path.exists():
+            logger.warning(f"Fused checkpoint not found at '{fused_path}'. Creating one now...")
+            original_model = EffortDetector(config)
+            state_dict = torch.load(original_path, map_location=device)
+            if list(state_dict.keys())[0].startswith('module.'):
+                state_dict = OrderedDict((k[7:], v) for k, v in state_dict.items())
+            original_model.load_state_dict(state_dict, strict=True)
+            fused_state_dict = fuse_model_weights(original_model)
+            torch.save(fused_state_dict, fused_path)
+            logger.info(f"✅ Saved new fused checkpoint to '{fused_path}'.")
+            del original_model
 
-    # Handle DataParallel prefix ('module.') if it exists
-    if list(state_dict.keys())[0].startswith('module.'):
-        logger.info("Removing 'module.' prefix from state_dict keys.")
-        state_dict = OrderedDict((k[7:], v) for k, v in state_dict.items())
+        logger.info(f"Loading fused weights from '{fused_path}' into standard model.")
+        # <<< MODIFIED LINE to pass the clip_model_path
+        model = InferenceModel(config['use_arcface_head'], clip_model_path=clip_model_path).to(device)
+        fused_state_dict = torch.load(fused_path, map_location=device)
+        model.load_state_dict(fused_state_dict, strict=True)
 
-    model.load_state_dict(state_dict, strict=True)
-    # model.eval()
-    logger.info("Model loaded successfully. Note: Model is NOT set to eval mode for debugging purposes.")
-    logger.info("Original EffortDetector model loaded successfully and set to evaluation mode.")
+    model.eval()
+    logger.info("Model loaded successfully and set to evaluation mode.")
     return model
-
-
-# def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path: str) -> nn.Module:
-#     """
-#     Main model loading function. Handles both original and fused model paths.
-#     """
-#     if not use_fused:
-#         # This path is unchanged
-#         logger.info("Loading original model with custom SVD layers (use_fused=False).")
-#         model = EffortDetector(config).to(device)
-#         state_dict = torch.load(weights_path, map_location=device)
-#         if list(state_dict.keys())[0].startswith('module.'):
-#             state_dict = OrderedDict((k[7:], v) for k, v in state_dict.items())
-#         model.load_state_dict(state_dict, strict=True)
-#     else:
-#         # This path is mostly the same, just passes the clip_model_path
-#         original_path = Path(weights_path)
-#         fused_path = original_path.with_name(f"fused_{original_path.name}")
-#
-#         if not fused_path.exists():
-#             logger.warning(f"Fused checkpoint not found at '{fused_path}'. Creating one now...")
-#             original_model = EffortDetector(config)
-#             state_dict = torch.load(original_path, map_location=device)
-#             if list(state_dict.keys())[0].startswith('module.'):
-#                 state_dict = OrderedDict((k[7:], v) for k, v in state_dict.items())
-#             original_model.load_state_dict(state_dict, strict=True)
-#             fused_state_dict = fuse_model_weights(original_model)
-#             torch.save(fused_state_dict, fused_path)
-#             logger.info(f"✅ Saved new fused checkpoint to '{fused_path}'.")
-#             del original_model
-#
-#         logger.info(f"Loading fused weights from '{fused_path}' into standard model.")
-#         # <<< MODIFIED LINE to pass the clip_model_path
-#         model = InferenceModel(config['use_arcface_head'], clip_model_path=clip_model_path).to(device)
-#         fused_state_dict = torch.load(fused_path, map_location=device)
-#         model.load_state_dict(fused_state_dict, strict=True)
-#
-#     model.eval()
-#     logger.info("Model loaded successfully and set to evaluation mode.")
-#     return model
 
 
 # =========================================================================
