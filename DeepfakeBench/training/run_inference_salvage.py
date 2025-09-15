@@ -1,16 +1,18 @@
 import argparse
 import logging
 import os
-import yaml
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 from transformers import CLIPModel
 
+# --- CORRECTED IMPORT ---
+# Import the specific function from your local video_preprocessor.py file
+from video_preprocessor import preprocess_video_for_effort_model
+
 # Assuming your project structure
 from detectors.effort_detector import ArcMarginProduct
-from data_process.process_video import Preprocess_videos
 
 # --- Basic Setup ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] - %(message)s")
@@ -37,24 +39,18 @@ class SalvageInferenceModel(nn.Module):
 
         self.use_arcface_head = use_arcface_head
         if self.use_arcface_head:
-            # Note: s and m values don't matter for inference logic, only for the weights.
             self.head = ArcMarginProduct(in_features=1024, out_features=2, s=30.0, m=0.35)
         else:
             self.head = nn.Linear(1024, 2)
 
     def forward(self, image):
-        # The forward pass is simpler now.
-        # Handle video tensor shape
         is_video = image.dim() == 5
         if is_video:
             B, T, C, H, W = image.shape
             image = image.view(B * T, C, H, W)
 
         features = self.backbone(image)['pooler_output']
-
-        # During inference, ArcFace head is called with no label
         logits = self.head(features)
-
         prob = torch.softmax(logits, dim=1)[:, 1]
         return prob
 
@@ -66,33 +62,24 @@ def load_salvaged_model(weights_path: str, use_arcface: bool, clip_model_path: s
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    # 1. Create the clean, standard-architecture model.
-    # Its weights are from the base CLIP model + random head.
     model = SalvageInferenceModel(use_arcface, clip_model_path).to(device)
     clean_state_dict = model.state_dict()
 
-    # 2. Load your trained (but problematic) checkpoint.
     logger.info(f"Loading salvageable weights from checkpoint: {weights_path}")
     salvage_state_dict = torch.load(weights_path, map_location='cpu')
     if list(salvage_state_dict.keys())[0].startswith('module.'):
         salvage_state_dict = OrderedDict((k[7:], v) for k, v in salvage_state_dict.items())
 
-    # 3. Transplant the weights that matter.
     logger.info("Performing weight transplant...")
     transplanted_count = 0
     for name, param in salvage_state_dict.items():
-        # We only care about the head and the biases.
-        # The SVD fine-tuning was effectively zero, so we use the base CLIP weights
-        # for everything else, which are already in our clean model.
         if name.startswith('head.') or name.endswith('.bias'):
             if name in clean_state_dict and clean_state_dict[name].shape == param.shape:
                 clean_state_dict[name].copy_(param)
                 transplanted_count += 1
-                # logger.info(f"  - Transplanted: {name}")
 
     logger.info(f"Successfully transplanted {transplanted_count} parameter tensors.")
 
-    # 4. Load the modified state dict into our clean model.
     model.load_state_dict(clean_state_dict)
     model.eval()
     return model
@@ -100,7 +87,6 @@ def load_salvaged_model(weights_path: str, use_arcface: bool, clip_model_path: s
 
 def main(args):
     # --- Load Model ---
-    # We don't need the full config, just the critical paths and flags.
     model = load_salvaged_model(
         weights_path=args.weights,
         use_arcface=args.use_arcface_head,
@@ -108,10 +94,13 @@ def main(args):
     )
     device = next(model.parameters()).device
 
-    # --- Preprocess Video ---
-    # This part remains the same.
-    preprocess = Preprocess_videos(detector='yolo', face_aligner='fan', image_size=224, device=device)
-    frames_t = preprocess(args.video)  # Returns a tensor [1, T, C, H, W]
+    # --- MODIFIED: Preprocess Video using your provided script ---
+    # This block now correctly calls the function from video_preprocessor.py
+    frames_t = preprocess_video_for_effort_model(
+        video_path=args.video,
+        pre_method=args.pre_method
+    )
+
     if frames_t is None:
         logger.error("Video processing failed. No faces detected or an error occurred.")
         return
@@ -120,8 +109,6 @@ def main(args):
     # --- Run Inference ---
     logger.info(f"Running inference on {frames_t.shape[1]} frames...")
     with torch.no_grad():
-        # The model's forward pass now returns probabilities directly
-        # for each frame in the batch.
         probs = model(frames_t).cpu().numpy()
 
     # --- Display Results ---
@@ -144,6 +131,9 @@ if __name__ == '__main__':
                         help='Path to the LOCAL base CLIP model directory.')
     parser.add_argument('--use-arcface-head', action='store_true',
                         help='CRITICAL: Specify this flag if the checkpoint was trained with an ArcFace head.')
+    # Added argument to control the preprocessing method
+    parser.add_argument('--pre-method', type=str, default='yolo', choices=['yolo', 'yolo_haar'],
+                        help='Face detection/cropping method to use.')
 
     parsed_args = parser.parse_args()
     main(parsed_args)
