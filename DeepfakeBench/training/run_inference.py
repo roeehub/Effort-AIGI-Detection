@@ -151,7 +151,8 @@ def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path
         state_dict = OrderedDict((k[7:], v) for k, v in state_dict.items())
 
     model.load_state_dict(state_dict, strict=True)
-    model.eval()
+    # model.eval()
+    logger.info("Model loaded successfully. Note: Model is NOT set to eval mode for debugging purposes.")
     logger.info("Original EffortDetector model loaded successfully and set to evaluation mode.")
     return model
 
