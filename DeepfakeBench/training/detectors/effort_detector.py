@@ -25,6 +25,8 @@ from transformers import AutoProcessor, CLIPModel, ViTModel, ViTConfig  # noqa
 
 logger = logging.getLogger(__name__)
 
+print("\n\n\n>>>>>>>>> LOADING THE NEW, CORRECTED effort_detector.py FILE <<<<<<<<<\n\n\n")
+
 
 class ArcMarginProduct(nn.Module):
     """
