@@ -133,7 +133,10 @@ def fuse_model_weights(original_model: EffortDetector) -> OrderedDict:
     # Copy the head weights which are not part of the SVD backbone
     logger.info("  -> Copying head weights.")
     fused_state_dict['head.weight'] = original_model.head.weight.clone().detach()
-    if original_model.head.bias is not None:
+
+    # Check if the head has a bias attribute before trying to access it.
+    # ArcMarginProduct does not have a bias, but a standard nn.Linear does.
+    if hasattr(original_model.head, 'bias') and original_model.head.bias is not None:
         fused_state_dict['head.bias'] = original_model.head.bias.clone().detach()
 
     logger.info("✅ Corrected fusion calculation complete.")
