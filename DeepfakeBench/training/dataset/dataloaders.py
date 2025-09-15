@@ -636,7 +636,9 @@ def load_and_process_frame_batch(frame_info_batch: list[tuple], config: dict, mo
                 img = data_aug_v2(img, config, augmentation_seed=aug_seed)
 
             image_tensor = normalize_transform(img)
-            return image_tensor, label_id, None, None, frame_path
+            # MODIFICATION START: Return 4 items: image, label, method_id (placeholder), path
+            return image_tensor, label_id, -1, frame_path
+            # MODIFICATION END
         except Exception:
             return None
 
@@ -664,8 +666,7 @@ def load_and_process_property_batch(frame_dict_batch: list[dict], config: dict, 
     ])
 
     def _load_single(frame_dict):
-        frame_path = frame_dict['path']
-        label_id = frame_dict['label_id']
+        frame_path, label_id, method_id = frame_dict['path'], frame_dict['label_id'], frame_dict['method_id']
         try:
             with fsspec.open(frame_path, "rb") as f:
                 img = Image.open(f).convert("RGB")
@@ -691,7 +692,7 @@ def load_and_process_property_batch(frame_dict_batch: list[dict], config: dict, 
                 img = Image.fromarray(augmented_img_np)
 
             image_tensor = normalize_transform(img)
-            return image_tensor, label_id, None, None, frame_path
+            return image_tensor, label_id, method_id, frame_path
         except Exception:
             return None
 
@@ -761,7 +762,9 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame
     video_tensor = torch.stack(image_tensors, dim=0)
     label = 0 if video_info.label == 'real' else 1
 
-    return video_tensor, label, None, None, f"{video_info.method}/{video_info.video_id}"
+    # MODIFICATION START: Return 4 items: image, label, method_id (placeholder), path
+    return video_tensor, label, -1, f"{video_info.method}/{video_info.video_id}"
+    # MODIFICATION END
 
 
 def collate_fn(batch):
@@ -770,18 +773,17 @@ def collate_fn(batch):
     """
     batch = [b for b in batch if b is not None]
     if not batch:
-        return {'image': torch.empty(0), 'label': torch.empty(0), 'path': []}
+        return {'image': torch.empty(0), 'label': torch.empty(0), 'method_id': torch.empty(0), 'path': []}
 
-    images, labels, landmarks, masks, paths = zip(*batch)
-
+    images, labels, method_ids, paths = zip(*batch)  # Unpack method_ids
     images = torch.stack(images, dim=0)
     labels = torch.LongTensor(labels)
+    method_ids = torch.LongTensor(method_ids)  # Convert method_ids to a tensor
 
     data_dict = {
         'image': images,
         'label': labels,
-        'landmark': None,
-        'mask': None,
+        'method_id': method_ids,
         'path': list(paths)
     }
     return data_dict

@@ -78,8 +78,8 @@ save_feat: true   # whether to save features
 loss_func: cross_entropy   # loss function to use
 losstype: null
 
-# metric
-metric_scoring: auc   # metric for evaluation (auc, acc, eer, ap)
+## metric
+#metric_scoring: auc   # metric for evaluation (auc, acc, eer, ap)
 
 # cuda
 ngpu: 1   # number of GPUs to use

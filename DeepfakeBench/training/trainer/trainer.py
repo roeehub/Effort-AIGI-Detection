@@ -44,7 +44,8 @@ class Trainer(object):
             val_holdout_loader,
             metric_scoring='auc',
             wandb_run=None,
-            ood_loader=None
+            ood_loader=None,
+            use_group_dro=False  # Argument to activate the feature
     ):
         if config is None or model is None or optimizer is None or logger is None:
             raise ValueError("config, model, optimizer, and logger must be implemented")
@@ -90,6 +91,97 @@ class Trainer(object):
         # These are now only used for 'per_method' strategy, but are initialized here
         self.real_method_iters = {}
         self.fake_method_iters = {}
+
+        self.use_group_dro = use_group_dro
+        if self.use_group_dro:
+            self._init_group_dro(config)
+
+    def _init_group_dro(self, config):
+        """Initializes parameters and state for Group-DRO loss."""
+        self.logger.info("Initializing Group-DRO loss strategy.")
+        dro_params = config.get('group_dro_params', {})
+        self.group_dro_beta = dro_params.get('beta', 3.0)
+        self.group_dro_clip_min = dro_params.get('clip_min', 1.0)
+        self.group_dro_clip_max = dro_params.get('clip_max', 4.0)
+        ema_alpha = dro_params.get('ema_alpha', 0.1)
+
+        # PREREQUISITE: Your config must contain the method_mapping generated in Step 1.
+        method_mapping = config.get('data_params', {}).get('method_mapping')
+        if not method_mapping:
+            raise ValueError("Group-DRO requires 'data_params.method_mapping' in the config.")
+        self.num_methods = len(method_mapping)
+
+        self.group_losses_ema = torch.zeros(self.num_methods, device=self.model.device)
+        self.ema_alpha = ema_alpha
+
+    def _calculate_group_dro_loss(self, data_dict, per_sample_loss):
+        """Computes the Group-DRO loss for a given batch."""
+        # The dataloader now provides the 'method_id' tensor.
+        method_ids = data_dict['method_id']
+        device = per_sample_loss.device
+
+        # Step 1: Compute per-group average loss for the current batch
+        batch_group_losses = torch.zeros(self.num_methods, device=device)
+        batch_group_counts = torch.zeros(self.num_methods, device=device)
+
+        # This scatter_add operation is efficient for calculating group means
+        batch_group_counts.index_add_(0, method_ids, torch.ones_like(per_sample_loss))
+        batch_group_losses.index_add_(0, method_ids, per_sample_loss.detach())
+
+        valid_groups_mask = batch_group_counts > 0
+        batch_group_losses[valid_groups_mask] /= batch_group_counts[valid_groups_mask]
+
+        # Step 2: Update the EMA of group losses
+        current_ema = self.group_losses_ema[valid_groups_mask]
+        current_batch_loss = batch_group_losses[valid_groups_mask]
+        updated_ema = (1 - self.ema_alpha) * current_ema + self.ema_alpha * current_batch_loss
+        self.group_losses_ema[valid_groups_mask] = updated_ema
+
+        # Step 3: Compute group weights `w_g` based on the EMA
+        # Use only the EMA of groups present in the current batch for the average to be stable
+        valid_ema_losses = self.group_losses_ema[self.group_losses_ema > 0]
+        avg_ema_loss = valid_ema_losses.mean() if len(valid_ema_losses) > 0 else 0
+
+        relative_losses = self.group_losses_ema - avg_ema_loss
+
+        weights = torch.exp(self.group_dro_beta * relative_losses)
+        weights = weights * (self.num_methods / torch.sum(weights))  # Normalize
+        clipped_weights = torch.clip(weights, self.group_dro_clip_min, self.group_dro_clip_max)
+
+        # Step 4: Calculate the final weighted loss for the batch
+        sample_weights = clipped_weights[method_ids].detach()
+        weighted_loss = (per_sample_loss * sample_weights).mean()
+
+        return {'overall': weighted_loss, 'group_weights': clipped_weights}
+
+    def _update_arcface_s(self, step_cnt):
+        """Anneals the 's' parameter of the ArcFace head if configured."""
+        model_instance = self.model.module if isinstance(self.model, DDP) else self.model
+
+        # Check if the model is an EffortDetector and has annealing configured
+        if not hasattr(model_instance, 'use_arcface_head') or not model_instance.use_arcface_head:
+            return
+        if not hasattr(model_instance, 'anneal_steps') or model_instance.anneal_steps <= 0:
+            return
+
+        anneal_steps = model_instance.anneal_steps
+
+        if step_cnt <= anneal_steps:
+            # Linear annealing
+            progress = step_cnt / anneal_steps
+            current_s = model_instance.s_start + progress * (model_instance.s_end - model_instance.s_start)
+            model_instance.head.s = current_s
+        else:
+            # Ensure s is fixed at s_end after annealing is complete
+            current_s = model_instance.s_end
+            if model_instance.head.s != current_s:  # Avoid redundant assignment
+                model_instance.head.s = current_s
+
+        # Log the change periodically during the annealing phase
+        log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
+        if self.wandb_run and step_cnt <= anneal_steps and (
+                step_cnt % log_progress_steps == 0 or step_cnt == anneal_steps):
+            self.wandb_run.log({'train/arcface_s': model_instance.head.s, 'train/step': step_cnt})
 
     def speed_up(self):
         self.model.to(device)
@@ -355,6 +447,8 @@ class Trainer(object):
             for i, data_dict in enumerate(pbar):
                 if i >= epoch_len: break
 
+                self._update_arcface_s(step_cnt)
+
                 is_final_accumulation_step = (i + 1) % accumulation_steps == 0
                 is_ddp = type(self.model) is DDP
                 # Use DDP's no_sync context manager to avoid redundant gradient all-reduce calls.
@@ -369,9 +463,20 @@ class Trainer(object):
                     # --- FORWARD PASS ---
                     with autocast():
                         predictions = self.model(data_dict)
-                        losses = self.model.module.get_losses(data_dict,
-                                                              predictions) if is_ddp else self.model.get_losses(
-                            data_dict, predictions)
+                        loss_fn_owner = self.model.module if type(self.model) is DDP else self.model
+
+                        if self.use_group_dro:
+                            # PREREQUISITE #1: Your model's get_losses must support reduction='none'
+                            per_sample_losses_dict = loss_fn_owner.get_losses(
+                                data_dict, predictions, reduction='none'
+                            )
+                            per_sample_loss = per_sample_losses_dict['overall']
+
+                            # PREREQUISITE #2: The data_dict must contain 'method_id' (fixed in Step 2)
+                            losses = self._calculate_group_dro_loss(data_dict, per_sample_loss)
+                        else:
+                            # Original behavior
+                            losses = loss_fn_owner.get_losses(data_dict, predictions)
                     # Store unscaled loss for accurate logging
                     unscaled_loss = losses['overall'].clone().detach()
                     # Scale loss for accumulation
@@ -395,7 +500,16 @@ class Trainer(object):
                     log_dict = {"train/step": step_cnt, "epoch": epoch + 1}
                     log_dict[f'train/loss/overall'] = unscaled_loss.item()
                     for name, value in losses.items():
-                        if name != 'overall': log_dict[f'train/loss/{name}'] = value.item()
+                        if name == 'overall':
+                            continue  # Already logged the unscaled version
+
+                        # If the value is a scalar tensor, log it with .item()
+                        if value.numel() == 1:
+                            log_dict[f'train/loss/{name}'] = value.item()
+                        # If it's a multi-element tensor (like group_weights), log it as a histogram
+                        else:
+                            # wandb.Histogram is the perfect tool for this
+                            log_dict[f'train/diagnostic/{name}'] = wandb.Histogram(value.detach().cpu())
 
                     batch_metrics = self.model.module.get_train_metrics(data_dict,
                                                                         predictions) if is_ddp else self.model.get_train_metrics(
@@ -440,6 +554,7 @@ class Trainer(object):
 
     def _run_train_step(self, data_dict, step_cnt, epoch, epoch_len, epoch_start_time):  # Add new args
         """Helper to avoid code duplication in the training loop."""
+        self._update_arcface_s(step_cnt)
         self.setTrain()
         for key in data_dict.keys():
             if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(self.model.device)

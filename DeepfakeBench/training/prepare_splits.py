@@ -347,6 +347,14 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     # --- 2. Load and filter data ---
     df = pd.read_parquet(PROPERTIES_FILE)
 
+    # Create a consistent mapping from method name to a unique integer ID
+    all_method_names = sorted(list(df['method'].unique()))
+    method_mapping = {name: i for i, name in enumerate(all_method_names)}
+    stats['method_mapping'] = method_mapping  # Add mapping to stats to be passed to config
+
+    # Add the integer method_id to the DataFrame for easy access later
+    df['method_id'] = df['method'].map(method_mapping)
+
     # [FIX] Populate initial discovery stats from the raw Parquet file
     # before any filtering, to match the legacy path's logic and prevent the error.
     stats['discovered_videos'] = df.groupby(['method', 'original_video_id']).ngroups
