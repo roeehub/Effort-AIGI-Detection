@@ -13,7 +13,7 @@ from transformers import CLIPModel
 
 # Import necessary components from your project files
 import video_preprocessor
-from detectors.effort_detector import EffortDetector, ArcMarginProduct  # Need both
+from detectors.effort_detector import EffortDetector, ArcMarginProduct, SVDResidualLinear  # Need all three
 
 # --- Basic Setup ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] - %(message)s")
