@@ -178,10 +178,18 @@ def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path
     # CHANGE THIS LINE FROM True TO False
     model.load_state_dict(state_dict, strict=False)
 
-    # +++ ADD DEBUG PRINT 2 +++
-    # We ALSO expect this to print 30.0
+    # +++ ADD THIS FINAL DIAGNOSTIC BLOCK +++
     if config['use_arcface_head']:
-        logger.info(f"DEBUG: Immediately after load_state_dict, model.head.s = {model.head.s.item()}")
+        with torch.no_grad():
+            w = model.head.weight
+            # Normalize the two class center vectors
+            w_normalized = torch.nn.functional.normalize(w, p=2, dim=1)
+            w0 = w_normalized[0]
+            w1 = w_normalized[1]
+            # Calculate the cosine similarity between the class centers
+            similarity = torch.dot(w0, w1).item()
+            logger.info(f"DEBUG: Cosine similarity between the two head weights (REAL vs FAKE) is: {similarity:.6f}")
+            # If the value is close to 1.0, the head has collapsed.
 
     model.eval()
     logger.info("✅ Model successfully assembled and set to evaluation mode.")
