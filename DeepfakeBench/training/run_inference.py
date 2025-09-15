@@ -151,6 +151,33 @@ def main(args):
         logger.error("Failed to process video. No faces might have been detected.")
         return
 
+    # ===================================================================
+    # =========== NEW DEBUGGING BLOCK TO VERIFY INPUT TENSOR ============
+    # ===================================================================
+    logger.info("--- [DEBUG] Running Input Tensor Sanity Check ---")
+    if video_tensor.shape[1] > 2:
+        # Get frame 2 (index 1) and frame 3 (index 2)
+        frame_2 = video_tensor[0, 1]
+        frame_3 = video_tensor[0, 2]
+
+        # Calculate the Mean Absolute Difference. If they are identical, it will be 0.0
+        diff = torch.abs(frame_2 - frame_3).mean().item()
+        logger.info(f"--- [DEBUG] Mean Absolute Difference between preprocessed frame 2 and 3: {diff}")
+
+        if diff < 1e-6:
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.error("!!! SANITY CHECK FAILED: The preprocessor is returning duplicate frames.")
+            logger.error("!!! The model is not the issue. The bug is in 'video_preprocessor.py'.")
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        else:
+            logger.info(
+                "--- [DEBUG] Sanity Check Passed: Input frames appear unique. The issue is likely in the model.")
+    else:
+        logger.info("--- [DEBUG] Less than 3 frames, skipping duplicate frame check.")
+    # ===================================================================
+    # ======================= END OF DEBUGGING BLOCK ======================
+    # ===================================================================
+
     num_frames = video_tensor.shape[1]
     logger.info(f"Successfully extracted and processed {num_frames} frames.")
 
