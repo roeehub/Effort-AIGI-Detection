@@ -42,36 +42,36 @@ class ArcMarginProduct(nn.Module):
         self.weight = nn.Parameter(torch.FloatTensor(out_features, in_features))
         nn.init.xavier_uniform_(self.weight)
 
-    def forward(self, features, label=None):
-        # 1. Normalize feature vectors and weight vectors
+    def forward(self, features, label=None, return_raw_logits=False):
+        # 1. Normalize and compute cosine similarity (the expensive part, done only once)
         cosine = F.linear(F.normalize(features), F.normalize(self.weight))
 
-        # If no label is provided (i.e., during inference), we can't add a margin.
-        # We return the scaled cosine similarity, which is a valid logit for ranking.
+        # The raw, unpenalized logits are simply the scaled cosine similarity.
+        # These are what we need for metrics.
+        raw_logits = self.s * cosine
+
+        # 2. Handle inference case (no label) or if only raw logits are needed.
+        # If no label is provided, we can't apply a margin, so we must return raw logits.
         if label is None:
-            return cosine * self.s
+            return raw_logits
 
-        # 2. Calculate the angle (theta) from the cosine similarity
-        # Add a small epsilon for numerical stability
+        # 3. Apply margin logic for the training path
         theta = torch.acos(torch.clamp(cosine, -1.0 + 1e-7, 1.0 - 1e-7))
-
-        # 3. Add the angular margin 'm' to the angle of the correct class
-        # Create a one-hot vector from the labels
         one_hot = torch.zeros(cosine.size(), device=features.device)
         one_hot.scatter_(1, label.view(-1, 1).long(), 1)
-
-        # Add margin 'm' where the one_hot vector is 1
-        # M_theta = theta + m * one_hot
         M_theta = torch.where(one_hot.bool(), theta + self.m, theta)
-
-        # 4. Convert the new angle back to a cosine value
         marginal_target_logit = torch.cos(M_theta)
 
-        # 5. Scale the logits
-        # This sharpens the distribution and helps convergence
-        logits = self.s * marginal_target_logit
+        # The final, penalized logits for the loss function.
+        final_logits = self.s * marginal_target_logit
 
-        return logits
+        # 4. Return what the caller asked for
+        if return_raw_logits:
+            # Return both the final (for loss) and raw (for metrics) logits
+            return final_logits, raw_logits
+        else:
+            # Default behavior: just return the final logits
+            return final_logits
 
     def __repr__(self):
         return self.__class__.__name__ + '(' \
@@ -166,8 +166,19 @@ class EffortDetector(nn.Module):
         if self.use_arcface_head:
             s = config.get('arcface_s', 30.0)
             m = config.get('arcface_m', 0.35)
-            logger.info(f"Using ArcFace head with s={s} and m={m}")
-            self.head = ArcMarginProduct(in_features=1024, out_features=2, s=s, m=m)
+
+            # Annealing parameters
+            self.s_start = config.get('s_start', s)
+            self.s_end = config.get('s_end', s)
+            self.anneal_steps = config.get('anneal_steps', 0)
+
+            initial_s = self.s_start if self.anneal_steps > 0 else s
+
+            logger.info(f"Using ArcFace head with s={initial_s} (initial) and m={m}")
+            if self.anneal_steps > 0:
+                logger.info(f"Annealing s from {self.s_start} to {self.s_end} over {self.anneal_steps} steps.")
+
+            self.head = ArcMarginProduct(in_features=1024, out_features=2, s=initial_s, m=m)
         else:
             logger.info("Using standard Linear head")
             self.head = nn.Linear(1024, 2)
@@ -400,7 +411,8 @@ class EffortDetector(nn.Module):
 
     def get_train_metrics(self, data_dict: dict, pred_dict: dict) -> dict:
         label = data_dict['label']
-        pred = pred_dict['cls']
+        # --- Use 'raw_logits' for metrics ---
+        pred = pred_dict['raw_logits']
 
         # If predictions are per-frame (B*T) and labels are per-video (B),
         # we must expand the labels to match the predictions for per-frame metric calculation.
@@ -420,9 +432,9 @@ class EffortDetector(nn.Module):
 
     def forward(self, data_dict: dict, inference=False) -> dict:
         image = data_dict['image']
-        label = data_dict.get('label', None)  # Get label, if available
+        label = data_dict.get('label', None)
 
-        # Check if the input is a 5D tensor (batch of videos)
+        # Handle reshaped video batches
         if image.dim() == 5:
             # data_dict['image'] has shape [B, T, C, H, W]
             B, T, C, H, W = image.shape
@@ -438,19 +450,29 @@ class EffortDetector(nn.Module):
         # Now the backbone receives a 4D tensor as expected
         features = self.features(temp_data_dict)
 
-        # The logic for calling the head must now be inside the forward pass,
-        # because the ArcFace head requires the label during training.
         if self.use_arcface_head:
-            # Pass the label to the head during training.
-            # During inference, label might be None, and the head is designed to handle this.
-            pred = self.head(features, label)
+            if inference:
+                # During inference, we only need the raw logits.
+                # `label` is passed as None to the head.
+                raw_logits = self.head(features, label=None)
+                pred_for_loss = raw_logits
+            else:  # During training
+                # Make ONE call to get both penalized and raw logits efficiently.
+                pred_for_loss, raw_logits = self.head(features, label=label, return_raw_logits=True)
         else:
-            # The standard linear head does not need the label.
-            pred = self.classifier(features)
+            # Standard linear head logic remains the same.
+            raw_logits = self.classifier(features)
+            pred_for_loss = raw_logits
 
-        prob = torch.softmax(pred, dim=1)[:, 1]
-        # build the prediction dict for each output
-        pred_dict = {'cls': pred, 'prob': prob, 'feat': features}
+        # Probabilities are always based on the raw, unpenalized logits.
+        prob = torch.softmax(raw_logits, dim=1)[:, 1]
+
+        pred_dict = {
+            'cls': pred_for_loss,  # Penalized for loss in train, raw otherwise
+            'prob': prob,  # Always from raw logits for consistent metrics
+            'feat': features,
+            'raw_logits': raw_logits  # Clean logits for training metrics
+        }
 
         return pred_dict
 
