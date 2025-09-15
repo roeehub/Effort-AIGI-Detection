@@ -7,40 +7,30 @@ import torch
 import torch.nn as nn
 from transformers import CLIPModel
 
-# --- CORRECTED IMPORT ---
-# Import the specific function from your local video_preprocessor.py file
 from video_preprocessor import preprocess_video_for_effort_model
-
-# Assuming your project structure
 from detectors.effort_detector import ArcMarginProduct
 
-# --- Basic Setup ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-class SalvageInferenceModel(nn.Module):
+class TransplantInferenceModel(nn.Module):
     """
-    A clean, standard model architecture for inference.
-    NO SVD modifications.
+    A clean, standard model architecture. It will be populated by transplanting
+    weights from two different checkpoints.
     """
 
     def __init__(self, use_arcface_head: bool, clip_model_path: str):
         super().__init__()
         logger.info(f"Initializing standard CLIP Vision Transformer from: {clip_model_path}")
-        try:
-            # Use local_files_only to ensure it doesn't try to download
-            clip_model = CLIPModel.from_pretrained(clip_model_path, local_files_only=True)
-        except Exception as e:
-            logger.error(f"Failed to load CLIP model from '{clip_model_path}'. Ensure the path is correct.")
-            raise e
-
+        clip_model = CLIPModel.from_pretrained(clip_model_path, local_files_only=True)
         self.backbone = clip_model.vision_model
 
         self.use_arcface_head = use_arcface_head
         if self.use_arcface_head:
             self.head = ArcMarginProduct(in_features=1024, out_features=2, s=30.0, m=0.35)
         else:
+            # Placeholder for the golden checkpoint's head
             self.head = nn.Linear(1024, 2)
 
     def forward(self, image):
@@ -55,63 +45,76 @@ class SalvageInferenceModel(nn.Module):
         return prob
 
 
-def load_salvaged_model(weights_path: str, use_arcface: bool, clip_model_path: str) -> nn.Module:
+def load_transplanted_model(
+        your_arcface_ckpt_path: str,
+        golden_linear_ckpt_path: str,
+        clip_model_path: str
+) -> nn.Module:
     """
-    Loads the trained head and bias weights from a checkpoint into a clean model.
+    Performs a model transplant:
+    1. Loads the backbone from the golden checkpoint.
+    2. Loads the trained ArcFace head from your checkpoint.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    model = SalvageInferenceModel(use_arcface, clip_model_path).to(device)
-    clean_state_dict = model.state_dict()
+    # --- Step 1: Create the final model shell ---
+    # We configure it with an ArcFace head because that's what our final model will have.
+    model = TransplantInferenceModel(use_arcface_head=True, clip_model_path=clip_model_path).to(device)
 
-    logger.info(f"Loading salvageable weights from checkpoint: {weights_path}")
-    salvage_state_dict = torch.load(weights_path, map_location='cpu')
-    if list(salvage_state_dict.keys())[0].startswith('module.'):
-        salvage_state_dict = OrderedDict((k[7:], v) for k, v in salvage_state_dict.items())
+    # --- Step 2: Load the golden checkpoint to get the working backbone ---
+    logger.info("--- STAGE 1: Loading backbone from GOLDEN checkpoint ---")
+    logger.info(f"Path: {golden_linear_ckpt_path}")
+    golden_state_dict = torch.load(golden_linear_ckpt_path, map_location='cpu')
 
-    logger.info("Performing weight transplant...")
-    transplanted_count = 0
-    for name, param in salvage_state_dict.items():
-        if name.startswith('head.') or name.endswith('.bias'):
-            if name in clean_state_dict and clean_state_dict[name].shape == param.shape:
-                clean_state_dict[name].copy_(param)
-                transplanted_count += 1
+    # The golden checkpoint head is Linear, ours is ArcFace. So there will be a size mismatch.
+    # `strict=False` is essential here. It will load all matching keys (the entire backbone)
+    # and ignore the non-matching head.
+    model.load_state_dict(golden_state_dict, strict=False)
+    logger.info("✅ Backbone transplant successful.")
 
-    logger.info(f"Successfully transplanted {transplanted_count} parameter tensors.")
+    # --- Step 3: Load your checkpoint to get the trained ArcFace head ---
+    logger.info("--- STAGE 2: Transplanting trained ArcFace head from YOUR checkpoint ---")
+    logger.info(f"Path: {your_arcface_ckpt_path}")
+    your_state_dict = torch.load(your_arcface_ckpt_path, map_location='cpu')
+    if list(your_state_dict.keys())[0].startswith('module.'):
+        your_state_dict = OrderedDict((k[7:], v) for k, v in your_state_dict.items())
 
-    model.load_state_dict(clean_state_dict)
+    # Manually copy only the head weights from your checkpoint into the model
+    with torch.no_grad():
+        if 'head.weight' in your_state_dict:
+            model.head.weight.copy_(your_state_dict['head.weight'])
+            logger.info("  - Transplanted 'head.weight'")
+        else:
+            logger.warning("Could not find 'head.weight' in your checkpoint!")
+
+    logger.info("✅ Head transplant successful. Model assembly complete.")
+
     model.eval()
     return model
 
 
 def main(args):
-    # --- Load Model ---
-    model = load_salvaged_model(
-        weights_path=args.weights,
-        use_arcface=args.use_arcface_head,
+    model = load_transplanted_model(
+        your_arcface_ckpt_path=args.arcface_weights,
+        golden_linear_ckpt_path=args.golden_weights,
         clip_model_path=args.clip_model_path
     )
     device = next(model.parameters()).device
 
-    # --- MODIFIED: Preprocess Video using your provided script ---
-    # This block now correctly calls the function from video_preprocessor.py
     frames_t = preprocess_video_for_effort_model(
         video_path=args.video,
         pre_method=args.pre_method
     )
 
     if frames_t is None:
-        logger.error("Video processing failed. No faces detected or an error occurred.")
         return
     frames_t = frames_t.to(device)
 
-    # --- Run Inference ---
     logger.info(f"Running inference on {frames_t.shape[1]} frames...")
     with torch.no_grad():
         probs = model(frames_t).cpu().numpy()
 
-    # --- Display Results ---
     print("\n--- Inference Results ---")
     for i, prob in enumerate(probs):
         prediction = "FAKE" if prob > 0.5 else "REAL"
@@ -124,16 +127,14 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Salvage and run inference on an EffortDetector checkpoint.")
-    parser.add_argument('--video', type=str, required=True, help='Path to the input video file.')
-    parser.add_argument('--weights', type=str, required=True, help='Path to the .pth checkpoint file to salvage.')
-    parser.add_argument('--clip-model-path', type=str, required=True,
-                        help='Path to the LOCAL base CLIP model directory.')
-    parser.add_argument('--use-arcface-head', action='store_true',
-                        help='CRITICAL: Specify this flag if the checkpoint was trained with an ArcFace head.')
-    # Added argument to control the preprocessing method
-    parser.add_argument('--pre-method', type=str, default='yolo', choices=['yolo', 'yolo_haar'],
-                        help='Face detection/cropping method to use.')
+    parser = argparse.ArgumentParser(description="Transplant weights and run inference.")
+    parser.add_argument('--video', type=str, required=True)
+    parser.add_argument('--arcface-weights', type=str, required=True,
+                        help="Path to YOUR trained .pth with the ArcFace head.")
+    parser.add_argument('--golden-weights', type=str, required=True,
+                        help="Path to the author's golden .pth with the working backbone.")
+    parser.add_argument('--clip-model-path', type=str, required=True)
+    parser.add_argument('--pre-method', type=str, default='yolo', choices=['yolo', 'yolo_haar'])
 
     parsed_args = parser.parse_args()
     main(parsed_args)
