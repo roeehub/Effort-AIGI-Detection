@@ -38,11 +38,12 @@ class ArcMarginProduct(nn.Module):
         super(ArcMarginProduct, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.s = s
         self.m = m
-        # The weight parameter is equivalent to the class centers in the feature space
         self.weight = nn.Parameter(torch.FloatTensor(out_features, in_features))
         nn.init.xavier_uniform_(self.weight)
+
+        # This tells PyTorch to include 's' in the state_dict
+        self.register_buffer('s', torch.tensor(s))
 
     def forward(self, features, label=None, return_raw_logits=False):
         # 1. Normalize and compute cosine similarity (the expensive part, done only once)

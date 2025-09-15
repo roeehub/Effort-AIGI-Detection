@@ -107,10 +107,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     try:
+        # --- MODIFICATION START ---
+        # Load both configs to create a complete config object
         with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
-    except FileNotFoundError:
-        print(f"ERROR: Config file not found at {args.config}")
+        with open('./config/train_config.yaml', 'r') as f:
+            config.update(yaml.safe_load(f))
+        # --- MODIFICATION END ---
+    except FileNotFoundError as e:
+        print(f"ERROR: Config file not found: {e}")
         exit()
 
     inspect(args.checkpoint, config, args.clip_model_path, args.use_arcface_head)
