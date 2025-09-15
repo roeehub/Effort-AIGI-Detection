@@ -434,22 +434,24 @@ class EffortDetector(nn.Module):
         image = data_dict['image']
         label = data_dict.get('label', None)
 
-        # Handle reshaped video batches
-        if image.dim() == 5:
-            # data_dict['image'] has shape [B, T, C, H, W]
+        # 1. Handle video tensor shape
+        # Input for video is [B, T, C, H, W], e.g., [1, 32, 3, 224, 224]
+        is_video = image.dim() == 5
+        if is_video:
             B, T, C, H, W = image.shape
-            # Reshape to treat every frame as a separate sample: [B * T, C, H, W]
+            # Reshape to a single batch of frames: [B * T, C, H, W], e.g., [32, 3, 224, 224]
             image = image.view(B * T, C, H, W).contiguous()
             # --- Ensure labels are also expanded if present ---
             if label is not None:
                 label = label.repeat_interleave(T)
 
-        # Create a temporary dict for the backbone
-        temp_data_dict = {'image': image}
+        # 2. Extract features directly from the backbone
+        # This is the core fix: Pass the reshaped 'image' tensor directly
+        # to the backbone, avoiding the 'features' helper method and the
+        # intermediate dictionary. This ensures the entire batch is processed.
+        features = self.backbone(image)['pooler_output']
 
-        # Now the backbone receives a 4D tensor as expected
-        features = self.features(temp_data_dict)
-
+        # 3. Pass features through the appropriate head
         if self.use_arcface_head:
             if inference:
                 # During inference, we only need the raw logits.
@@ -460,18 +462,19 @@ class EffortDetector(nn.Module):
                 # Make ONE call to get both penalized and raw logits efficiently.
                 pred_for_loss, raw_logits = self.head(features, label=label, return_raw_logits=True)
         else:
-            # Standard linear head logic remains the same.
-            raw_logits = self.classifier(features)
+            # Standard linear head logic
+            # The original self.classifier(features) is just self.head(features)
+            raw_logits = self.head(features)
             pred_for_loss = raw_logits
 
-        # Probabilities are always based on the raw, unpenalized logits.
+        # 4. Calculate probabilities from raw (unpenalized) logits
         prob = torch.softmax(raw_logits, dim=1)[:, 1]
 
         pred_dict = {
-            'cls': pred_for_loss,  # Penalized for loss in train, raw otherwise
-            'prob': prob,  # Always from raw logits for consistent metrics
+            'cls': pred_for_loss,
+            'prob': prob,
             'feat': features,
-            'raw_logits': raw_logits  # Clean logits for training metrics
+            'raw_logits': raw_logits
         }
 
         return pred_dict
