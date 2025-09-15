@@ -93,27 +93,36 @@ class InferenceModel(nn.Module):
 def fuse_model_weights(original_model: EffortDetector) -> OrderedDict:
     """Takes a loaded EffortDetector and returns a state_dict with fused weights."""
     fused_state_dict = OrderedDict()
+    original_state_dict = original_model.state_dict()
     logger.info("Starting weight fusion process...")
 
-    original_state_dict = original_model.state_dict()
+    # Step 1: Copy all parameters that DON'T need fusion (e.g., LayerNorms, embeddings, the head)
+    # This is a safe way to get all the non-SVD parameters into the new dict.
     for key, value in original_state_dict.items():
-        # Exclude all the SVD component parameters from the new state dict
         if 'S_residual' in key or 'U_residual' in key or 'V_residual' in key or \
                 'weight_main' in key or '_fnorm' in key or '_r' in key:
-            continue
+            continue  # Skip all SVD components for now
+        fused_state_dict[key] = value.clone().detach()
 
-        if key.endswith('.weight'):
-            module_path = key.rsplit('.', 1)[0]
-            sub_module = original_model.get_submodule(module_path)
+    # Step 2: Iterate through the model's modules to find SVDResidualLinear instances
+    # and perform the fusion, creating the keys the InferenceModel expects.
+    for name, module in original_model.named_modules():
+        if isinstance(module, SVDResidualLinear):
+            logger.info(f"  -> Fusing weights for: {name}")
 
-            if hasattr(sub_module, 'compute_current_weight'):
-                logger.info(f"  -> Fusing weights for: {module_path}")
-                fused_weight = sub_module.compute_current_weight()
-                fused_state_dict[key] = fused_weight.clone().detach()
-            else:
-                fused_state_dict[key] = value.clone().detach()
-        else:
-            fused_state_dict[key] = value.clone().detach()
+            # Calculate the final, fused weight
+            fused_weight = module.compute_current_weight()
+
+            # Create the key that the standard nn.Linear layer expects
+            weight_key = name + '.weight'
+            fused_state_dict[weight_key] = fused_weight.clone().detach()
+
+            # The original module might have had a bias, which we copied in Step 1.
+            # We need to ensure it's present if the SVD layer has one too.
+            if module.bias is not None:
+                bias_key = name + '.bias'
+                if bias_key not in fused_state_dict:
+                    fused_state_dict[bias_key] = module.bias.clone().detach()
 
     logger.info("✅ Fusion calculation complete.")
     return fused_state_dict
