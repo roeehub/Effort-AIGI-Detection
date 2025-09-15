@@ -225,11 +225,10 @@ def main(args):
                 return
 
     # =====================================================================
-    # ========================= THE CRITICAL FIX ==========================
+    # ========================= THE CRITICAL FIX (v2) =====================
     # Update the config dictionary with the correct, verified local path.
-    # This ensures that any model created using this config will use the
-    # right backbone path.
-    config['backbone']['clip_model_name'] = local_clip_path
+    # This path matches the structure read by the EffortDetector class.
+    config['gcs_assets']['clip_backbone']['local_path'] = local_clip_path
     logger.info(f"Updated config to use local CLIP model path: '{local_clip_path}'")
     # =====================================================================
 
@@ -266,25 +265,32 @@ def main(args):
                        use_fused=args.use_fused_weights,
                        clip_model_path=local_clip_path)
 
-    # ... (Rest of the function is identical and correct)
+    # 7. Preprocess Video
     logger.info(f"Processing video file: {args.video}")
     video_tensor = video_preprocessor.preprocess_video_for_effort_model(
         video_path=args.video, pre_method="yolo"
     )
+
     if args.debug_save_frames:
         save_debug_frames(video_tensor, f"debug_frames/{Path(args.video).stem}")
+
     if video_tensor is None or video_tensor.shape[1] == 0:
         logger.error("Failed to process video. No faces might have been detected.")
         return
+
+    # 8. Run Inference
     logger.info(f"Running inference on {video_tensor.shape[1]} frames...")
     with torch.inference_mode():
         predictions = model({'image': video_tensor.to(device)}, inference=True)
         frame_probabilities = predictions["prob"].cpu().numpy().tolist()
+
+    # 9. Display Results
     print("\n--- Inference Results ---")
     if frame_probabilities:
         for i, prob in enumerate(frame_probabilities):
             decision = "FAKE" if prob >= 0.5 else "REAL"
             print(f"Frame {i + 1:02d}: Fake Probability = {prob:.8f} -> {decision}")
+
         avg_prob = sum(frame_probabilities) / len(frame_probabilities)
         avg_decision = "FAKE" if avg_prob >= 0.5 else "REAL"
         print(f"\nAverage Fake Probability across {len(frame_probabilities)} frames: {avg_prob:.8f} -> {avg_decision}")
