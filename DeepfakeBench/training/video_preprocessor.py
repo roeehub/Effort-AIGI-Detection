@@ -61,16 +61,16 @@ _transform_cache = {}
 # 🚀 Model Initializers (called once at startup)
 # ──────────────────────────
 
-def initialize_dlib_predictors():
-    """Initializes and caches dlib models."""
-    global _dlib_cache
-    if "face_detector" not in _dlib_cache:
-        if not os.path.exists(DLIB_LANDMARK_MODEL_PATH):
-            raise FileNotFoundError(f"Dlib landmark model not found: {DLIB_LANDMARK_MODEL_PATH}")
-        print("[*] Initializing Dlib models...")
-        _dlib_cache["face_detector"] = dlib.get_frontal_face_detector()
-        _dlib_cache["landmark_predictor"] = dlib.shape_predictor(DLIB_LANDMARK_MODEL_PATH)
-    return _dlib_cache["face_detector"], _dlib_cache["landmark_predictor"]
+# def initialize_dlib_predictors():
+#     """Initializes and caches dlib models."""
+#     global _dlib_cache
+#     if "face_detector" not in _dlib_cache:
+#         if not os.path.exists(DLIB_LANDMARK_MODEL_PATH):
+#             raise FileNotFoundError(f"Dlib landmark model not found: {DLIB_LANDMARK_MODEL_PATH}")
+#         print("[*] Initializing Dlib models...")
+#         _dlib_cache["face_detector"] = dlib.get_frontal_face_detector()
+#         _dlib_cache["landmark_predictor"] = dlib.shape_predictor(DLIB_LANDMARK_MODEL_PATH)
+#     return _dlib_cache["face_detector"], _dlib_cache["landmark_predictor"]
 
 
 def initialize_yolo_model():
@@ -107,28 +107,28 @@ def initialize_haar_cascades():
 # ──────────────────────────
 
 # --- Method 1: Dlib ---
-def extract_aligned_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
-    """Detects, aligns, and crops one face from a BGR frame using dlib."""
-    face_detector, landmark_predictor = initialize_dlib_predictors()
-    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    faces = face_detector(frame_rgb, 1)
-    if not faces: return None
-
-    face = max(faces, key=lambda r: r.width() * r.height())
-    shape = landmark_predictor(frame_rgb, face)
-    lmk_idxs = [37, 44, 30, 49, 55]
-    keypoints = np.array([[shape.part(i).x, shape.part(i).y] for i in lmk_idxs], dtype=np.float32)
-
-    dst = np.array([[30.2946, 51.6963], [65.5318, 51.5014], [48.0252, 71.7366],
-                    [33.5493, 92.3655], [62.7299, 92.2041]], dtype=np.float32)
-    dst[:, 0] += 8.0
-    dst = (dst * MODEL_IMG_SIZE / 112.0)
-    tform = trans.SimilarityTransform()
-    tform.estimate(keypoints, dst)
-    M = tform.params[0:2, :]
-    warped_rgb = cv2.warpAffine(frame_rgb, M, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), borderValue=0.0)
-    return cv2.cvtColor(warped_rgb, cv2.COLOR_RGB2BGR)
-
+# def extract_aligned_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+#     """Detects, aligns, and crops one face from a BGR frame using dlib."""
+#     face_detector, landmark_predictor = initialize_dlib_predictors()
+#     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+#     faces = face_detector(frame_rgb, 1)
+#     if not faces: return None
+#
+#     face = max(faces, key=lambda r: r.width() * r.height())
+#     shape = landmark_predictor(frame_rgb, face)
+#     lmk_idxs = [37, 44, 30, 49, 55]
+#     keypoints = np.array([[shape.part(i).x, shape.part(i).y] for i in lmk_idxs], dtype=np.float32)
+#
+#     dst = np.array([[30.2946, 51.6963], [65.5318, 51.5014], [48.0252, 71.7366],
+#                     [33.5493, 92.3655], [62.7299, 92.2041]], dtype=np.float32)
+#     dst[:, 0] += 8.0
+#     dst = (dst * MODEL_IMG_SIZE / 112.0)
+#     tform = trans.SimilarityTransform()
+#     tform.estimate(keypoints, dst)
+#     M = tform.params[0:2, :]
+#     warped_rgb = cv2.warpAffine(frame_rgb, M, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), borderValue=0.0)
+#     return cv2.cvtColor(warped_rgb, cv2.COLOR_RGB2BGR)
+#
 
 def _get_yolo_face_box(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
     """Internal helper to get the largest face box from YOLO."""
@@ -223,6 +223,8 @@ def extract_yolo_haar_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 # 🎥 Video Preprocessing Logic
 # ──────────────────────────
 
+# ... (keep all code above this function the same) ...
+
 def _find_and_prepare_faces(
         video_path: str,
         pre_method: str,
@@ -232,6 +234,9 @@ def _find_and_prepare_faces(
     Internal helper to sample a video and return a list of processed face images.
     This implementation is designed to be robust, attempting to find up to
     NUM_SAMPLES faces by checking a larger number of frames spread throughout the video.
+
+    This corrected version uses batched prediction to avoid model state issues and
+    improve performance.
     """
     if debug_save_path:
         os.makedirs(debug_save_path, exist_ok=True)
@@ -243,49 +248,90 @@ def _find_and_prepare_faces(
         return None
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    collected_faces = []
 
-    # To improve robustness, we check more frames than we strictly need.
-    # This avoids failing if a few frames/segments are bad (e.g., person turns away).
-    # We check up to 3x the number of samples, or all frames if the video is short.
+    # We will try to find NUM_SAMPLES faces by checking up to 3x that many frames.
     frames_to_check_count = min(total_frames, NUM_SAMPLES * 3)
     if frames_to_check_count == 0:
         cap.release()
         return None
 
-    # Generate a list of evenly spaced frame indices to inspect.
     frame_indices = np.linspace(0, total_frames - 1, frames_to_check_count, dtype=int)
 
+    original_frames_read = []
     for frame_idx in frame_indices:
-        # Stop once we've collected enough faces.
-        if len(collected_faces) >= NUM_SAMPLES:
-            break
-
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
         ret, frame = cap.read()
-        if not ret:
-            continue
-
-        if pre_method == 'dlib':
-            face = extract_aligned_face(frame)
-        elif pre_method == 'yolo':
-            face = extract_yolo_face(frame)
-        else:  # yolo_haar
-            face = extract_yolo_haar_face(frame)
-
-        if face is not None:
-            collected_faces.append(face)
-            if debug_save_path:
-                save_name = f"{Path(video_path).stem}_found{len(collected_faces)}_frame{frame_idx}_{pre_method}.jpg"
-                cv2.imwrite(os.path.join(debug_save_path, save_name), face)
-
+        if ret:
+            original_frames_read.append(frame)
     cap.release()
+
+    if not original_frames_read:
+        return None
+
+    collected_faces = []
+
+    # We use YOLO for all methods to get the initial bounding box.
+    if pre_method in ['yolo', 'yolo_haar']:
+        model = initialize_yolo_model()
+        # Process all collected frames in a single batch for efficiency and stability
+        results = model.predict(original_frames_read, conf=YOLO_CONF_THRESHOLD, iou=0.4, verbose=False)
+
+        for i, (frame_bgr, result) in enumerate(zip(original_frames_read, results)):
+            if len(collected_faces) >= NUM_SAMPLES:
+                break
+
+            if result.boxes.shape[0] > 0:
+                # Find the largest face in the frame
+                boxes = result.boxes.xyxy.cpu().numpy()
+                areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+                best_box = boxes[np.argmax(areas)]
+
+                # Apply the final cropping/alignment method
+                face = None
+                if pre_method == 'yolo':
+                    # Manually apply the square crop logic from extract_yolo_face
+                    x0, y0, x1, y1 = best_box.astype(int)
+                    h, w = frame_bgr.shape[:2]
+                    width, height = x1 - x0, y1 - y0
+                    center_x, center_y = x0 + width / 2, y0 + height / 2
+                    side_length = max(width, height)
+                    sq_x0 = max(0, int(center_x - side_length / 2))
+                    sq_y0 = max(0, int(center_y - side_length / 2))
+                    sq_x1 = min(w, int(center_x + side_length / 2))
+                    sq_y1 = min(h, int(center_y + side_length / 2))
+                    cropped_face = frame_bgr[sq_y0:sq_y1, sq_x0:sq_x1]
+                    if cropped_face.size > 0:
+                        face = cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
+
+                elif pre_method == 'yolo_haar':
+                    # Fallback to the single-frame function for this more complex logic
+                    face = extract_yolo_haar_face(frame_bgr)
+
+                if face is not None:
+                    collected_faces.append(face)
+                    if debug_save_path:
+                        frame_idx = frame_indices[i]  # Get original frame index for debug name
+                        save_name = f"{Path(video_path).stem}_found{len(collected_faces)}_frame{frame_idx}_{pre_method}.jpg"
+                        cv2.imwrite(os.path.join(debug_save_path, save_name), face)
+
+    # elif pre_method == 'dlib':
+    #     # Dlib doesn't support batching, so we must loop
+    #     for i, frame_bgr in enumerate(original_frames_read):
+    #         if len(collected_faces) >= NUM_SAMPLES:
+    #             break
+    #         face = extract_aligned_face(frame_bgr)
+    #         if face is not None:
+    #             collected_faces.append(face)
 
     if not collected_faces:
         print(f"[*] Preprocessing failed: No valid faces found in video using '{pre_method}'.")
         return None
 
-    return collected_faces
+    # Ensure we only return up to NUM_SAMPLES
+    return collected_faces[:NUM_SAMPLES]
+
+
+# ... (rest of video_preprocessor.py remains the same) ...
 
 
 def preprocess_video_for_effort_model(
