@@ -99,7 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint', type=str, required=True, help='Path to the .pth model checkpoint file.')
     parser.add_argument('--config', type=str, default='./config/detector/effort.yaml',
                         help='Path to the detector config.')
-    parser.add_autorun('store_true', help='Specify if the model architecture to be tested uses an ArcFace head.')
+    parser.add_argument('--use-arcface-head', action='store_true', help='Crucial: Specify if model uses ArcFace head.')
     # This path needs to be valid for the script to instantiate the model
     parser.add_argument('--clip-model-path', type=str, default='./base_models/clip-vit-large-patch14',
                         help='Path to the base CLIP model.')
