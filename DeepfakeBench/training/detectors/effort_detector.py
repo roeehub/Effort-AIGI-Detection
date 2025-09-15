@@ -480,6 +480,11 @@ class EffortDetector(nn.Module):
         return pred_dict
 
 
+import threading
+_svd_diagnostic_lock = threading.Lock()
+_svd_diagnostic_printed = False
+
+
 # Custom module to represent the residual using SVD components
 class SVDResidualLinear(nn.Module):
     def __init__(self, in_features, out_features, r, bias=True, init_weight=None):
@@ -509,6 +514,26 @@ class SVDResidualLinear(nn.Module):
             return self.weight_main
 
     def forward(self, x):
+        # ==================== START: DIAGNOSTIC CODE ====================
+        global _svd_diagnostic_printed
+        with _svd_diagnostic_lock:
+            if not _svd_diagnostic_printed:
+                print("\n" + "*" * 25 + " SVD DIAGNOSTIC " + "*" * 25)
+                is_using_residual = hasattr(self, 'U_residual') and hasattr(self,
+                                                                            'V_residual') and self.S_residual is not None
+                print(f"[*] Is this layer using the trained residual weights? -> {is_using_residual}")
+                if not is_using_residual:
+                    print(f"    - hasattr(self, 'U_residual'): {hasattr(self, 'U_residual')}")
+                    print(f"    - hasattr(self, 'V_residual'): {hasattr(self, 'V_residual')}")
+                    print(f"    - self.S_residual is not None: {self.S_residual is not None}")
+                    if self.S_residual is not None:
+                        print(f"    - S_residual value: {self.S_residual.data}")
+                else:
+                    print(f"    - S_residual Mean: {self.S_residual.data.mean().item():.8f}")
+                    print(f"    - S_residual Max Abs: {self.S_residual.data.abs().max().item():.8f}")
+                print("*" * 66 + "\n")
+                _svd_diagnostic_printed = True
+        # ===================== END: DIAGNOSTIC CODE =====================
         if hasattr(self, 'U_residual') and hasattr(self, 'V_residual') and self.S_residual is not None:
             # Reconstruct the residual weight
             residual_weight = self.U_residual @ torch.diag(self.S_residual) @ self.V_residual
