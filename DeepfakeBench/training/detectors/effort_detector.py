@@ -440,7 +440,7 @@ class EffortDetector(nn.Module):
         if is_video:
             B, T, C, H, W = image.shape
             # Reshape to a single batch of frames: [B * T, C, H, W], e.g., [32, 3, 224, 224]
-            image = image.view(B * T, C, H, W).contiguous()
+            image = image.view(B * T, C, H, W)
             # --- Ensure labels are also expanded if present ---
             if label is not None:
                 label = label.repeat_interleave(T)
