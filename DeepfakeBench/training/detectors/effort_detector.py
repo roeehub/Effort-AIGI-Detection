@@ -46,8 +46,17 @@ class ArcMarginProduct(nn.Module):
         self.register_buffer('s', torch.tensor(s))
 
     def forward(self, features, label=None, return_raw_logits=False):
+
+        # +++ ADD DEBUG PRINT 3 +++
+        # This is the most critical check. What is the value of 's' right here?
+        print(f"DEBUG: INSIDE ArcMarginProduct forward pass. self.s = {self.s.item()}")
+
         # 1. Normalize and compute cosine similarity (the expensive part, done only once)
         cosine = F.linear(F.normalize(features), F.normalize(self.weight))
+
+        # Also, let's check the cosine values just in case
+        print(
+            f"DEBUG: Cosine stats: min={cosine.min().item():.4f}, max={cosine.max().item():.4f}, mean={cosine.mean().item():.4f}")
 
         # The raw, unpenalized logits are simply the scaled cosine similarity.
         # These are what we need for metrics.

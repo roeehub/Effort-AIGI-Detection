@@ -157,6 +157,11 @@ def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path
     # the frozen 'weight_main' from the generic base CLIP model.
     model = EffortDetector(config).to(device)
 
+    # +++ ADD DEBUG PRINT 1 +++
+    # We expect this to print 30.0
+    if config['use_arcface_head']:
+        logger.info(f"DEBUG: Immediately after initialization, model.head.s = {model.head.s.item()}")
+
     logger.info(f"Loading PARTIAL checkpoint from: {weights_path}")
     state_dict = torch.load(weights_path, map_location=device)
 
@@ -172,6 +177,11 @@ def load_model(config: dict, weights_path: str, use_fused: bool, clip_model_path
     logger.info("Loading state dict with strict=False to recover legacy checkpoint.")
     # CHANGE THIS LINE FROM True TO False
     model.load_state_dict(state_dict, strict=False)
+
+    # +++ ADD DEBUG PRINT 2 +++
+    # We ALSO expect this to print 30.0
+    if config['use_arcface_head']:
+        logger.info(f"DEBUG: Immediately after load_state_dict, model.head.s = {model.head.s.item()}")
 
     model.eval()
     logger.info("✅ Model successfully assembled and set to evaluation mode.")
