@@ -16,7 +16,7 @@ import cv2  # OpenCV for video
 from pydub import AudioSegment  # pydub for audio
 
 # --- Configuration ---
-SERVER_IP = "34.116.234.242"
+SERVER_IP = "34.116.214.60"
 SERVER_PORT = 50051
 VIDEO_FILE_PATH = "low_res_video_test.mp4"  # Path to your test video file
 
