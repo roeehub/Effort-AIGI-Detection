@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13wma_streaming.proto\x12\rwma.streaming\"\xf2\x01\n\nAudioBatch\x12\x10\n\x08ogg_data\x18\x01 \x01(\x0c\x12\x13\n\x0bstart_ts_ms\x18\x02 \x01(\x04\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\r\x12\x12\n\nmeeting_id\x18\x04 \x01(\t\x12\x12\n\nsession_id\x18\x05 \x01(\t\x12\x10\n\x08\x63hunk_id\x18\x06 \x01(\t\x12\x13\n\x0bsample_rate\x18\x07 \x01(\r\x12\x10\n\x08\x63hannels\x18\x08 \x01(\r\x12\x10\n\x08\x62it_rate\x18\n \x01(\r\x12\r\n\x05\x63odec\x18\x0b \x01(\t\x12\x11\n\tcontainer\x18\x0c \x01(\t\x12\x13\n\x0b\x66rame_count\x18\r \x01(\r\"\xc9\x01\n\x0fParticipantCrop\x12\x16\n\x0eparticipant_id\x18\x01 \x01(\t\x12\x12\n\nimage_data\x18\x02 \x01(\x0c\x12\x0e\n\x06\x62\x62ox_x\x18\x03 \x01(\r\x12\x0e\n\x06\x62\x62ox_y\x18\x04 \x01(\r\x12\x12\n\nbbox_width\x18\x05 \x01(\r\x12\x13\n\x0b\x62\x62ox_height\x18\x06 \x01(\r\x12\x12\n\nconfidence\x18\x07 \x01(\x02\x12\x14\n\x0ctimestamp_ms\x18\x08 \x01(\x04\x12\x17\n\x0fsequence_number\x18\t \x01(\x04\"\x8d\x02\n\x10ParticipantFrame\x12\x16\n\x0eparticipant_id\x18\x01 \x01(\t\x12-\n\x05\x63rops\x18\x02 \x03(\x0b\x32\x1e.wma.streaming.ParticipantCrop\x12\x13\n\x0bstart_ts_ms\x18\x03 \x01(\x04\x12\x11\n\tend_ts_ms\x18\x04 \x01(\x04\x12\x12\n\nmeeting_id\x18\x05 \x01(\t\x12\x12\n\nsession_id\x18\x06 \x01(\t\x12\x10\n\x08\x63hunk_id\x18\x07 \x01(\t\x12\x13\n\x0b\x66rame_count\x18\x08 \x01(\r\x12\x1c\n\x14original_frame_width\x18\t \x01(\r\x12\x1d\n\x15original_frame_height\x18\n \x01(\r\"~\n\x0cScreenBanner\x12)\n\x05level\x18\x01 \x01(\x0e\x32\x1a.wma.streaming.BannerLevel\x12\x0e\n\x06ttl_ms\x18\x02 \x01(\r\x12\x11\n\tplacement\x18\x03 \x01(\t\x12\x11\n\taction_id\x18\x04 \x01(\t\x12\r\n\x05scope\x18\x05 \x01(\t\"\xba\x01\n\x06Uplink\x12\x35\n\x0cparticipants\x18\x01 \x03(\x0b\x32\x1f.wma.streaming.ParticipantFrame\x12-\n\x05\x61udio\x18\x02 \x01(\x0b\x32\x19.wma.streaming.AudioBatchH\x00\x88\x01\x01\x12\x14\n\x0ctimestamp_ms\x18\x03 \x01(\x04\x12\x11\n\tclient_id\x18\x04 \x01(\t\x12\x17\n\x0fsequence_number\x18\x05 \x01(\x04\x42\x08\n\x06_audio\"\xc0\x01\n\x08\x44ownlink\x12\x37\n\rscreen_banner\x18\x01 \x01(\x0b\x32\x1b.wma.streaming.ScreenBannerH\x00\x88\x01\x01\x12\x14\n\x0ctimestamp_ms\x18\x02 \x01(\x04\x12\x11\n\tserver_id\x18\x03 \x01(\t\x12\x17\n\x0fsequence_number\x18\x04 \x01(\x04\x12\x10\n\x08received\x18\x05 \x01(\x08\x12\x15\n\rerror_message\x18\x06 \x01(\tB\x10\n\x0e_screen_banner\"6\n\x0bPingRequest\x12\x14\n\x0ctimestamp_ms\x18\x01 \x01(\x04\x12\x11\n\tclient_id\x18\x02 \x01(\t\"e\n\x0cPingResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x16\n\x0eserver_time_ms\x18\x02 \x01(\x04\x12\x0f\n\x07version\x18\x03 \x01(\t\x12\x1c\n\x14request_timestamp_ms\x18\x04 \x01(\x04*>\n\x0b\x42\x61nnerLevel\x12\x0f\n\x0b\x42\x41NNER_NONE\x10\x00\x12\t\n\x05GREEN\x10\x01\x12\n\n\x06YELLOW\x10\x02\x12\x07\n\x03RED\x10\x03\x32\x95\x01\n\x10StreamingService\x12@\n\nStreamData\x12\x15.wma.streaming.Uplink\x1a\x17.wma.streaming.Downlink(\x01\x30\x01\x12?\n\x04Ping\x12\x1a.wma.streaming.PingRequest\x1a\x1b.wma.streaming.PingResponseB\x03\x90\x01\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13wma_streaming.proto\x12\rwma.streaming\"\xf2\x01\n\nAudioBatch\x12\x10\n\x08ogg_data\x18\x01 \x01(\x0c\x12\x13\n\x0bstart_ts_ms\x18\x02 \x01(\x04\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\r\x12\x12\n\nmeeting_id\x18\x04 \x01(\t\x12\x12\n\nsession_id\x18\x05 \x01(\t\x12\x10\n\x08\x63hunk_id\x18\x06 \x01(\t\x12\x13\n\x0bsample_rate\x18\x07 \x01(\r\x12\x10\n\x08\x63hannels\x18\x08 \x01(\r\x12\x10\n\x08\x62it_rate\x18\n \x01(\r\x12\r\n\x05\x63odec\x18\x0b \x01(\t\x12\x11\n\tcontainer\x18\x0c \x01(\t\x12\x13\n\x0b\x66rame_count\x18\r \x01(\r\"\xc9\x01\n\x0fParticipantCrop\x12\x16\n\x0eparticipant_id\x18\x01 \x01(\t\x12\x12\n\nimage_data\x18\x02 \x01(\x0c\x12\x0e\n\x06\x62\x62ox_x\x18\x03 \x01(\r\x12\x0e\n\x06\x62\x62ox_y\x18\x04 \x01(\r\x12\x12\n\nbbox_width\x18\x05 \x01(\r\x12\x13\n\x0b\x62\x62ox_height\x18\x06 \x01(\r\x12\x12\n\nconfidence\x18\x07 \x01(\x02\x12\x14\n\x0ctimestamp_ms\x18\x08 \x01(\x04\x12\x17\n\x0fsequence_number\x18\t \x01(\x04\"\x8d\x02\n\x10ParticipantFrame\x12\x16\n\x0eparticipant_id\x18\x01 \x01(\t\x12-\n\x05\x63rops\x18\x02 \x03(\x0b\x32\x1e.wma.streaming.ParticipantCrop\x12\x13\n\x0bstart_ts_ms\x18\x03 \x01(\x04\x12\x11\n\tend_ts_ms\x18\x04 \x01(\x04\x12\x12\n\nmeeting_id\x18\x05 \x01(\t\x12\x12\n\nsession_id\x18\x06 \x01(\t\x12\x10\n\x08\x63hunk_id\x18\x07 \x01(\t\x12\x13\n\x0b\x66rame_count\x18\x08 \x01(\r\x12\x1c\n\x14original_frame_width\x18\t \x01(\r\x12\x1d\n\x15original_frame_height\x18\n \x01(\r\"\xf8\x01\n\x0cScreenBanner\x12)\n\x05level\x18\x01 \x01(\x0e\x32\x1a.wma.streaming.BannerLevel\x12\x0e\n\x06ttl_ms\x18\x02 \x01(\r\x12\x11\n\tplacement\x18\x03 \x01(\t\x12\x11\n\taction_id\x18\x04 \x01(\t\x12\r\n\x05scope\x18\x05 \x01(\t\x12.\n\nscope_enum\x18\x06 \x01(\x0e\x32\x1a.wma.streaming.BannerScope\x12\x16\n\x0eparticipant_id\x18\x07 \x01(\t\x12\x13\n\x0b\x62\x61nner_type\x18\x08 \x01(\t\x12\x1b\n\x13\x65xpiry_timestamp_ms\x18\t \x01(\x04\"\xba\x01\n\x06Uplink\x12\x35\n\x0cparticipants\x18\x01 \x03(\x0b\x32\x1f.wma.streaming.ParticipantFrame\x12-\n\x05\x61udio\x18\x02 \x01(\x0b\x32\x19.wma.streaming.AudioBatchH\x00\x88\x01\x01\x12\x14\n\x0ctimestamp_ms\x18\x03 \x01(\x04\x12\x11\n\tclient_id\x18\x04 \x01(\t\x12\x17\n\x0fsequence_number\x18\x05 \x01(\x04\x42\x08\n\x06_audio\"\xc0\x01\n\x08\x44ownlink\x12\x37\n\rscreen_banner\x18\x01 \x01(\x0b\x32\x1b.wma.streaming.ScreenBannerH\x00\x88\x01\x01\x12\x14\n\x0ctimestamp_ms\x18\x02 \x01(\x04\x12\x11\n\tserver_id\x18\x03 \x01(\t\x12\x17\n\x0fsequence_number\x18\x04 \x01(\x04\x12\x10\n\x08received\x18\x05 \x01(\x08\x12\x15\n\rerror_message\x18\x06 \x01(\tB\x10\n\x0e_screen_banner\"6\n\x0bPingRequest\x12\x14\n\x0ctimestamp_ms\x18\x01 \x01(\x04\x12\x11\n\tclient_id\x18\x02 \x01(\t\"e\n\x0cPingResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x16\n\x0eserver_time_ms\x18\x02 \x01(\x04\x12\x0f\n\x07version\x18\x03 \x01(\t\x12\x1c\n\x14request_timestamp_ms\x18\x04 \x01(\x04*>\n\x0b\x42\x61nnerLevel\x12\x0f\n\x0b\x42\x41NNER_NONE\x10\x00\x12\t\n\x05GREEN\x10\x01\x12\n\n\x06YELLOW\x10\x02\x12\x07\n\x03RED\x10\x03*6\n\x0b\x42\x61nnerScope\x12\x10\n\x0cSCOPE_GLOBAL\x10\x00\x12\x15\n\x11SCOPE_PARTICIPANT\x10\x01\x32\x95\x01\n\x10StreamingService\x12@\n\nStreamData\x12\x15.wma.streaming.Uplink\x1a\x17.wma.streaming.Downlink(\x01\x30\x01\x12?\n\x04Ping\x12\x1a.wma.streaming.PingRequest\x1a\x1b.wma.streaming.PingResponseB\x03\x90\x01\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,25 +32,27 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'wma_streaming_pb2', _global
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\220\001\001'
-  _globals['_BANNERLEVEL']._serialized_start=1430
-  _globals['_BANNERLEVEL']._serialized_end=1492
+  _globals['_BANNERLEVEL']._serialized_start=1553
+  _globals['_BANNERLEVEL']._serialized_end=1615
+  _globals['_BANNERSCOPE']._serialized_start=1617
+  _globals['_BANNERSCOPE']._serialized_end=1671
   _globals['_AUDIOBATCH']._serialized_start=39
   _globals['_AUDIOBATCH']._serialized_end=281
   _globals['_PARTICIPANTCROP']._serialized_start=284
   _globals['_PARTICIPANTCROP']._serialized_end=485
   _globals['_PARTICIPANTFRAME']._serialized_start=488
   _globals['_PARTICIPANTFRAME']._serialized_end=757
-  _globals['_SCREENBANNER']._serialized_start=759
-  _globals['_SCREENBANNER']._serialized_end=885
-  _globals['_UPLINK']._serialized_start=888
-  _globals['_UPLINK']._serialized_end=1074
-  _globals['_DOWNLINK']._serialized_start=1077
-  _globals['_DOWNLINK']._serialized_end=1269
-  _globals['_PINGREQUEST']._serialized_start=1271
-  _globals['_PINGREQUEST']._serialized_end=1325
-  _globals['_PINGRESPONSE']._serialized_start=1327
-  _globals['_PINGRESPONSE']._serialized_end=1428
-  _globals['_STREAMINGSERVICE']._serialized_start=1495
-  _globals['_STREAMINGSERVICE']._serialized_end=1644
+  _globals['_SCREENBANNER']._serialized_start=760
+  _globals['_SCREENBANNER']._serialized_end=1008
+  _globals['_UPLINK']._serialized_start=1011
+  _globals['_UPLINK']._serialized_end=1197
+  _globals['_DOWNLINK']._serialized_start=1200
+  _globals['_DOWNLINK']._serialized_end=1392
+  _globals['_PINGREQUEST']._serialized_start=1394
+  _globals['_PINGREQUEST']._serialized_end=1448
+  _globals['_PINGRESPONSE']._serialized_start=1450
+  _globals['_PINGRESPONSE']._serialized_end=1551
+  _globals['_STREAMINGSERVICE']._serialized_start=1674
+  _globals['_STREAMINGSERVICE']._serialized_end=1823
 _builder.BuildServices(DESCRIPTOR, 'wma_streaming_pb2', _globals)
 # @@protoc_insertion_point(module_scope)

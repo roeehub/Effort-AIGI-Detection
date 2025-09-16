@@ -55,13 +55,23 @@ enum BannerLevel {
     RED = 3;                // Red banner level
 }
 
+// Banner scope enumeration
+enum BannerScope {
+    SCOPE_GLOBAL = 0;       // Global banner (screen-wide)
+    SCOPE_PARTICIPANT = 1;  // Per-participant banner
+}
+
 // Screen banner message for overlay display
 message ScreenBanner {
     BannerLevel level = 1;      // Banner level/color
     uint32 ttl_ms = 2;          // Time to live in milliseconds
-    string placement = 3;       // Placement hint ("TopCenter" default)
+    string placement = 3;       // Placement hint ("TopCenter" default for global)
     string action_id = 4;       // Unique action identifier
-    string scope = 5;           // Action scope ("global")
+    string scope = 5;           // Action scope ("global" or "participant")
+    BannerScope scope_enum = 6; // Banner scope enumeration
+    string participant_id = 7;  // Participant ID (for per-participant banners)
+    string banner_type = 8;     // Banner type for image selection
+    uint64 expiry_timestamp_ms = 9; // Absolute expiry timestamp
 }
 
 // Uplink message from Service 5 to backend (client -> server)
