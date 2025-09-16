@@ -48,7 +48,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     def __init__(self):
         """Initialize the streaming service."""
-        data_directory = os.path.join(BASE_PATH, "data")
+        # data_directory = os.path.join(BASE_PATH, "data")
+        data_directory = "/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data"
         self.data_writer = BackendDataWriter(data_directory)
         self.banner_simulator = BannerSimulator(banner_probability=0.15,
                                                 per_person_probability=1.0)  # 15% global, 100% per-person FOR IMMEDIATE TESTING
