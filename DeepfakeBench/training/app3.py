@@ -52,22 +52,38 @@ def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -
             return False
 
         downloaded = False
+
+        # Decide whether this folder is an "images folder" or a "generic assets folder".
+        image_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
+        any_images = any(
+            (not b.name.endswith('/')) and b.name.lower().endswith(image_exts)
+            for b in blobs
+        )
+
         for blob in blobs:
-            if blob.name.endswith('/'): continue
-            # Ensure the blob is an image for batch processing
-            if not blob.name.lower().endswith(('.png', '.jpg', '.jpeg')):
-                logger.warning(f"Skipping non-image file in GCS directory: {blob.name}")
+            if blob.name.endswith('/'):
                 continue
 
-            destination_file_name = os.path.join(local_path, os.path.basename(blob.name))
+            # If the directory contains images, keep previous behavior (download images only).
+            # Otherwise, download **all** files (needed for model folders like CLIP backbone).
+            if any_images and not blob.name.lower().endswith(image_exts):
+                logger.debug(f"Skipping non-image file in GCS directory: {blob.name}")
+                continue
+
+            # Preserve relative subpaths under the prefix
+            rel = blob.name.replace(prefix, '', 1)
+            destination_file_name = os.path.join(local_path, rel)
             os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
+
             try:
                 blob.download_to_filename(destination_file_name)
                 downloaded = True
             except Exception as e:
                 logger.error(f"Failed to download {blob.name}: {e}")
                 return False
+
         return downloaded
+
     else:  # It's a single file
         blob_name = gcs_path.replace(prefix_to_strip, '', 1)
         blob = bucket.blob(blob_name)
