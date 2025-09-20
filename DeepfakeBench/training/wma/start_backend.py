@@ -9,11 +9,10 @@ import sys
 import os
 from pathlib import Path
 
-# Add the backend directory to Python path
 backend_dir = Path(__file__).parent
-repo_root = backend_dir.parent
-sys.path.insert(0, str(repo_root))
-sys.path.insert(0, str(backend_dir))
+repo_root = backend_dir.parent         # -> .../training
+sys.path.insert(0, str(repo_root))     # ensures "utils", "detectors", "app3", etc. import
+sys.path.insert(0, str(backend_dir))   # ensures "wma.*" imports
 
 DEFAULTS = {
     # Your preferred default checkpoint (overridable via env)
