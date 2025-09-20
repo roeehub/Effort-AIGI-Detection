@@ -6,5 +6,8 @@ project_root_dir = os.path.dirname(parent_dir)
 sys.path.append(parent_dir)
 sys.path.append(project_root_dir)
 
-from utils.registry import DETECTOR
-from .effort_detector import EffortDetector
+# from utils.registry import DETECTOR
+from training.utils.registry import DETECTOR
+
+# from .effort_detector import EffortDetector
+from training.detectors.effort_detector import EffortDetector
