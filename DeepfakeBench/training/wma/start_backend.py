@@ -9,10 +9,10 @@ import sys
 import os
 from pathlib import Path
 
-backend_dir = Path(__file__).parent           # .../training/wma
-repo_root = backend_dir.parent                # .../training
-sys.path.insert(0, str(repo_root))            # finds utils/, detectors/, app3.py
-sys.path.insert(0, str(backend_dir))          # finds wma/*
+backend_dir = Path(__file__).parent        # .../training/wma
+repo_root  = backend_dir.parent            # .../training
+sys.path.insert(0, str(repo_root))
+sys.path.insert(0, str(backend_dir))
 
 DEFAULTS = {
     # Your preferred default checkpoint (overridable via env)
