@@ -36,7 +36,6 @@ import os
 import threading
 import urllib.request
 
-
 # === Your generated protos (must be installed/available like in cloud_client_tester.py) ===
 import wma_streaming_pb2 as pb2
 import wma_streaming_pb2_grpc as pb2_grpc
@@ -177,7 +176,6 @@ def _post_local_ui(json_payload: str, ports=(4587,)):
             pass
 
 
-
 # ---------------------
 # Utilities for chunk detection
 # ---------------------
@@ -216,7 +214,8 @@ def sorted_frame_paths(participant_dir: Path) -> List[Path]:
 # ===== UI Forwarding Config =====
 BRIDGE_HOST = os.getenv("WMA_PANEL_HOST", "127.0.0.1")
 BRIDGE_PORT = int(os.getenv("WMA_PANEL_PORT", "4587"))
-UI_DEBUG    = os.getenv("WMA_UI_DEBUG", "0") == "1"
+UI_DEBUG = os.getenv("WMA_UI_DEBUG", "0") == "1"
+
 
 def _ui_post_sync(json_payload: str):
     url = f"http://{BRIDGE_HOST}:{BRIDGE_PORT}/downlink"
@@ -232,9 +231,11 @@ def _ui_post_sync(json_payload: str):
     if UI_DEBUG:
         print(f"[UI] POST -> {url} ({len(json_payload)} bytes)")
 
+
 def _ui_post_async(json_payload: str):
     # fire-and-forget so uplink/downlink loops never block
     threading.Thread(target=_try_ui_post, args=(json_payload,), daemon=True).start()
+
 
 def _try_ui_post(js: str):
     try:
@@ -243,7 +244,6 @@ def _try_ui_post(js: str):
         # Only print if explicitly opted-in; otherwise keep silent
         if UI_DEBUG:
             print(f"[UI] POST failed: {e}")
-
 
 
 # ---------------------
@@ -337,51 +337,50 @@ class StreamClient:
                 log_err(f"Server not reachable yet: {e}")
                 time.sleep(ping_interval_sec)
 
-    def stream(self, uplink_iter):
+    def stream(self, uplink_iter, on_ack=None, on_fail=None):
         """
-        Starts the bidi stream. The uplink_iter is a generator that yields pb2.UplinkMessage.
+        Starts the bidi stream. Any non-error downlink is considered an ACK.
+        If error_message is present, on_fail(seqno, err) is invoked and the item is finalized (no retry).
         """
         response_iterator = self.stub.StreamData(uplink_iter)
 
         def _downlink_worker():
             try:
                 for msg in response_iterator:
-                    # Handle specific downlink types you expect
+                    err = getattr(msg, "error_message", "")
+                    seqno = getattr(msg, "sequence_number", None)
+
+                    # Log useful side-messages (optional)
                     if getattr(msg, "screen_banner", None):
                         b = msg.screen_banner
                         log_recv(f"ScreenBanner: level={getattr(b, 'level', '?')}, ttl={getattr(b, 'ttl_ms', '?')}ms")
-                    elif getattr(msg, "received", False):
-                        seqno = getattr(msg, "sequence_number", None)
-                        log_recv(f"ACK for sequence={seqno}")
 
-                        # Mark the corresponding chunk as sent
-                        try:
-                            # Access the outer scope trackers via nonlocal or pass callbacks in
-                            info = None
-                            with pending_lock:
-                                info = pending_by_seq.pop(seqno, None)
-                            if info:
-                                chunk = info["chunk_path"]
-                                (chunk / ".sent").write_text(now(), encoding="utf-8")
-                                state[info["chunk_name"]] = {"sent_at": now(), "path": str(chunk)}
-                                save_state(state)
-                                log_info(f"Chunk {info['chunk_name']} marked as sent after ACK.")
-                            else:
-                                log_err(f"ACK {seqno} had no matching pending chunk.")
-                        except Exception as e:
-                            log_err(f"Failed to finalize ACK {seqno}: {e}")
-                    elif getattr(msg, "error_message", ""):
-                        log_err(f"Downlink error: {msg.error_message}")
+                    if err:
+                        log_err(f"Downlink error for seq={seqno}: {err}")
+                        if on_fail:
+                            try:
+                                on_fail(seqno, err)
+                            except Exception as e:
+                                log_err(f"on_fail error: {e}")
                     else:
-                        log_recv(f"Downlink: {msg}")
-                    # Always write to disk
+                        # Non-error => treat as ACK
+                        if on_ack:
+                            try:
+                                on_ack(seqno)
+                            except Exception as e:
+                                log_err(f"on_ack error: {e}")
+                        else:
+                            log_recv(f"ACK (no error) for seq={seqno}")
+
+                    # Always persist the raw downlink
                     self.downlink_logger.write(msg)
+
             except grpc.RpcError as e:
                 log_err(f"Downlink stream error: {e.code()} - {e.details()}")
 
         t = threading.Thread(target=_downlink_worker, daemon=True)
         t.start()
-        return t  # caller can join this thread if desired
+        return t
 
     def stop(self):
         self._stop.set()
@@ -395,24 +394,33 @@ class StreamClient:
 # Folder watch loop
 # ---------------------
 def watch_and_stream(video_dir: Path,
-                     client: StreamClient,
+                     client: "StreamClient",
                      meeting_id: str,
                      session_id: str,
                      client_id: str,
                      state: Dict[str, dict]) -> None:
     """
-    Polls for new chunk folders and streams them once.
+    Polls for new chunk folders and streams them once (live mode).
+    Rules:
+      - As soon as a chunk is queued, mark it as .queued and persist in `state` (no re-queue spam).
+      - ANY non-error downlink is treated as an ACK -> mark .sent and finalize.
+      - Errors are logged and finalized as .failed (no retry).
+      - If server omits sequence_number, we finalize the oldest pending item.
     """
     log_info(f"Watching: {video_dir}")
     if not video_dir.exists():
         log_err(f"Path does not exist: {video_dir}")
         return
 
-    # Start bidi stream: we feed messages via a queue-backed generator
-    q: "queue.Queue[pb2.UplinkMessage]" = queue.Queue(maxsize=1000)
+    q: "queue.Queue[pb2.Uplink]" = queue.Queue(maxsize=1000)
     stop_flag = {"stop": False}
-    pending_by_seq = {}  # seq -> {"chunk_path": Path, "chunk_name": str}
+
+    # track queued but not yet acked
+    pending_by_seq: Dict[int, Dict[str, object]] = {}  # seq -> {"chunk_path": Path, "chunk_name": str}
     pending_lock = Lock()
+
+    # prevent duplicate queueing within this run even if ACKs don’t come
+    queued_once: set[str] = set()  # chunk_name strings
 
     def uplink_gen():
         while not stop_flag["stop"]:
@@ -424,29 +432,109 @@ def watch_and_stream(video_dir: Path,
             except queue.Empty:
                 continue
 
-    downlink_thread = client.stream(uplink_gen())
+    def _pop_oldest_pending():
+        with pending_lock:
+            if not pending_by_seq:
+                return None
+            oldest_seq = min(pending_by_seq.keys())
+            return oldest_seq, pending_by_seq.pop(oldest_seq)
+
+    def on_ack(seqno: Optional[int]):
+        # If server didn’t echo seq, ACK the oldest pending
+        if seqno is None:
+            popped = _pop_oldest_pending()
+            if not popped:
+                log_err("ACK without sequence_number and no pending items; ignoring.")
+                return
+            seqno_, info = popped
+            log_recv(f"ACK (no seq in downlink) → using oldest pending seq={seqno_}")
+        else:
+            with pending_lock:
+                info = pending_by_seq.pop(seqno, None)
+            if not info:
+                log_err(f"ACK seq={seqno} had no matching pending chunk.")
+                return
+
+        chunk: Path = info["chunk_path"]  # type: ignore[index]
+        chunk_name: str = info["chunk_name"]  # type: ignore[index]
+        try:
+            (chunk / ".sent").write_text(now(), encoding="utf-8")
+        except Exception as e:
+            log_err(f"Failed to write .sent for {chunk}: {e}")
+
+        state[chunk_name] = {
+            "sent_at": now(),
+            "path": str(chunk),
+            "status": "sent"
+        }
+        save_state(state)
+        log_info(f"Chunk {chunk_name} marked as SENT.")
+
+    def on_fail(seqno: Optional[int], err_msg: str):
+        # If server didn’t echo seq, fail the oldest pending
+        if seqno is None:
+            popped = _pop_oldest_pending()
+            if not popped:
+                log_err("ERROR without sequence_number and no pending items; ignoring.")
+                return
+            seqno_, info = popped
+            log_err(f"ERROR (no seq in downlink) → using oldest pending seq={seqno_}")
+        else:
+            with pending_lock:
+                info = pending_by_seq.pop(seqno, None)
+            if not info:
+                log_err(f"ERROR seq={seqno} had no matching pending chunk.")
+                return
+
+        chunk: Path = info["chunk_path"]  # type: ignore[index]
+        chunk_name: str = info["chunk_name"]  # type: ignore[index]
+        try:
+            (chunk / ".failed").write_text(f"{now()}\n{err_msg}", encoding="utf-8")
+        except Exception as e:
+            log_err(f"Failed to write .failed for {chunk}: {e}")
+
+        state[chunk_name] = {
+            "failed_at": now(),
+            "path": str(chunk),
+            "status": "error",
+            "error": err_msg
+        }
+        save_state(state)
+        log_err(f"Chunk {chunk_name} finalized as FAILED. No retry (live mode).")
+
+    # Start stream with live-mode callbacks
+    downlink_thread = client.stream(uplink_gen(), on_ack=on_ack, on_fail=on_fail)
 
     last_empty_log = 0.0
     seq = 1
 
     try:
         while True:
-            # Discover chunk dirs
-            chunk_dirs = [d for d in video_dir.iterdir() if is_chunk_dir(d)]
+            # discover candidate chunks
+            try:
+                chunk_dirs = [d for d in video_dir.iterdir() if is_chunk_dir(d)]
+            except FileNotFoundError:
+                chunk_dirs = []
+
             new_chunks: List[Path] = []
             for c in sorted(chunk_dirs, key=lambda p: p.name):
-                if c.name in state:  # already sent
+                if c.name in state:  # finalized (sent/failed/ignored)
                     continue
-                if (c / ".sent").exists():  # on-disk marker
-                    state[c.name] = {"sent_at": now(), "path": str(c)}
+                if (c / ".sent").exists() or (c / ".failed").exists():
+                    # backfill state if present on disk
+                    state[c.name] = {
+                        "path": str(c),
+                        "status": "sent" if (c / ".sent").exists() else "error"
+                    }
                     continue
-                # Only process chunks with manifest (signals "done writing")
-                if has_manifest(c):
+                if c.name in queued_once or (c / ".queued").exists():  # already queued; don't re-queue
+                    queued_once.add(c.name)
+                    continue
+                if has_manifest(c):  # ready to send
                     new_chunks.append(c)
 
             if not new_chunks:
                 now_ts = time.time()
-                # log "waiting..." at most every 10 seconds to avoid spam
                 if now_ts - last_empty_log > 10:
                     log_info("No ready chunks found. Waiting…")
                     last_empty_log = now_ts
@@ -463,18 +551,28 @@ def watch_and_stream(video_dir: Path,
                         seq_start=seq
                     )
                     if not msgs:
-                        log_info(f"Chunk {chunk.name}: no frames found; marking ignored.")
-                        state[chunk.name] = {"ignored": True, "path": str(chunk), "reason": "no_frames"}
+                        log_info(f"Chunk {chunk.name}: no frames; marking ignored.")
+                        state[chunk.name] = {"ignored": True, "path": str(chunk), "status": "ignored"}
                         save_state(state)
                         continue
 
+                    # queue exactly once per chunk
                     for m in msgs:
                         q.put(m)
                         with pending_lock:
                             pending_by_seq[m.sequence_number] = {"chunk_path": chunk, "chunk_name": chunk.name}
                         seq += 1
 
-                    log_info(f"Chunk {chunk.name} queued (awaiting ACK).")
+                    # persist queued marker and state so we never re-queue
+                    try:
+                        (chunk / ".queued").write_text(now(), encoding="utf-8")
+                    except Exception as e:
+                        log_err(f"Failed to write .queued for {chunk}: {e}")
+                    queued_once.add(chunk.name)
+                    state[chunk.name] = {"queued_at": now(), "path": str(chunk), "status": "queued"}
+                    save_state(state)
+                    log_info(f"Chunk {chunk.name} queued (live mode; awaiting any response).")
+
                 except Exception as e:
                     log_err(f"Failed processing {chunk.name}: {e}")
 
@@ -484,7 +582,7 @@ def watch_and_stream(video_dir: Path,
         log_info("Ctrl+C received, shutting down…")
     finally:
         stop_flag["stop"] = True
-        q.put(None)  # end generator
+        q.put(None)
         downlink_thread.join(timeout=5.0)
 
 

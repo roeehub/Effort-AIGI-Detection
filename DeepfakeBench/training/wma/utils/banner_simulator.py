@@ -76,6 +76,10 @@ class BannerSimulator:
         Returns:
             ScreenBanner message or None if no banner should be generated
         """
+
+        # sleep for 2 seconds to simulate delay
+        time.sleep(2)
+
         if not self.should_generate_banner():
             return None
         
