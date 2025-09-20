@@ -13,6 +13,12 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
+# print the sys path
+print(f"[BackendStartup] Python sys.path: {sys.path}")
+exit(0)
+
+
+
 # Import and run the server
 try:
     from server import serve

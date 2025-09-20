@@ -14,6 +14,9 @@ import wma_streaming_pb2_grpc as pb2_grpc
 # --- Video/Audio Processing Libraries ---
 import cv2  # OpenCV for video
 from pydub import AudioSegment  # pydub for audio
+from google.protobuf.json_format import MessageToJson
+# Also dump any raw bytes fields we can find, to separate .bin files
+from google.protobuf.descriptor import FieldDescriptor
 
 # --- Configuration ---
 SERVER_IP = "34.116.214.60"
@@ -53,6 +56,55 @@ def listen_for_downlinks(response_iterator):
     """
     try:
         for downlink_msg in response_iterator:
+            # === BEGIN: super-simple "I really wrote a file" logging ===
+            log_dir = os.environ.get("WMA_LOG_DIR", os.getcwd())
+            os.makedirs(log_dir, exist_ok=True)
+
+            # one-time init per run
+            if not hasattr(listen_for_downlinks, "_run_init"):
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                listen_for_downlinks._run_dir = os.path.join(log_dir, f"downlinks_{ts}_msgs")
+                os.makedirs(listen_for_downlinks._run_dir, exist_ok=True)
+                listen_for_downlinks._counter = 0
+                print(f"[LOG] Downlinks will be saved to: {listen_for_downlinks._run_dir}")
+                listen_for_downlinks._run_init = True
+
+            # pick a filename and write *something* no matter what
+            idx = listen_for_downlinks._counter
+            listen_for_downlinks._counter += 1
+            seq = getattr(downlink_msg, "sequence_number", None)
+            base = f"downlink_{seq if seq is not None else 'nseq'}_{idx}"
+            msg_dir = os.path.join(listen_for_downlinks._run_dir, base)
+            os.makedirs(msg_dir, exist_ok=True)
+
+            # 1) Debug TXT (always)
+            dbg_path = os.path.join(msg_dir, base + ".txt")
+            with open(dbg_path, "a", encoding="utf-8") as df:
+                df.write(f"{datetime.now().isoformat()}  {downlink_msg}\n")
+
+            # 2) JSON (prefer protobuf->json; fallback to str)
+            json_path = os.path.join(msg_dir, base + ".json")
+            try:
+                if MessageToJson is not None:
+                    try:
+                        json_str = MessageToJson(
+                            downlink_msg,
+                            including_default_value_fields=True,
+                            preserving_proto_field_name=True,
+                        )
+                    except TypeError:
+                        json_str = MessageToJson(downlink_msg)
+                else:
+                    json_str = str(downlink_msg)
+            except Exception as e:
+                json_str = f'{{"fallback_str": "{str(downlink_msg).replace(chr(10), " ")}", "error": "{e}"}}'
+
+            with open(json_path, "w", encoding="utf-8") as jf:
+                jf.write(json_str)
+
+            print(f"[LOG] Saved downlink -> {json_path}")
+            # === END: super-simple logging ===
+
             if downlink_msg.HasField("screen_banner"):
                 banner = downlink_msg.screen_banner
                 print_recv(f"Received ScreenBanner: level={banner.level}, ttl={banner.ttl_ms}ms")
