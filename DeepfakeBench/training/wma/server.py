@@ -23,8 +23,8 @@ import wma_streaming_pb2 as pb2
 import wma_streaming_pb2_grpc as pb2_grpc
 
 # Import backend components
-from storage.data_writer import BackendDataWriter
-from utils.banner_simulator import BannerSimulator
+from wma.storage.data_writer import BackendDataWriter
+from wma.utils.banner_simulator import BannerSimulator
 
 # For Effort detector
 import threading, queue
