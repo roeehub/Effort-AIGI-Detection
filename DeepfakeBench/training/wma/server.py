@@ -13,7 +13,7 @@ import uuid
 import sys
 import os
 from concurrent import futures
-from typing import AsyncIterator, Dict, Any
+from typing import AsyncIterator, Dict, Any, List
 
 import grpc
 from grpc import aio
@@ -25,6 +25,12 @@ import wma_streaming_pb2_grpc as pb2_grpc
 # Import backend components
 from storage.data_writer import BackendDataWriter
 from utils.banner_simulator import BannerSimulator
+
+# For Effort detector
+import threading, queue
+import cv2, numpy as np, torch
+from app3 import app as model_app, startup_event, calculate_analysis
+import video_preprocessor
 
 
 def get_base_path():
@@ -43,6 +49,106 @@ def get_base_path():
 BASE_PATH = get_base_path()
 
 
+# ---------- Background I/O worker (non-blocking) ----------
+class FrameIOWorker:
+    def __init__(self, maxsize: int = 10000):
+        self.q = queue.Queue(maxsize=maxsize)
+        self._stop = threading.Event()
+        self._count = 0
+        self._lock = threading.Lock()
+        self.t = threading.Thread(target=self._loop, daemon=True)
+        self.t.start()
+
+    def submit(self, frame_bytes: bytes):
+        try:
+            self.q.put_nowait(frame_bytes)
+        except queue.Full:
+            # drop or log; choose your policy
+            pass
+
+    def _loop(self):
+        while not self._stop.is_set():
+            try:
+                item = self.q.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            # TODO: replace with your real I/O (upload, write, etc.)
+            with self._lock:
+                self._count += 1
+                if self._count % 100 == 0:
+                    print(f"[I/O] processed frames so far: {self._count}")
+            self.q.task_done()
+
+    def stop(self):
+        self._stop.set()
+        self.t.join(timeout=2)
+
+    @property
+    def count(self) -> int:
+        with self._lock:
+            return self._count
+
+
+# ---------- Model manager (load once, reuse) ----------
+class ModelManager:
+    def __init__(self):
+        # Ensure app3 loads its models according to ENV (set in start_backend.py)
+        if not hasattr(model_app, "state") or not getattr(model_app.state, "models", None):
+            startup_event()  # app3's init hook
+
+        # prefer "custom" if available, else "base"
+        self.model = model_app.state.models.get("custom") or model_app.state.models["base"]
+        self.model.eval()
+        self.device = next(self.model.parameters()).device
+
+        self.transform = video_preprocessor._get_transform()
+        self.threshold = float(os.getenv("WMA_INFER_THRESHOLD", "0.46"))
+        self.batch_size = int(os.getenv("WMA_INFER_BATCH", "16"))
+
+    @torch.inference_mode()
+    def infer_probs(self, frame_rgbs: List[np.ndarray]) -> List[float]:
+        """frame_rgbs: list of HxWx3 RGB uint8 arrays"""
+        probs: List[float] = []
+        tensors: List[torch.Tensor] = []
+        for rgb in frame_rgbs:
+            tensors.append(self.transform(rgb))
+            if len(tensors) == self.batch_size:
+                probs.extend(self._forward_stack(tensors))
+                tensors = []
+        if tensors:
+            probs.extend(self._forward_stack(tensors))
+        return probs
+
+    @torch.inference_mode()
+    def infer_mean_decision(self, frames_rgb, bs=16, thr=None):
+        """frames_rgb: list of HxWx3 RGB uint8 arrays"""
+        device = self.device
+        thr = float(thr if thr is not None else os.getenv("WMA_INFER_THRESHOLD", "0.46"))
+        bs = int(os.getenv("WMA_INFER_BATCH", bs))
+        probs, buf = [], []
+
+        for rgb in frames_rgb:
+            buf.append(self.transform(rgb))  # -> [C,H,W]
+            if len(buf) == bs:
+                out = self.model({"image": torch.stack(buf).to(device)}, inference=True)["prob"]
+                probs.extend(map(float, out.detach().cpu()))
+                buf = []
+
+        if buf:
+            out = self.model({"image": torch.stack(buf).to(device)}, inference=True)["prob"]
+            probs.extend(map(float, out.detach().cpu()))
+
+        mean_prob = float(np.mean(probs)) if probs else 0.0
+        decision = "FAKE" if mean_prob >= thr else "REAL"
+        return {"decision": decision, "mean_prob": mean_prob, "probs": probs}
+
+    def _forward_stack(self, tensors: List[torch.Tensor]) -> List[float]:
+        batch = torch.stack(tensors, dim=0).to(self.device, non_blocking=True)
+        out = self.model({"image": batch}, inference=True)
+        fake_probs = out["prob"].detach().float().cpu().tolist()
+        return [float(p) for p in fake_probs]
+
+
 class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     """Implementation of the WMA StreamingService."""
 
@@ -51,8 +157,23 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # data_directory = os.path.join(BASE_PATH, "data")
         data_directory = "/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data"
         self.data_writer = BackendDataWriter(data_directory)
-        self.banner_simulator = BannerSimulator(banner_probability=0.15,
-                                                per_person_probability=1.0)  # 15% global, 100% per-person FOR IMMEDIATE TESTING
+        # self.banner_simulator = BannerSimulator(banner_probability=0.15,
+        #                                         per_person_probability=1.0)  # 15% global, 100% per-person FOR IMMEDIATE TESTING
+
+        # Disable random banners by default; we now use real inference
+        self.banner_simulator = BannerSimulator(banner_probability=0.0, per_person_probability=0.0)
+
+        # --- Real Effort detector (batched) ---
+        self.mm = ModelManager()
+        self.io = FrameIOWorker()
+        self.margin = float(os.getenv("WMA_BAND_MARGIN", "0.15"))
+
+        # TTLs per level (ms)
+        self.ttl_map = {
+            pb2.GREEN: 2000,
+            pb2.YELLOW: 3000,
+            pb2.RED: 4000,
+        }
 
         # Server state
         self.server_id = f"backend-{uuid.uuid4().hex[:8]}"
@@ -72,6 +193,24 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         }
 
         print(f"[Backend] StreamingService initialized with server_id: {self.server_id}")
+
+    def _decode_jpeg_to_rgb(self, image_bytes: bytes):
+        arr = np.frombuffer(image_bytes, np.uint8)
+        bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if bgr is None:
+            return None
+        return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+    def _band_level(self, mean_prob: float) -> int:
+        """Map mean(fake_prob) to GREEN/YELLOW/RED using threshold ± margin."""
+        thr = self.mm.threshold
+        m = self.margin
+        if mean_prob >= thr + m:
+            return pb2.RED
+        elif mean_prob >= thr - m:
+            return pb2.YELLOW
+        else:
+            return pb2.GREEN
 
     def _sanitize_participant_id(self, participant_id_raw: str) -> str:
         """
@@ -166,18 +305,28 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         self.stats["downlink_messages"] += 1
                         yield response
 
-                    # Check for additional banner responses (simulate async banner triggers)
-                    banner_response = await self._check_for_banner_trigger()
-                    if banner_response:
-                        self.stats["banners_sent"] += 1
-                        yield banner_response
-
-                    # Generate per-person banners for participants
+                    # Send inference-driven per-participant banners (REAL)
                     if uplink_msg.participants:
-                        per_person_banners = await self._generate_per_person_banners(uplink_msg.participants)
-                        for banner_msg in per_person_banners:
+                        loop = asyncio.get_running_loop()
+                        inference_banners = await loop.run_in_executor(
+                            None, self._generate_inference_banners, uplink_msg.participants
+                        )
+                        for banner_msg in inference_banners:
                             self.stats["banners_sent"] += 1
                             yield banner_msg
+
+                    # # Check for additional banner responses (simulate async banner triggers)
+                    # banner_response = await self._check_for_banner_trigger()
+                    # if banner_response:
+                    #     self.stats["banners_sent"] += 1
+                    #     yield banner_response
+                    #
+                    # # Generate per-person banners for participants
+                    # if uplink_msg.participants:
+                    #     per_person_banners = await self._generate_per_person_banners(uplink_msg.participants)
+                    #     for banner_msg in per_person_banners:
+                    #         self.stats["banners_sent"] += 1
+                    #         yield banner_msg
 
                 except Exception as e:
                     print(f"[Backend] Error processing uplink message: {e}")
@@ -270,22 +419,93 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         except Exception as e:
             print(f"[Backend] Error processing audio batch: {e}")
 
+    # async def _create_response(self, uplink_msg: pb2.Uplink) -> pb2.Downlink:
+    #     """Create response message with possible banner."""
+    #     response = pb2.Downlink()
+    #     response.timestamp_ms = int(time.time() * 1000)
+    #     response.server_id = self.server_id
+    #     response.sequence_number = self._next_sequence()
+    #     response.received = True
+    #
+    #     # Check if we should generate a banner
+    #     banner = self.banner_simulator.generate_banner()
+    #     if banner:
+    #         response.screen_banner.CopyFrom(banner)
+    #         print(f"[Backend] Generated banner: {pb2.BannerLevel.Name(banner.level)} "
+    #               f"TTL={banner.ttl_ms}ms ID={banner.action_id}")
+    #
+    #     return response
+
     async def _create_response(self, uplink_msg: pb2.Uplink) -> pb2.Downlink:
-        """Create response message with possible banner."""
+        """ACK-only response (no random banners)."""
         response = pb2.Downlink()
         response.timestamp_ms = int(time.time() * 1000)
         response.server_id = self.server_id
         response.sequence_number = self._next_sequence()
         response.received = True
-
-        # Check if we should generate a banner
-        banner = self.banner_simulator.generate_banner()
-        if banner:
-            response.screen_banner.CopyFrom(banner)
-            print(f"[Backend] Generated banner: {pb2.BannerLevel.Name(banner.level)} "
-                  f"TTL={banner.ttl_ms}ms ID={banner.action_id}")
-
         return response
+
+    def _generate_inference_banners(self, participant_frames: list) -> list:
+        """
+        Generate per-participant banners using real Effort detector results.
+        Returns a list of Downlink messages (one per participant with crops).
+        """
+        responses = []
+        now_ms = int(time.time() * 1000)
+
+        for pf in participant_frames:
+            # Sanitize participant id (your existing utility)
+            pid_raw = getattr(pf, "participant_id", "") or ""
+            participant_id = self._sanitize_participant_id(pid_raw)
+
+            # Decode all crops to RGB and push bytes to non-blocking I/O counter
+            rgbs = []
+            for crop in pf.crops:
+                img_bytes = getattr(crop, "image_data", b"")
+                if not img_bytes:
+                    continue
+                self.io.submit(img_bytes)
+                rgb = self._decode_jpeg_to_rgb(img_bytes)
+                if rgb is not None:
+                    rgbs.append(rgb)
+
+            if not rgbs:
+                continue  # nothing to score
+
+            # Batched scoring (16 micro-batch by default)
+            res = self.mm.infer_mean_decision(rgbs)  # {"decision", "mean_prob", "probs"}
+            mean_prob = res["mean_prob"]
+            level = self._band_level(mean_prob)
+            ttl_ms = self.ttl_map.get(level, 2500)
+
+            # Build ScreenBanner (per-participant)
+            banner = pb2.ScreenBanner()
+            banner.level = level
+            banner.ttl_ms = ttl_ms
+            banner.placement = "TopRight"
+            banner.action_id = f"act-{uuid.uuid4().hex[:8]}"
+            banner.scope = "participant"
+            banner.scope_enum = pb2.SCOPE_PARTICIPANT
+            banner.participant_id = participant_id
+            # Optional: pick a type per level (used by your UI icon chooser)
+            banner.banner_type = "alert" if level == pb2.RED else ("attention" if level == pb2.YELLOW else "info")
+            banner.expiry_timestamp_ms = now_ms + ttl_ms
+
+            # Wrap into Downlink
+            down = pb2.Downlink()
+            down.timestamp_ms = now_ms
+            down.server_id = self.server_id
+            down.sequence_number = self._next_sequence()
+            down.received = True
+            down.screen_banner.CopyFrom(banner)
+
+            print(f"[Backend] Participant={participant_id} mean_prob={mean_prob:.3f} "
+                  f"-> {pb2.BannerLevel.Name(level)} (thr={self.mm.threshold:.2f}, margin={self.margin:.2f}) "
+                  f"frames={len(rgbs)} io_count={self.io.count}")
+
+            responses.append(down)
+
+        return responses
 
     async def _check_for_banner_trigger(self) -> pb2.Downlink:
         """Check for additional banner triggers (simulating async events)."""

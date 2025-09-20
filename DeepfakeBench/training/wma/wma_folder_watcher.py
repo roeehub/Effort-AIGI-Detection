@@ -339,8 +339,9 @@ class StreamClient:
 
     def stream(self, uplink_iter, on_ack=None, on_fail=None):
         """
-        Starts the bidi stream. Any non-error downlink is considered an ACK.
-        If error_message is present, on_fail(seqno, err) is invoked and the item is finalized (no retry).
+        Live mode:
+          - Any non-error downlink => ACK (oldest pending).
+          - Error downlink => FAIL (oldest pending if no explicit mapping).
         """
         response_iterator = self.stub.StreamData(uplink_iter)
 
@@ -348,29 +349,25 @@ class StreamClient:
             try:
                 for msg in response_iterator:
                     err = getattr(msg, "error_message", "")
-                    seqno = getattr(msg, "sequence_number", None)
 
-                    # Log useful side-messages (optional)
+                    # Optional side messages
                     if getattr(msg, "screen_banner", None):
                         b = msg.screen_banner
                         log_recv(f"ScreenBanner: level={getattr(b, 'level', '?')}, ttl={getattr(b, 'ttl_ms', '?')}ms")
 
                     if err:
-                        log_err(f"Downlink error for seq={seqno}: {err}")
+                        log_err(f"Downlink error: {err}")
                         if on_fail:
                             try:
-                                on_fail(seqno, err)
+                                on_fail(None, err)  # <- ignore server seq; fail oldest
                             except Exception as e:
                                 log_err(f"on_fail error: {e}")
                     else:
-                        # Non-error => treat as ACK
                         if on_ack:
                             try:
-                                on_ack(seqno)
+                                on_ack(None)  # <- ignore server seq; ack oldest
                             except Exception as e:
                                 log_err(f"on_ack error: {e}")
-                        else:
-                            log_recv(f"ACK (no error) for seq={seqno}")
 
                     # Always persist the raw downlink
                     self.downlink_logger.write(msg)
@@ -381,13 +378,6 @@ class StreamClient:
         t = threading.Thread(target=_downlink_worker, daemon=True)
         t.start()
         return t
-
-    def stop(self):
-        self._stop.set()
-        try:
-            self.channel.close()
-        except Exception:
-            pass
 
 
 # ---------------------
@@ -439,24 +429,17 @@ def watch_and_stream(video_dir: Path,
             oldest_seq = min(pending_by_seq.keys())
             return oldest_seq, pending_by_seq.pop(oldest_seq)
 
-    def on_ack(seqno: Optional[int]):
-        # If server didn’t echo seq, ACK the oldest pending
-        if seqno is None:
-            popped = _pop_oldest_pending()
-            if not popped:
-                log_err("ACK without sequence_number and no pending items; ignoring.")
+    def on_ack(_ignored_seqno: Optional[int]):
+        # finalize oldest pending item (if any)
+        with pending_lock:
+            if not pending_by_seq:
+                log_info("ACK received but no pending items; ignoring.")
                 return
-            seqno_, info = popped
-            log_recv(f"ACK (no seq in downlink) → using oldest pending seq={seqno_}")
-        else:
-            with pending_lock:
-                info = pending_by_seq.pop(seqno, None)
-            if not info:
-                log_err(f"ACK seq={seqno} had no matching pending chunk.")
-                return
+            seqno, info = min(pending_by_seq.items(), key=lambda kv: kv[0])
+            pending_by_seq.pop(seqno)
 
-        chunk: Path = info["chunk_path"]  # type: ignore[index]
-        chunk_name: str = info["chunk_name"]  # type: ignore[index]
+        chunk: Path = info["chunk_path"]
+        chunk_name: str = info["chunk_name"]
         try:
             (chunk / ".sent").write_text(now(), encoding="utf-8")
         except Exception as e:
@@ -468,7 +451,7 @@ def watch_and_stream(video_dir: Path,
             "status": "sent"
         }
         save_state(state)
-        log_info(f"Chunk {chunk_name} marked as SENT.")
+        log_info(f"Chunk {chunk_name} marked as SENT (acked oldest pending).")
 
     def on_fail(seqno: Optional[int], err_msg: str):
         # If server didn’t echo seq, fail the oldest pending
