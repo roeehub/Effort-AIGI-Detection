@@ -5,14 +5,34 @@ Backend startup script for orchestrator integration.
 Simple wrapper around the main server.py for easy startup.
 """
 
-import sys
-import os
+# --- bootstrap paths + shim local `utils` package (no repo edits needed) ---
+import sys, os, types, importlib.util
 from pathlib import Path
 
-backend_dir = Path(__file__).parent        # .../training/wma
-repo_root  = backend_dir.parent            # .../training
-sys.path.insert(0, str(repo_root))
-sys.path.insert(0, str(backend_dir))
+backend_dir = Path(__file__).parent  # .../training/wma
+repo_root = backend_dir.parent  # .../training
+sys.path.insert(0, str(repo_root))  # ensure app3, detectors, etc.
+sys.path.insert(0, str(backend_dir))  # ensure wma/*
+
+# Force-load our local training/utils as the top-level "utils" package
+local_utils_dir = repo_root / "utils"
+if local_utils_dir.is_dir():
+    # Create a synthetic "utils" package pointing to training/utils
+    utils_pkg = types.ModuleType("utils")
+    utils_pkg.__path__ = [str(local_utils_dir)]
+    sys.modules.setdefault("utils", utils_pkg)
+
+    # Preload the modules you need (add more if needed)
+    for modname in ("registry", "metrics"):
+        mod_path = local_utils_dir / f"{modname}.py"
+        if mod_path.exists():
+            spec = importlib.util.spec_from_file_location(f"utils.{modname}", str(mod_path))
+            mod = importlib.util.module_from_spec(spec)
+            assert spec and spec.loader, f"Cannot load {mod_path}"
+            spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+            sys.modules[f"utils.{modname}"] = mod
+            setattr(utils_pkg, modname, mod)
+# --- end bootstrap ---
 
 DEFAULTS = {
     # Your preferred default checkpoint (overridable via env)
