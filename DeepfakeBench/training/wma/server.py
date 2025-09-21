@@ -30,7 +30,33 @@ from wma.utils.banner_simulator import BannerSimulator
 import threading, queue
 import cv2, numpy as np, torch
 from app3 import app as model_app, startup_event, calculate_analysis
-import video_preprocessor
+
+# ──────────────────────────
+# Inline image preprocessing (same as video_preprocessor)
+# ──────────────────────────
+_MODEL_IMG_SIZE = 224
+_MODEL_NORM_MEAN = (0.48145466, 0.4578275, 0.40821073)   # CLIP mean
+_MODEL_NORM_STD  = (0.26862954, 0.26130258, 0.27577711)  # CLIP std
+
+def _prep_rgb_to_tensor(rgb_uint8):
+    """
+    Resize to 224x224 (INTER_AREA), then normalize with CLIP mean/std.
+    Input: HxWx3 uint8 RGB np.ndarray
+    Output: torch.FloatTensor [3, 224, 224]
+    """
+    # Ensure 224x224
+    h, w = rgb_uint8.shape[:2]
+    if (h, w) != (_MODEL_IMG_SIZE, _MODEL_IMG_SIZE):
+        rgb_uint8 = cv2.resize(rgb_uint8, (_MODEL_IMG_SIZE, _MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
+
+    # To [C,H,W] float32 in [0,1]
+    t = torch.from_numpy(rgb_uint8).permute(2, 0, 1).contiguous().float().div(255.0)
+
+    # Normalize (no torchvision import needed)
+    mean = torch.tensor(_MODEL_NORM_MEAN, dtype=t.dtype).view(3, 1, 1)
+    std  = torch.tensor(_MODEL_NORM_STD,  dtype=t.dtype).view(3, 1, 1)
+    t = (t - mean) / std
+    return t
 
 
 def get_base_path():
@@ -101,7 +127,8 @@ class ModelManager:
         self.model.eval()
         self.device = next(self.model.parameters()).device
 
-        self.transform = video_preprocessor._get_transform()
+        # Inline transform parameters (no torchvision import)
+        self.model_img_size = _MODEL_IMG_SIZE
         self.threshold = float(os.getenv("WMA_INFER_THRESHOLD", "0.46"))
         self.batch_size = int(os.getenv("WMA_INFER_BATCH", "16"))
 
@@ -111,7 +138,7 @@ class ModelManager:
         probs: List[float] = []
         tensors: List[torch.Tensor] = []
         for rgb in frame_rgbs:
-            tensors.append(self.transform(rgb))
+            tensors.append(_prep_rgb_to_tensor(rgb))
             if len(tensors) == self.batch_size:
                 probs.extend(self._forward_stack(tensors))
                 tensors = []
@@ -128,7 +155,7 @@ class ModelManager:
         probs, buf = [], []
 
         for rgb in frames_rgb:
-            buf.append(self.transform(rgb))  # -> [C,H,W]
+            buf.append(_prep_rgb_to_tensor(rgb))  # -> [C,H,W]
             if len(buf) == bs:
                 out = self.model({"image": torch.stack(buf).to(device)}, inference=True)["prob"]
                 probs.extend(map(float, out.detach().cpu()))
