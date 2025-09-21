@@ -348,7 +348,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                     if uplink_msg.participants:
                         loop = asyncio.get_running_loop()
                         inference_banners = await loop.run_in_executor(
-                            None, self._generate_inference_banners, uplink_msg.participants
+                            None, self._generate_inference_banners, uplink_msg
                         )
                         for banner_msg in inference_banners:
                             self.stats["banners_sent"] += 1
@@ -356,7 +356,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
                     # 2. Send inference-driven global banner for AUDIO
                     if uplink_msg.HasField('audio'):
-                        audio_banner_msg = await self._generate_audio_inference_banner(uplink_msg.audio)
+                        audio_banner_msg = await self._generate_audio_inference_banner(uplink_msg)
                         if audio_banner_msg:
                             self.stats["banners_sent"] += 1
                             yield audio_banner_msg
@@ -494,8 +494,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 "audio": audio_data.tolist(),
                 "sample_rate": sample_rate,
                 # These can be hardcoded or passed from the client if needed
-                "window_step": 500,
-                "aggregation_window": 2.0,
+                "window_step": 4000,
+                "aggregation_window": 10.0,
                 "aggregation_type": 'mean',
                 "threshold": 0.85,
                 "use_vad": True,
@@ -520,11 +520,15 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             print(f"[ASV API] Error processing audio for API call: {e}")
             return None
 
-    async def _generate_audio_inference_banner(self, audio_batch: pb2.AudioBatch) -> pb2.Downlink | None:
+    async def _generate_audio_inference_banner(self, uplink_msg: pb2.Uplink) -> pb2.Downlink | None:
         """
         Processes an audio batch, calls the ASV API, and generates a global banner.
         """
         loop = asyncio.get_running_loop()
+
+        audio_batch = uplink_msg.audio
+        request_seq = uplink_msg.sequence_number
+
         # Run the blocking I/O (HTTP request) in a separate thread
         api_result = await loop.run_in_executor(None, self._call_asv_api, audio_batch)
 
@@ -554,7 +558,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         down = pb2.Downlink()
         down.timestamp_ms = now_ms
         down.server_id = self.server_id
-        down.sequence_number = self._next_sequence()
+        down.sequence_number = request_seq  # Echo the request sequence number
         down.received = True
         down.screen_banner.CopyFrom(banner)
 
@@ -562,15 +566,16 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         return down
 
-    def _generate_inference_banners(self, participant_frames: list) -> list:
+    def _generate_inference_banners(self, uplink_msg: pb2.Uplink) -> list:
         """
         Generate per-participant banners using real Effort detector results.
         Returns a list of Downlink messages (one per participant with crops).
         """
         responses = []
         now_ms = int(time.time() * 1000)
+        request_seq = uplink_msg.sequence_number
 
-        for pf in participant_frames:
+        for pf in uplink_msg.participants:
             # Sanitize participant id (your existing utility)
             pid_raw = getattr(pf, "participant_id", "") or ""
             participant_id = self._sanitize_participant_id(pid_raw)
@@ -612,7 +617,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             down = pb2.Downlink()
             down.timestamp_ms = now_ms
             down.server_id = self.server_id
-            down.sequence_number = self._next_sequence()
+            down.sequence_number = request_seq  # Echo the request sequence number
             down.received = True
             down.screen_banner.CopyFrom(banner)
 
