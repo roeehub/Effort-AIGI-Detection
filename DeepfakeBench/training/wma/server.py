@@ -335,10 +335,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         self.active_streams[stream_id]["messages_received"] += 1
 
                     # Process the message and send a standard ACK
-                    response = await self._process_uplink_message(uplink_msg, stream_id)
-                    if response:
-                        self.stats["downlink_messages"] += 1
-                        yield response
+                    # response = await self._process_uplink_message(uplink_msg, stream_id)
+                    # if response:
+                    #     self.stats["downlink_messages"] += 1
+                    #     yield response
+
+                    await self._process_uplink_message(uplink_msg, stream_id)
 
                     # --- INFERENCE SECTION ---
 
