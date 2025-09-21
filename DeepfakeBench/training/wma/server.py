@@ -31,12 +31,18 @@ import threading, queue
 import cv2, numpy as np, torch
 from app3 import app as model_app, startup_event, calculate_analysis
 
+# for audio processing
+import requests
+import soundfile as sf
+import io
+
 # ──────────────────────────
 # Inline image preprocessing (same as video_preprocessor)
 # ──────────────────────────
 _MODEL_IMG_SIZE = 224
-_MODEL_NORM_MEAN = (0.48145466, 0.4578275, 0.40821073)   # CLIP mean
-_MODEL_NORM_STD  = (0.26862954, 0.26130258, 0.27577711)  # CLIP std
+_MODEL_NORM_MEAN = (0.48145466, 0.4578275, 0.40821073)  # CLIP mean
+_MODEL_NORM_STD = (0.26862954, 0.26130258, 0.27577711)  # CLIP std
+
 
 def _prep_rgb_to_tensor(rgb_uint8):
     """
@@ -54,7 +60,7 @@ def _prep_rgb_to_tensor(rgb_uint8):
 
     # Normalize (no torchvision import needed)
     mean = torch.tensor(_MODEL_NORM_MEAN, dtype=t.dtype).view(3, 1, 1)
-    std  = torch.tensor(_MODEL_NORM_STD,  dtype=t.dtype).view(3, 1, 1)
+    std = torch.tensor(_MODEL_NORM_STD, dtype=t.dtype).view(3, 1, 1)
     t = (t - mean) / std
     return t
 
@@ -195,6 +201,10 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         self.io = FrameIOWorker()
         self.margin = float(os.getenv("WMA_BAND_MARGIN", "0.15"))
 
+        # --- ASV API config ---
+        self.asv_api_url = os.getenv("ASV_API_URL", "http://34.125.106.206:8000/asv/predict-live")
+        self.asv_api_timeout = int(os.getenv("ASV_API_TIMEOUT", "20"))
+
         # TTLs per level (ms)
         self.ttl_map = {
             pb2.GREEN: 2000,
@@ -324,15 +334,15 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                     if stream_id in self.active_streams:
                         self.active_streams[stream_id]["messages_received"] += 1
 
-                    # Process the message
+                    # Process the message and send a standard ACK
                     response = await self._process_uplink_message(uplink_msg, stream_id)
-
-                    # Send response if generated
                     if response:
                         self.stats["downlink_messages"] += 1
                         yield response
 
-                    # Send inference-driven per-participant banners (REAL)
+                    # --- INFERENCE SECTION ---
+
+                    # 1. Send inference-driven per-participant banners for VIDEO
                     if uplink_msg.participants:
                         loop = asyncio.get_running_loop()
                         inference_banners = await loop.run_in_executor(
@@ -342,18 +352,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                             self.stats["banners_sent"] += 1
                             yield banner_msg
 
-                    # # Check for additional banner responses (simulate async banner triggers)
-                    # banner_response = await self._check_for_banner_trigger()
-                    # if banner_response:
-                    #     self.stats["banners_sent"] += 1
-                    #     yield banner_response
-                    #
-                    # # Generate per-person banners for participants
-                    # if uplink_msg.participants:
-                    #     per_person_banners = await self._generate_per_person_banners(uplink_msg.participants)
-                    #     for banner_msg in per_person_banners:
-                    #         self.stats["banners_sent"] += 1
-                    #         yield banner_msg
+                    # 2. Send inference-driven global banner for AUDIO
+                    if uplink_msg.HasField('audio'):
+                        audio_banner_msg = await self._generate_audio_inference_banner(uplink_msg.audio)
+                        if audio_banner_msg:
+                            self.stats["banners_sent"] += 1
+                            yield audio_banner_msg
 
                 except Exception as e:
                     print(f"[Backend] Error processing uplink message: {e}")
@@ -471,6 +475,90 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         response.sequence_number = self._next_sequence()
         response.received = True
         return response
+
+    def _call_asv_api(self, audio_batch: pb2.AudioBatch) -> Dict[str, Any] | None:
+        """
+        Synchronous helper to decode audio and call the ASV API.
+        This is designed to be run in a thread pool executor to avoid blocking asyncio.
+        """
+        try:
+            # 1. Decode the in-memory OGG file into raw audio samples (NumPy array)
+            # We use io.BytesIO to treat the `bytes` object like a file
+            audio_data, sample_rate = sf.read(io.BytesIO(audio_batch.ogg_data))
+
+            # 2. Prepare the payload for the API, as seen in live_test.py
+            # The API expects a list of floats, not a NumPy array.
+            payload = {
+                "audio": audio_data.tolist(),
+                "sample_rate": sample_rate,
+                # These can be hardcoded or passed from the client if needed
+                "window_step": 500,
+                "aggregation_window": 2.0,
+                "aggregation_type": 'mean',
+                "threshold": 0.85,
+                "use_vad": True,
+                "vol_norm": False,
+            }
+
+            # 3. Make the HTTP POST request
+            print(f"[ASV API] Sending {len(audio_data) / sample_rate:.2f}s audio chunk for analysis...")
+            response = requests.post(self.asv_api_url, json=payload, timeout=self.asv_api_timeout)
+            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+
+            result = response.json()
+            print(
+                f"[ASV API] Received response: prediction={result.get('prediction')}, confidence={result.get('confidence'):.3f}")
+            return result
+
+        except requests.exceptions.RequestException as e:
+            print(f"[ASV API] Error calling API: {e}")
+            return None
+        except Exception as e:
+            # This can catch errors from sf.read if the OGG data is corrupt
+            print(f"[ASV API] Error processing audio for API call: {e}")
+            return None
+
+    async def _generate_audio_inference_banner(self, audio_batch: pb2.AudioBatch) -> pb2.Downlink | None:
+        """
+        Processes an audio batch, calls the ASV API, and generates a global banner.
+        """
+        loop = asyncio.get_running_loop()
+        # Run the blocking I/O (HTTP request) in a separate thread
+        api_result = await loop.run_in_executor(None, self._call_asv_api, audio_batch)
+
+        if not api_result or 'prediction' not in api_result:
+            return None
+
+        # Map the API prediction to a banner level
+        # Assuming `prediction` is boolean or 0/1 where True/1 is REAL
+        is_real = api_result['prediction']
+        level = pb2.GREEN if is_real else pb2.RED
+
+        now_ms = int(time.time() * 1000)
+        ttl_ms = self.ttl_map.get(level, 3000)
+
+        # Build a GLOBAL ScreenBanner
+        banner = pb2.ScreenBanner()
+        banner.level = level
+        banner.ttl_ms = ttl_ms
+        banner.placement = "TopCenter"
+        banner.action_id = f"act-audio-{uuid.uuid4().hex[:8]}"
+        banner.scope = "global"
+        banner.scope_enum = pb2.SCOPE_GLOBAL
+        banner.banner_type = "audio_ok" if is_real else "audio_alert"
+        banner.expiry_timestamp_ms = now_ms + ttl_ms
+
+        # Wrap into Downlink message
+        down = pb2.Downlink()
+        down.timestamp_ms = now_ms
+        down.server_id = self.server_id
+        down.sequence_number = self._next_sequence()
+        down.received = True
+        down.screen_banner.CopyFrom(banner)
+
+        print(f"[Backend] Generated GLOBAL audio banner -> {pb2.BannerLevel.Name(level)}")
+
+        return down
 
     def _generate_inference_banners(self, participant_frames: list) -> list:
         """
