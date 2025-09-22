@@ -140,19 +140,22 @@ class DownlinkLogger:
                     js = MessageToJson(msg, including_default_value_fields=True, preserving_proto_field_name=True)
                 except TypeError:
                     js = MessageToJson(msg)
-            # Forward to local Electron UI (non-blocking best effort)
-            try:
-                _ui_post_async(js)  # js is your JSON string for this downlink
-            except Exception:
-                pass
-            else:
-                js = json.dumps({"fallback_str": str(msg)})
-            json_path.write_text(js, encoding="utf-8")
-        except Exception as e:
-            log_err(f"Failed to write JSON {json_path}: {e}")
 
-        # Always tell you where it went
-        print(f"[LOG] Saved downlink -> {json_path}")
+                # Forward to local Electron UI (non-blocking best effort)
+                try:
+                    _ui_post_async(js)  # js is your JSON string for this downlink
+                except Exception:
+                    pass
+
+                # Only write real converted messages to disk
+                json_path.write_text(js, encoding="utf-8")
+                # Always tell you where it went
+                print(f"[LOG] Saved downlink -> {json_path}")
+            else:
+                # Don't save anything if MessageToJson isn't available
+                log_info(f"Skipping JSON save for {base} - MessageToJson not available")
+        except Exception as e:
+            log_err(f"Failed to process JSON for {json_path}: {e}")
 
 
 # ---------------------
@@ -353,13 +356,13 @@ class StreamClient:
                         log_err(f"Downlink error: {err}")
                         if on_fail:
                             try:
-                                on_fail(None, err)
+                                on_fail(msg, err)
                             except Exception as e:
                                 log_err(f"on_fail error: {e}")
                     else:
                         if on_ack:
                             try:
-                                on_ack(None)
+                                on_ack(msg)
                             except Exception as e:
                                 log_err(f"on_ack error: {e}")
                     self.downlink_logger.write(msg)
@@ -397,63 +400,72 @@ def watch_and_stream(video_dir: Path,
             try:
                 msg = q.get(timeout=1.0)
                 if msg is None: break
+                # Pass the sequence number to the callbacks
                 yield msg
             except queue.Empty:
                 continue
 
-    def on_ack(_ignored_seqno: Optional[int]):
+    # A helper to do the actual marking, to avoid code duplication
+    def _finalize_item(seqno: int, status: str, error_msg: Optional[str] = None):
         with pending_lock:
-            if not pending_by_seq:
-                log_info("ACK received but no pending items; ignoring.")
-                return
-            seqno, info = min(pending_by_seq.items(), key=lambda kv: kv[0])
-            pending_by_seq.pop(seqno)
+            info = pending_by_seq.pop(seqno, None)
+
+        if not info:
+            log_err(f"Received response for seq={seqno}, but it was not pending. Might be a duplicate ACK.")
+            return
 
         item_path: Path = info["path"]
         item_name: str = info["name"]
         item_type: str = info["type"]
-        marker_path = item_path if item_type == "video" else item_path.with_suffix(item_path.suffix + '.sent')
+
+        if status == "sent":
+            marker_file = ".sent"
+            state_status = "sent"
+            state_timestamp = "sent_at"
+            log_msg = f"{item_type.capitalize()} {item_name} (seq={seqno}) marked as SENT."
+        else:  # "failed"
+            marker_file = ".failed"
+            state_status = "error"
+            state_timestamp = "failed_at"
+            log_msg = f"{item_type.capitalize()} {item_name} (seq={seqno}) finalized as FAILED."
+
+        marker_path = item_path / marker_file if item_type == "video" else item_path.with_suffix(
+            item_path.suffix + marker_file)
 
         try:
-            (marker_path / ".sent" if item_type == "video" else marker_path).write_text(now(), encoding="utf-8")
+            content = now() if status == "sent" else f"{now()}\n{error_msg}"
+            marker_path.write_text(content, encoding="utf-8")
         except Exception as e:
-            log_err(f"Failed to write .sent for {item_name}: {e}")
+            log_err(f"Failed to write {marker_file} for {item_name}: {e}")
 
-        state[item_name] = {"sent_at": now(), "path": str(item_path), "status": "sent"}
+        state[item_name] = {state_timestamp: now(), "path": str(item_path), "status": state_status}
+        if error_msg:
+            state[item_name]["error"] = error_msg
+
         save_state(state)
-        log_info(f"{item_type.capitalize()} {item_name} marked as SENT (acked oldest pending).")
+        if status == "sent":
+            log_info(log_msg)
+        else:
+            log_err(log_msg)
 
-    def on_fail(seqno: Optional[int], err_msg: str):
-        with pending_lock:
-            if seqno is None:  # If server didn’t echo seq, fail the oldest pending
-                if not pending_by_seq:
-                    log_err("ERROR without sequence_number and no pending items; ignoring.")
-                    return
-                seqno, info = min(pending_by_seq.items(), key=lambda kv: kv[0])
-                pending_by_seq.pop(seqno)
-                log_err(f"ERROR (no seq in downlink) → using oldest pending seq={seqno}")
-            else:
-                info = pending_by_seq.pop(seqno, None)
-            if not info:
-                log_err(f"ERROR seq={seqno} had no matching pending item.")
-                return
+    # Modified callbacks
+    def on_ack(msg):  # Now receives the full downlink message
+        seqno = getattr(msg, "sequence_number", None)
+        if seqno is not None:
+            _finalize_item(seqno, "sent")
+        else:
+            log_err("Received an ACK without a sequence_number. Cannot process.")
 
-        item_path: Path = info["path"]
-        item_name: str = info["name"]
-        item_type: str = info["type"]
-        marker_path = item_path if item_type == "video" else item_path.with_suffix(item_path.suffix + '.failed')
+    def on_fail(msg, err_msg: str):  # Now receives the full downlink message
+        seqno = getattr(msg, "sequence_number", None)
+        if seqno is not None:
+            _finalize_item(seqno, "failed", err_msg)
+        else:
+            log_err(f"Received an ERROR without a sequence_number. Cannot process. Error was: {err_msg}")
 
-        try:
-            (marker_path / ".failed" if item_type == "video" else marker_path).write_text(f"{now()}\n{err_msg}",
-                                                                                          encoding="utf-8")
-        except Exception as e:
-            log_err(f"Failed to write .failed for {item_name}: {e}")
-
-        state[item_name] = {"failed_at": now(), "path": str(item_path), "status": "error", "error": err_msg}
-        save_state(state)
-        log_err(f"{item_type.capitalize()} {item_name} finalized as FAILED. No retry.")
-
+    # Modified stream call
     downlink_thread = client.stream(uplink_gen(), on_ack=on_ack, on_fail=on_fail)
+
     last_empty_log = 0.0
     seq = 1
 

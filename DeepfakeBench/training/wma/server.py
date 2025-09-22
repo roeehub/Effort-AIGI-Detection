@@ -31,6 +31,9 @@ import threading, queue
 import cv2, numpy as np, torch
 from app3 import app as model_app, startup_event, calculate_analysis
 
+# Participant state manager
+from participant_manager import ParticipantManager
+
 # for audio processing
 import requests
 import soundfile as sf
@@ -199,7 +202,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # --- Real Effort detector (batched) ---
         self.mm = ModelManager()
         self.io = FrameIOWorker()
-        self.margin = float(os.getenv("WMA_BAND_MARGIN", "0.15"))
+        self.margin = float(os.getenv("WMA_BAND_MARGIN", "0.05"))
+
+        # --- Participant state manager ---
+        self.participant_manager = ParticipantManager(
+            threshold=self.mm.threshold,
+            margin=self.margin
+        )
 
         # --- ASV API config ---
         self.asv_api_url = os.getenv("ASV_API_URL", "http://34.125.106.206:8000/asv/predict-live")
@@ -239,7 +248,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
     def _band_level(self, mean_prob: float) -> int:
-        """Map mean(fake_prob) to GREEN/YELLOW/RED using threshold ± margin."""
+        """
+        DEPRECATED in favor of ParticipantManager._calculate_band_level.
+        Kept for any part of the code that might still use it directly, but
+        the main banner logic now uses the stateful manager.
+        """
         thr = self.mm.threshold
         m = self.margin
         if mean_prob >= thr + m:
@@ -568,8 +581,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     def _generate_inference_banners(self, uplink_msg: pb2.Uplink) -> list:
         """
-        Generate per-participant banners using real Effort detector results.
-        Returns a list of Downlink messages (one per participant with crops).
+        Generate per-participant banners using the stateful ParticipantManager
+        to ensure stable and non-flickering verdicts.
         """
         responses = []
         now_ms = int(time.time() * 1000)
@@ -579,6 +592,14 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             # Sanitize participant id (your existing utility)
             pid_raw = getattr(pf, "participant_id", "") or ""
             participant_id = self._sanitize_participant_id(pid_raw)
+
+            # ──────────────────────────
+            #  NEW: Handle the special [RESTART] signal
+            # ──────────────────────────
+            if participant_id == "[RESTART]":
+                print("[Backend] Received [RESTART] signal from client. Resetting all participant states.")
+                self.participant_manager.reset_all()
+                continue  # Skip processing for this special participant
 
             # Decode all crops to RGB and push bytes to non-blocking I/O counter
             rgbs = []
@@ -594,38 +615,43 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             if not rgbs:
                 continue  # nothing to score
 
-            # Batched scoring (16 micro-batch by default)
-            res = self.mm.infer_mean_decision(rgbs)  # {"decision", "mean_prob", "probs"}
-            mean_prob = res["mean_prob"]
-            level = self._band_level(mean_prob)
-            ttl_ms = self.ttl_map.get(level, 2500)
+            # Run inference to get probabilities (16 micro-batch by default)
+            res = self.mm.infer_mean_decision(rgbs)
+            individual_probs = res["probs"]
 
-            # Build ScreenBanner (per-participant)
-            banner = pb2.ScreenBanner()
-            banner.level = level
-            banner.ttl_ms = ttl_ms
-            banner.placement = "TopRight"
-            banner.action_id = f"act-{uuid.uuid4().hex[:8]}"
-            banner.scope = "participant"
-            banner.scope_enum = pb2.SCOPE_PARTICIPANT
-            banner.participant_id = participant_id
-            # Optional: pick a type per level (used by your UI icon chooser)
-            banner.banner_type = "alert" if level == pb2.RED else ("attention" if level == pb2.YELLOW else "info")
-            banner.expiry_timestamp_ms = now_ms + ttl_ms
+            # ──────────────────────────
+            #  Use the ParticipantManager to decide if a banner should be sent
+            # ──────────────────────────
+            new_verdict_level = self.participant_manager.process_and_decide(
+                participant_id, individual_probs
+            )
 
-            # Wrap into Downlink
-            down = pb2.Downlink()
-            down.timestamp_ms = now_ms
-            down.server_id = self.server_id
-            down.sequence_number = request_seq  # Echo the request sequence number
-            down.received = True
-            down.screen_banner.CopyFrom(banner)
+            # Only create a banner if the manager returns a verdict
+            if new_verdict_level is not None:
+                ttl_ms = self.ttl_map.get(new_verdict_level, 2500)
 
-            print(f"[Backend] Participant={participant_id} mean_prob={mean_prob:.3f} "
-                  f"-> {pb2.BannerLevel.Name(level)} (thr={self.mm.threshold:.2f}, margin={self.margin:.2f}) "
-                  f"frames={len(rgbs)} io_count={self.io.count}")
+                # Build ScreenBanner (per-participant)
+                banner = pb2.ScreenBanner()
+                banner.level = new_verdict_level
+                banner.ttl_ms = ttl_ms
+                banner.placement = "TopRight"
+                banner.action_id = f"act-{uuid.uuid4().hex[:8]}"
+                banner.scope = "participant"
+                banner.scope_enum = pb2.SCOPE_PARTICIPANT
+                banner.participant_id = participant_id
+                banner.banner_type = "alert" if new_verdict_level == pb2.RED else \
+                    ("attention" if new_verdict_level == pb2.YELLOW else "info")
+                banner.expiry_timestamp_ms = now_ms + ttl_ms
 
-            responses.append(down)
+                # Wrap into Downlink
+                down = pb2.Downlink()
+                down.timestamp_ms = now_ms
+                down.server_id = self.server_id
+                down.sequence_number = request_seq
+                down.received = True
+                down.screen_banner.CopyFrom(banner)
+
+                responses.append(down)
 
         return responses
 
