@@ -11,6 +11,7 @@ from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
 import numpy as np  # noqa
 import wandb  # noqa
+import pandas as pd  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
 from google.cloud.storage import Bucket  # noqa
@@ -34,10 +35,10 @@ import torch.nn.parallel  # noqa
 import torch.backends.cudnn as cudnn  # noqa
 import torch.utils.data  # noqa
 import torch.optim as optim  # noqa
-from torch.utils.data.distributed import DistributedSampler  # noqa
 import torch.distributed as dist  # noqa
-import numpy as np  # noqa
-import wandb  # noqa
+from torch.utils.data import DataLoader, WeightedRandomSampler, Subset  # noqa
+# --- add near other torch imports ---
+from torch.utils.data import IterableDataset  # noqa
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR  # noqa
@@ -285,45 +286,44 @@ def main():
 
     # --- 1. Optimizer params (Search Space) ---
     config['load_base_checkpoint'] = wandb.config.load_base_checkpoint
-    config['optimizer']['adam']['lr'] = wandb.config.learning_rate
-    config['optimizer']['adam']['eps'] = wandb.config.optimizer_eps
-    config['optimizer']['adam']['weight_decay'] = wandb.config.weight_decay
-    config['nEpochs'] = wandb.config.nEpochs
-    config['lambda_reg'] = wandb.config.lambda_reg  # Pass the sweep value to the main config
-    config['rank'] = wandb.config.rank
+    config['optimizer']['adam']['lr'] = float(wandb.config.learning_rate)
+    config['optimizer']['adam']['eps'] = float(wandb.config.optimizer_eps)
+    config['optimizer']['adam']['weight_decay'] = float(wandb.config.weight_decay)
+    config['nEpochs'] = int(wandb.config.nEpochs)
+    config['lambda_reg'] = float(wandb.config.lambda_reg)
+    config['rank'] = int(wandb.config.rank)
     config['lr_scheduler'] = wandb.config.get('lr_scheduler', None)
-    config['total_training_steps'] = wandb.config.get('total_training_steps', 35000)  # e.g., 35k
-    config['lr_scheduler_warmup_steps'] = wandb.config.get('lr_scheduler_warmup_steps', 1000)  # e.g., 1k
+    config['total_training_steps'] = int(wandb.config.get('total_training_steps', 35000))
+    config['lr_scheduler_warmup_steps'] = int(wandb.config.get('lr_scheduler_warmup_steps', 1000))
+    config['gradient_clip_val'] = float(wandb.config.get('gradient_clip_val', 0))
 
     # --- Focal Loss params (from wandb.config) ---
     config['use_focal_loss'] = wandb.config.get('use_focal_loss', False)
-    config['focal_loss_gamma'] = wandb.config.get('focal_loss_gamma', 2.0)
-    config['focal_loss_alpha'] = wandb.config.get('focal_loss_alpha', None)
+    config['focal_loss_gamma'] = float(wandb.config.get('focal_loss_gamma', 2.0))
+    # This parameter can legitimately be None, so your original logic for it is already correct and robust.
+    focal_alpha = wandb.config.get('focal_loss_alpha', None)
+    if focal_alpha == 'null' or focal_alpha == 'None':
+        focal_alpha = None
+    config['focal_loss_alpha'] = focal_alpha
 
     # --- Group DRO params (from wandb.config) ---
     config['use_group_dro'] = wandb.config.get('use_group_dro', False)
     if config['use_group_dro']:
         config['group_dro_params'] = {
-            'beta': wandb.config.get('group_dro_beta', 3.0),
-            'clip_min': wandb.config.get('group_dro_clip_min', 1.0),
-            'clip_max': wandb.config.get('group_dro_clip_max', 4.0),
-            'ema_alpha': wandb.config.get('group_dro_ema_alpha', 0.1)
+            'beta': float(wandb.config.get('group_dro_beta', 3.0)),
+            'clip_min': float(wandb.config.get('group_dro_clip_min', 1.0)),
+            'clip_max': float(wandb.config.get('group_dro_clip_max', 4.0)),
+            'ema_alpha': float(wandb.config.get('group_dro_ema_alpha', 0.1))
         }
 
     # ArcFace margin loss params (from wandb.config)
     config['use_arcface_head'] = wandb.config.get('use_arcface_head', False)
     if config['use_arcface_head']:
-        config['arcface_s'] = wandb.config.get('arcface_s', 30.0)
-        config['arcface_m'] = wandb.config.get('arcface_m', 0.35)
-        config['s_start'] = wandb.config.get('s_start', config['arcface_s'])
-        config['s_end'] = wandb.config.get('s_end', config['arcface_s'])
-        config['anneal_steps'] = wandb.config.get('anneal_steps', 0)
-
-    # Robustly handle the 'null' case from W&B sweeps
-    focal_alpha = wandb.config.get('focal_loss_alpha', None)
-    if focal_alpha == 'null' or focal_alpha == 'None':
-        focal_alpha = None
-    config['focal_loss_alpha'] = focal_alpha
+        config['arcface_s'] = float(wandb.config.get('arcface_s', 30.0))
+        config['arcface_m'] = float(wandb.config.get('arcface_m', 0.35))
+        config['s_start'] = float(wandb.config.get('s_start', config['arcface_s']))
+        config['s_end'] = float(wandb.config.get('s_end', config['arcface_s']))
+        config['anneal_steps'] = int(wandb.config.get('anneal_steps', 0))
 
     config['early_stopping'] = {
         'enabled': wandb.config.get('early_stopping_enabled', False),
@@ -534,6 +534,74 @@ def main():
         train_data, val_in_dist_videos, val_holdout_videos, config, data_config
     )
 
+    # === Rebuild TRAIN loader with WeightedRandomSampler (TRAIN ONLY) ============
+    try:
+        if isinstance(train_loader.dataset, pd.DataFrame) and 'sample_weight' in train_loader.dataset.columns:
+            logger.info(f"Weight summary: mean={train_loader.dataset['sample_weight'].mean():.6f} "
+                        f"min={train_loader.dataset['sample_weight'].min():.6f} "
+                        f"max={train_loader.dataset['sample_weight'].max():.6f}")
+    except Exception:
+        pass
+
+    is_property_balancing = data_config.get('property_balancing', {}).get('enabled', False)
+
+    # IMPORTANT:
+    # - Property balancing already implements its own sampling
+    # - PB loader is an IterableDataset -> samplers are not supported by PyTorch
+    dataset_obj = getattr(train_loader, 'dataset', None)
+    if is_property_balancing:
+        logger.info(
+            "Property balancing enabled -> using its internal sampling. Skipping WeightedRandomSampler rebuild.")
+    elif (dataset_obj is not None) and (not isinstance(dataset_obj, IterableDataset)):
+        # ---- Map-style dataset: Weighted sampler is OK ----
+        if not train_data or 'sample_weight' not in train_data[0]:
+            logger.warning("No 'sample_weight' in train_data; leaving train_loader as-is (unweighted).")
+        else:
+            sample_weights = np.asarray([ex.get('sample_weight', 0.0) for ex in train_data], dtype=np.float64)
+            if sample_weights.sum() == 0:
+                logger.warning("All sample_weight are zero; leaving train_loader as-is (unweighted).")
+            else:
+                frames_per_batch = config['dataloader_params']['frames_per_batch']
+                num_workers = config['dataloader_params'].get('num_workers', 4)
+                prefetch_factor = config['dataloader_params'].get('prefetch_factor', 2)
+
+                if not config.get('ddp', False):
+                    weights_t = torch.as_tensor(sample_weights, dtype=torch.double)
+                    epoch_size = len(sample_weights)
+                    w_sampler = WeightedRandomSampler(weights=weights_t, num_samples=epoch_size, replacement=True)
+
+                    train_loader = DataLoader(
+                        dataset_obj,
+                        batch_size=frames_per_batch,
+                        sampler=w_sampler,
+                        shuffle=False,
+                        num_workers=num_workers,
+                        prefetch_factor=prefetch_factor,
+                        pin_memory=True,
+                    )
+                    logger.info("Rebuilt train_loader with WeightedRandomSampler (single-GPU).")
+                else:
+                    def _make_ddp_weighted_loader():
+                        p = sample_weights / sample_weights.sum()
+                        n = len(sample_weights)
+                        idx = np.random.choice(np.arange(n), size=n, replace=True, p=p).tolist()
+                        subset = Subset(dataset_obj, idx)
+                        dist_sampler = DistributedSampler(subset, shuffle=True, drop_last=False)
+                        return DataLoader(
+                            subset,
+                            batch_size=frames_per_batch,
+                            sampler=dist_sampler,
+                            num_workers=num_workers,
+                            prefetch_factor=prefetch_factor,
+                            pin_memory=True,
+                        )
+
+                    train_loader = _make_ddp_weighted_loader()
+                    config['_ddp_weight_helper'] = {'fn': _make_ddp_weighted_loader}
+                    logger.info("Rebuilt train_loader with DDP-weighted epoch materialization.")
+    else:
+        logger.info("Train dataset is an IterableDataset -> samplers are not supported. Leaving loader as-is.")
+
     logger.info(
         f"DEBUG: is property balancing enabled? {data_config.get('property_balancing', {}).get('enabled', False)}")
 
@@ -702,8 +770,12 @@ def main():
         )
 
     # start training
+    # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
-        # MODIFIED: The call is now simpler. The trainer handles its own validation loaders.
+        # If we’re in DDP with property balancing, rebuild a fresh, weighted per-epoch loader
+        if (not is_property_balancing) and config.get('ddp', False) and config.get('_ddp_weight_helper'):
+            train_loader = config['_ddp_weight_helper']['fn']()
+
         trainer.train_epoch(
             train_loader=train_loader,
             epoch=epoch,
@@ -712,7 +784,7 @@ def main():
 
         if trainer.early_stop_triggered:
             logger.info(f"Gracefully terminating training at epoch {epoch + 1} due to early stopping.")
-            wandb.log({"train/status": "Early Stopped"})  # Log final status
+            wandb.log({"train/status": "Early Stopped"})
             break
 
     wandb_run.finish()

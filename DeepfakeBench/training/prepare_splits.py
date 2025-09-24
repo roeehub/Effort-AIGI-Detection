@@ -23,6 +23,73 @@ from sklearn.model_selection import train_test_split  # noqa
 
 log = logging.getLogger(__name__)
 
+
+# --- Method-aware hierarchical weighting (training only) ----------------------
+def _get_method_multipliers_from_cfg(cfg: dict) -> dict:
+    """
+    Prefer cfg['methods']['method_multipliers'], fallback to
+    cfg['dataset_methods']['method_multipliers'] if present.
+    """
+    mm = ((cfg.get('methods') or {}).get('method_multipliers')) or \
+         ((cfg.get('dataset_methods') or {}).get('method_multipliers'))
+    return mm or {}
+
+
+def compute_frame_weights_vectorized(
+        df: pd.DataFrame,
+        real_category_weights: dict,
+        fake_category_weights: dict,
+        method_multipliers: dict | None = None,
+        by: str = "video",  # 'video' recommended for talking-head datasets
+        eps: float = 1e-12,
+) -> pd.Series:
+    """
+    Returns normalized per-row weights (sum=1).
+    This version is vectorized for significantly better performance and robustness.
+    """
+    required = {'label', 'method', 'method_category', 'video_id'}
+    if not required.issubset(df.columns):
+        raise KeyError(f"compute_frame_weights: df missing {required - set(df.columns)}")
+
+    df_working = df[list(required)].copy()
+
+    # 1. Vectorized category mass calculation
+    is_real = df_working['label'] == 'real'
+    df_working['cat_mass'] = 0.0
+    df_working.loc[is_real, 'cat_mass'] = df_working.loc[is_real, 'method_category'].map(real_category_weights).fillna(
+        0.0)
+    df_working.loc[~is_real, 'cat_mass'] = df_working.loc[~is_real, 'method_category'].map(
+        fake_category_weights).fillna(0.0)
+
+    # 2. Calculate effective counts per method (same logic as before)
+    mm = defaultdict(lambda: 1.0)
+    if method_multipliers:
+        mm.update(method_multipliers)
+
+    if by == 'video':
+        base = df_working[['label', 'method', 'method_category', 'video_id']].drop_duplicates()
+    else:  # 'frame'
+        base = df_working
+
+    eff = base.groupby(['label', 'method', 'method_category']).size().reset_index(name='internal_count')
+    eff['eff_weight'] = eff['internal_count'] * eff['method'].map(mm)
+    eff['cat_eff_sum'] = eff.groupby(['label', 'method_category'])['eff_weight'].transform('sum') + eps
+    eff['p_m_given_cat'] = eff['eff_weight'] / eff['cat_eff_sum']
+
+    # 3. Vectorized merge to apply p_m_given_cat (replaces the slow dict lookup)
+    # This is the core of the improvement, replacing the slow itertuples loop.
+    key_cols = ['label', 'method', 'method_category']
+    df_working = df_working.merge(eff[key_cols + ['p_m_given_cat']], on=key_cols, how='left')
+    df_working['p_m_given_cat'] = df_working['p_m_given_cat'].fillna(0.0)
+
+    # 4. Final weight calculation
+    sample_weight = df_working['cat_mass'] * df_working['p_m_given_cat']
+    total = sample_weight.sum() + eps
+    normalized_weight = sample_weight / total
+
+    return normalized_weight
+
+
 # ---------------------------------------------------------------------------
 # 1 Method categories (edit REG/REV if needed)
 # ---------------------------------------------------------------------------
@@ -224,9 +291,13 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
     real_methods = set(cfg['methods']['use_real_sources'])
     train_fake_methods = set(cfg['methods']['use_fake_methods_for_training'])
     val_fake_methods = set(cfg['methods']['use_fake_methods_for_validation'])
-    all_allowed_methods = real_methods | train_fake_methods | val_fake_methods
 
-    # The stats dictionary will be built progressively.
+    # --- Read the new config key and create a combined set for validation ---
+    val_only_real_methods = set(cfg['methods'].get('use_real_methods_for_validation_only', []))
+    all_val_real_methods = real_methods | val_only_real_methods  # This is crucial for the balancer later
+
+    all_allowed_methods = real_methods | train_fake_methods | val_fake_methods | val_only_real_methods
+
     stats = {}
     random.seed(SEED)
     manifest_path = Path(__file__).with_name("frame_manifest.json")
@@ -271,8 +342,11 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
         if tid is None: tid = (hash((method, vid)) & 0x7FFFFFFF) + 100_000
         video = VideoInfo(label, method, vid, fr, tid, label_id=(0 if label == 'real' else 1))
 
+        # --- MODIFICATION 2: Update the pool creation logic ---
         if method in real_methods:
             training_pool.append(video)
+            validation_pool.append(video)
+        elif method in val_only_real_methods:
             validation_pool.append(video)
         elif method in train_fake_methods:
             training_pool.append(video)
@@ -303,7 +377,8 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
     train_videos = _balance_video_list(videos=training_pool, real_source_names=list(real_methods))
 
     log.info("--- Balancing Validation Set from its pool ---")
-    val_videos = _balance_video_list(videos=validation_pool, real_source_names=list(real_methods))
+    # --- Use the combined list of reals for balancing the validation set ---
+    val_videos = _balance_video_list(videos=validation_pool, real_source_names=list(all_val_real_methods))
 
     stats['balanced_train_count'] = len(train_videos)
     stats['balanced_val_count'] = len(val_videos)
@@ -313,10 +388,7 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
     random.shuffle(train_videos)
     random.shuffle(val_videos)
 
-    # --- 7. MODIFIED RETURN STATEMENT FOR COMPATIBILITY ---
-    # The legacy path returns its single validation set as the "holdout" set
-    # and an empty list for the "in-distribution" set. This makes it compatible
-    # with the new 4-tuple return signature expected by the main training script.
+    # --- 7. MODIFIED RETURN STATEMENT FOR COMPATIBILITY  ---
     val_in_dist_videos = []
     val_holdout_videos = val_videos
 
@@ -397,6 +469,20 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     # --- 4. Balance the training set (DataFrame) and convert to dicts ---
     log.info("--- Balancing Training Set ---")
     train_df_balanced = _balance_df_by_label(train_df, real_methods, SEED)
+
+    # apply method-aware weights (TRAIN ONLY)
+    # Ensure your df has 'method_category' (your parquet does). If not, map it before.
+    method_multipliers = _get_method_multipliers_from_cfg(cfg)
+
+    train_df_balanced['sample_weight'] = compute_frame_weights_vectorized(
+        df=train_df_balanced,
+        real_category_weights=cfg['dataloader_params']['real_category_weights'],
+        fake_category_weights=cfg['dataloader_params']['fake_category_weights'],
+        method_multipliers=method_multipliers,
+        by='video',  # or 'frame' if you prefer
+    )
+
+    # Convert to dict *after* we added 'sample_weight'
     final_train_data = train_df_balanced.to_dict('records')
     stats['train_frame_count'] = len(final_train_data)
     stats['train_video_count'] = len(train_df_balanced['video_id'].unique())

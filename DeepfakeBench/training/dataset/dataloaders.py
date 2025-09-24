@@ -291,6 +291,13 @@ def apply_augmentation_v6(img_np: np.ndarray, frame_dict: dict) -> np.ndarray:
             return A.HorizontalFlip(p=0.5)(image=img_np)['image']
 
 
+def apply_augmentation_v7(img_np: np.ndarray) -> np.ndarray:
+    pipelines = [AUG_PIPELINE_V6_SIMULATOR, AUG_PIPELINE_V4_GENERALIST, AUG_PIPELINE_PURIST]
+    weights = [0.2, 0.4, 0.4]
+    chosen_pipeline = random.choices(pipelines, weights=weights, k=1)[0]
+    return chosen_pipeline(image=img_np)['image']
+
+
 # ==============================================================================
 # --- NEW: FLEXIBLE AUGMENTATION PIPELINES (albumentations==0.4.6 compatible) ---
 # ==============================================================================
@@ -684,6 +691,8 @@ def load_and_process_property_batch(frame_dict_batch: list[dict], config: dict, 
                     augmented_img_np = revised_augmentation_pipeline_legacy(image=img_np)['image']
                 elif aug_version == 6:
                     augmented_img_np = apply_augmentation_v6(img_np, frame_dict)
+                elif aug_version == 7:
+                    augmented_img_np = apply_augmentation_v7(img_np)
                 else:
                     # Default to the dynamic "surgical" pipeline
                     pipeline = create_surgical_augmentation_pipeline(aug_params, frame_dict)

@@ -12,6 +12,8 @@ gcs_assets:
   base_checkpoint:
     gcs_path: "gs://base-checkpoints/effort-aigi/effort_clip_L14_trainOn_FaceForensic.pth"
     local_path: "./weights/effort_clip_L14_trainOn_FaceForensic.pth"
+#    gcs_path: "gs://training-job-outputs/best_checkpoints/60mara08/top_n_effort_20250919_ep1_auc0.9817_eer0.0753.pth"
+#    local_path: "./weights/M4_top_n_effort_20250919_ep1_auc0.9817_eer0.0753.pth"
   clip_backbone:
     gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
     local_path: "./weights/models--openai--clip-vit-large-patch14/"

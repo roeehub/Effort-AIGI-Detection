@@ -85,6 +85,9 @@ class Trainer(object):
 
         # Initialize AMP scaler for mixed precision training
         self.scaler = GradScaler()
+        self.gradient_clip_val = self.config.get('gradient_clip_val')
+        if self.gradient_clip_val:
+            self.logger.info(f"✅ Gradient clipping enabled with max norm: {self.gradient_clip_val}")
         self.speed_up()
 
         self.log_dir = self.wandb_run.dir if self.wandb_run else './logs'
@@ -166,16 +169,25 @@ class Trainer(object):
 
         anneal_steps = model_instance.anneal_steps
 
+        # Get the device from the existing buffer to ensure device consistency
+        target_device = model_instance.head.s.device
+
         if step_cnt <= anneal_steps:
             # Linear annealing
             progress = step_cnt / anneal_steps
-            current_s = model_instance.s_start + progress * (model_instance.s_end - model_instance.s_start)
-            model_instance.head.s = current_s
+            current_s_float = model_instance.s_start + progress * (model_instance.s_end - model_instance.s_start)
+
+            # Convert the float to a tensor on the correct device
+            current_s_tensor = torch.tensor(current_s_float, device=target_device)
+            model_instance.head.s = current_s_tensor
         else:
             # Ensure s is fixed at s_end after annealing is complete
-            current_s = model_instance.s_end
-            if model_instance.head.s != current_s:  # Avoid redundant assignment
-                model_instance.head.s = current_s
+            current_s_float = model_instance.s_end
+
+            # Only update if necessary to avoid redundant operations
+            if model_instance.head.s.item() != current_s_float:
+                current_s_tensor = torch.tensor(current_s_float, device=target_device)
+                model_instance.head.s = current_s_tensor
 
         # Log the change periodically during the annealing phase
         log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
@@ -296,6 +308,11 @@ class Trainer(object):
 
         self.optimizer.zero_grad()
         self.scaler.scale(losses['overall']).backward()
+
+        if hasattr(self, 'gradient_clip_val') and self.gradient_clip_val:
+            self.scaler.unscale_(self.optimizer)  # Unscale gradients before clipping
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
@@ -487,6 +504,10 @@ class Trainer(object):
 
                 # --- OPTIMIZER STEP (conditional) ---
                 if is_final_accumulation_step or accumulation_steps == 1:
+                    if hasattr(self, 'gradient_clip_val') and self.gradient_clip_val:
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
 
@@ -540,6 +561,10 @@ class Trainer(object):
             # Perform a final optimizer step for any remaining gradients at the end of the epoch
             if epoch_len > 0 and epoch_len % accumulation_steps != 0 and accumulation_steps > 1:
                 self.logger.info("Performing final optimizer step for dangling gradients at end of epoch.")
+                if hasattr(self, 'gradient_clip_val') and self.gradient_clip_val:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
