@@ -593,13 +593,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             pid_raw = getattr(pf, "participant_id", "") or ""
             participant_id = self._sanitize_participant_id(pid_raw)
 
-            # ──────────────────────────
-            #  NEW: Handle the special [RESTART] signal
-            # ──────────────────────────
+            #  Handle the special [RESTART] signal
             if participant_id == "[RESTART]":
                 print("[Backend] Received [RESTART] signal from client. Resetting all participant states.")
                 self.participant_manager.reset_all()
-                continue  # Skip processing for this special participant
+                continue
 
             # Decode all crops to RGB and push bytes to non-blocking I/O counter
             rgbs = []
@@ -613,22 +611,39 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                     rgbs.append(rgb)
 
             if not rgbs:
-                continue  # nothing to score
+                continue
 
             # Run inference to get probabilities (16 micro-batch by default)
             res = self.mm.infer_mean_decision(rgbs)
             individual_probs = res["probs"]
 
-            # ──────────────────────────
-            #  Use the ParticipantManager to decide if a banner should be sent
-            # ──────────────────────────
-            new_verdict_level = self.participant_manager.process_and_decide(
+            # Handle the new return type from the manager
+            manager_result = self.participant_manager.process_and_decide(
                 participant_id, individual_probs
             )
 
-            # Only create a banner if the manager returns a verdict
-            if new_verdict_level is not None:
+            # Only create a banner if the manager returns a result
+            if manager_result is not None:
+                new_verdict_level, confidence_score = manager_result
                 ttl_ms = self.ttl_map.get(new_verdict_level, 2500)
+
+                # --- CONFIDENCE ENCODING LOGIC ---
+                # 1. Calculate the true expiry timestamp.
+                true_expiry_ms = now_ms + ttl_ms
+
+                # 2. Convert confidence (0.0 to 1.0) to a two-digit integer (0 to 99).
+                confidence_code = int(confidence_score * 100) % 100
+
+                # 3. Create the encoded timestamp: zero out the last 3 digits of the
+                #    true expiry and add the confidence code.
+                #    This "hides" the confidence in a way that minimally affects the
+                #    absolute expiry time for old clients.
+                encoded_expiry_ms = (true_expiry_ms // 1000) * 1000 + confidence_code
+
+                # --- BANNER CONSTRUCTION ---
+                # Revert banner_type to its simple, original form for the old client.
+                banner_type = "alert" if new_verdict_level == pb2.RED else \
+                    ("attention" if new_verdict_level == pb2.YELLOW else "info")
 
                 # Build ScreenBanner (per-participant)
                 banner = pb2.ScreenBanner()
@@ -639,9 +654,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 banner.scope = "participant"
                 banner.scope_enum = pb2.SCOPE_PARTICIPANT
                 banner.participant_id = participant_id
-                banner.banner_type = "alert" if new_verdict_level == pb2.RED else \
-                    ("attention" if new_verdict_level == pb2.YELLOW else "info")
-                banner.expiry_timestamp_ms = now_ms + ttl_ms
+                banner.banner_type = banner_type  # Use the simple type
+                banner.expiry_timestamp_ms = encoded_expiry_ms  # Use the encoded timestamp
 
                 # Wrap into Downlink
                 down = pb2.Downlink()
@@ -650,6 +664,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 down.sequence_number = request_seq
                 down.received = True
                 down.screen_banner.CopyFrom(banner)
+
+                print(f"[Backend] Sending banner for {participant_id}. "
+                      f"Level={pb2.BannerLevel.Name(new_verdict_level)}, "
+                      f"Conf={confidence_score:.3f}, "
+                      f"EncodedExpiry={encoded_expiry_ms} (code={confidence_code})")
 
                 responses.append(down)
 
