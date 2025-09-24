@@ -99,6 +99,23 @@ class Trainer(object):
         if self.use_group_dro:
             self._init_group_dro(config)
 
+        # --- Lesson Gate for curriculum learning ---
+        self.gate_config = self.config.get('lesson_gate', {})
+        self.gate_enabled = self.gate_config.get('enabled', False)
+        if self.gate_enabled:
+            self.gate_checks = self.gate_config.get('checks', [])
+            self.gate_plateau_config = self.gate_config.get('plateau_check', {})
+            self.gate_guardrail_config = self.gate_config.get('guardrail_check', {})
+
+            # State tracking
+            self.gate_primary_metric_history = []
+            self.gate_guardrail_start_value = None
+
+            self.logger.info("✅ Lesson Gate enabled with the following configuration:")
+            self.logger.info(f"   - Checks: {len(self.gate_checks)} conditions")
+            self.logger.info(f"   - Plateau Check: {self.gate_plateau_config}")
+            self.logger.info(f"   - Guardrail Check: {self.gate_guardrail_config}")
+
     def _init_group_dro(self, config):
         """Initializes parameters and state for Group-DRO loss."""
         self.logger.info("Initializing Group-DRO loss strategy.")
@@ -194,6 +211,79 @@ class Trainer(object):
         if self.wandb_run and step_cnt <= anneal_steps and (
                 step_cnt % log_progress_steps == 0 or step_cnt == anneal_steps):
             self.wandb_run.log({'train/arcface_s': model_instance.head.s, 'train/step': step_cnt})
+
+    def _check_lesson_gate(self, all_val_metrics: dict):
+        """Checks if the curriculum lesson's gate conditions have been met."""
+        self.logger.info("--- Checking Lesson Gate conditions...")
+
+        # A helper to safely retrieve nested metric values
+        def get_metric(metric_name, dataset):
+            return all_val_metrics.get(dataset, {}).get(metric_name)
+
+        # 1. Guardrail Check
+        guardrail_ok = True
+        guard_conf = self.gate_guardrail_config
+        if guard_conf.get('enabled'):
+            guard_metric = get_metric(guard_conf['metric'], guard_conf['dataset'])
+            if guard_metric is not None:
+                if self.gate_guardrail_start_value is None:
+                    self.gate_guardrail_start_value = guard_metric
+                    self.logger.info(f"Guardrail initialized: {guard_conf['metric']} = {guard_metric:.4f}")
+
+                drop = self.gate_guardrail_start_value - guard_metric
+                if drop > guard_conf.get('max_drop', 0.01):
+                    guardrail_ok = False
+                    self.logger.warning(
+                        f"🚨 GUARDRAIL FAILED: {guard_conf['metric']} dropped by {drop:.4f} (max allowed: {guard_conf['max_drop']})")
+
+        # 2. Threshold Checks
+        all_thresholds_met = True
+        for check in self.gate_checks:
+            metric_val = get_metric(check['metric'], check['dataset'])
+            if metric_val is None:
+                all_thresholds_met = False
+                self.logger.warning(
+                    f"Gate check skipped: metric '{check['metric']}' not found for dataset '{check['dataset']}'.")
+                break
+
+            op = check['comparison']
+            thresh = check['threshold']
+            passed = (op == 'ge' and metric_val >= thresh) or (op == 'le' and metric_val <= thresh)
+
+            if not passed:
+                all_thresholds_met = False
+                self.logger.info(
+                    f"Gate check FAILED: {check['dataset']}/{check['metric']} ({metric_val:.4f}) did not meet {op} {thresh}")
+                break
+            else:
+                self.logger.info(
+                    f"Gate check PASSED: {check['dataset']}/{check['metric']} ({metric_val:.4f}) met {op} {thresh}")
+
+        # 3. Plateau Check (based on the primary validation metric)
+        plateau_met = False
+        plateau_conf = self.gate_plateau_config
+        if plateau_conf.get('enabled') and all_thresholds_met:  # Only check plateau if thresholds are met
+            primary_metric_val = all_val_metrics.get('val_holdout', {}).get('overall', {}).get(self.metric_scoring)
+            if primary_metric_val is not None:
+                self.gate_primary_metric_history.append(primary_metric_val)
+                patience = plateau_conf.get('patience', 2)
+
+                if len(self.gate_primary_metric_history) >= patience:
+                    recent_history = self.gate_primary_metric_history[-patience:]
+                    best_recent = max(recent_history)
+                    improvement = best_recent - self.gate_primary_metric_history[-patience]
+
+                    if improvement < plateau_conf.get('min_delta', 0.001):
+                        plateau_met = True
+                        self.logger.info(
+                            f"✅ Plateau condition MET: Improvement ({improvement:.4f}) is less than min_delta over last {patience} evals.")
+
+        # 4. Final Decision
+        if guardrail_ok and all_thresholds_met and plateau_met:
+            self.early_stop_triggered = True
+            self.logger.critical("✅✅✅ LESSON GATE PASSED! All conditions met. Triggering stop.")
+        else:
+            self.logger.info("--- Lesson Gate conditions not yet met. Continuing training.")
 
     def speed_up(self):
         self.model.to(device)
@@ -637,32 +727,41 @@ class Trainer(object):
 
     def _run_validation(self, epoch, iteration):
         """
-        Helper to run the full validation suite, including in-distribution and holdout sets.
-        The holdout set is designated as the primary metric for checkpointing.
+        Helper to run the full validation suite and check the lesson gate conditions.
         """
-        if self.config['local_rank'] == 0:
-            self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
+        if self.config['local_rank'] != 0:
+            return
 
-            # 1. Run In-Distribution Validation (for diagnostics)
-            if self.val_in_dist_loader:
-                self.test_epoch(
-                    epoch=epoch,
-                    validation_loader=self.val_in_dist_loader,
-                    log_prefix="val_in_dist",
-                    is_primary_metric=False
-                )
+        self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
 
-            # 2. Run Holdout Validation (for checkpointing and early stopping)
-            if self.val_holdout_loader:
-                self.test_epoch(
-                    epoch=epoch,
-                    validation_loader=self.val_holdout_loader,
-                    log_prefix="val_holdout",
-                    is_primary_metric=True
-                )
+        all_val_metrics = {}
 
-            # 3. Run OOD monitoring as before
-            self._run_ood_monitoring(epoch)
+        # 1. Run In-Distribution Validation
+        if self.val_in_dist_loader:
+            in_dist_metrics = self.test_epoch(
+                epoch=epoch,
+                validation_loader=self.val_in_dist_loader,
+                log_prefix="val_in_dist",
+                is_primary_metric=False
+            )
+            all_val_metrics['val_in_dist'] = in_dist_metrics
+
+        # 2. Run Holdout Validation
+        if self.val_holdout_loader:
+            holdout_metrics = self.test_epoch(
+                epoch=epoch,
+                validation_loader=self.val_holdout_loader,
+                log_prefix="val_holdout",
+                is_primary_metric=not self.gate_enabled
+            )
+            all_val_metrics['val_holdout'] = holdout_metrics
+
+        # 3. Check Lesson Gate
+        if self.gate_enabled:
+            self._check_lesson_gate(all_val_metrics)
+
+        # 4. Run OOD monitoring (does not affect gating)
+        self._run_ood_monitoring(epoch)
 
     @torch.no_grad()
     def test_epoch(self, epoch, validation_loader, log_prefix: str, is_primary_metric: bool):
@@ -845,11 +944,56 @@ class Trainer(object):
         if self.early_stopping_enabled:
             wandb_log_dict['val_primary/epochs_without_improvement'] = self.epochs_without_improvement
 
+        if self.wandb_run:
+            self.wandb_run.log(wandb_log_dict)
+
+        # --- Calculate and log additional metrics for Lesson Gate ---
+        per_method_aucs = [m.get('auc') for m in method_metrics.values() if m.get('auc') is not None]
+        if per_method_aucs:
+            # Macro AUC: Unweighted average of per-method AUCs
+            macro_auc = np.mean(per_method_aucs)
+            wandb_log_dict[f'{log_prefix}/derived/macro_auc'] = macro_auc
+
+            # Hardest-k AUC
+            k = self.gate_config.get('hardest_k', 5)
+            sorted_aucs = sorted(per_method_aucs)
+            hardest_k_aucs = sorted_aucs[:k]
+            hardest_k_auc_mean = np.mean(hardest_k_aucs)
+            wandb_log_dict[f'{log_prefix}/derived/hardest_{k}_auc'] = hardest_k_auc_mean
+
+            # Real-Real AUC (if real methods are present in this validation set)
+            real_source_names = self.config.get('data_params', {}).get('real_source_names', [])
+            real_preds = []
+            real_labels = []
+            for method_name in real_source_names:
+                if method_name in method_preds:
+                    real_preds.extend(method_preds[method_name])
+                    real_labels.extend(method_labels[method_name])
+
+            if len(real_labels) > 1 and len(np.unique(real_labels)) > 1:  # Can only compute AUC with multiple classes
+                real_real_metrics = get_test_metrics(np.array(real_preds), np.array(real_labels))
+                real_real_auc = real_real_metrics.get('auc', 0.0)
+                wandb_log_dict[f'{log_prefix}/derived/real_real_auc'] = real_real_auc
+            else:
+                real_real_auc = None
+        else:
+            macro_auc, hardest_k_auc_mean, real_real_auc = None, None, None
+
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
+
+        returned_metrics = {
+            'overall': overall_metrics,
+            'per_method': method_metrics,
+            'macro_auc': macro_auc,
+            f'hardest_{k}_auc': hardest_k_auc_mean,
+            'real_real_auc': real_real_auc
+        }
+
         del all_preds, all_labels, method_labels, method_preds, overall_metrics, all_losses
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.info(f"===> Evaluation for '{log_prefix}' Done!")
+        return returned_metrics
 
     def _run_ood_monitoring(self, epoch):
         """Helper to run the OOD monitoring loop."""
