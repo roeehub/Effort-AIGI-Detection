@@ -81,7 +81,17 @@ class Trainer(object):
             self.epochs_without_improvement = 0
             self.logger.info(
                 f"✅ Early stopping enabled: patience={self.early_stopping_patience}, min_delta={self.early_stopping_min_delta}")
+
         self.early_stop_triggered = False  # Flag to signal the main loop
+
+        # --- Step-based training control ---
+        self.max_train_steps = self.config.get('max_train_steps', None)
+        self.evaluate_every_steps = self.config.get('evaluate_every_steps', None)
+        if self.max_train_steps:
+            self.logger.info(f"✅ Training will stop at a maximum of {self.max_train_steps} total steps.")
+        if self.evaluate_every_steps:
+            self.logger.info(
+                f"✅ Evaluation will run every {self.evaluate_every_steps} steps, overriding epoch frequency.")
 
         # Initialize AMP scaler for mixed precision training
         self.scaler = GradScaler()
@@ -512,11 +522,16 @@ class Trainer(object):
         evaluation_frequency = self.config.get('data_params', {}).get('evaluation_frequency', 1)
         if evaluation_frequency <= 0: evaluation_frequency = 1
         eval_steps = set()
-        if epoch_len > 0:
-            interval = max(1, epoch_len // evaluation_frequency)
-            for i in range(1, evaluation_frequency): eval_steps.add(i * interval)
-            eval_steps.add(epoch_len)
-        self.logger.info(f"Scheduled evaluation at steps: {sorted(list(eval_steps))}")
+        # Only calculate epoch-based steps if step-based evaluation is not active
+        if self.evaluate_every_steps is None or self.evaluate_every_steps <= 0:
+            if epoch_len > 0:
+                interval = max(1, epoch_len // evaluation_frequency)
+                for i in range(1, evaluation_frequency): eval_steps.add(i * interval)
+                eval_steps.add(epoch_len)
+            self.logger.info(f"Scheduled evaluation at epoch steps: {sorted(list(eval_steps))}")
+        else:
+            # eval_steps remains empty; we will check step_cnt directly in the loop
+            pass
 
         step_cnt = epoch * epoch_len
         epoch_start_time = time.time()
@@ -541,11 +556,40 @@ class Trainer(object):
             for iteration in pbar:
                 data_dict = self._train_per_method_step(train_loader, train_loader, real_method_names,
                                                         fake_method_names, real_weights, fake_weights)
-                if data_dict is None: continue
+                if data_dict is None:
+                    continue
                 # This strategy uses the original, single-step logic.
                 self._run_train_step(data_dict, step_cnt, epoch, epoch_len, epoch_start_time)
+
+                # --- Evaluation and Stop Condition Check ---
                 step_cnt += 1
-                if (iteration + 1) in eval_steps: self._run_validation(epoch, iteration + 1, val_method_loaders)
+                should_evaluate_now = False
+
+                if self.evaluate_every_steps and self.evaluate_every_steps > 0:
+                    if step_cnt > 0 and step_cnt % self.evaluate_every_steps == 0:
+                        should_evaluate_now = True
+                else:  # Fallback to epoch-based frequency
+                    if (iteration + 1) in eval_steps:
+                        should_evaluate_now = True
+
+                if should_evaluate_now:
+                    self._run_validation(epoch, iteration, val_method_loaders)
+
+                # Check for max steps termination
+                if self.max_train_steps and step_cnt >= self.max_train_steps:
+                    self.logger.critical(f"MAX STEPS REACHED: {step_cnt}/{self.max_train_steps}. Stopping training.")
+                    if not should_evaluate_now and self.evaluate_every_steps and self.evaluate_every_steps > 0:
+                        next_eval_step = math.ceil(step_cnt / self.evaluate_every_steps) * self.evaluate_every_steps
+                        steps_until_next_eval = next_eval_step - step_cnt
+                        threshold = self.evaluate_every_steps / 1.5
+                        if steps_until_next_eval <= threshold:
+                            self.logger.info(
+                                f"Running one final evaluation before stopping (steps until next eval {steps_until_next_eval} <= threshold {threshold:.1f}).")
+                            self._run_validation(epoch, iteration, val_method_loaders)
+                    self.early_stop_triggered = True
+
+                if self.early_stop_triggered:
+                    break
 
         elif strategy in ['video_level', 'frame_level', 'property_balancing']:
             pbar = tqdm(train_loader, desc=f"EPOCH ({strategy}): {epoch + 1}/{self.config['nEpochs']}", total=epoch_len)
@@ -645,8 +689,35 @@ class Trainer(object):
                     else:
                         self.wandb_run.log({"train/loss/overall": unscaled_loss.item(), "train/step": step_cnt})
 
-                step_cnt += 1  # Global step counter increments with each GPU batch
-                if (i + 1) in eval_steps: self._run_validation(epoch, i)
+                # --- Evaluation and Stop Condition Check ---
+                step_cnt += 1
+                should_evaluate_now = False
+
+                if self.evaluate_every_steps and self.evaluate_every_steps > 0:
+                    if step_cnt > 0 and step_cnt % self.evaluate_every_steps == 0:
+                        should_evaluate_now = True
+                else:  # Fallback to epoch-based frequency
+                    if (i + 1) in eval_steps:
+                        should_evaluate_now = True
+
+                if should_evaluate_now:
+                    self._run_validation(epoch, i)
+
+                # Check for max steps termination
+                if self.max_train_steps and step_cnt >= self.max_train_steps:
+                    self.logger.critical(f"MAX STEPS REACHED: {step_cnt}/{self.max_train_steps}. Stopping training.")
+                    if not should_evaluate_now and self.evaluate_every_steps and self.evaluate_every_steps > 0:
+                        next_eval_step = math.ceil(step_cnt / self.evaluate_every_steps) * self.evaluate_every_steps
+                        steps_until_next_eval = next_eval_step - step_cnt
+                        threshold = self.evaluate_every_steps / 1.5
+                        if steps_until_next_eval <= threshold:
+                            self.logger.info(
+                                f"Running one final evaluation before stopping (steps until next eval {steps_until_next_eval} <= threshold {threshold:.1f}).")
+                            self._run_validation(epoch, i)
+                    self.early_stop_triggered = True
+
+                if self.early_stop_triggered:
+                    break
 
             # Perform a final optimizer step for any remaining gradients at the end of the epoch
             if epoch_len > 0 and epoch_len % accumulation_steps != 0 and accumulation_steps > 1:
