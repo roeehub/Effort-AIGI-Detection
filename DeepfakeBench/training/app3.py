@@ -200,6 +200,11 @@ class VideoAnalysisResponse(BaseModel):
     raw_frame_probs: List[float]
 
 
+class BatchInferResponse(BaseModel):
+    confidence: float  # mean of frame-level fake probabilities
+    probs: List[float]  # per-frame fake probabilities
+
+
 # --- Analysis Helper ---
 def calculate_analysis(frame_probs: List[float], threshold: float) -> VideoAnalysisResponse:
     """Performs the full analysis matrix on a list of frame probabilities."""
@@ -471,6 +476,89 @@ async def check_frame(
 
     logger.info("Frame inference result: label=%s, fake_prob=%.4f, threshold=%.2f", pred_label, prob, threshold)
     return InferResponse(pred_label=pred_label, fake_prob=prob)
+
+
+@app.post("/check_frame_batch", response_model=BatchInferResponse)
+async def check_frame_batch(
+        request: Request,
+        files: List[UploadFile] = File(...),
+        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
+        debug: bool = False
+) -> BatchInferResponse:
+    """
+    Accepts a batch of frames (JPEG/PNG), runs the same pipeline as /check_frame on each,
+    and returns the 'mean' strategy result over ALL frames:
+      - confidence: mean of per-frame fake probabilities
+      - probs: list of per-frame fake probabilities
+    """
+    if not files:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files were uploaded.")
+
+    # Validate content-types early
+    for f in files:
+        if f.content_type not in {"image/jpeg", "image/png"}:
+            raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only JPEG or PNG images are accepted")
+
+    try:
+        model = get_model_for_request(request, model_type)
+
+        # Prepare transform once
+        transform = video_preprocessor._get_transform()
+
+        tensors = []
+        probs_list: List[float] = []
+
+        for f in files:
+            raw = await f.read()
+            img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            if img_bgr is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Cannot decode image: {f.filename or '[unnamed]'}")
+
+            # Same face extraction path as /check_frame (YOLO)
+            processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr)
+            if processed_face_bgr is None:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}"
+                )
+
+            if debug:
+                os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
+                timestamp = int(time.time() * 1000)
+                save_path = os.path.join(DEBUG_FRAME_DIR, f"batch_frame_{timestamp}.jpg")
+                cv2.imwrite(save_path, processed_face_bgr)
+                logger.info(f"Debug frame saved to: {save_path}")
+
+            # To tensor (same as /check_frame)
+            rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
+            image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
+            tensors.append(image_tensor)
+
+        # Batch the frames to a single forward pass when possible
+        batch_tensor = torch.cat(tensors, dim=0).to(device)  # (N, C, H, W)
+
+        with torch.inference_mode():
+            preds = model({'image': batch_tensor}, inference=True)  # same call signature as /check_frame
+            # Expect preds["prob"] to be shape (N,) or (N,1)
+            probs = preds["prob"].detach().squeeze().cpu().numpy().tolist()
+
+        # Normalize to list[float]
+        if isinstance(probs, float):
+            probs_list = [float(probs)]
+        else:
+            probs_list = [float(p) for p in probs]
+
+        # 'mean' strategy over ALL frames
+        confidence = float(np.mean(probs_list)) if probs_list else 0.0
+
+        return BatchInferResponse(confidence=confidence, probs=probs_list)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Batch inference failed.")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Batch inference failed.") from e
 
 
 @app.post("/check_video", response_model=VideoAnalysisResponse)
