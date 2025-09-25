@@ -918,7 +918,8 @@ class Trainer(object):
                 method_preds[method].extend(probs_np)
                 videos_processed += data_dict['image'].shape[0]
 
-            self.logger.info(f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
+            self.logger.info(
+                f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
 
         if not all_labels:
             self.logger.error(f"Validation failed for '{log_prefix}': No data was processed.")
@@ -946,6 +947,7 @@ class Trainer(object):
         wandb_log_dict[f'{log_prefix}/probabilities'] = wandb.Histogram(np.array(all_preds))
 
         # Metrics Per Method, logged with the correct prefix.
+        # This first block is kept for non-AUC metrics like ACC and for populating the W&B table.
         method_metrics = {}
         for method in method_preds.keys():
             method_metrics[method] = get_test_metrics(np.array(method_preds[method]),
@@ -1039,21 +1041,55 @@ class Trainer(object):
             self.wandb_run.log(wandb_log_dict)
 
         # --- Calculate and log additional metrics for Lesson Gate ---
-        per_method_aucs = [m.get('auc') for m in method_metrics.values() if m.get('auc') is not None]
+        # START: MODIFIED LOGIC FOR AUC CALCULATION
+        per_method_aucs = []
+        real_source_names = self.config.get('dataset_methods', {}).get('use_real_sources', [])
+
+        # 1. Pool all real predictions and labels from the validation set
+        all_real_preds = []
+        all_real_labels = []
+        for method_name in real_source_names:
+            if method_name in method_preds:
+                all_real_preds.extend(method_preds[method_name])
+                all_real_labels.extend(method_labels[method_name])
+
+        # 2. Calculate AUC for each FAKE method against the complete pool of REAL samples
+        if all_real_labels:
+            for method in method_preds.keys():
+                # Only calculate for fake methods
+                if method not in real_source_names:
+                    combined_preds = np.array(method_preds[method] + all_real_preds)
+                    combined_labels = np.array(method_labels[method] + all_real_labels)
+
+                    # Ensure both classes (0 and 1) are present
+                    if len(np.unique(combined_labels)) > 1:
+                        # Calculate metrics on this combined (fake vs. all real) set
+                        fake_vs_real_metrics = get_test_metrics(combined_preds, combined_labels)
+                        auc = fake_vs_real_metrics.get('auc', -1.0)
+                        per_method_aucs.append(auc)
+                        # Log this correct, meaningful AUC for monitoring
+                        wandb_log_dict[f'{log_prefix}/per_fake_method_auc/{method}'] = auc
+                    else:
+                        self.logger.warning(
+                            f"Skipping AUC for method '{method}' in '{log_prefix}': not enough class diversity.")
+        else:
+            self.logger.warning(
+                f"No real samples found in validation set '{log_prefix}'. Cannot calculate per-method AUCs.")
+
         if per_method_aucs:
             # Macro AUC: Unweighted average of per-method AUCs
             macro_auc = np.mean(per_method_aucs)
             wandb_log_dict[f'{log_prefix}/derived/macro_auc'] = macro_auc
 
             # Hardest-k AUC
-            k = self.gate_config.get('hardest_k', 5)
+            k_config_key = 'hardest_k' if 'lesson_gate' in self.config else 'hardest_k_fallback'
+            k = self.config.get('lesson_gate', {}).get('hardest_k', 5)
             sorted_aucs = sorted(per_method_aucs)
             hardest_k_aucs = sorted_aucs[:k]
             hardest_k_auc_mean = np.mean(hardest_k_aucs)
             wandb_log_dict[f'{log_prefix}/derived/hardest_{k}_auc'] = hardest_k_auc_mean
 
             # Real-Real AUC (if real methods are present in this validation set)
-            real_source_names = self.config.get('data_params', {}).get('real_source_names', [])
             real_preds = []
             real_labels = []
             for method_name in real_source_names:
@@ -1061,12 +1097,13 @@ class Trainer(object):
                     real_preds.extend(method_preds[method_name])
                     real_labels.extend(method_labels[method_name])
 
-            if len(real_labels) > 1 and len(np.unique(real_labels)) > 1:  # Can only compute AUC with multiple classes
+            if len(real_labels) > 1 and len(
+                    np.unique(real_labels)) > 1:  # Can only compute AUC with multiple classes
                 real_real_metrics = get_test_metrics(np.array(real_preds), np.array(real_labels))
                 real_real_auc = real_real_metrics.get('auc', 0.0)
                 wandb_log_dict[f'{log_prefix}/derived/real_real_auc'] = real_real_auc
             else:
-                real_real_auc = None
+                real_real_auc = None  # Can't be computed with only one class (all reals are label 0)
         else:
             macro_auc, hardest_k_auc_mean, real_real_auc = None, None, None
 
@@ -1076,7 +1113,7 @@ class Trainer(object):
             'overall': overall_metrics,
             'per_method': method_metrics,
             'macro_auc': macro_auc,
-            f'hardest_{k}_auc': hardest_k_auc_mean,
+            f'hardest_{k}_auc' if 'k' in locals() else 'hardest_k_auc': hardest_k_auc_mean if 'hardest_k_auc_mean' in locals() else None,
             'real_real_auc': real_real_auc
         }
 
