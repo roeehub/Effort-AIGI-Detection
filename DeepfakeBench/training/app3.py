@@ -201,6 +201,7 @@ class VideoAnalysisResponse(BaseModel):
 
 
 class BatchInferResponse(BaseModel):
+    pred_label: str  # Add prediction label based on threshold
     confidence: float  # mean of frame-level fake probabilities
     probs: List[float]  # per-frame fake probabilities
 
@@ -551,8 +552,9 @@ async def check_frame_batch(
 
         # 'mean' strategy over ALL frames
         confidence = float(np.mean(probs_list)) if probs_list else 0.0
+        pred_label = "FAKE" if confidence >= threshold else "REAL"
 
-        return BatchInferResponse(confidence=confidence, probs=probs_list)
+        return BatchInferResponse(pred_label=pred_label, confidence=confidence, probs=probs_list)
 
     except HTTPException:
         raise
