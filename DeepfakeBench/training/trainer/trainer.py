@@ -228,46 +228,63 @@ class Trainer(object):
 
         # A helper to safely retrieve nested metric values
         def get_metric(metric_name, dataset):
+            # This check is important: if config keys are missing, metric_name or dataset will be None.
+            if not metric_name or not dataset:
+                return None
             return all_val_metrics.get(dataset, {}).get(metric_name)
 
         # 1. Guardrail Check
         guardrail_ok = True
         guard_conf = self.gate_guardrail_config
         if guard_conf.get('enabled'):
-            guard_metric = get_metric(guard_conf['metric'], guard_conf['dataset'])
+            # FIX: Use .get() for safe dictionary access instead of ['key']
+            guard_metric = get_metric(guard_conf.get('metric'), guard_conf.get('dataset'))
             if guard_metric is not None:
                 if self.gate_guardrail_start_value is None:
                     self.gate_guardrail_start_value = guard_metric
-                    self.logger.info(f"Guardrail initialized: {guard_conf['metric']} = {guard_metric:.4f}")
+                    self.logger.info(f"Guardrail initialized: {guard_conf.get('metric')} = {guard_metric:.4f}")
 
                 drop = self.gate_guardrail_start_value - guard_metric
                 if drop > guard_conf.get('max_drop', 0.01):
                     guardrail_ok = False
                     self.logger.warning(
-                        f"🚨 GUARDRAIL FAILED: {guard_conf['metric']} dropped by {drop:.4f} (max allowed: {guard_conf['max_drop']})")
+                        f"🚨 GUARDRAIL FAILED: {guard_conf.get('metric')} dropped by {drop:.4f} (max allowed: {guard_conf.get('max_drop')})")
+            else:
+                self.logger.warning(
+                    f"Guardrail check skipped: metric '{guard_conf.get('metric')}' not found for dataset '{guard_conf.get('dataset')}'. Check your lesson_gate config."
+                )
 
         # 2. Threshold Checks
         all_thresholds_met = True
         for check in self.gate_checks:
-            metric_val = get_metric(check['metric'], check['dataset'])
+            # FIX: Use .get() for safe dictionary access
+            metric_val = get_metric(check.get('metric'), check.get('dataset'))
             if metric_val is None:
                 all_thresholds_met = False
                 self.logger.warning(
-                    f"Gate check skipped: metric '{check['metric']}' not found for dataset '{check['dataset']}'.")
+                    f"Gate check skipped: metric '{check.get('metric')}' not found for dataset '{check.get('dataset')}'.")
                 break
 
-            op = check['comparison']
-            thresh = check['threshold']
+            op = check.get('comparison')
+            thresh = check.get('threshold')
+
+            # FIX: Ensure comparison and threshold keys exist
+            if op is None or thresh is None:
+                all_thresholds_met = False
+                self.logger.warning(
+                    f"Gate check skipped: malformed check config (missing 'comparison' or 'threshold'): {check}")
+                break
+
             passed = (op == 'ge' and metric_val >= thresh) or (op == 'le' and metric_val <= thresh)
 
             if not passed:
                 all_thresholds_met = False
                 self.logger.info(
-                    f"Gate check FAILED: {check['dataset']}/{check['metric']} ({metric_val:.4f}) did not meet {op} {thresh}")
+                    f"Gate check FAILED: {check.get('dataset')}/{check.get('metric')} ({metric_val:.4f}) did not meet {op} {thresh}")
                 break
             else:
                 self.logger.info(
-                    f"Gate check PASSED: {check['dataset']}/{check['metric']} ({metric_val:.4f}) met {op} {thresh}")
+                    f"Gate check PASSED: {check.get('dataset')}/{check.get('metric')} ({metric_val:.4f}) met {op} {thresh}")
 
         # 3. Plateau Check (based on the primary validation metric)
         plateau_met = False
@@ -573,9 +590,9 @@ class Trainer(object):
                         should_evaluate_now = True
 
                 if should_evaluate_now:
-                    self._run_validation(epoch, iteration, val_method_loaders)
+                    self._run_validation(epoch, iteration, step_cnt)
 
-                # Check for max steps termination
+                    # Check for max steps termination
                 if self.max_train_steps and step_cnt >= self.max_train_steps:
                     self.logger.critical(f"MAX STEPS REACHED: {step_cnt}/{self.max_train_steps}. Stopping training.")
                     if not should_evaluate_now and self.evaluate_every_steps and self.evaluate_every_steps > 0:
@@ -585,7 +602,7 @@ class Trainer(object):
                         if steps_until_next_eval <= threshold:
                             self.logger.info(
                                 f"Running one final evaluation before stopping (steps until next eval {steps_until_next_eval} <= threshold {threshold:.1f}).")
-                            self._run_validation(epoch, iteration, val_method_loaders)
+                            self._run_validation(epoch, iteration, step_cnt)
                     self.early_stop_triggered = True
 
                 if self.early_stop_triggered:
@@ -701,9 +718,9 @@ class Trainer(object):
                         should_evaluate_now = True
 
                 if should_evaluate_now:
-                    self._run_validation(epoch, i)
+                    self._run_validation(epoch, i, step_cnt)
 
-                # Check for max steps termination
+                    # Check for max steps termination
                 if self.max_train_steps and step_cnt >= self.max_train_steps:
                     self.logger.critical(f"MAX STEPS REACHED: {step_cnt}/{self.max_train_steps}. Stopping training.")
                     if not should_evaluate_now and self.evaluate_every_steps and self.evaluate_every_steps > 0:
@@ -713,7 +730,7 @@ class Trainer(object):
                         if steps_until_next_eval <= threshold:
                             self.logger.info(
                                 f"Running one final evaluation before stopping (steps until next eval {steps_until_next_eval} <= threshold {threshold:.1f}).")
-                            self._run_validation(epoch, i)
+                            self._run_validation(epoch, i, step_cnt)
                     self.early_stop_triggered = True
 
                 if self.early_stop_triggered:
@@ -796,14 +813,14 @@ class Trainer(object):
                 # For other steps, just log the minimal required info to not miss loss spikes
                 self.wandb_run.log({"train/loss/overall": losses['overall'].item(), "train/step": step_cnt})
 
-    def _run_validation(self, epoch, iteration):
+    def _run_validation(self, epoch, iteration, step_cnt):
         """
         Helper to run the full validation suite and check the lesson gate conditions.
         """
         if self.config['local_rank'] != 0:
             return
 
-        self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {iteration + 1}")
+        self.logger.info(f"\n===> Evaluation at epoch {epoch + 1}, step {step_cnt}")
 
         all_val_metrics = {}
 
@@ -811,6 +828,7 @@ class Trainer(object):
         if self.val_in_dist_loader:
             in_dist_metrics = self.test_epoch(
                 epoch=epoch,
+                step_cnt=step_cnt,
                 validation_loader=self.val_in_dist_loader,
                 log_prefix="val_in_dist",
                 is_primary_metric=False
@@ -821,6 +839,7 @@ class Trainer(object):
         if self.val_holdout_loader:
             holdout_metrics = self.test_epoch(
                 epoch=epoch,
+                step_cnt=step_cnt,
                 validation_loader=self.val_holdout_loader,
                 log_prefix="val_holdout",
                 is_primary_metric=not self.gate_enabled
@@ -832,16 +851,17 @@ class Trainer(object):
             self._check_lesson_gate(all_val_metrics)
 
         # 4. Run OOD monitoring (does not affect gating)
-        self._run_ood_monitoring(epoch)
+        self._run_ood_monitoring(epoch, step_cnt)
 
     @torch.no_grad()
-    def test_epoch(self, epoch, validation_loader, log_prefix: str, is_primary_metric: bool):
+    def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool):
         """
         Performs a full evaluation on a given validation dataloader. This function is now
         general-purpose and can be used for any validation set.
 
         Args:
             epoch (int): The current epoch number.
+            step_cnt (int): The current global training step.
             validation_loader (LazyDataLoaderManager): The dataloader to evaluate.
             log_prefix (str): The prefix for WandB logs (e.g., "val_in_dist", "val_holdout").
             is_primary_metric (bool): If True, the results from this run will be used for
@@ -911,7 +931,7 @@ class Trainer(object):
         overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
 
         # Use the log_prefix for all WandB metrics to create separate charts.
-        wandb_log_dict = {f"{log_prefix}/epoch": epoch + 1}
+        wandb_log_dict = {f"{log_prefix}/epoch": epoch + 1, "train/step": step_cnt}
 
         if all_losses:
             avg_val_loss = np.mean(all_losses)
@@ -1066,14 +1086,14 @@ class Trainer(object):
         self.logger.info(f"===> Evaluation for '{log_prefix}' Done!")
         return returned_metrics
 
-    def _run_ood_monitoring(self, epoch):
+    def _run_ood_monitoring(self, epoch, step_cnt):
         """Helper to run the OOD monitoring loop."""
         if self.ood_loader is not None and self.config['local_rank'] == 0:
             self.logger.info(f"\n===> OOD Monitoring at epoch {epoch + 1}")
-            self.ood_monitoring_epoch(epoch)
+            self.ood_monitoring_epoch(epoch, step_cnt)
 
     @torch.no_grad()
-    def ood_monitoring_epoch(self, epoch):
+    def ood_monitoring_epoch(self, epoch, step_cnt):
         """
         Runs evaluation on the OOD set. Logs metrics with an 'ood/' prefix
         and does NOT affect checkpointing or early stopping.
@@ -1127,7 +1147,7 @@ class Trainer(object):
             return
 
         overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
-        wandb_log_dict = {"ood/epoch": epoch + 1}
+        wandb_log_dict = {"ood/epoch": epoch + 1, "train/step": step_cnt}
 
         for name, value in overall_metrics.items():
             if name not in ['pred', 'label']:
