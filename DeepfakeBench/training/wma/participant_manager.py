@@ -8,7 +8,7 @@ import time
 import threading
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 import numpy as np
 
