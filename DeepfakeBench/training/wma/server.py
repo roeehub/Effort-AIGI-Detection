@@ -342,12 +342,23 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             return None
         return self.audio_io_workers[self.stats["audio_batches"] % len(self.audio_io_workers)]
 
-    def _decode_jpeg_to_rgb(self, image_bytes: bytes):
-        arr = np.frombuffer(image_bytes, np.uint8)
-        bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        if bgr is None:
+    def _decode_image_to_rgb(self, image_bytes: bytes):
+        """
+        Decode image bytes to RGB format.
+        Supports both JPEG and PNG formats.
+        """
+        try:
+            # Use cv2.imdecode which automatically detects format
+            arr = np.frombuffer(image_bytes, np.uint8)
+            bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if bgr is None:
+                print(f"[Backend] Failed to decode image data ({len(image_bytes)} bytes)")
+                return None
+            # Convert BGR to RGB
+            return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        except Exception as e:
+            print(f"[Backend] Error decoding image: {e}")
             return None
-        return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
     def _band_level(self, mean_prob: float) -> int:
         """
@@ -603,19 +614,37 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     def _call_asv_api(self, audio_batch: pb2.AudioBatch) -> Dict[str, Any] | None:
         """
         Synchronous helper to decode audio and call the ASV API.
-        This is designed to be run in a thread pool executor to avoid blocking asyncio.
+        Supports both OGG and WAV formats.
         """
         try:
-            # 1. Decode the in-memory OGG file into raw audio samples (NumPy array)
-            # We use io.BytesIO to treat the `bytes` object like a file
-            audio_data, sample_rate = sf.read(io.BytesIO(audio_batch.ogg_data))
+            audio_data = None
+            sample_rate = None
 
-            # 2. Prepare the payload for the API, as seen in live_test.py
-            # The API expects a list of floats, not a NumPy array.
+            # Try OGG first (existing format)
+            if hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
+                try:
+                    audio_data, sample_rate = sf.read(io.BytesIO(audio_batch.ogg_data))
+                    print(f"[ASV API] Successfully decoded OGG audio data")
+                except Exception as e:
+                    print(f"[ASV API] Failed to decode OGG data: {e}")
+
+            # Try WAV if OGG failed or wasn't available
+            if audio_data is None and hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
+                try:
+                    audio_data, sample_rate = sf.read(io.BytesIO(audio_batch.wav_data))
+                    print(f"[ASV API] Successfully decoded WAV audio data")
+                except Exception as e:
+                    print(f"[ASV API] Failed to decode WAV data: {e}")
+
+            # If neither format worked
+            if audio_data is None:
+                print(f"[ASV API] No valid audio data found in batch (checked OGG and WAV)")
+                return None
+
+            # Prepare the payload for the API
             payload = {
                 "audio": audio_data.tolist(),
                 "sample_rate": sample_rate,
-                # These can be hardcoded or passed from the client if needed
                 "window_step": 4000,
                 "aggregation_window": 10.0,
                 "aggregation_type": 'mean',
@@ -624,10 +653,10 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 "vol_norm": False,
             }
 
-            # 3. Make the HTTP POST request
+            # Make the HTTP POST request
             print(f"[ASV API] Sending {len(audio_data) / sample_rate:.2f}s audio chunk for analysis...")
             response = requests.post(self.asv_api_url, json=payload, timeout=self.asv_api_timeout)
-            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+            response.raise_for_status()
 
             result = response.json()
             print(
@@ -638,7 +667,6 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             print(f"[ASV API] Error calling API: {e}")
             return None
         except Exception as e:
-            # This can catch errors from sf.read if the OGG data is corrupt
             print(f"[ASV API] Error processing audio for API call: {e}")
             return None
 
