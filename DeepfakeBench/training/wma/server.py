@@ -12,6 +12,7 @@ import time
 import uuid
 import sys
 import os
+import argparse
 from concurrent import futures
 from typing import AsyncIterator, Dict, Any, List
 
@@ -38,6 +39,12 @@ from participant_manager import ParticipantManager
 import requests
 import soundfile as sf
 import io
+
+# Global variables for GCP buckets
+GCP_VIDEO_BUCKET = None
+GCP_AUDIO_BUCKET = None
+ENABLE_BUCKET_SAVE = False
+IO_WORKER_COUNT = 2
 
 # ──────────────────────────
 # Inline image preprocessing (same as video_preprocessor)
@@ -84,9 +91,13 @@ def get_base_path():
 BASE_PATH = get_base_path()
 
 
-# ---------- Background I/O worker (non-blocking) ----------
-class FrameIOWorker:
-    def __init__(self, maxsize: int = 10000):
+# ---------- Background I/O worker (generic for video/audio) ----------
+class MediaIOWorker:
+    """Generic I/O worker for processing media data (video frames or audio chunks)."""
+
+    def __init__(self, name: str, bucket_name: str = None, maxsize: int = 10000):
+        self.name = name
+        self.bucket_name = bucket_name
         self.q = queue.Queue(maxsize=maxsize)
         self._stop = threading.Event()
         self._count = 0
@@ -94,32 +105,92 @@ class FrameIOWorker:
         self.t = threading.Thread(target=self._loop, daemon=True)
         self.t.start()
 
-    def submit(self, frame_bytes: bytes):
+        # Initialize GCP client if bucket is specified and saving is enabled
+        self.gcp_client = None
+        self.gcp_bucket = None
+        if ENABLE_BUCKET_SAVE and bucket_name:
+            try:
+                from google.cloud import storage
+                self.gcp_client = storage.Client()
+                self.gcp_bucket = self.gcp_client.bucket(bucket_name)
+                print(f"[{self.name}] Initialized GCP bucket: {bucket_name}")
+            except Exception as e:
+                print(f"[{self.name}] Failed to initialize GCP bucket {bucket_name}: {e}")
+
+    def submit(self, data: bytes, metadata: Dict[str, Any] = None):
+        """Submit data for processing."""
         try:
-            self.q.put_nowait(frame_bytes)
+            item = {"data": data, "metadata": metadata or {}}
+            self.q.put_nowait(item)
         except queue.Full:
             # drop or log; choose your policy
-            pass
+            print(f"[{self.name}] Queue full, dropping item")
 
     def _loop(self):
+        """Main processing loop."""
         while not self._stop.is_set():
             try:
                 item = self.q.get(timeout=0.5)
             except queue.Empty:
                 continue
-            # TODO: replace with your real I/O (upload, write, etc.)
+
+            # Process the item
+            self._process_item(item)
+
             with self._lock:
                 self._count += 1
                 if self._count % 100 == 0:
-                    print(f"[I/O] processed frames so far: {self._count}")
+                    print(f"[{self.name}] processed items so far: {self._count}")
+
             self.q.task_done()
 
+    def _process_item(self, item: Dict[str, Any]):
+        """Process a single item - override for specific behavior."""
+        data = item["data"]
+        metadata = item["metadata"]
+
+        if ENABLE_BUCKET_SAVE and self.gcp_bucket:
+            self._save_to_bucket(data, metadata)
+        else:
+            # Just count for now - could add local file saving here
+            pass
+
+    def _save_to_bucket(self, data: bytes, metadata: Dict[str, Any]):
+        """Save data to GCP bucket."""
+        try:
+            # Generate unique filename
+            timestamp = int(time.time() * 1000)
+            file_id = uuid.uuid4().hex[:8]
+
+            if self.name.lower().startswith('video'):
+                filename = f"video/{timestamp}_{file_id}.jpg"
+                content_type = "image/jpeg"
+            else:  # audio
+                filename = f"audio/{timestamp}_{file_id}.ogg"
+                content_type = "audio/ogg"
+
+            # Upload to bucket
+            blob = self.gcp_bucket.blob(filename)
+            blob.upload_from_string(data, content_type=content_type)
+
+            # Set metadata if provided
+            if metadata:
+                blob.metadata = {k: str(v) for k, v in metadata.items()}
+                blob.patch()
+
+            print(f"[{self.name}] Saved to bucket: {filename} ({len(data)} bytes)")
+
+        except Exception as e:
+            print(f"[{self.name}] Error saving to bucket: {e}")
+
     def stop(self):
+        """Stop the worker."""
         self._stop.set()
         self.t.join(timeout=2)
 
     @property
     def count(self) -> int:
+        """Get processed item count."""
         with self._lock:
             return self._count
 
@@ -193,15 +264,34 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # data_directory = os.path.join(BASE_PATH, "data")
         data_directory = "/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data"
         self.data_writer = BackendDataWriter(data_directory)
-        # self.banner_simulator = BannerSimulator(banner_probability=0.15,
-        #                                         per_person_probability=1.0)  # 15% global, 100% per-person FOR IMMEDIATE TESTING
 
         # Disable random banners by default; we now use real inference
         self.banner_simulator = BannerSimulator(banner_probability=0.0, per_person_probability=0.0)
 
         # --- Real Effort detector (batched) ---
         self.mm = ModelManager()
-        self.io = FrameIOWorker()
+
+        # --- I/O Workers for video and audio (only if bucket saving is enabled) ---
+        self.video_io_workers = []
+        self.audio_io_workers = []
+
+        if ENABLE_BUCKET_SAVE:
+            # Create video workers
+            for i in range(IO_WORKER_COUNT):
+                worker = MediaIOWorker(f"Video-IO-{i + 1}", GCP_VIDEO_BUCKET)
+                self.video_io_workers.append(worker)
+
+            # Create audio workers
+            for i in range(IO_WORKER_COUNT):
+                worker = MediaIOWorker(f"Audio-IO-{i + 1}", GCP_AUDIO_BUCKET)
+                self.audio_io_workers.append(worker)
+
+            print(
+                f"[Backend] Initialized {len(self.video_io_workers)} video workers and {len(self.audio_io_workers)} audio workers")
+            print(f"[Backend] GCP bucket saving enabled - Video: {GCP_VIDEO_BUCKET}, Audio: {GCP_AUDIO_BUCKET}")
+        else:
+            print(f"[Backend] GCP bucket saving disabled - no I/O workers created")
+
         self.margin = float(os.getenv("WMA_BAND_MARGIN", "0.05"))
 
         # --- Participant state manager ---
@@ -240,6 +330,18 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         print(f"[Backend] StreamingService initialized with server_id: {self.server_id}")
 
+    def _get_next_video_worker(self) -> MediaIOWorker:
+        """Round-robin selection of video workers."""
+        if not self.video_io_workers:
+            return None
+        return self.video_io_workers[self.stats["participant_batches"] % len(self.video_io_workers)]
+
+    def _get_next_audio_worker(self) -> MediaIOWorker:
+        """Round-robin selection of audio workers."""
+        if not self.audio_io_workers:
+            return None
+        return self.audio_io_workers[self.stats["audio_batches"] % len(self.audio_io_workers)]
+
     def _decode_jpeg_to_rgb(self, image_bytes: bytes):
         arr = np.frombuffer(image_bytes, np.uint8)
         bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
@@ -265,13 +367,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     def _sanitize_participant_id(self, participant_id_raw: str) -> str:
         """
         Sanitize participant_id to handle JSON corruption in gRPC messages.
-        
+
         The participant_id field sometimes contains raw JSON fragments instead of clean IDs.
         This method extracts the actual participant ID and sanitizes it for banner generation.
-        
+
         Args:
             participant_id_raw: Raw participant_id from gRPC message
-            
+
         Returns:
             Clean participant ID safe for use
         """
@@ -284,7 +386,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 sanitized = re.sub(invalid_chars, '_', participant_id_raw).strip(' .')
                 return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
 
-            # Handle JSON corruption - extract participant ID from JSON fragment
+            # Handle JSON corruption - extract participant ID from corrupted data
             import re
 
             # Try to extract participant ID from corrupted data
@@ -311,11 +413,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                          context: grpc.aio.ServicerContext) -> AsyncIterator[pb2.Downlink]:
         """
         Bidirectional streaming endpoint for video/audio data exchange.
-        
+
         Args:
             request_iterator: Stream of Uplink messages from Service 5
             context: gRPC service context
-            
+
         Yields:
             Downlink messages with banner actions and confirmations
         """
@@ -346,12 +448,6 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                     self.stats["uplink_messages"] += 1
                     if stream_id in self.active_streams:
                         self.active_streams[stream_id]["messages_received"] += 1
-
-                    # Process the message and send a standard ACK
-                    # response = await self._process_uplink_message(uplink_msg, stream_id)
-                    # if response:
-                    #     self.stats["downlink_messages"] += 1
-                    #     yield response
 
                     await self._process_uplink_message(uplink_msg, stream_id)
 
@@ -398,11 +494,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                       stream_id: str) -> pb2.Downlink:
         """
         Process incoming uplink message.
-        
+
         Args:
             uplink_msg: Uplink message from Service 5
             stream_id: Stream identifier
-            
+
         Returns:
             Downlink response message
         """
@@ -437,6 +533,21 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             # Also create API-compliant multipart format for demonstration
             api_data = self.data_writer.create_multipart_api_data(participant_frames, metadata)
 
+            # Submit frames to background workers for bucket upload
+            if ENABLE_BUCKET_SAVE and self.video_io_workers:
+                worker = self._get_next_video_worker()
+                if worker:
+                    for pf in participant_frames:
+                        for crop in pf.crops:
+                            img_bytes = getattr(crop, "image_data", b"")
+                            if img_bytes:
+                                frame_metadata = {
+                                    "participant_id": getattr(pf, "participant_id", ""),
+                                    "timestamp_ms": metadata.get("timestamp_ms", 0),
+                                    "stream_id": metadata.get("stream_id", "")
+                                }
+                                worker.submit(img_bytes, frame_metadata)
+
             # Log processing
             participant_count = len(participant_frames)
             total_crops = sum(len(pf.crops) for pf in participant_frames)
@@ -444,7 +555,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
             print(f"[Backend] Processed video batch: {participant_count} participants, "
                   f"{total_crops} crops -> {chunk_path}")
-            print(f"[Backend] API format ready: manifest + {total_files} files for multipart/form-data")
+            if ENABLE_BUCKET_SAVE and self.video_io_workers:
+                print(f"[Backend] Submitted {total_crops} frames to video workers")
 
         except Exception as e:
             print(f"[Backend] Error processing participant frames: {e}")
@@ -453,34 +565,31 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                    metadata: Dict[str, Any]) -> None:
         """Process audio batch."""
         try:
-            # Write to storage  
+            # Write to storage
             audio_path = self.data_writer.write_audio_chunk(audio_batch, metadata)
+
+            # Submit audio to background worker for bucket upload
+            if ENABLE_BUCKET_SAVE and self.audio_io_workers:
+                worker = self._get_next_audio_worker()
+                if worker and hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
+                    audio_metadata = {
+                        "chunk_id": audio_batch.chunk_id,
+                        "duration_ms": audio_batch.duration_ms,
+                        "timestamp_ms": metadata.get("timestamp_ms", 0),
+                        "stream_id": metadata.get("stream_id", "")
+                    }
+                    worker.submit(audio_batch.ogg_data, audio_metadata)
 
             # Log processing
             frame_count = audio_batch.frame_count if hasattr(audio_batch, 'frame_count') else 0
             ogg_size = len(audio_batch.ogg_data) if hasattr(audio_batch, 'ogg_data') else 0
             print(f"[Backend] Processed audio batch: {audio_batch.chunk_id}, "
                   f"{frame_count} frames, {ogg_size} bytes, {audio_batch.duration_ms}ms -> {audio_path}")
+            if ENABLE_BUCKET_SAVE and self.audio_io_workers:
+                print(f"[Backend] Submitted {ogg_size} byte audio chunk to worker")
 
         except Exception as e:
             print(f"[Backend] Error processing audio batch: {e}")
-
-    # async def _create_response(self, uplink_msg: pb2.Uplink) -> pb2.Downlink:
-    #     """Create response message with possible banner."""
-    #     response = pb2.Downlink()
-    #     response.timestamp_ms = int(time.time() * 1000)
-    #     response.server_id = self.server_id
-    #     response.sequence_number = self._next_sequence()
-    #     response.received = True
-    #
-    #     # Check if we should generate a banner
-    #     banner = self.banner_simulator.generate_banner()
-    #     if banner:
-    #         response.screen_banner.CopyFrom(banner)
-    #         print(f"[Backend] Generated banner: {pb2.BannerLevel.Name(banner.level)} "
-    #               f"TTL={banner.ttl_ms}ms ID={banner.action_id}")
-    #
-    #     return response
 
     async def _create_response(self, uplink_msg: pb2.Uplink) -> pb2.Downlink:
         """ACK-only response (no random banners)."""
@@ -510,7 +619,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 "window_step": 4000,
                 "aggregation_window": 10.0,
                 "aggregation_type": 'mean',
-                "threshold": 0.85,
+                "threshold": 0.5,
                 "use_vad": True,
                 "vol_norm": False,
             }
@@ -599,13 +708,23 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 self.participant_manager.reset_all()
                 continue
 
-            # Decode all crops to RGB and push bytes to non-blocking I/O counter
+            # Decode all crops to RGB and push bytes to video workers
             rgbs = []
             for crop in pf.crops:
                 img_bytes = getattr(crop, "image_data", b"")
                 if not img_bytes:
                     continue
-                self.io.submit(img_bytes)
+
+                # Submit to video worker if bucket saving is enabled
+                if ENABLE_BUCKET_SAVE and self.video_io_workers:
+                    worker = self._get_next_video_worker()
+                    if worker:
+                        frame_metadata = {
+                            "participant_id": participant_id,
+                            "timestamp_ms": now_ms,
+                        }
+                        worker.submit(img_bytes, frame_metadata)
+
                 rgb = self._decode_jpeg_to_rgb(img_bytes)
                 if rgb is not None:
                     rgbs.append(rgb)
@@ -723,16 +842,16 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     async def _generate_per_person_banners(self, participant_frames: list) -> list:
         """
         Generate per-person banners for participants.
-        
+
         Args:
             participant_frames: List of ParticipantFrame messages
-            
+
         Returns:
             List of Downlink messages with per-person banners
         """
         responses = []
 
-        # Extract AND SANITIZE participant IDs  
+        # Extract AND SANITIZE participant IDs
         print(f"[Backend] Processing {len(participant_frames)} participant frames for per-person banners")
         raw_participant_ids = []
         sanitized_participant_ids = []
@@ -792,11 +911,21 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         """Get server statistics."""
         uptime = time.time() - self.stats["start_time"]
         stats = self.stats.copy()
+
+        # Add I/O worker stats
+        video_worker_count = sum(worker.count for worker in self.video_io_workers)
+        audio_worker_count = sum(worker.count for worker in self.audio_io_workers)
+
         stats.update({
             "uptime_seconds": uptime,
             "data_writer_stats": self.data_writer.get_statistics(),
             "banner_simulator_stats": self.banner_simulator.get_banner_stats(),
-            "active_streams": len(self.active_streams)
+            "active_streams": len(self.active_streams),
+            "video_worker_processed": video_worker_count,
+            "audio_worker_processed": audio_worker_count,
+            "bucket_save_enabled": ENABLE_BUCKET_SAVE,
+            "video_bucket": GCP_VIDEO_BUCKET,
+            "audio_bucket": GCP_AUDIO_BUCKET
         })
 
         if uptime > 0:
@@ -804,9 +933,55 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         return stats
 
+    def cleanup(self):
+        """Clean up resources."""
+        print("[Backend] Cleaning up I/O workers...")
+        for worker in self.video_io_workers + self.audio_io_workers:
+            worker.stop()
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='WMA Backend gRPC Server')
+
+    parser.add_argument('--video-bucket', type=str, default=None,
+                        help='GCP bucket name for video frames')
+    parser.add_argument('--audio-bucket', type=str, default=None,
+                        help='GCP bucket name for audio chunks')
+    parser.add_argument('--enable-bucket-save', action='store_true',
+                        help='Enable saving to GCP buckets (default: disabled)')
+    parser.add_argument('--io-workers', type=int, default=2,
+                        help='Number of I/O workers per media type (default: 2)')
+    parser.add_argument('--port', type=int, default=50051,
+                        help='gRPC server port (default: 50051)')
+
+    return parser.parse_args()
+
 
 async def serve():
     """Start the gRPC server."""
+    # Parse command line arguments
+    args = parse_args()
+
+    # Set global variables
+    global GCP_VIDEO_BUCKET, GCP_AUDIO_BUCKET, ENABLE_BUCKET_SAVE, IO_WORKER_COUNT
+    GCP_VIDEO_BUCKET = args.video_bucket
+    GCP_AUDIO_BUCKET = args.audio_bucket
+    ENABLE_BUCKET_SAVE = args.enable_bucket_save
+    IO_WORKER_COUNT = args.io_workers
+
+    print(f"[Backend] Configuration:")
+    print(f"  - Video bucket: {GCP_VIDEO_BUCKET or 'None'}")
+    print(f"  - Audio bucket: {GCP_AUDIO_BUCKET or 'None'}")
+    print(f"  - Bucket saving: {'Enabled' if ENABLE_BUCKET_SAVE else 'Disabled'}")
+    print(f"  - I/O workers per media type: {IO_WORKER_COUNT}")
+    print(f"  - Port: {args.port}")
+
+    # Validate bucket configuration
+    if ENABLE_BUCKET_SAVE and (not GCP_VIDEO_BUCKET or not GCP_AUDIO_BUCKET):
+        print("[Backend] Error: --enable-bucket-save requires both --video-bucket and --audio-bucket")
+        return
+
     # Raise gRPC message size limits (default is 4 MiB). 50 MiB is usually plenty.
     MAX_MSG_MB = 20
     server = grpc.aio.server(
@@ -823,7 +998,7 @@ async def serve():
     pb2_grpc.add_StreamingServiceServicer_to_server(service_impl, server)
 
     # Configure server address
-    listen_addr = '[::]:50051'
+    listen_addr = f'[::]:{args.port}'
     server.add_insecure_port(listen_addr)
 
     # Setup graceful shutdown handlers
@@ -841,7 +1016,6 @@ async def serve():
     print(f"[Backend] Server started successfully")
     print(f"[Backend] Server ID: {service_impl.server_id}")
     print(f"[Backend] Data directory: data/")
-    print(f"[Backend] Banner probability: {service_impl.banner_simulator.banner_probability}")
     print(f"[Backend] Ready to receive streaming data from Service 5")
 
     try:
@@ -857,12 +1031,14 @@ async def serve():
                       f"{stats['uplink_messages']} uplink msgs, "
                       f"{stats['participant_batches']} video batches, "
                       f"{stats['audio_batches']} audio batches, "
-                      f"{stats['banners_sent']} banners sent")
+                      f"{stats['banners_sent']} banners sent, "
+                      f"I/O processed: {stats['video_worker_processed']} video, {stats['audio_worker_processed']} audio")
 
     except KeyboardInterrupt:
         print("[Backend] Shutting down server...")
     finally:
         print("[Backend] Closing active connections...")
+        service_impl.cleanup()
         await server.stop(5)
 
 

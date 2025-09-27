@@ -36,15 +36,17 @@ if local_utils_dir.is_dir():
 
 DEFAULTS = {
     # Your preferred default checkpoint (overridable via env)
-    # "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/gqsvxems/top_n_effort_20250917_ep1_auc0.9700_eer0.0805.pth",
-    # "CUSTOM_MODEL_USE_ARCFACE": "true",
-    "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/rvfezpc0/top_n_effort_20250910_ep2_auc0.9808_eer0.0818.pth",
-    "CUSTOM_MODEL_USE_ARCFACE": "false",
+    "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/o3wcb3lr/top_n_effort_20250927_ep1_auc0.9754_eer0.0785.pth",
+    "CUSTOM_MODEL_USE_ARCFACE": "true",
+    # "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/rvfezpc0/top_n_effort_20250910_ep2_auc0.9808_eer0.0818.pth",
+    # "CUSTOM_MODEL_USE_ARCFACE": "false",
 
     # Inference defaults for WMA backend
-    "WMA_INFER_THRESHOLD": "0.46",
+    # "WMA_INFER_THRESHOLD": "0.46",
+    "WMA_INFER_THRESHOLD": "0.75",
     "WMA_INFER_BATCH": "16",
-    "WMA_BAND_MARGIN": "0.03",
+    # "WMA_BAND_MARGIN": "0.03",
+    "WMA_BAND_MARGIN": "0.05",
 }
 for k, v in DEFAULTS.items():
     os.environ.setdefault(k, v)

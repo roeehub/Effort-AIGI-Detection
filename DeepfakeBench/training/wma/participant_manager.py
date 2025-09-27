@@ -83,16 +83,16 @@ class ParticipantManager:
             self.participants[participant_id] = ParticipantState()
         return self.participants[participant_id]
 
-    def process_and_decide(self, participant_id: str, new_probs: List[float]) -> Optional[int]:
+    def process_and_decide(self, participant_id: str, new_probs: List[float]) -> Optional[Tuple[int, float]]:
         """
-        Processes new probabilities for a participant and decides if a banner should be sent.
+        Processes new probabilities and decides if a banner should be sent.
 
         Args:
             participant_id: The unique ID of the participant.
             new_probs: A list of new fake probabilities from the latest frame batch.
 
         Returns:
-            The new verdict (e.g., pb2.RED) if a response should be sent, otherwise None.
+            A tuple of (verdict, confidence_score) if a response should be sent, otherwise None.
         """
         if not new_probs:
             return None
@@ -129,8 +129,9 @@ class ParticipantManager:
                 print(
                     f"[ParticipantManager] TRIGGER! Sending verdict for {participant_id}. Reason: {'Change' if verdict_changed else 'Interval'}.")
                 state.current_verdict = new_verdict
-                state.batch_counter = 0  # Reset counter after sending
-                return new_verdict
+                state.batch_counter = 0
+                # Return both the verdict and the mean probability (confidence score)
+                return new_verdict, mean_prob
             else:
                 # Suppress the response, as the verdict is stable and the interval is not met
                 return None

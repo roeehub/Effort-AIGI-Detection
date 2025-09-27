@@ -8,11 +8,16 @@ WMA folder watcher (Windows)
   - C:\Program Files\WMA\data\audio\ for audio_*.ogg files
 - Sends VIDEO-ONLY and AUDIO-ONLY uplinks via your existing gRPC proto
 - Receives downlinks and logs them (JSON + TXT), like in cloud_client_tester.py
+- NEW: Can operate in a pipe-only mode to listen for banner notifications directly.
 
 Run (PowerShell):
+  # OLD FOLDER WATCHER MODE
   $env:WMA_SERVER="34.116.214.60:50051"
   $env:WMA_ROOT="C:\Program Files\WMA"
   python .\wma_folder_watcher.py --meeting-id meet_local --client-id win-edge-01
+
+  # NEW PIPE LISTENER MODE
+  python .\wma_folder_watcher.py --read-from-pipe
 
 Notes:
 - Video and Audio are sent in separate, independent uplink messages.
@@ -31,6 +36,7 @@ import queue
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
+from atexit import register
 from threading import Lock
 import urllib.request
 import threading
@@ -45,6 +51,14 @@ try:
 except Exception:
     MessageToJson = None
 
+# === Imports for Pipe Listener Mode ===
+try:
+    import win32pipe
+    import win32file
+    import pywintypes
+except ImportError:
+    win32pipe = None  # We will check for this if --read-from-pipe is used
+
 # ---------------------
 # Configuration
 # ---------------------
@@ -55,6 +69,9 @@ AUDIO_DIR = Path(os.environ.get("WMA_AUDIO_DIR", str(ROOT_DIR / "data" / "audio"
 STATE_FILE = Path(os.environ.get("WMA_STATE_FILE", r"C:\ProgramData\WMA\sent_index.json"))
 LOG_DIR = Path(os.environ.get("WMA_LOG_DIR", r"C:\Program Files\WMA\my_logs"))
 POLL_SEC = float(os.environ.get("WMA_POLL_SEC", "2.0"))  # how often to scan the folders
+
+# Configuration for the new Pipe Listener Mode
+BANNER_PIPE_NAME = r"\\.\pipe\wma.ui_overlay_B.banners"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -550,40 +567,177 @@ def watch_and_stream(video_dir: Path,
 
 
 # ---------------------
+# NEW: Pipe Listener for Banners
+# ---------------------
+class PipeBannerListener(threading.Thread):
+    """
+    A background thread that listens on a named pipe for banner commands
+    and forwards them to the local UI.
+    """
+
+    def __init__(self, pipe_name: str):
+        super().__init__(daemon=True)
+        self.pipe_name = pipe_name
+        self._stop_event = threading.Event()
+        log_info(f"Pipe listener initialized for: {self.pipe_name}")
+
+    def stop(self):
+        """Signals the thread to stop and attempts to unblock it."""
+        self._stop_event.set()
+        # This is a trick to unblock the ConnectNamedPipe call.
+        # We briefly connect to the pipe ourselves, which causes the listening
+        # call to return, allowing the loop to check the _stop_event.
+        try:
+            h_pipe = win32file.CreateFile(
+                self.pipe_name, win32file.GENERIC_WRITE, 0, None,
+                win32file.OPEN_EXISTING, 0, None
+            )
+            # No need to write, just connecting and closing is enough.
+            win32file.CloseHandle(h_pipe)
+        except pywintypes.error:
+            # This is expected if the server isn't listening or another client is there
+            pass
+        log_info("Pipe listener stop signal sent.")
+
+    def run(self):
+        """The main loop for the banner listening thread."""
+        while not self._stop_event.is_set():
+            pipe_handle = None
+            try:
+                # 1. Create the named pipe server instance...
+                pipe_handle = win32pipe.CreateNamedPipe(
+                    self.pipe_name,
+                    win32pipe.PIPE_ACCESS_INBOUND,
+                    win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+                    1, 65536, 65536, 0, None
+                )
+
+                # 2. Wait for a client (the WMA pipes router) to connect... (code is unchanged)
+                win32pipe.ConnectNamedPipe(pipe_handle, None)
+                log_info("Pipe client connected.")
+
+                # 3. Read the message from the pipe... (code is unchanged)
+                hr, message_bytes = win32file.ReadFile(pipe_handle, 4096)
+
+                if hr == 0 and message_bytes:
+                    try:
+                        message_str = message_bytes.decode('utf-8')
+
+                        # === START: NEW DEBUG LOGS ===
+                        try:
+                            # Parse the JSON to inspect its contents
+                            banner_data = json.loads(message_str)
+                            scope = banner_data.get("scope", "N/A")
+                            p_id = banner_data.get("participant_id", "Not Present")
+                            banner_id = banner_data.get("id", "N/A")
+                            # Print a clean, informative log line to the PowerShell console
+                            log_info(f"[PIPE DATA] ID: {banner_id}, Scope: {scope}, Participant_ID: {p_id}")
+                        except json.JSONDecodeError:
+                            log_err("[PIPE DATA] Received a message that was not valid JSON.")
+                        # === END: NEW DEBUG LOGS ===
+
+                        log_recv(f"Received banner from pipe ({len(message_str)} bytes). Forwarding to UI...")
+                        # 4. Forward the raw JSON string to the UI.
+                        _ui_post_async(message_str)
+
+                    except UnicodeDecodeError:
+                        log_err("Received non-UTF8 data from banner pipe.")
+
+            except pywintypes.error as e:
+                # These errors are normal during shutdown when stop() is called.
+                if e.winerror in [232, 109]:  # ERROR_NO_DATA, ERROR_BROKEN_PIPE
+                    time.sleep(0.5)
+                    continue
+                log_err(f"Pipe error occurred: {e}. Retrying in 2 seconds...")
+                time.sleep(2)
+            except Exception as e:
+                log_err(f"Unhandled exception in pipe listener: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
+            finally:
+                # 5. Clean up the handle and loop back.
+                # A new pipe instance must be created for each new connection.
+                if pipe_handle:
+                    win32file.CloseHandle(pipe_handle)
+                log_info("Pipe connection closed. Listening for next banner...")
+
+
+def run_pipe_listener_mode():
+    """
+    Main function for the new pipe listener mode. Skips all gRPC and folder watching.
+    """
+    listener = PipeBannerListener(pipe_name=BANNER_PIPE_NAME)
+    listener.start()
+
+    try:
+        # The main thread just waits until the user interrupts it.
+        # The listener thread does all the work in the background.
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        log_info("Ctrl+C received, shutting down pipe listener…")
+    finally:
+        listener.stop()
+        listener.join(timeout=2.0)
+        log_info("Shutdown complete.")
+
+
+# ---------------------
 # Main
 # ---------------------
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="WMA Folder Watcher (Video and Audio)")
-    parser.add_argument("--server", default=SERVER_ADDR, help="gRPC server host:port")
-    parser.add_argument("--video-dir", default=str(VIDEO_DIR), help="Folder with video_chunk_* subfolders")
-    parser.add_argument("--audio-dir", default=str(AUDIO_DIR), help="Folder with audio_*.ogg files")
-    parser.add_argument("--meeting-id", required=True, help="Meeting ID to use")
-    parser.add_argument("--session-id", default=f"sess_{uuid.uuid4()}", help="Session ID to use")
-    parser.add_argument("--client-id", required=True, help="Client ID to use")
+    parser = argparse.ArgumentParser(description="WMA Folder Watcher and Pipe Listener")
+    # --- New default is pipe mode, so folder-watching is now the optional flag ---
+    parser.add_argument("--read-from-folder", action="store_true",
+                        help="If set, uses the old logic of watching folders for data. Default is the new pipe listener mode.")
+
+    # --- Arguments required ONLY for folder mode ---
+    parser.add_argument("--server", default=SERVER_ADDR, help="gRPC server host:port (folder mode only)")
+    parser.add_argument("--video-dir", default=str(VIDEO_DIR),
+                        help="Folder with video_chunk_* subfolders (folder mode only)")
+    parser.add_argument("--audio-dir", default=str(AUDIO_DIR), help="Folder with audio_*.ogg files (folder mode only)")
+    parser.add_argument("--meeting-id", required=False, help="Meeting ID to use (required for folder mode)")
+    parser.add_argument("--session-id", default=f"sess_{uuid.uuid4()}", help="Session ID to use (folder mode only)")
+    parser.add_argument("--client-id", required=False, help="Client ID to use (required for folder mode)")
+
     args = parser.parse_args()
 
-    log_info(f"Server: {args.server}")
-    log_info(f"Video dir: {args.video_dir}")
-    log_info(f"Audio dir: {args.audio_dir}")
+    # --- MODE SELECTION ---
+    if args.read_from_folder:
+        # OLD BEHAVIOR: Watch folders and stream via gRPC
+        log_info("Running in Folder Watcher mode. This is the legacy behavior.")
+        if not args.meeting_id or not args.client_id:
+            parser.error("--meeting-id and --client-id are required when using --read-from-folder")
 
-    client = StreamClient(args.server)
-    state = load_state()
-    try:
-        client.wait_until_available()
-        watch_and_stream(
-            video_dir=Path(args.video_dir),
-            audio_dir=Path(args.audio_dir),
-            client=client,
-            meeting_id=args.meeting_id,
-            session_id=args.session_id,
-            client_id=args.client_id,
-            state=state
-        )
-    except Exception as e:
-        log_err(f"Unhandled exception in main loop: {e}")
-    finally:
-        client.stop()
+        log_info(f"Server: {args.server}")
+        log_info(f"Video dir: {args.video_dir}")
+        log_info(f"Audio dir: {args.audio_dir}")
+
+        client = StreamClient(args.server)
+        state = load_state()
+        try:
+            client.wait_until_available()
+            watch_and_stream(
+                video_dir=Path(args.video_dir),
+                audio_dir=Path(args.audio_dir),
+                client=client,
+                meeting_id=args.meeting_id,
+                session_id=args.session_id,
+                client_id=args.client_id,
+                state=state
+            )
+        except Exception as e:
+            log_err(f"Unhandled exception in main loop: {e}")
+        finally:
+            client.stop()
+    else:
+        # NEW DEFAULT BEHAVIOR: Listen to the named pipe for banners
+        log_info("Running in Pipe Listener mode (default). Use --read-from-folder to switch to legacy mode.")
+        if win32pipe is None:
+            log_err("The 'pywin32' library is required to run in the default pipe mode.")
+            log_err("Please install it by running: pip install pywin32")
+            return
+        run_pipe_listener_mode()
 
 
 if __name__ == "__main__":
