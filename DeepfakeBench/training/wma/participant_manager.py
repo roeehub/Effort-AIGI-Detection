@@ -24,6 +24,7 @@ RESET_AFTER_INACTIVE_MIN = 2.0  # Forget a participant after this many minutes o
 
 
 # --- Data Structure for Participant State ---
+# Add 'is_new' flag to ParticipantState
 @dataclass
 class ParticipantState:
     """Holds the state for a single participant."""
@@ -33,6 +34,7 @@ class ParticipantState:
     current_verdict: int = pb2.GREEN
     batch_counter: int = 0
     last_seen_ts: float = field(default_factory=time.time)
+    is_new: bool = True  # Flag to track if this participant is new
 
 
 # --- The Main Manager Class ---
@@ -103,6 +105,7 @@ class ParticipantManager:
 
             # 2. Get the current state for the participant
             state = self._get_or_create_state(participant_id)
+            is_new_participant = state.is_new
 
             # 3. Update history: add new probabilities to the front of the deque
             state.history.extendleft(reversed(new_probs))
@@ -123,13 +126,16 @@ class ParticipantManager:
             print(
                 f"[ParticipantManager] ID: {participant_id}, MeanProb: {mean_prob:.3f}, NewVerdict: {pb2.BannerLevel.Name(new_verdict)}, "
                 f"OldVerdict: {pb2.BannerLevel.Name(state.current_verdict)}, Changed: {verdict_changed}, "
-                f"Counter: {state.batch_counter}/{MIN_RESPONSE_INTERVAL}")
+                f"Counter: {state.batch_counter}/{MIN_RESPONSE_INTERVAL}, IsNew: {is_new_participant}")
 
-            if verdict_changed or interval_reached:
+            # Always send a banner for new participants
+            if is_new_participant or verdict_changed or interval_reached:
+                reason = "New" if is_new_participant else "Change" if verdict_changed else "Interval"
                 print(
-                    f"[ParticipantManager] TRIGGER! Sending verdict for {participant_id}. Reason: {'Change' if verdict_changed else 'Interval'}.")
+                    f"[ParticipantManager] TRIGGER! Sending verdict for {participant_id}. Reason: {reason}.")
                 state.current_verdict = new_verdict
                 state.batch_counter = 0
+                state.is_new = False  # Mark participant as no longer new
                 # Return both the verdict and the mean probability (confidence score)
                 return new_verdict, mean_prob
             else:
