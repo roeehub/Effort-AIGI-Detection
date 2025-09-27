@@ -45,6 +45,7 @@ GCP_VIDEO_BUCKET = None
 GCP_AUDIO_BUCKET = None
 ENABLE_BUCKET_SAVE = False
 IO_WORKER_COUNT = 2
+DEBUG_MODE = True
 
 # ──────────────────────────
 # Inline image preprocessing (same as video_preprocessor)
@@ -388,6 +389,10 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         Returns:
             Clean participant ID safe for use
         """
+
+        if DEBUG_MODE:
+            print(f"[DEBUG] Sanitizing participant ID: '{participant_id_raw}'")
+
         try:
             # If it looks like a clean participant ID already, use it
             if len(participant_id_raw) < 50 and not any(c in participant_id_raw for c in ['"', '\n', ',', '{', '}']):
@@ -395,6 +400,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 import re
                 invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
                 sanitized = re.sub(invalid_chars, '_', participant_id_raw).strip(' .')
+                if DEBUG_MODE:
+                    print(f"[DEBUG] ID sanitized: '{participant_id_raw}' → '{sanitized}'")
                 return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
 
             # Handle JSON corruption - extract participant ID from corrupted data
@@ -407,12 +414,16 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 clean_id = match.group(1)
                 invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
                 sanitized = re.sub(invalid_chars, '_', clean_id).strip(' .')
+                if DEBUG_MODE:
+                    print(f"[DEBUG] ID sanitized: '{participant_id_raw}' → '{sanitized}'")
                 return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
 
             # Fallback: Take first part before any JSON punctuation and sanitize
             clean_id = participant_id_raw.split('"')[0].split(',')[0].strip()
             invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
             sanitized = re.sub(invalid_chars, '_', clean_id).strip(' .')
+            if DEBUG_MODE:
+                print(f"[DEBUG] ID sanitized: '{participant_id_raw}' → '{sanitized}'")
             return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
 
         except Exception:
@@ -520,6 +531,44 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             "sequence_number": uplink_msg.sequence_number,
             "stream_id": stream_id
         }
+
+        if DEBUG_MODE:
+            print(f"[DEBUG] Received message from {uplink_msg.client_id} (seq: {uplink_msg.sequence_number})")
+            print(
+                f"[DEBUG] Message has: participants={bool(uplink_msg.participants)}, audio={uplink_msg.HasField('audio')}")
+
+            # Detailed participant inspection
+            if uplink_msg.participants:
+                for i, p in enumerate(uplink_msg.participants):
+                    print(f"[DEBUG] Participant #{i + 1}:")
+                    print(f"[DEBUG]   - ID: '{p.participant_id}'")
+                    print(f"[DEBUG]   - Has {len(p.crops)} crops")
+
+                    # Check for problematic IDs
+                    if ' ' in p.participant_id:
+                        print(f"[DEBUG] ⚠️ WARNING: Participant ID contains spaces: '{p.participant_id}'")
+                    if not p.participant_id:
+                        print(f"[DEBUG] ⚠️ WARNING: Empty participant ID")
+
+                    # Inspect crops
+                    for j, crop in enumerate(p.crops):
+                        img_bytes = getattr(crop, "image_data", b"")
+                        print(f"[DEBUG]   - Crop #{j + 1}: {len(img_bytes)} bytes")
+                        if not img_bytes:
+                            print(f"[DEBUG] ⚠️ WARNING: Empty crop data")
+
+            # Audio inspection
+            if uplink_msg.HasField('audio'):
+                audio = uplink_msg.audio
+                ogg_size = len(audio.ogg_data) if hasattr(audio, 'ogg_data') and audio.ogg_data else 0
+                wav_size = len(audio.wav_data) if hasattr(audio, 'wav_data') and audio.wav_data else 0
+                print(f"[DEBUG] Audio chunk: '{audio.chunk_id}'")
+                print(f"[DEBUG]   - OGG data: {ogg_size} bytes")
+                print(f"[DEBUG]   - WAV data: {wav_size} bytes")
+                print(f"[DEBUG]   - Duration: {audio.duration_ms}ms")
+
+                if ogg_size == 0 and wav_size == 0:
+                    print(f"[DEBUG] ⚠️ WARNING: No audio data found (both OGG and WAV empty)")
 
         # Process participant video frames
         if uplink_msg.participants:
@@ -983,6 +1032,9 @@ def parse_args():
     parser.add_argument('--port', type=int, default=50051,
                         help='gRPC server port (default: 50051)')
 
+    parser.add_argument('--debug', action='store_true',
+                        help='Enable verbose debug logging')
+
     return parser.parse_args()
 
 
@@ -992,13 +1044,15 @@ async def serve():
     args = parse_args()
 
     # Set global variables
-    global GCP_VIDEO_BUCKET, GCP_AUDIO_BUCKET, ENABLE_BUCKET_SAVE, IO_WORKER_COUNT
+    global GCP_VIDEO_BUCKET, GCP_AUDIO_BUCKET, ENABLE_BUCKET_SAVE, IO_WORKER_COUNT, DEBUG_MODE
     GCP_VIDEO_BUCKET = args.video_bucket
     GCP_AUDIO_BUCKET = args.audio_bucket
     ENABLE_BUCKET_SAVE = args.enable_bucket_save
     IO_WORKER_COUNT = args.io_workers
+    DEBUG_MODE = args.debug
 
     print(f"[Backend] Configuration:")
+    print(f"  - Debug mode: {'Enabled' if DEBUG_MODE else 'Disabled'}")
     print(f"  - Video bucket: {GCP_VIDEO_BUCKET or 'None'}")
     print(f"  - Audio bucket: {GCP_AUDIO_BUCKET or 'None'}")
     print(f"  - Bucket saving: {'Enabled' if ENABLE_BUCKET_SAVE else 'Disabled'}")
