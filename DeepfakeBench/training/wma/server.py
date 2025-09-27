@@ -753,7 +753,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         }
                         worker.submit(img_bytes, frame_metadata)
 
-                rgb = self._decode_jpeg_to_rgb(img_bytes)
+                rgb = self._decode_image_to_rgb(img_bytes)
                 if rgb is not None:
                     rgbs.append(rgb)
 
