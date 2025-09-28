@@ -18,6 +18,8 @@ from typing import AsyncIterator, Dict, Any, List
 
 import grpc
 from grpc import aio
+import io
+from pydub import AudioSegment
 
 # Import generated protobuf classes
 import wma_streaming_pb2 as pb2
@@ -53,6 +55,37 @@ DEBUG_MODE = True
 _MODEL_IMG_SIZE = 224
 _MODEL_NORM_MEAN = (0.48145466, 0.4578275, 0.40821073)  # CLIP mean
 _MODEL_NORM_STD = (0.26862954, 0.26130258, 0.27577711)  # CLIP std
+
+
+def _convert_audio_to_mp3(self, audio_data: bytes, source_format: str) -> bytes:
+    """
+    Convert audio data to MP3 format.
+
+    Args:
+        audio_data: Raw audio bytes (WAV or OGG)
+        source_format: Source format ('wav' or 'ogg')
+
+    Returns:
+        MP3 encoded audio bytes
+    """
+    try:
+        # Load audio from bytes
+        audio_segment = AudioSegment.from_file(
+            io.BytesIO(audio_data),
+            format=source_format.lower()
+        )
+
+        # Convert to MP3
+        mp3_buffer = io.BytesIO()
+        audio_segment.export(mp3_buffer, format="mp3", bitrate="128k")
+        mp3_data = mp3_buffer.getvalue()
+
+        print(f"[Audio Conversion] {source_format.upper()} -> MP3: {len(audio_data)} -> {len(mp3_data)} bytes")
+        return mp3_data
+
+    except Exception as e:
+        print(f"[Audio Conversion] Failed to convert {source_format} to MP3: {e}")
+        return audio_data  # Return original data as fallback
 
 
 def _prep_rgb_to_tensor(rgb_uint8):
@@ -157,7 +190,7 @@ class MediaIOWorker:
             pass
 
     def _save_to_bucket(self, data: bytes, metadata: Dict[str, Any]):
-        """Save data to GCP bucket."""
+        """Save data to GCP bucket with MP3 support."""
         try:
             # Generate unique filename
             timestamp = int(time.time() * 1000)
@@ -167,8 +200,14 @@ class MediaIOWorker:
                 filename = f"video/{timestamp}_{file_id}.jpg"
                 content_type = "image/jpeg"
             else:  # audio
-                filename = f"audio/{timestamp}_{file_id}.ogg"
-                content_type = "audio/ogg"
+                # Use MP3 format if converted, otherwise fallback to original
+                audio_format = metadata.get('format', 'ogg')
+                if audio_format == 'mp3':
+                    filename = f"audio/{timestamp}_{file_id}.mp3"
+                    content_type = "audio/mpeg"
+                else:
+                    filename = f"audio/{timestamp}_{file_id}.{audio_format}"
+                    content_type = f"audio/{audio_format}"
 
             # Upload to bucket
             blob = self.gcp_bucket.blob(filename)
@@ -623,30 +662,54 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     async def _process_audio_batch(self, audio_batch: pb2.AudioBatch,
                                    metadata: Dict[str, Any]) -> None:
-        """Process audio batch."""
+        """Process audio batch with MP3 conversion."""
         try:
-            # Write to storage
-            audio_path = self.data_writer.write_audio_chunk(audio_batch, metadata)
+            # Convert audio to MP3 first
+            mp3_data = None
+            original_format = None
 
-            # Submit audio to background worker for bucket upload
+            # Try OGG first
+            if hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
+                mp3_data = self._convert_audio_to_mp3(audio_batch.ogg_data, 'ogg')
+                original_format = 'ogg'
+            # Try WAV if OGG not available
+            elif hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
+                mp3_data = self._convert_audio_to_mp3(audio_batch.wav_data, 'wav')
+                original_format = 'wav'
+
+            if not mp3_data:
+                print("[Backend] No valid audio data found for conversion")
+                return
+
+            # Update metadata to reflect MP3 conversion
+            metadata['converted_format'] = 'mp3'
+            metadata['original_format'] = original_format
+            metadata['mp3_size'] = len(mp3_data)
+
+            # Write MP3 to storage
+            audio_path = self.data_writer.write_audio_chunk_mp3(mp3_data, audio_batch, metadata)
+
+            # Submit MP3 to background worker for bucket upload
             if ENABLE_BUCKET_SAVE and self.audio_io_workers:
                 worker = self._get_next_audio_worker()
-                if worker and hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
+                if worker:
                     audio_metadata = {
                         "chunk_id": audio_batch.chunk_id,
                         "duration_ms": audio_batch.duration_ms,
                         "timestamp_ms": metadata.get("timestamp_ms", 0),
-                        "stream_id": metadata.get("stream_id", "")
+                        "stream_id": metadata.get("stream_id", ""),
+                        "format": "mp3",
+                        "original_format": original_format
                     }
-                    worker.submit(audio_batch.ogg_data, audio_metadata)
+                    worker.submit(mp3_data, audio_metadata)
 
             # Log processing
             frame_count = audio_batch.frame_count if hasattr(audio_batch, 'frame_count') else 0
-            ogg_size = len(audio_batch.ogg_data) if hasattr(audio_batch, 'ogg_data') else 0
             print(f"[Backend] Processed audio batch: {audio_batch.chunk_id}, "
-                  f"{frame_count} frames, {ogg_size} bytes, {audio_batch.duration_ms}ms -> {audio_path}")
+                  f"{frame_count} frames, {len(mp3_data)} bytes MP3 (from {original_format}), "
+                  f"{audio_batch.duration_ms}ms -> {audio_path}")
             if ENABLE_BUCKET_SAVE and self.audio_io_workers:
-                print(f"[Backend] Submitted {ogg_size} byte audio chunk to worker")
+                print(f"[Backend] Submitted {len(mp3_data)} byte MP3 chunk to worker")
 
         except Exception as e:
             print(f"[Backend] Error processing audio batch: {e}")
@@ -662,32 +725,30 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     def _call_asv_api(self, audio_batch: pb2.AudioBatch) -> Dict[str, Any] | None:
         """
-        Synchronous helper to decode audio and call the ASV API.
-        Supports both OGG and WAV formats.
+        Synchronous helper to decode audio, convert to MP3, and call the ASV API.
         """
         try:
-            audio_data = None
-            sample_rate = None
+            mp3_data = None
+            original_format = None
 
-            # Try OGG first (existing format)
+            # Convert to MP3 first
             if hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
-                try:
-                    audio_data, sample_rate = sf.read(io.BytesIO(audio_batch.ogg_data))
-                    print(f"[ASV API] Successfully decoded OGG audio data")
-                except Exception as e:
-                    print(f"[ASV API] Failed to decode OGG data: {e}")
+                mp3_data = self._convert_audio_to_mp3(audio_batch.ogg_data, 'ogg')
+                original_format = 'ogg'
+            elif hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
+                mp3_data = self._convert_audio_to_mp3(audio_batch.wav_data, 'wav')
+                original_format = 'wav'
 
-            # Try WAV if OGG failed or wasn't available
-            if audio_data is None and hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
-                try:
-                    audio_data, sample_rate = sf.read(io.BytesIO(audio_batch.wav_data))
-                    print(f"[ASV API] Successfully decoded WAV audio data")
-                except Exception as e:
-                    print(f"[ASV API] Failed to decode WAV data: {e}")
+            if not mp3_data:
+                print(f"[ASV API] No valid audio data found for conversion")
+                return None
 
-            # If neither format worked
-            if audio_data is None:
-                print(f"[ASV API] No valid audio data found in batch (checked OGG and WAV)")
+            # Now decode the MP3 for API processing
+            try:
+                audio_data, sample_rate = sf.read(io.BytesIO(mp3_data))
+                print(f"[ASV API] Successfully decoded MP3 audio data (converted from {original_format})")
+            except Exception as e:
+                print(f"[ASV API] Failed to decode MP3 data: {e}")
                 return None
 
             # Prepare the payload for the API
@@ -703,7 +764,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             }
 
             # Make the HTTP POST request
-            print(f"[ASV API] Sending {len(audio_data) / sample_rate:.2f}s audio chunk for analysis...")
+            print(f"[ASV API] Sending {len(audio_data) / sample_rate:.2f}s MP3 audio chunk for analysis...")
             response = requests.post(self.asv_api_url, json=payload, timeout=self.asv_api_timeout)
             response.raise_for_status()
 
@@ -716,7 +777,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             print(f"[ASV API] Error calling API: {e}")
             return None
         except Exception as e:
-            print(f"[ASV API] Error processing audio for API call: {e}")
+            print(f"[ASV API] Error processing MP3 audio for API call: {e}")
             return None
 
     async def _generate_audio_inference_banner(self, uplink_msg: pb2.Uplink) -> pb2.Downlink | None:
