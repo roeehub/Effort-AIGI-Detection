@@ -310,7 +310,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         )
 
         # --- ASV API config ---
-        self.asv_api_url = os.getenv("ASV_API_URL", "http://34.125.106.206:8000/asv/predict-live")
+        self.asv_api_url = os.getenv("ASV_API_URL", "http://34.125.106.206:8000/asv/predict")
         self.asv_api_timeout = int(os.getenv("ASV_API_TIMEOUT", "20"))
 
         # TTLs per level (ms)
@@ -724,7 +724,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     def _call_asv_api(self, audio_batch: pb2.AudioBatch) -> Dict[str, Any] | None:
         """
-        Synchronous helper to decode audio, convert to MP3, and call the ASV API.
+        Synchronous helper to convert audio to MP3 and call the ASV API using multipart/form-data.
         """
         try:
             mp3_data = None
@@ -742,41 +742,32 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 print(f"[ASV API] No valid audio data found for conversion")
                 return None
 
-            # Now decode the MP3 for API processing
-            try:
-                audio_data, sample_rate = sf.read(io.BytesIO(mp3_data))
-                print(f"[ASV API] Successfully decoded MP3 audio data (converted from {original_format})")
-            except Exception as e:
-                print(f"[ASV API] Failed to decode MP3 data: {e}")
-                return None
-
-            # Prepare the payload for the API
-            payload = {
-                "audio": audio_data.tolist(),
-                "sample_rate": sample_rate,
-                "window_step": 4000,
-                "aggregation_window": 10.0,
-                "aggregation_type": 'mean',
-                "threshold": 0.5,
-                "use_vad": True,
-                "vol_norm": False,
+            # Prepare the multipart/form-data payload
+            files = {
+                'audio': ('audio.mp3', mp3_data, 'audio/mpeg')
+            }
+            form_data = {
+                'window_step': '500',
+                'use_vad': 'true',
+                'vol_norm': 'false',
+                'threshold': '0.89'
             }
 
-            # Make the HTTP POST request
-            print(f"[ASV API] Sending {len(audio_data) / sample_rate:.2f}s MP3 audio chunk for analysis...")
-            response = requests.post(self.asv_api_url, json=payload, timeout=self.asv_api_timeout)
+            # Make the HTTP POST request with multipart/form-data
+            print(
+                f"[ASV API] Sending {len(mp3_data)} bytes of MP3 audio (from {original_format}) for analysis to {self.asv_api_url}...")
+            response = requests.post(self.asv_api_url, data=form_data, files=files, timeout=self.asv_api_timeout)
             response.raise_for_status()
 
             result = response.json()
-            print(
-                f"[ASV API] Received response: prediction={result.get('prediction')}, confidence={result.get('confidence'):.3f}")
+            print(f"[ASV API] Received response: {result}")
             return result
 
         except requests.exceptions.RequestException as e:
             print(f"[ASV API] Error calling API: {e}")
             return None
         except Exception as e:
-            print(f"[ASV API] Error processing MP3 audio for API call: {e}")
+            print(f"[ASV API] Error processing audio for API call: {e}")
             return None
 
     async def _generate_audio_inference_banner(self, uplink_msg: pb2.Uplink) -> pb2.Downlink | None:
