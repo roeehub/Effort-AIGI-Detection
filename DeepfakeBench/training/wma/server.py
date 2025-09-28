@@ -17,9 +17,9 @@ from concurrent import futures
 from typing import AsyncIterator, Dict, Any, List
 
 import grpc
-from grpc import aio
-import io
+import grpc.aio
 from pydub import AudioSegment
+import io
 
 # Import generated protobuf classes
 import wma_streaming_pb2 as pb2
@@ -55,37 +55,6 @@ DEBUG_MODE = True
 _MODEL_IMG_SIZE = 224
 _MODEL_NORM_MEAN = (0.48145466, 0.4578275, 0.40821073)  # CLIP mean
 _MODEL_NORM_STD = (0.26862954, 0.26130258, 0.27577711)  # CLIP std
-
-
-def _convert_audio_to_mp3(self, audio_data: bytes, source_format: str) -> bytes:
-    """
-    Convert audio data to MP3 format.
-
-    Args:
-        audio_data: Raw audio bytes (WAV or OGG)
-        source_format: Source format ('wav' or 'ogg')
-
-    Returns:
-        MP3 encoded audio bytes
-    """
-    try:
-        # Load audio from bytes
-        audio_segment = AudioSegment.from_file(
-            io.BytesIO(audio_data),
-            format=source_format.lower()
-        )
-
-        # Convert to MP3
-        mp3_buffer = io.BytesIO()
-        audio_segment.export(mp3_buffer, format="mp3", bitrate="128k")
-        mp3_data = mp3_buffer.getvalue()
-
-        print(f"[Audio Conversion] {source_format.upper()} -> MP3: {len(audio_data)} -> {len(mp3_data)} bytes")
-        return mp3_data
-
-    except Exception as e:
-        print(f"[Audio Conversion] Failed to convert {source_format} to MP3: {e}")
-        return audio_data  # Return original data as fallback
 
 
 def _prep_rgb_to_tensor(rgb_uint8):
@@ -414,6 +383,36 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             return pb2.YELLOW
         else:
             return pb2.GREEN
+
+    def _convert_audio_to_mp3(self, audio_data: bytes, source_format: str) -> bytes:
+        """
+        Convert audio data to MP3 format.
+
+        Args:
+            audio_data: Raw audio bytes (WAV or OGG)
+            source_format: Source format ('wav' or 'ogg')
+
+        Returns:
+            MP3 encoded audio bytes
+        """
+        try:
+            # Load audio from bytes
+            audio_segment = AudioSegment.from_file(
+                io.BytesIO(audio_data),
+                format=source_format.lower()
+            )
+
+            # Convert to MP3
+            mp3_buffer = io.BytesIO()
+            audio_segment.export(mp3_buffer, format="mp3", bitrate="128k")
+            mp3_data = mp3_buffer.getvalue()
+
+            print(f"[Audio Conversion] {source_format.upper()} -> MP3: {len(audio_data)} -> {len(mp3_data)} bytes")
+            return mp3_data
+
+        except Exception as e:
+            print(f"[Audio Conversion] Failed to convert {source_format} to MP3: {e}")
+            return audio_data  # Return original data as fallback
 
     def _sanitize_participant_id(self, participant_id_raw: str) -> str:
         """
