@@ -35,7 +35,7 @@ import cv2, numpy as np, torch
 from app3 import app as model_app, startup_event, calculate_analysis
 
 # Participant state manager
-from participant_manager import ParticipantManager
+from participant_manager import ParticipantManager, AudioWindowManager
 
 # for audio processing
 import requests
@@ -308,6 +308,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             threshold=self.mm.threshold,
             margin=self.margin
         )
+
+        # --- Audio sliding window manager ---
+        self.audio_window_manager = AudioWindowManager()
 
         # --- ASV API config ---
         self.asv_api_url = os.getenv("ASV_API_URL", "http://34.125.106.206:8000/asv/predict")
@@ -772,7 +775,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     async def _generate_audio_inference_banner(self, uplink_msg: pb2.Uplink) -> pb2.Downlink | None:
         """
-        Processes an audio batch, calls the ASV API, and generates a global banner.
+        Processes an audio batch, calls the ASV API, and generates a global banner using sliding window.
         """
         loop = asyncio.get_running_loop()
 
@@ -785,23 +788,25 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         if not api_result or 'prediction' not in api_result:
             return None
 
-        # Map the API prediction to a banner level
-        # Assuming `prediction` is boolean or 0/1 where True/1 is REAL
-        is_real = api_result['prediction']
-        level = pb2.GREEN if is_real else pb2.RED
+        # Process the result through the audio sliding window manager
+        verdict_level = self.audio_window_manager.process_audio_result(api_result)
+        
+        # Only generate a banner if the verdict changed
+        if verdict_level is None:
+            return None
 
         now_ms = int(time.time() * 1000)
-        ttl_ms = self.ttl_map.get(level, 3000)
+        ttl_ms = self.ttl_map.get(verdict_level, 3000)
 
         # Build a GLOBAL ScreenBanner
         banner = pb2.ScreenBanner()
-        banner.level = level
+        banner.level = verdict_level
         banner.ttl_ms = ttl_ms
         banner.placement = "TopCenter"
         banner.action_id = f"act-audio-{uuid.uuid4().hex[:8]}"
         banner.scope = "global"
         banner.scope_enum = pb2.SCOPE_GLOBAL
-        banner.banner_type = "audio_ok" if is_real else "audio_alert"
+        banner.banner_type = "audio_ok" if verdict_level == pb2.GREEN else "audio_alert"
         banner.expiry_timestamp_ms = now_ms + ttl_ms
 
         # Wrap into Downlink message
@@ -812,7 +817,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         down.received = True
         down.screen_banner.CopyFrom(banner)
 
-        print(f"[Backend] Generated GLOBAL audio banner -> {pb2.BannerLevel.Name(level)}")
+        print(f"[Backend] Generated GLOBAL audio banner (sliding window) -> {pb2.BannerLevel.Name(verdict_level)}")
 
         return down
 
@@ -1066,6 +1071,10 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         print("[Backend] Cleaning up I/O workers...")
         for worker in self.video_io_workers + self.audio_io_workers:
             worker.stop()
+        
+        # Reset audio window manager
+        self.audio_window_manager.reset()
+        print("[Backend] Audio window manager reset")
 
 
 def parse_args():

@@ -2,6 +2,7 @@
 
 """
 Manages stateful analysis for individual participants to provide stable verdicts.
+Also manages audio sliding window for stable audio verdicts.
 """
 
 import time
@@ -150,3 +151,89 @@ class ParticipantManager:
                 self.participants.clear()
             else:
                 print("[ParticipantManager] Reset requested, but no active participants.")
+
+
+# --- Audio Sliding Window Manager ---
+class AudioWindowManager:
+    """
+    Manages a sliding window of audio analysis results to provide stable audio verdicts.
+    """
+    
+    AUDIO_WINDOW_SIZE = 5  # Keep track of 5 audio datapoints
+    RED_THRESHOLD = 4  # 4/5 red datapoints trigger red banner
+    
+    def __init__(self):
+        """Initialize the audio window manager."""
+        self.lock = threading.Lock()
+        # Start with 5 green datapoints (prediction=True means real/green)
+        self.audio_window = deque([True] * self.AUDIO_WINDOW_SIZE, maxlen=self.AUDIO_WINDOW_SIZE)
+        print(f"[AudioWindowManager] Initialized with {self.AUDIO_WINDOW_SIZE} green datapoints")
+    
+    def process_audio_result(self, api_result: Dict) -> Optional[int]:
+        """
+        Process an audio API result and decide if a banner should be sent.
+        
+        Args:
+            api_result: Dictionary containing ASV API response with 'probs' and 'prediction' keys
+            
+        Returns:
+            Banner level (pb2.GREEN or pb2.RED) if a verdict change occurred, None otherwise
+        """
+        if not api_result or 'probs' not in api_result or 'prediction' not in api_result:
+            return None
+            
+        probs = api_result['probs']
+        if not probs or not isinstance(probs, list):
+            return None
+            
+        # Check if audio is silent (negative probability)
+        prob_value = probs[0]  # First (and usually only) probability value
+        if prob_value < 0:
+            print(f"[AudioWindowManager] Ignoring silent audio with prob={prob_value:.3f}")
+            return None
+        
+        # Get the current prediction (True=real/green, False=fake/red)
+        current_prediction = api_result['prediction']
+        
+        with self.lock:
+            # Remember the previous verdict
+            previous_verdict = self._calculate_verdict()
+            
+            # Add new prediction to the sliding window
+            self.audio_window.append(current_prediction)
+            
+            # Calculate new verdict
+            new_verdict = self._calculate_verdict()
+            
+            print(f"[AudioWindowManager] Audio prob={prob_value:.3f}, prediction={current_prediction}, "
+                  f"window={list(self.audio_window)}, verdict={pb2.BannerLevel.Name(new_verdict)}")
+            
+            # Return verdict only if it changed
+            if new_verdict != previous_verdict:
+                print(f"[AudioWindowManager] VERDICT CHANGED: {pb2.BannerLevel.Name(previous_verdict)} -> {pb2.BannerLevel.Name(new_verdict)}")
+                return new_verdict
+            
+            return None
+    
+    def _calculate_verdict(self) -> int:
+        """
+        Calculate the current verdict based on the sliding window.
+        
+        Returns:
+            pb2.GREEN or pb2.RED based on the 4/5 threshold
+        """
+        # Count red predictions (False means fake/red)
+        red_count = sum(1 for prediction in self.audio_window if not prediction)
+        
+        # If 4 or more out of 5 are red, return red verdict
+        if red_count >= self.RED_THRESHOLD:
+            return pb2.RED
+        else:
+            return pb2.GREEN
+    
+    def reset(self):
+        """Reset the audio window to all green datapoints."""
+        with self.lock:
+            self.audio_window.clear()
+            self.audio_window.extend([True] * self.AUDIO_WINDOW_SIZE)
+            print(f"[AudioWindowManager] Reset to {self.AUDIO_WINDOW_SIZE} green datapoints")
