@@ -781,6 +781,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         audio_batch = uplink_msg.audio
         request_seq = uplink_msg.sequence_number
+        
+        # Check for restart signal in session_id
+        if hasattr(audio_batch, 'session_id') and audio_batch.session_id == "[RESTART]":
+            print(f"[Backend] *** RESTART SIGNAL DETECTED IN AUDIO SESSION_ID ***")
+            self.audio_window_manager.reset()
+            return None  # Don't process this as a normal audio batch
 
         # Run the blocking I/O (HTTP request) in a separate thread
         api_result = await loop.run_in_executor(None, self._call_asv_api, audio_batch)
@@ -817,7 +823,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         down.received = True
         down.screen_banner.CopyFrom(banner)
 
+        print(f"!******** SENDING AUDIO BANNER RESPONSE ********!")
         print(f"[Backend] Generated GLOBAL audio banner (sliding window) -> {pb2.BannerLevel.Name(verdict_level)}")
+        print(f"!***********************************************!")
 
         return down
 

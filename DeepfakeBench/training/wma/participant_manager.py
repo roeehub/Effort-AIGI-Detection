@@ -205,12 +205,15 @@ class AudioWindowManager:
             # Calculate new verdict
             new_verdict = self._calculate_verdict()
             
+            print(f"!******** WINDOW ********!")
             print(f"[AudioWindowManager] Audio prob={prob_value:.3f}, prediction={current_prediction}, "
                   f"window={list(self.audio_window)}, verdict={pb2.BannerLevel.Name(new_verdict)}")
             
             # Return verdict only if it changed
             if new_verdict != previous_verdict:
+                print(f"!******** AUDIO VERDICT CHANGE - WILL SEND RESPONSE ********!")
                 print(f"[AudioWindowManager] VERDICT CHANGED: {pb2.BannerLevel.Name(previous_verdict)} -> {pb2.BannerLevel.Name(new_verdict)}")
+                print(f"!**********************************************************!")
                 return new_verdict
             
             return None
