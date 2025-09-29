@@ -569,7 +569,8 @@ async def check_video(
         file: UploadFile = File(...),
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         threshold: float = Query(0.75, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
-        debug: bool = False
+        debug: bool = False,
+        debug_frames_count: int = Query(2, ge=1, description="Number of frames to save when debug is enabled")
 ) -> VideoAnalysisResponse:
     ext = Path(file.filename).suffix.lower()
     if ext not in {".mp4", ".mov", ".mkv", ".avi", ".webm"}:
@@ -584,7 +585,7 @@ async def check_video(
 
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
-            str(tmp_path), pre_method="yolo", debug_save_path=debug_path
+            str(tmp_path), pre_method="yolo", debug_save_path=debug_path, debug_frames_count=debug_frames_count if debug else None
         )
 
         if video_tensor is None or video_tensor.shape[1] == 0:
@@ -616,7 +617,8 @@ async def check_video_from_gcp(
         request: Request,
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
-        debug: bool = False
+        debug: bool = False,
+        debug_frames_count: int = Query(2, ge=1, description="Number of frames to save when debug is enabled")
 ) -> VideoAnalysisResponse:
     gcs_full_path = request_body.gcs_path
     logger.info(f"Received request to process video from GCS: {gcs_full_path}")
@@ -643,7 +645,7 @@ async def check_video_from_gcp(
 
         debug_path = DEBUG_FRAME_DIR if debug else None
         video_tensor = video_preprocessor.preprocess_video_for_effort_model(
-            str(tmp_path), pre_method="yolo", debug_save_path=debug_path
+            str(tmp_path), pre_method="yolo", debug_save_path=debug_path, debug_frames_count=debug_frames_count if debug else None
         )
 
         if video_tensor is None or video_tensor.shape[1] == 0:

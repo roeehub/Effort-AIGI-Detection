@@ -227,7 +227,8 @@ def extract_yolo_haar_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 def _find_and_prepare_faces(
         video_path: str,
         pre_method: str,
-        debug_save_path: Optional[str] = None
+        debug_save_path: Optional[str] = None,
+        debug_frames_count: Optional[int] = None
 ) -> Optional[List[np.ndarray]]:
     """
     Internal helper to sample a video and return a list of processed face images.
@@ -235,9 +236,12 @@ def _find_and_prepare_faces(
     This version uses a robust sequential reading method to avoid unreliable seeking
     with `cv2.VideoCapture.set()`, which was the root cause of the duplicate frames.
     """
+    debug_frames_saved = 0
+    max_debug_frames = debug_frames_count or 2  # Default to 2 if not specified
+    
     if debug_save_path:
         os.makedirs(debug_save_path, exist_ok=True)
-        print(f"[*] Debug mode ON. Saving processed faces to: {debug_save_path}")
+        print(f"[*] Debug mode ON. Saving up to {max_debug_frames} processed faces to: {debug_save_path}")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -314,17 +318,11 @@ def _find_and_prepare_faces(
 
                 if face is not None:
                     collected_faces.append(face)
-                    if debug_save_path:
+                    if debug_save_path and debug_frames_saved < max_debug_frames:
                         frame_idx = original_indices_processed[i]
                         save_name = f"{Path(video_path).stem}_found{len(collected_faces)}_frame{frame_idx}_{pre_method}.jpg"
                         cv2.imwrite(os.path.join(debug_save_path, save_name), face)
-
-    elif pre_method == 'dlib':
-        for frame_bgr in frames_to_process:
-            if len(collected_faces) >= NUM_SAMPLES: break
-            face = extract_aligned_face(frame_bgr)
-            if face is not None:
-                collected_faces.append(face)
+                        debug_frames_saved += 1
 
     if not collected_faces:
         print(f"[*] Preprocessing failed: No valid faces found in video using '{pre_method}'.")
@@ -336,12 +334,13 @@ def _find_and_prepare_faces(
 def preprocess_video_for_effort_model(
         video_path: str,
         pre_method: str,
-        debug_save_path: Optional[str] = None
+        debug_save_path: Optional[str] = None,
+        debug_frames_count: Optional[int] = None
 ) -> Optional[torch.Tensor]:
     """Preprocesses a video clip for the EffortDetector model."""
     print(f"[*] Starting video preprocessing for: {os.path.basename(video_path)} using '{pre_method}' method.")
 
-    selected_faces = _find_and_prepare_faces(video_path, pre_method, debug_save_path=debug_save_path)
+    selected_faces = _find_and_prepare_faces(video_path, pre_method, debug_save_path=debug_save_path, debug_frames_count=debug_frames_count)
     if not selected_faces:
         # _find_and_prepare_faces already logs the specific failure reason.
         print(f"[*] Video rejected: Could not extract any valid faces.")
