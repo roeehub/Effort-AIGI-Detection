@@ -750,7 +750,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 'window_step': '500',
                 'use_vad': 'true',
                 'vol_norm': 'false',
-                'threshold': '0.89'
+                'threshold': '0.55'
             }
 
             # Make the HTTP POST request with multipart/form-data
