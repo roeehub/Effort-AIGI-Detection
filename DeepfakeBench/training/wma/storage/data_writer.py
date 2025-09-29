@@ -93,6 +93,11 @@ class BackendDataWriter:
             # CRITICAL FIX: Sanitize participant_id to remove JSON corruption
             # The participant_id field sometimes contains raw JSON instead of clean ID
             participant_id = self._sanitize_participant_id(participant_id_raw)
+            
+            # Skip nonsensical participant IDs (sanitizer returns None for these)
+            if participant_id is None:
+                self.logger.warning(f"Skipping participant with nonsensical ID for video chunk: '{participant_id_raw}'")
+                continue
 
             self.logger.debug(
                 f"Processing participant - Raw ID: {repr(participant_id_raw)}, Sanitized ID: {participant_id}")
@@ -213,6 +218,11 @@ class BackendDataWriter:
 
             # CRITICAL FIX: Sanitize participant_id to remove JSON corruption
             participant_id = self._sanitize_participant_id(participant_id_raw)
+            
+            # Skip nonsensical participant IDs (sanitizer returns None for these)
+            if participant_id is None:
+                self.logger.warning(f"Skipping participant with nonsensical ID for API data: '{participant_id_raw}'")
+                continue
 
             self.logger.debug(
                 f"Processing participant for API - Raw ID: {repr(participant_id_raw)}, Sanitized ID: {participant_id}")
@@ -323,12 +333,20 @@ class BackendDataWriter:
         The participant_id field sometimes contains raw JSON fragments instead of clean IDs.
         This method extracts the actual participant ID and sanitizes it for filename use.
         
+        It also validates and rejects nonsensical IDs with too many special characters.
+        
         Args:
             participant_id_raw: Raw participant_id from gRPC message
             
         Returns:
-            Clean participant ID safe for filenames
+            Clean participant ID safe for filenames, or None if the ID is nonsensical
         """
+        # Check for nonsensical IDs with too many special characters
+        if self._is_nonsensical_id(participant_id_raw):
+            self.logger.warning(f"🚨 [IMPORTANT] REJECTING NONSENSICAL PARTICIPANT ID for data storage: '{participant_id_raw}' - "
+                              f"Contains too many special characters and appears to be corrupted data")
+            return None
+            
         try:
             # If it looks like a clean participant ID already, use it
             if len(participant_id_raw) < 50 and not any(c in participant_id_raw for c in ['"', '\n', ',', '{', '}']):
@@ -364,6 +382,50 @@ class BackendDataWriter:
                 f"Failed to sanitize participant_id '{participant_id_raw}': {e}. Using generated ID: {safe_id}")
             return safe_id
 
+    def _is_nonsensical_id(self, participant_id_raw: str) -> bool:
+        """
+        Check if a participant ID is nonsensical based on the number of special characters.
+        
+        A participant ID is considered nonsensical if it contains too many special characters
+        like $, &, %, #, @, !, etc., which usually indicates corrupted or malformed data.
+        
+        Args:
+            participant_id_raw: Raw participant ID to check
+            
+        Returns:
+            True if the ID appears nonsensical, False otherwise
+        """
+        if not participant_id_raw or len(participant_id_raw.strip()) == 0:
+            return True
+            
+        # Define special characters (excluding alphanumeric, underscore, hyphen, and common separators)
+        import re
+        special_chars = re.findall(r'[^a-zA-Z0-9_\-\.\s]', participant_id_raw)
+        
+        # Count total length vs special characters ratio
+        total_length = len(participant_id_raw)
+        special_count = len(special_chars)
+        
+        # Thresholds for nonsensical detection:
+        # 1. If more than 30% of characters are special characters
+        # 2. If there are more than 10 special characters total
+        # 3. If the ID contains multiple consecutive special characters (like $$$ or &&&)
+        special_ratio = special_count / total_length if total_length > 0 else 0
+        has_consecutive_specials = re.search(r'[^a-zA-Z0-9_\-\.\s]{3,}', participant_id_raw)
+        
+        is_nonsensical = (
+            special_ratio > 0.3 or  # More than 30% special characters
+            special_count > 10 or   # More than 10 special characters total
+            has_consecutive_specials  # Has 3+ consecutive special characters
+        )
+        
+        if is_nonsensical:
+            self.logger.debug(f"Nonsensical ID detected: '{participant_id_raw}' - "
+                            f"SpecialChars: {special_count}/{total_length} ({special_ratio:.1%}), "
+                            f"ConsecutiveSpecials: {bool(has_consecutive_specials)}")
+        
+        return is_nonsensical
+        
     def _sanitize_filename(self, filename: str) -> str:
         """
         Sanitize a string for safe filename use.
