@@ -205,7 +205,10 @@ class AudioWindowManager:
             print(f"!******** WINDOW ********!")
             print(f"[AudioWindowManager] Audio prob={prob_value:.3f}, prediction={current_prediction}, "
                   f"window={list(self.audio_window)}, verdict={pb2.BannerLevel.Name(current_verdict)}")
-            print(f"!******** WILL SEND AUDIO RESPONSE ********!")
+            
+            print(f"!******** AUDIO WILL SEND RESPONSE ********!")
+            print(f"[AudioWindowManager] Sending audio verdict: {pb2.BannerLevel.Name(current_verdict)}")
+            print(f"!*******************************************!")
 
             # Always return the current verdict (changed behavior)
             return current_verdict
