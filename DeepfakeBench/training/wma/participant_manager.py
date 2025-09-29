@@ -171,13 +171,13 @@ class AudioWindowManager:
     
     def process_audio_result(self, api_result: Dict) -> Optional[int]:
         """
-        Process an audio API result and decide if a banner should be sent.
-        
+        Process an audio API result and return the current verdict.
+
         Args:
             api_result: Dictionary containing ASV API response with 'probs' and 'prediction' keys
             
         Returns:
-            Banner level (pb2.GREEN or pb2.RED) if a verdict change occurred, None otherwise
+            Banner level (pb2.GREEN or pb2.RED) for every valid audio result, None for invalid/silent audio
         """
         if not api_result or 'probs' not in api_result or 'prediction' not in api_result:
             return None
@@ -196,28 +196,20 @@ class AudioWindowManager:
         current_prediction = api_result['prediction']
         
         with self.lock:
-            # Remember the previous verdict
-            previous_verdict = self._calculate_verdict()
-            
             # Add new prediction to the sliding window
             self.audio_window.append(current_prediction)
             
-            # Calculate new verdict
-            new_verdict = self._calculate_verdict()
-            
+            # Calculate current verdict
+            current_verdict = self._calculate_verdict()
+
             print(f"!******** WINDOW ********!")
             print(f"[AudioWindowManager] Audio prob={prob_value:.3f}, prediction={current_prediction}, "
-                  f"window={list(self.audio_window)}, verdict={pb2.BannerLevel.Name(new_verdict)}")
-            
-            # Return verdict only if it changed
-            if new_verdict != previous_verdict:
-                print(f"!******** AUDIO VERDICT CHANGE - WILL SEND RESPONSE ********!")
-                print(f"[AudioWindowManager] VERDICT CHANGED: {pb2.BannerLevel.Name(previous_verdict)} -> {pb2.BannerLevel.Name(new_verdict)}")
-                print(f"!**********************************************************!")
-                return new_verdict
-            
-            return None
-    
+                  f"window={list(self.audio_window)}, verdict={pb2.BannerLevel.Name(current_verdict)}")
+            print(f"!******** WILL SEND AUDIO RESPONSE ********!")
+
+            # Always return the current verdict (changed behavior)
+            return current_verdict
+
     def _calculate_verdict(self) -> int:
         """
         Calculate the current verdict based on the sliding window.
