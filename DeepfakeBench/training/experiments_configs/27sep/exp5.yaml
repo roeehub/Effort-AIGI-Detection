@@ -1,0 +1,161 @@
+# --- CONFIG: Curriculum v2 — L1+L2 Fusion (L1.5) ---
+name: "Curriculum_v2_L1L2_Fusion_8k_m0p30"
+
+# Core Effort/Optimizer Hyperparameters
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 1023
+
+# Training Schedule
+nEpochs: 20 # Will be overridden by max_train_steps
+early_stopping_enabled: false # We use the Lesson Gate instead
+
+# Dataloader Configuration
+dataloader_strategy: property_balancing
+frames_per_batch: 64
+frames_per_video: 8
+num_workers: 12
+prefetch_factor: 3
+
+# Fixed Context
+test_batch_size: 8
+val_split_ratio: 0.1
+evaluation_frequency: 3 # Will be overridden by evaluate_every_steps
+seed: 737
+data_subset_percentage: 1.0
+load_base_checkpoint: true
+property_balancing_enabled: true
+
+# learning rate scheduler
+lr_scheduler: 'cosine_with_warmup'
+total_training_steps: 8000
+lr_scheduler_warmup_steps: 800
+
+# ArcFace head usage
+use_arcface_head: true
+arcface_s: 30.0
+arcface_m: 0.30
+s_start: 10.0
+s_end: 30.0
+anneal_steps: 8000
+
+# Augmentation Version
+augmentation_version: 7
+
+# -------------------------------
+# --- Lesson Schedule & Gate ---
+# -------------------------------
+evaluate_every_steps: 700
+max_train_steps: 8000
+
+lesson_gate:
+  enabled: true
+  checks:
+    - metric: "macro_auc"
+      dataset: "val_in_dist"
+      threshold: 0.93
+      comparison: "ge"
+    - metric: "hardest5_auc"
+      dataset: "val_in_dist"
+      threshold: 0.90
+      comparison: "ge"
+  plateau_check:
+    enabled: true
+    patience: 2
+    min_delta: 0.001
+  guardrail_check:
+    enabled: true
+    metric: "real_real_auc"
+    dataset: "val_holdout"
+    max_drop: 0.01
+
+dataset_methods:
+  use_real_sources:
+    - "celeb_real"
+    - "youtube_real"
+    - "external_youtube_avspeech"
+
+  use_fake_methods_for_training:
+    - "deepfakes"
+    - "faceswapff"
+    - "faceshifter"
+    - "face2face"
+    - "neuraltextures"
+    - "fsgan"
+    - "fomm"
+    - "deepfakedetection"
+    - "simswap"
+    - "mobileswap"
+    - "inswap"
+    - "blendface"
+    - "facevid2vid"
+    - "danet"
+
+  use_fake_methods_for_validation:
+    - "stylegan3"
+    - "sadtalker"
+    - "lia"
+    - "rddm"
+    - "e4s"
+    - "hey_gen"
+    - "veo3_creations"
+    - "deep_live_cam_fake"
+
+# ---- FAKE MIX CONTROL (weights renormalize if needed) ----
+lesson_data_control:
+  enabled: true
+  fake_method_groups:
+    # L0 backbone — thin but present (7 * 0.035 = 0.245)
+    L0_deepfakes:
+      methods: ["deepfakes"]
+      weight: 0.035
+    L0_faceswapff:
+      methods: ["faceswapff"]
+      weight: 0.035
+    L0_faceshifter:
+      methods: ["faceshifter"]
+      weight: 0.035
+    L0_face2face:
+      methods: ["face2face"]
+      weight: 0.035
+    L0_neuraltextures:
+      methods: ["neuraltextures"]
+      weight: 0.035
+    L0_fsgan:
+      methods: ["fsgan"]
+      weight: 0.035
+    L0_fomm:
+      methods: ["fomm"]
+      weight: 0.035
+
+    # L1 trio — still the anchor (3 * 0.13 = 0.39)
+    L1_deepfakedetection:
+      methods: ["deepfakedetection"]
+      weight: 0.13
+    L1_simswap:
+      methods: ["simswap"]
+      weight: 0.13
+    L1_mobileswap:
+      methods: ["mobileswap"]
+      weight: 0.13
+
+    # L2 clean swaps (2 * 0.115 = 0.23)
+    L2_inswap:
+      methods: ["inswap"]
+      weight: 0.115
+    L2_blendface:
+      methods: ["blendface"]
+      weight: 0.115
+
+    # FR/Talking-head (0.09 + 0.045 = 0.135)
+    L2_facevid2vid:
+      methods: ["facevid2vid"]
+      weight: 0.09
+    L2_danet:
+      methods: ["danet"]
+      weight: 0.045
+
+use_group_dro: false
+use_focal_loss: false

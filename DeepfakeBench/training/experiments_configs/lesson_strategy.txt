@@ -1,0 +1,170 @@
+Deepfake Detector Curriculum — Working Blueprint (living doc)
+Why we’re switching to a curriculum (very brief)
+
+Training “all-at-once” plateaued: the model learned a decent boundary but stalled on several modern DF40 methods and generalized poorly to OOD fake–fake (e.g., Veo3/social). Group-DRO/naïve reweighting added noise; EFS were trivially easy and inflated scores without improving robustness. Conclusion: staged learning with targeted pressure is the right path.
+
+Pre-curriculum findings (context only)
+
+Easier (in your runs): classic/blended fakes and some early FR/FS (FF++: DeepFakes, FaceSwap, Face2Face, NeuralTextures), plus DF40 methods like FSGAN/FOMM.
+
+Harder (in your runs): “clean” swaps + one-shot/talking-head FR (e.g., Inswap, SimSwap/MobileSwap, FaceVid2Vid, MCNet, LIA, MRAA, OneShot_Free, PiRenderer, SadTalker); OOD fake-fake (Veo3, social).
+
+Important caveat: these labels are provisional. As we rebalance data/augs and change the training order, some “hard” may become “easy” and vice-versa.
+
+Method taxonomy/details live in a separate reference file; this summary focuses on the training plan and its rationale.
+
+The lesson plan (starting point, meant to evolve)
+Data reality we’re optimizing for
+
+DF40_REG: ~20 core methods (thousands of vids each).
+
+FF++: ~6 older methods.
+
+EFS: ~6 methods, easy; tiny share in train, keep mainly for eval.
+
+VEO3: 1 method, ~150 vids (very hard, very small).
+
+HEYGEN: 1 method, ~75 vids (tiny, hard; best as holdout probe).
+
+Your social-media set: ~150 real + ~150 fake; heterogeneous OOD domain.
+
+High-level strategy
+
+Start narrow with high-signal data to stabilize the boundary and avoid shortcuts.
+
+Introduce only the failing families next, with precise sampling and harder augmentations.
+
+Finish with OOD (Veo3 + social) under heavy “social media” degradations to close fake-fake gaps.
+
+Keep EFS mostly for validation; don’t let “easy wins” steer training.
+
+Lessons (L0→L4)
+
+L0 — Calibrate the boundary (3–5k steps)
+
+Train: FF++ {DeepFakes, FaceSwap, FaceShifter, Face2Face, NeuralTextures} + DF40 {FSGAN, FOMM}.
+
+Aug: moderate (V4). LR 1e-4. ArcFace m=0.20 (s anneal on).
+
+Goal: quick, clean separation before adding complexity.
+
+L1 — Classic + semi-clean (8–12k)
+
+Add DF40 {DeepFakeDetection, FaceShifter(DF40), SimSwap, MobileSwap}; keep ~40% L0 to avoid forgetting.
+
+Aug: portfolio/surgical (V6). LR 1e-4. m=0.28.
+
+L2 — Problem-cluster bootcamp (15–18k)
+
+Focus DF40 {Inswap, FaceVid2Vid, MCNet, LIA, MRAA, OneShot_Free, PiRenderer, SadTalker}; keep ~30% L1 backbone.
+
+Sampler: per_method (precise quotas).
+
+Aug: V6. LR 1e-4. m=0.30.
+
+Targeted pressure: use OHEM (online hard example mining) per method and adaptive method quotas (increase only if a method’s AUC deficit persists).
+
+L3 — Talking-head / AV-sync realism (8–10k)
+
+Emphasize {SadTalker, OneShot_Free, FaceVid2Vid} (+ Wav2Lip if available).
+
+Sampler: per_method (cap any method once ≥95% AUC for 2 evals).
+
+Aug: V6 + occasional lip-region blur/compression.
+
+LR 8e-5. m=0.33.
+
+L4 — Final-boss OOD (10–12k)
+
+Add VEO3 and your social-media fakes; keep 60–70% L2/L3 mix to prevent overfit to tiny OOD.
+
+Bring in social-media real (5–10%) to align domain.
+
+Sampler: property_balancing (stability).
+
+Aug: heavy (V5) mixed with V6 (down/up-scale + strong compression).
+
+LR 5e-5. m=0.35.
+
+HEYGEN: holdout/probe only (optionally ≤5% in train late, with heavy aug, if OOD won’t budge).
+
+Frame-level training remains at 8 frames/video. Video-level aggregation (mean vs trimmed-mean/percentile) will be tuned later on a small clip set.
+
+Gates, cadence, and monitoring (how we move between lessons)
+
+Splits per lesson
+
+Train: lesson’s method list.
+
+Val (in-dist): same list, disjoint videos.
+
+Holdout: everything not in train for that lesson + tiny/rare sources (EFS, HEYGEN, VEO3, social if not used yet).
+
+Metrics
+
+Per-method AUC (Val).
+
+In-dist macro-AUC (unweighted mean across lesson methods).
+
+Hardest-5 AUC (mean of the 5 lowest AUC methods on Val).
+
+Holdout macro-AUC (by method family) and holdout real-real AUC (guardrail).
+
+Calibration: ECE or reliability curve. Plus FN/FP mining and prob histograms on key methods.
+
+Promotion gates (Val unless noted)
+
+L0: hardest-5 ≥0.90, macro-AUC ≥0.92.
+
+L1: hardest-5 ≥0.90, macro-AUC ≥0.93.
+
+L2: hardest-5 ≥0.88 (problem set), macro-AUC ≥0.92.
+
+L3: hardest-5 ≥0.90, macro-AUC ≥0.93.
+
+L4: holdout OOD (VEO3/social) macro-AUC trending ↑; holdout real-real not ↓ by >1 pt.
+
+Plateau rule: when the optimized metric improves <1 pt across two consecutive evals and the gate is met, move on. Never promote if holdout real-real drops >1 pt from lesson start.
+
+Eval cadence
+
+Val every 600 steps.
+
+Holdout/OOD every 1,800 steps in L0–L1; 900–1,000 in L2–L4.
+
+Save top-3 checkpoints by holdout macro-AUC each lesson; carry the best forward.
+
+Samplers and why
+
+Property-balancing (L0, L1, L4): most stable; preserves attribute diversity (codec/resolution) while mixing methods.
+
+Per-method (L2, L3): lets us hammer specific laggards without destabilizing the rest, especially when combined with OHEM and adaptive quotas.
+
+Random sampling: not recommended here; you need directed pressure.
+
+ArcFace margin schedule (and how to sweep)
+
+m: 0.20 → 0.28 → 0.30 → 0.33 → 0.35 across L0→L4.
+
+Rationale: increase inter-class angular separation as the task shifts from obvious to subtle cues.
+
+Per-lesson sweep: test ±0.02 around the default; if Val stalls with over-confident train, drop m by 0.02; if Val probs bunch near 0.5–0.7, raise m by 0.02.
+
+OOD/social media usage
+
+Use your 150 social real/fake primarily in L4 (fake 10–15% of fakes; real 5–10% of reals), with a 60/20/20 split and stratification to avoid leakage. Treat them as distinct “methods” for reporting so you can steer reweighting.
+
+This is a starting point (expect evolution)
+
+This blueprint is the root of the curriculum, not the final word. We will revise:
+
+method groupings (as “hard”/“easy” flip with better mixes/augs),
+
+quotas (driven by adaptive deficits),
+
+margins/LR per lesson,
+
+when/if to introduce HEYGEN in train,
+
+and finally the video-level aggregation rule.
+Each new run should update the gates, quotas, and even lesson boundaries. The intent is dynamic curriculum guided by per-method AUC trends and OOD progress, not a fixed syllabus.

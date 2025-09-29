@@ -1,0 +1,10 @@
+9 Sep:
+    exp1_aug_v3_lr2e-4_fpv4_focal_loss_gamma2_0909-2257
+    exp1_aug_v3_lr2e-4_fpv4_focal_loss_gamma3_0909-2256
+
+10 Sep:
+    exp3_fpv8_aug3_gamma3_lr2e-4_Isolate_Sampling_0910-1845
+
+11 Sep:
+    exp4_scratch_aug5_alpha0.62_max_lr1e-4_constant_scheduler_alpha_tune_aggressive_0911-1748
+    exp5_scratch_aug5_alpha0.57_max_lr1.5e-4_cosine_with_warmup_0911-1747

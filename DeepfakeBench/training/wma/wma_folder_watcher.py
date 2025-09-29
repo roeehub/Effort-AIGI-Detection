@@ -4,7 +4,15 @@ from __future__ import annotations
 """
 WMA folder watcher (Windows)
 - Monitors:
-  - C:\Program Files\WMA\data\video\ for video_chunk_* folders
+  - def save_state(state: Dict[str, dict], enable_file_logging=False) -> None:
+    if not enable_file_logging:
+        return  # Skip state saving if file logging is disabled
+
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except Exception as e:
+        log_err(f"Failed saving state to {STATE_FILE}: {e}")ogram Files\WMA\data\video\ for video_chunk_* folders
   - C:\Program Files\WMA\data\audio\ for audio_*.ogg files
 - Sends VIDEO-ONLY and AUDIO-ONLY uplinks via your existing gRPC proto
 - Receives downlinks and logs them (JSON + TXT), like in cloud_client_tester.py
@@ -73,10 +81,6 @@ POLL_SEC = float(os.environ.get("WMA_POLL_SEC", "2.0"))  # how often to scan the
 # Configuration for the new Pipe Listener Mode
 BANNER_PIPE_NAME = r"\\.\pipe\wma.ui_overlay_B.banners"
 
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-
 # ---------------------
 # Logging helpers
 # ---------------------
@@ -103,7 +107,10 @@ def log_err(msg: str) -> None:
 # ---------------------
 # Persistent "already-sent" index
 # ---------------------
-def load_state() -> Dict[str, dict]:
+def load_state(enable_file_logging=False) -> Dict[str, dict]:
+    if not enable_file_logging:
+        return {}  # Skip state loading if file logging is disabled
+
     if STATE_FILE.exists():
         try:
             return json.loads(STATE_FILE.read_text(encoding="utf-8"))
@@ -123,14 +130,27 @@ def save_state(state: Dict[str, dict]) -> None:
 # Downlink logging (JSON + TXT, per-message)
 # ---------------------
 class DownlinkLogger:
-    def __init__(self):
+    def __init__(self, enable_logging=False):
+        self.enable_logging = enable_logging
+        if not enable_logging:
+            print("[LOG] File logging disabled. Use --enable-file-logging to enable.")
+            return
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.run_dir = LOG_DIR / f"downlinks_{ts}_msgs"
-        self.run_dir.mkdir(parents=True, exist_ok=True)
-        self.counter = 0
-        print(f"[LOG] Downlinks will be saved to: {self.run_dir}")
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            self.run_dir = LOG_DIR / f"downlinks_{ts}_msgs"
+            self.run_dir.mkdir(parents=True, exist_ok=True)
+            self.counter = 0
+            print(f"[LOG] Downlinks will be saved to: {self.run_dir}")
+        except Exception as e:
+            print(f"[LOG] Warning: Could not create log directory: {e}")
+            self.enable_logging = False
 
     def write(self, msg) -> None:
+        if not self.enable_logging:
+            return  # Skip file logging if disabled
+
         idx = self.counter
         self.counter += 1
         seq = getattr(msg, "sequence_number", None)
@@ -328,11 +348,11 @@ def build_audio_only_message(audio_path: Path, meta_path: Path, client_id: str, 
 # gRPC Stream (uplink generator + downlink listener)
 # ---------------------
 class StreamClient:
-    def __init__(self, server_addr: str):
+    def __init__(self, server_addr: str, enable_file_logging=False):
         self.server_addr = server_addr
         self.channel = grpc.insecure_channel(server_addr)
         self.stub = pb2_grpc.StreamingServiceStub(self.channel)
-        self.downlink_logger = DownlinkLogger()
+        self.downlink_logger = DownlinkLogger(enable_file_logging)
         self._stop_event = threading.Event()
 
     def stop(self):
@@ -401,7 +421,8 @@ def watch_and_stream(video_dir: Path,
                      meeting_id: str,
                      session_id: str,
                      client_id: str,
-                     state: Dict[str, dict]) -> None:
+                     state: Dict[str, dict],
+                     enable_file_logging: bool = False) -> None:
     log_info(f"Watching Video: {video_dir}")
     log_info(f"Watching Audio: {audio_dir}")
 
@@ -459,7 +480,7 @@ def watch_and_stream(video_dir: Path,
         if error_msg:
             state[item_name]["error"] = error_msg
 
-        save_state(state)
+        save_state(state, enable_file_logging)
         if status == "sent":
             log_info(log_msg)
         else:
@@ -514,7 +535,7 @@ def watch_and_stream(video_dir: Path,
                             log_info(f"Video chunk {c.name} queued.")
                             found_new_item = True
                         queued_once.add(c.name)
-                        save_state(state)
+                        save_state(state, enable_file_logging)
             except FileNotFoundError:
                 log_err(f"Video directory not found: {video_dir}")
             except Exception as e:
@@ -545,7 +566,7 @@ def watch_and_stream(video_dir: Path,
                         else:
                             state[f.name] = {"status": "error", "error": "build_failed"}
                         queued_once.add(f.name)
-                        save_state(state)
+                        save_state(state, enable_file_logging)
             except FileNotFoundError:
                 log_err(f"Audio directory not found: {audio_dir}")
             except Exception as e:
@@ -687,34 +708,38 @@ def run_pipe_listener_mode():
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="WMA Folder Watcher and Pipe Listener")
-    # --- New default is pipe mode, so folder-watching is now the optional flag ---
+    # --- Default is pipe mode, folder mode is optional ---
     parser.add_argument("--read-from-folder", action="store_true",
-                        help="If set, uses the old logic of watching folders for data. Default is the new pipe listener mode.")
+                        help="If set, uses folder watching mode instead of the default pipe listener mode.")
 
     # --- Arguments required ONLY for folder mode ---
-    parser.add_argument("--server", default=SERVER_ADDR, help="gRPC server host:port (folder mode only)")
+    parser.add_argument("--server", default="34.116.214.60:50051", help="gRPC server host:port (folder mode only)")
     parser.add_argument("--video-dir", default=str(VIDEO_DIR),
                         help="Folder with video_chunk_* subfolders (folder mode only)")
     parser.add_argument("--audio-dir", default=str(AUDIO_DIR), help="Folder with audio_*.ogg files (folder mode only)")
-    parser.add_argument("--meeting-id", required=False, help="Meeting ID to use (required for folder mode)")
+    parser.add_argument("--meeting-id", default="AAA", help="Meeting ID to use (default: AAA)")
     parser.add_argument("--session-id", default=f"sess_{uuid.uuid4()}", help="Session ID to use (folder mode only)")
-    parser.add_argument("--client-id", required=False, help="Client ID to use (required for folder mode)")
+    parser.add_argument("--client-id", default="AAA", help="Client ID to use (default: AAA)")
+    parser.add_argument("--enable-file-logging", action="store_true",
+                        help="Enable logging to files (requires admin permissions)")
 
     args = parser.parse_args()
 
     # --- MODE SELECTION ---
     if args.read_from_folder:
-        # OLD BEHAVIOR: Watch folders and stream via gRPC
-        log_info("Running in Folder Watcher mode. This is the legacy behavior.")
-        if not args.meeting_id or not args.client_id:
-            parser.error("--meeting-id and --client-id are required when using --read-from-folder")
+        # FOLDER MODE: Watch folders and stream via gRPC (your manual mode)
+        log_info("Running in Folder Watcher mode.")
+        # Default values are provided, so no validation needed
+        log_info(f"Server: {args.server}")
+        log_info(f"Meeting ID: {args.meeting_id}")
+        log_info(f"Client ID: {args.client_id}")
 
         log_info(f"Server: {args.server}")
         log_info(f"Video dir: {args.video_dir}")
         log_info(f"Audio dir: {args.audio_dir}")
 
-        client = StreamClient(args.server)
-        state = load_state()
+        client = StreamClient(args.server, args.enable_file_logging)
+        state = load_state(args.enable_file_logging)
         try:
             client.wait_until_available()
             watch_and_stream(
@@ -724,15 +749,21 @@ def main():
                 meeting_id=args.meeting_id,
                 session_id=args.session_id,
                 client_id=args.client_id,
-                state=state
+                state=state,
+                enable_file_logging=args.enable_file_logging
             )
         except Exception as e:
             log_err(f"Unhandled exception in main loop: {e}")
         finally:
             client.stop()
     else:
-        # NEW DEFAULT BEHAVIOR: Listen to the named pipe for banners
-        log_info("Running in Pipe Listener mode (default). Use --read-from-folder to switch to legacy mode.")
+        # DEFAULT BEHAVIOR: Listen to named pipe for banners
+        log_info("Running in Pipe Listener mode (default).")
+        if win32pipe is None:
+            log_err("The 'pywin32' library is required to run in pipe mode.")
+            log_err("Please install it by running: pip install pywin32")
+            return
+        run_pipe_listener_mode()
         if win32pipe is None:
             log_err("The 'pywin32' library is required to run in the default pipe mode.")
             log_err("Please install it by running: pip install pywin32")

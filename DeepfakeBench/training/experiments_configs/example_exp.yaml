@@ -1,0 +1,119 @@
+# --- train_parameters.yaml ---
+
+# Core Effort/Optimizer Hyperparameters
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 1023
+
+# Training Schedule
+nEpochs: 20
+early_stopping_enabled: true
+early_stopping_patience: 5
+early_stopping_min_delta: 0.01
+
+# Dataloader Configuration
+dataloader_strategy: property_balancing
+frames_per_batch: 64
+frames_per_video: 8
+num_workers: 12
+prefetch_factor: 3
+
+# Fixed Context
+test_batch_size: 8
+val_split_ratio: 0.1
+evaluation_frequency: 5
+seed: 737
+data_subset_percentage: 1.0
+load_base_checkpoint: false
+property_balancing_enabled: true
+
+# learning rate scheduler
+lr_scheduler: None                   # None = constant LR.
+total_training_steps: 50000          # Total steps for the entire training run
+lr_scheduler_warmup_steps: 1000      # Number of steps for linear warmup
+
+# loss
+use_focal_loss: true
+focal_loss_gamma: 3.0
+focal_loss_alpha: None
+
+# --- NEW: HIERARCHICAL SAMPLING WEIGHTS ---
+# These parameters directly control the new sampling logic in the dataloader.
+# The keys MUST match the 'method_category' strings in your manifest.
+# Values in each section should sum to 1.0.
+
+real_category_weights:
+  BASE_DF40_REG: 0.60               # control "youtube_real", "faceforensics++", "celeb_real"
+  external_youtube_avspeech: 0.40   # control "external_youtube_avspeech"
+  vcd: 0.0                          # control "VCD" - very small dataset, so ignore for now.
+
+fake_category_weights:
+  BASE_DF40_EFS: 0.05       # "dit", "sit", "ddim", "rddm", "vqgan", "stylegan2", "stylegan3", "styleganxl"
+  BASE_DF40_REG: 0.60       #  "simswap", "fsgan", "fomm", "facedancer", "inswap", "one_shot_free", "blendface", "lia", "mobileswap", "mcnet", "uniface", "mraa", "facevid2vid", "wav2lip", "sadtalker", "danet", "e4s", "pirender", "tpsm", "hyperreenact",
+  BASE_FF++: 0.25           # 'deepfakes', 'face2face', 'faceshifter', 'faceswap', 'neuraltextures', 'deepfakedetection'
+  hey_gen: 0.0             # Keep these novel ones.
+  veo3_creations: 0.10      # Keep these novel ones.
+
+augmentation_version: 4
+
+
+# --- DATASET METHOD SPLITS ---
+# Defines the total pool of data available for training vs. validation.
+
+dataset_methods:
+  use_real_sources:
+    - "celeb_real"
+    - "faceforensics++"
+    - "youtube_real"
+    - "external_youtube_avspeech"
+    - "vcd"
+
+  use_fake_methods_for_training:
+    # --- FF++ Methods ---
+    - "deepfakedetection"
+    - "deepfakes"
+    - "face2face"
+    - "faceshifter"
+    - "neuraltextures"
+    # --- Novel Methods ---
+    - "veo3_creations"
+    # --- DF40 EFS Methods ---
+    - "dit"
+    - "rddm"
+    - "sit"
+    - "stylegan3"
+    - "styleganxl"
+    - "vqgan"
+    # --- DF40 REG Methods ---
+    - "mraa"
+    - "blendface"
+    - "danet"
+    - "e4s"
+    - "facedancer"
+    - "facevid2vid"
+    - "fsgan"
+    - "inswap"
+    - "lia"
+    - "mcnet"
+    - "mobileswap"
+    - "one_shot_free"
+    - "pirender"
+    - "simswap"
+    - "uniface"
+    - "wav2lip" # A classic lip-sync method
+
+  use_fake_methods_for_validation:
+    # A small, representative holdout set to check for generalization.
+    - "faceswap"      # A classic FF++ swap
+    - "fomm"          # A classic reenactment method
+    - "stylegan2"     # A foundational GAN method
+    - "ddim"          # A foundational diffusion method
+    - "sadtalker"    # A foundational audio-driven method
+    - "hey_gen"  # little data
+    - "tpsm"  # little data
+    - "hyperreenact" # little data
+
+# Descriptive name for this specific experimental run
+name: "exp1_scratch_aug4_alpha0.5_max_lr1e-4_constant_scheduler_BASELINE"
