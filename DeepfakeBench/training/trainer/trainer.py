@@ -26,6 +26,11 @@ from torchdata.datapipes.iter import IterableWrapper, Mapper, Filter  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
 import gc
+import csv
+import tempfile
+import shutil
+from datetime import datetime
+from sklearn.metrics import confusion_matrix
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -65,7 +70,8 @@ class Trainer(object):
         # --- Comprehensive checkpoint tracking ---
         # List of dicts: [{'metric': float, 'epoch': int, 'gcs_path': str, ...}, ...]
         self.top_n_checkpoints = []
-        self.top_n_size = self.config.get('checkpointing', {}).get('top_n_size', 3)
+        # self.top_n_size = self.config.get('checkpointing', {}).get('top_n_size', 3)
+        self.top_n_size = 6  # Save top 6 by default
         self.first_best_gcs_path = None
         self.top_n_saved_count = 0
 
@@ -74,13 +80,19 @@ class Trainer(object):
 
         self.early_stopping_config = self.config.get('early_stopping', {})
         self.early_stopping_enabled = self.early_stopping_config.get('enabled', False)
+
+        # This prevents an AttributeError when early stopping is disabled but the primary
+        self.early_stopping_patience = self.early_stopping_config.get('patience', 3)
+        self.early_stopping_min_delta = self.early_stopping_config.get('min_delta', 0.0001)
+        self.epochs_without_improvement = 0
+
         if self.early_stopping_enabled:
-            self.early_stopping_patience = self.early_stopping_config.get('patience', 3)
-            # What is the minimum change to be considered an improvement
-            self.early_stopping_min_delta = self.early_stopping_config.get('min_delta', 0.0001)
-            self.epochs_without_improvement = 0
             self.logger.info(
                 f"✅ Early stopping enabled: patience={self.early_stopping_patience}, min_delta={self.early_stopping_min_delta}")
+        else:
+            # Optional: Log that it's disabled for clarity, but the attributes are still safely initialized.
+            self.logger.info(
+                "Early stopping is disabled. Checkpointing will still occur based on primary metric improvement.")
 
         self.early_stop_triggered = False  # Flag to signal the main loop
 
@@ -737,19 +749,43 @@ class Trainer(object):
                     break
 
             # Perform a final optimizer step for any remaining gradients at the end of the epoch
-            if epoch_len > 0 and epoch_len % accumulation_steps != 0 and accumulation_steps > 1:
+            try:
+                # 'i' is the index of the last item processed by the loop.
+                num_iterations_run = i + 1
+            except NameError:
+                num_iterations_run = 0
+
+            # Perform a final optimizer step for any remaining gradients at the end of the epoch.
+            if num_iterations_run > 0 and num_iterations_run % accumulation_steps != 0 and accumulation_steps > 1:
                 self.logger.info("Performing final optimizer step for dangling gradients at end of epoch.")
-                if hasattr(self, 'gradient_clip_val') and self.gradient_clip_val:
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
 
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
+                try:
+                    # --- ATTEMPT THE OPTIMIZER STEP ---
+                    if hasattr(self, 'gradient_clip_val') and self.gradient_clip_val:
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
 
-                if self.scheduler is not None:
-                    self.scheduler.step()
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
 
-                self.optimizer.zero_grad()
+                    if self.scheduler is not None:
+                        self.scheduler.step()
+
+                    # On success, zero the gradients for the next epoch.
+                    self.optimizer.zero_grad()
+
+                except AssertionError as e:
+                    # --- FAILSAFE: CATCH THE ERROR ---
+                    self.logger.error(
+                        "!!! FAILSAFE TRIGGERED: Caught AssertionError during final optimizer step. "
+                        "This indicates a logic error in gradient accumulation handling. "
+                        f"Error: {e}. "
+                        "Skipping this optimizer step and discarding stale gradients to prevent a crash."
+                    )
+                    # Manually discard the stale gradients that caused the error.
+                    self.optimizer.zero_grad()
+                    if hasattr(self.scaler, '_per_optimizer_states'):
+                        self.scaler._per_optimizer_states.clear()
         else:
             raise ValueError(f"Unsupported training strategy: {strategy}")
 
@@ -842,7 +878,7 @@ class Trainer(object):
                 step_cnt=step_cnt,
                 validation_loader=self.val_holdout_loader,
                 log_prefix="val_holdout",
-                is_primary_metric=not self.gate_enabled
+                is_primary_metric=True  # This is the primary metric set for checkpointing
             )
             all_val_metrics['val_holdout'] = holdout_metrics
 
@@ -873,7 +909,7 @@ class Trainer(object):
         total_videos = sum(len(v) for v in validation_loader.videos_by_method.values())
         if total_videos == 0:
             self.logger.warning(f"No validation videos found for loader with prefix '{log_prefix}'. Skipping.")
-            return
+            return {}  # Return an empty dict to avoid errors
 
         self.logger.info(f"--- Starting validation for '{log_prefix}' set ({total_videos} videos)...")
         val_start_time = time.time()
@@ -923,7 +959,7 @@ class Trainer(object):
 
         if not all_labels:
             self.logger.error(f"Validation failed for '{log_prefix}': No data was processed.")
-            return
+            return {}  # Return an empty dict
 
         total_val_time = time.time() - val_start_time
         self.logger.info(f"Validation for '{log_prefix}' finished in {total_val_time:.2f}s. Calculating metrics...")
@@ -945,28 +981,6 @@ class Trainer(object):
                 self.logger.info(f"Overall {log_prefix} {name}: {value:.4f}")
 
         wandb_log_dict[f'{log_prefix}/probabilities'] = wandb.Histogram(np.array(all_preds))
-
-        # Metrics Per Method, logged with the correct prefix.
-        # This first block is kept for non-AUC metrics like ACC and for populating the W&B table.
-        method_metrics = {}
-        for method in method_preds.keys():
-            method_metrics[method] = get_test_metrics(np.array(method_preds[method]),
-                                                      np.array(method_labels[method]))
-            for name, value in method_metrics[method].items():
-                if name in ['acc']:
-                    wandb_log_dict[f'{log_prefix}/method/{method}/{name}'] = value
-                    self.logger.info(f"Method {method} ({log_prefix}) val {name}: {value:.4f}")
-
-        # Create and log a W&B Table, namespaced with the prefix.
-        if self.wandb_run:
-            columns = ["epoch", "method", "acc", "auc", "eer", "n_samples"]
-            table_data = []
-            for method, metrics in method_metrics.items():
-                table_data.append([
-                    epoch + 1, method, metrics.get('acc'), metrics.get('auc'),
-                    metrics.get('eer'), len(method_labels[method])
-                ])
-            wandb_log_dict[f"{log_prefix}/method_table"] = wandb.Table(columns=columns, data=table_data)
 
         # --- THIS IS THE CRUCIAL CONTROL BLOCK ---
         # All checkpointing and early stopping logic is now conditional on this being the
@@ -993,6 +1007,7 @@ class Trainer(object):
                         self.wandb_run.summary['best/acc'] = overall_metrics.get('acc', 0)
 
                     if self.config.get('save_ckpt', True):
+                        self.logger.info(f"✅ Saving new best checkpoint to GCS (Epoch {epoch + 1})...")
                         if self.first_best_gcs_path is None:
                             new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
                                                           eer=overall_metrics.get('eer'), ckpt_prefix='first_best')
@@ -1037,13 +1052,12 @@ class Trainer(object):
         if self.early_stopping_enabled:
             wandb_log_dict['val_primary/epochs_without_improvement'] = self.epochs_without_improvement
 
-        if self.wandb_run:
-            self.wandb_run.log(wandb_log_dict)
-
-        # --- Calculate and log additional metrics for Lesson Gate ---
-        # START: MODIFIED LOGIC FOR AUC CALCULATION
+        # --- Calculate and log MEANINGFUL per-method and derived metrics ---
         per_method_aucs = []
         real_source_names = self.config.get('dataset_methods', {}).get('use_real_sources', [])
+
+        # Create a temporary dictionary for method metrics to build the table
+        method_table_metrics = {}
 
         # 1. Pool all real predictions and labels from the validation set
         all_real_preds = []
@@ -1053,9 +1067,9 @@ class Trainer(object):
                 all_real_preds.extend(method_preds[method_name])
                 all_real_labels.extend(method_labels[method_name])
 
-        # 2. Calculate AUC for each FAKE method against the complete pool of REAL samples
+        # 2. Calculate metrics for each FAKE method against the complete pool of REAL samples
         if all_real_labels:
-            for method in method_preds.keys():
+            for method in sorted(method_preds.keys()):
                 # Only calculate for fake methods
                 if method not in real_source_names:
                     combined_preds = np.array(method_preds[method] + all_real_preds)
@@ -1065,16 +1079,47 @@ class Trainer(object):
                     if len(np.unique(combined_labels)) > 1:
                         # Calculate metrics on this combined (fake vs. all real) set
                         fake_vs_real_metrics = get_test_metrics(combined_preds, combined_labels)
-                        auc = fake_vs_real_metrics.get('auc', -1.0)
-                        per_method_aucs.append(auc)
-                        # Log this correct, meaningful AUC for monitoring
-                        wandb_log_dict[f'{log_prefix}/per_fake_method_auc/{method}'] = auc
+                        method_table_metrics[method] = fake_vs_real_metrics
+
+                        # Log meaningful metrics for monitoring
+                        for metric_name in ['acc', 'auc', 'eer']:
+                            if metric_name in fake_vs_real_metrics:
+                                wandb_log_dict[f'{log_prefix}/method/{method}/{metric_name}'] = fake_vs_real_metrics[
+                                    metric_name]
+
+                        if 'auc' in fake_vs_real_metrics:
+                            per_method_aucs.append(fake_vs_real_metrics['auc'])
                     else:
                         self.logger.warning(
-                            f"Skipping AUC for method '{method}' in '{log_prefix}': not enough class diversity.")
+                            f"Skipping metrics for method '{method}' in '{log_prefix}': not enough class diversity.")
         else:
             self.logger.warning(
                 f"No real samples found in validation set '{log_prefix}'. Cannot calculate per-method AUCs.")
+
+        # Also add real methods to the table and log their accuracy for monitoring
+        for method in sorted(method_preds.keys()):
+            if method in real_source_names:
+                # For real methods, we calculate metrics on their own samples.
+                # Note: AUC/EER are not meaningful here as there's only one class (label 0),
+                # but ACC correctly measures the model's ability to classify them as real.
+                real_method_metrics = get_test_metrics(np.array(method_preds[method]),
+                                                       np.array(method_labels[method]))
+                method_table_metrics[method] = real_method_metrics
+
+                # Log the accuracy for this real method to get the time-series plot back
+                if 'acc' in real_method_metrics:
+                    wandb_log_dict[f'{log_prefix}/method/{method}/acc'] = real_method_metrics['acc']
+
+        # Create and log a W&B Table, namespaced with the prefix.
+        if self.wandb_run:
+            columns = ["epoch", "method", "acc", "auc", "eer", "n_samples"]
+            table_data = []
+            for method, metrics in method_table_metrics.items():
+                table_data.append([
+                    epoch + 1, method, metrics.get('acc'), metrics.get('auc'),
+                    metrics.get('eer'), len(method_labels[method])
+                ])
+            wandb_log_dict[f"{log_prefix}/method_table"] = wandb.Table(columns=columns, data=table_data)
 
         if per_method_aucs:
             # Macro AUC: Unweighted average of per-method AUCs
@@ -1082,36 +1127,34 @@ class Trainer(object):
             wandb_log_dict[f'{log_prefix}/derived/macro_auc'] = macro_auc
 
             # Hardest-k AUC
-            k_config_key = 'hardest_k' if 'lesson_gate' in self.config else 'hardest_k_fallback'
             k = self.config.get('lesson_gate', {}).get('hardest_k', 5)
             sorted_aucs = sorted(per_method_aucs)
             hardest_k_aucs = sorted_aucs[:k]
             hardest_k_auc_mean = np.mean(hardest_k_aucs)
             wandb_log_dict[f'{log_prefix}/derived/hardest_{k}_auc'] = hardest_k_auc_mean
-
-            # Real-Real AUC (if real methods are present in this validation set)
-            real_preds = []
-            real_labels = []
-            for method_name in real_source_names:
-                if method_name in method_preds:
-                    real_preds.extend(method_preds[method_name])
-                    real_labels.extend(method_labels[method_name])
-
-            if len(real_labels) > 1 and len(
-                    np.unique(real_labels)) > 1:  # Can only compute AUC with multiple classes
-                real_real_metrics = get_test_metrics(np.array(real_preds), np.array(real_labels))
-                real_real_auc = real_real_metrics.get('auc', 0.0)
-                wandb_log_dict[f'{log_prefix}/derived/real_real_auc'] = real_real_auc
-            else:
-                real_real_auc = None  # Can't be computed with only one class (all reals are label 0)
         else:
-            macro_auc, hardest_k_auc_mean, real_real_auc = None, None, None
+            macro_auc, hardest_k_auc_mean = None, None
+
+        # Real-Real AUC calculation can remain the same
+        real_preds_for_auc = []
+        real_labels_for_auc = []
+        for method_name in real_source_names:
+            if method_name in method_preds:
+                real_preds_for_auc.extend(method_preds[method_name])
+                real_labels_for_auc.extend(method_labels[method_name])
+
+        if len(real_labels_for_auc) > 1 and len(np.unique(real_labels_for_auc)) > 1:
+            real_real_metrics = get_test_metrics(np.array(real_preds_for_auc), np.array(real_labels_for_auc))
+            real_real_auc = real_real_metrics.get('auc', 0.0)
+            wandb_log_dict[f'{log_prefix}/derived/real_real_auc'] = real_real_auc
+        else:
+            real_real_auc = None
 
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
 
         returned_metrics = {
             'overall': overall_metrics,
-            'per_method': method_metrics,
+            'per_method': method_table_metrics,
             'macro_auc': macro_auc,
             f'hardest_{k}_auc' if 'k' in locals() else 'hardest_k_auc': hardest_k_auc_mean if 'hardest_k_auc_mean' in locals() else None,
             'real_real_auc': real_real_auc
@@ -1220,3 +1263,145 @@ class Trainer(object):
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.info("===> OOD Monitoring Done!")
+
+    def _generate_and_upload_reports(self, log_prefix, frame_data, video_data, all_preds, all_labels, method_preds,
+                                     method_labels):
+        """
+        Generates and uploads detailed CSV and TXT reports to GCS.
+        """
+        self.logger.info("Generating detailed validation reports...")
+        local_temp_dir = tempfile.mkdtemp()
+        try:
+            # 1. --- Create Frame-level CSV ---
+            frame_csv_path = os.path.join(local_temp_dir, 'frames_report.csv')
+            with open(frame_csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['method', 'label', 'video_id', 'frame_path', 'frame_prob'])
+                writer.writerows(frame_data)
+            self.logger.info(f"Frame report generated with {len(frame_data)} entries.")
+
+            # 2. --- Create Video-level CSV ---
+            video_csv_path = os.path.join(local_temp_dir, 'videos_report.csv')
+            with open(video_csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['method', 'label', 'video_id', 'avg_video_prob', 'prediction', 'is_correct'])
+                writer.writerows(video_data)
+            self.logger.info(f"Video report generated with {len(video_data)} entries.")
+
+            # 3. --- Create Summary TXT file ---
+            summary_txt_path = os.path.join(local_temp_dir, 'summary_report.txt')
+            with open(summary_txt_path, 'w') as f:
+                f.write(f"Validation Summary Report for: {log_prefix}\n")
+                f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 40 + "\n")
+                f.write("Overall Performance\n")
+                f.write("-" * 40 + "\n")
+
+                # Calculate overall confusion matrix
+                # Note: fake=1 (positive), real=0 (negative)
+                overall_preds_binary = (np.array(all_preds) >= 0.5).astype(int)
+                tn, fp, fn, tp = confusion_matrix(all_labels, overall_preds_binary, labels=[0, 1]).ravel()
+                total = tn + fp + fn + tp
+                acc = (tp + tn) / total if total > 0 else 0
+                f.write(f"Total Videos: {total}\n")
+                f.write(f"Accuracy: {acc:.4f}\n")
+                f.write(f"True Positives (Correctly identified Fake): {tp}\n")
+                f.write(f"True Negatives (Correctly identified Real): {tn}\n")
+                f.write(f"False Positives (Real misclassified as Fake): {fp}\n")
+                f.write(f"False Negatives (Fake misclassified as Real): {fn}\n\n")
+
+                f.write("=" * 40 + "\n")
+                f.write("Per-Method Performance\n")
+                f.write("-" * 40 + "\n")
+
+                for method in sorted(method_preds.keys()):
+                    labels = np.array(method_labels[method])
+                    preds = np.array(method_preds[method])
+                    preds_binary = (preds >= 0.5).astype(int)
+
+                    # Ensure we have labels to process
+                    if len(labels) == 0: continue
+
+                    is_real_method = (labels[0] == 0)
+                    method_type = "REAL" if is_real_method else "FAKE"
+
+                    f.write(f"----- Method: {method} ({method_type}) -----\n")
+                    f.write(f"Total Videos: {len(labels)}\n")
+
+                    # For a single class, confusion matrix is simpler
+                    if len(np.unique(labels)) == 1:
+                        correct_predictions = np.sum(labels == preds_binary)
+                        accuracy = correct_predictions / len(labels)
+                        f.write(f"Accuracy: {accuracy:.4f} ({correct_predictions}/{len(labels)} correct)\n\n")
+                    else:  # Mixed labels (e.g., in overall calculation, though not typical for per-method)
+                        m_tn, m_fp, m_fn, m_tp = confusion_matrix(labels, preds_binary, labels=[0, 1]).ravel()
+                        m_total = m_tn + m_fp + m_fn + m_tp
+                        m_acc = (m_tp + m_tn) / m_total if m_total > 0 else 0
+                        f.write(f"Accuracy: {m_acc:.4f}\n")
+                        f.write(f"  TN: {m_tn}, FP: {m_fp}, FN: {m_fn}, TP: {m_tp}\n\n")
+
+            # 4. --- Upload files to GCS ---
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            gcs_folder = f"{timestamp}_{log_prefix}"
+            gcs_base_path = "gs://training-job-outputs/test_results"
+
+            for filename in os.listdir(local_temp_dir):
+                local_path = os.path.join(local_temp_dir, filename)
+                gcs_path = f"{gcs_base_path}/{gcs_folder}/{filename}"
+                self._upload_to_gcs(local_path, gcs_path)
+
+        finally:
+            # 5. --- Clean up local temporary directory ---
+            shutil.rmtree(local_temp_dir)
+            self.logger.info("Detailed reports generated and uploaded successfully.")
+
+    def run_validation_on_demand(
+            self,
+            validation_loader,
+            log_prefix: str = "on_demand_validation",
+            generate_detailed_reports: bool = False
+    ) -> dict:
+        """
+        Runs a full validation pass on a provided dataloader.
+
+        This method is designed for post-training analysis. It assumes that the
+        model held by the Trainer instance has already been loaded with the
+        desired checkpoint weights. It reuses the standard `test_epoch` logic
+        to ensure the validation process is identical to the one used during
+        training.
+
+        Args:
+            validation_loader: A fully configured LazyDataLoaderManager instance
+                               containing the videos to evaluate.
+            log_prefix: A string to prefix all WandB logs, allowing for clear
+                        separation of different validation runs.
+            generate_detailed_reports (bool): If True, generates and uploads
+                                              detailed frame, video, and summary
+                                              reports to GCS for deep analysis.
+
+        Returns:
+            A dictionary containing the calculated metrics for this validation run.
+        """
+        self.logger.info(f"--- Starting on-demand validation for '{log_prefix}' ---")
+        if generate_detailed_reports:
+            self.logger.info("Detailed report generation is ENABLED.")
+
+        # Reuse the existing test_epoch logic completely.
+        # We pass dummy values for epoch/step and critically set
+        # is_primary_metric=False to prevent any checkpointing or
+        # early stopping state changes from being triggered.
+        # The `generate_detailed_reports` flag will activate the new logic
+        # inside the `test_epoch` method.
+        metrics = self.test_epoch(
+            epoch=-1,
+            step_cnt=-1,
+            validation_loader=validation_loader,
+            log_prefix=log_prefix,
+            is_primary_metric=False,
+            generate_detailed_reports=generate_detailed_reports  # Pass the new flag
+        )
+
+        overall_auc = metrics.get('overall', {}).get('auc', 'N/A')
+        self.logger.info(
+            f"--- On-demand validation for '{log_prefix}' complete. Overall AUC: {overall_auc:.4f if isinstance(overall_auc, float) else 'N/A'} ---")
+        return metrics
