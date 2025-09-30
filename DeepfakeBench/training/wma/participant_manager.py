@@ -161,6 +161,7 @@ class AudioWindowManager:
     
     AUDIO_WINDOW_SIZE = 5  # Keep track of 5 audio datapoints
     RED_THRESHOLD = 4  # 4/5 red datapoints trigger red banner
+    YELLOW_THRESHOLD = 3  # 3/5 red datapoints trigger yellow banner
     
     def __init__(self):
         """Initialize the audio window manager."""
@@ -177,7 +178,7 @@ class AudioWindowManager:
             api_result: Dictionary containing ASV API response with 'probs' and 'prediction' keys
             
         Returns:
-            Banner level (pb2.GREEN or pb2.RED) for every valid audio result, None for invalid/silent audio
+            Banner level (pb2.GREEN, pb2.YELLOW, or pb2.RED) for every valid audio result, None for invalid/silent audio
         """
         if not api_result or 'probs' not in api_result or 'prediction' not in api_result:
             return None
@@ -218,7 +219,7 @@ class AudioWindowManager:
         Calculate the current verdict based on the sliding window.
         
         Returns:
-            pb2.GREEN or pb2.RED based on the 4/5 threshold
+            pb2.GREEN, pb2.YELLOW, or pb2.RED based on red count thresholds
         """
         # Count red predictions (False means fake/red)
         red_count = sum(1 for prediction in self.audio_window if not prediction)
@@ -226,6 +227,9 @@ class AudioWindowManager:
         # If 4 or more out of 5 are red, return red verdict
         if red_count >= self.RED_THRESHOLD:
             return pb2.RED
+        # If exactly 3 out of 5 are red, return yellow verdict
+        elif red_count == self.YELLOW_THRESHOLD:
+            return pb2.YELLOW
         else:
             return pb2.GREEN
     
