@@ -7,7 +7,7 @@ WMA folder watcher (Windows)
   - def save_state(state: Dict[str, dict], enable_file_logging=False) -> None:
     if not enable_file_logging:
         return  # Skip state saving if file logging is disabled
-
+        
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -81,6 +81,11 @@ POLL_SEC = float(os.environ.get("WMA_POLL_SEC", "2.0"))  # how often to scan the
 # Configuration for the new Pipe Listener Mode
 BANNER_PIPE_NAME = r"\\.\pipe\wma.ui_overlay_B.banners"
 
+# File logging directories - only created if file logging is enabled
+# LOG_DIR.mkdir(parents=True, exist_ok=True)
+# STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+
 # ---------------------
 # Logging helpers
 # ---------------------
@@ -110,7 +115,7 @@ def log_err(msg: str) -> None:
 def load_state(enable_file_logging=False) -> Dict[str, dict]:
     if not enable_file_logging:
         return {}  # Skip state loading if file logging is disabled
-
+        
     if STATE_FILE.exists():
         try:
             return json.loads(STATE_FILE.read_text(encoding="utf-8"))
@@ -135,7 +140,7 @@ class DownlinkLogger:
         if not enable_logging:
             print("[LOG] File logging disabled. Use --enable-file-logging to enable.")
             return
-
+            
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -150,7 +155,7 @@ class DownlinkLogger:
     def write(self, msg) -> None:
         if not self.enable_logging:
             return  # Skip file logging if disabled
-
+            
         idx = self.counter
         self.counter += 1
         seq = getattr(msg, "sequence_number", None)
@@ -720,8 +725,7 @@ def main():
     parser.add_argument("--meeting-id", default="AAA", help="Meeting ID to use (default: AAA)")
     parser.add_argument("--session-id", default=f"sess_{uuid.uuid4()}", help="Session ID to use (folder mode only)")
     parser.add_argument("--client-id", default="AAA", help="Client ID to use (default: AAA)")
-    parser.add_argument("--enable-file-logging", action="store_true",
-                        help="Enable logging to files (requires admin permissions)")
+    parser.add_argument("--enable-file-logging", action="store_true", help="Enable logging to files (requires admin permissions)")
 
     args = parser.parse_args()
 
