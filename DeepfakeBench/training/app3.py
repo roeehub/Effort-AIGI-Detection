@@ -574,8 +574,8 @@ async def check_frame_batch(
                         failed_frames += 1
                         continue
                 else:
-                    # Use the frame as-is, assuming it's already cropped
-                    processed_face_bgr = img_bgr
+                    # Use the frame as-is, assuming it's already cropped, but resize to model input size
+                    processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_AREA)
 
                 if debug:
                     os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
@@ -585,7 +585,7 @@ async def check_frame_batch(
                     cv2.imwrite(save_path, processed_face_bgr)
                     logger.info(f"Debug frame saved to: {save_path}")
 
-                # To tensor (same as /check_frame)
+                # To tensor (same as /check_frame) - convert to RGB and apply normalization
                 rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
                 image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
                 tensors.append(image_tensor)
