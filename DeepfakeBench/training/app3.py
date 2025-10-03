@@ -143,14 +143,53 @@ def download_assets_from_gcs(config, logger):
 # Model Loading
 # ──────────────────────────────────────────
 def load_detector(cfg: dict, weights: str) -> nn.Module:
-    """Loads the EffortDetector model from config and weights."""
+    """Loads the EffortDetector model from config and weights with configuration validation."""
+    logger.info(f"Loading detector from: {weights}")
+    
+    # Load checkpoint
+    ckpt = torch.load(weights, map_location=device)
+    
+    # Handle both old and new checkpoint formats
+    if isinstance(ckpt, dict) and 'state_dict' in ckpt:
+        # New format with configuration
+        state_dict = ckpt['state_dict']
+        model_config = ckpt.get('model_config', {})
+        
+        # Update config with saved configuration for exact reconstruction
+        if model_config:
+            logger.info("📋 Restoring model configuration from checkpoint:")
+            for key, value in model_config.items():
+                if key != 'current_arcface_s':  # Skip dynamic parameter
+                    old_value = cfg.get(key)
+                    cfg[key] = value
+                    if old_value != value:
+                        logger.info(f"  {key}: {old_value} → {value}")
+            
+            logger.info(f"📊 Checkpoint: Epoch {ckpt.get('epoch')}, AUC: {ckpt.get('auc', 0):.4f}")
+        else:
+            logger.warning("No model configuration in checkpoint - using provided config")
+    else:
+        # Old format
+        state_dict = ckpt
+        model_config = {}
+        logger.warning("⚠️  Old checkpoint format detected. Configuration validation not possible.")
+    
+    # Initialize model with (possibly updated) config
     model_cls = DETECTOR[cfg["model_name"]]
     model = model_cls(cfg).to(device)
-    ckpt = torch.load(weights, map_location=device)
-    state = ckpt.get("state_dict", ckpt)
-    state = {k.replace("module.", ""): v for k, v in state.items()}
+    
+    # Restore dynamic ArcFace parameter if available
+    if model_config.get('use_arcface_head', False) and 'current_arcface_s' in model_config:
+        if hasattr(model, 'head') and hasattr(model.head, 's'):
+            current_s = model_config['current_arcface_s']
+            model.head.s.data.fill_(current_s)
+            logger.info(f"  Restored ArcFace s parameter: {current_s}")
+    
+    # Load state dict with module prefix handling
+    state = {k.replace("module.", ""): v for k, v in state_dict.items()}
     model.load_state_dict(state, strict=False)
     model.eval()
+    logger.info("✅ Model loaded and set to evaluation mode")
     return model
 
 
@@ -489,9 +528,10 @@ async def check_frame_batch(
 ) -> BatchInferResponse:
     """
     Accepts a batch of frames (JPEG/PNG), runs the same pipeline as /check_frame on each,
-    and returns the 'mean' strategy result over ALL frames:
-      - confidence: mean of per-frame fake probabilities
-      - probs: list of per-frame fake probabilities
+    and returns the 'mean' strategy result over successfully processed frames:
+      - confidence: mean of per-frame fake probabilities (from successful frames only)
+      - probs: list of per-frame fake probabilities (from successful frames only)
+    If no frames can be processed, returns pred_label="REAL", confidence=0.0, probs=[]
     """
     if not files:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files were uploaded.")
@@ -508,36 +548,50 @@ async def check_frame_batch(
         transform = video_preprocessor._get_transform()
 
         tensors = []
-        probs_list: List[float] = []
+        failed_frames = 0
+        total_frames = len(files)
 
-        for f in files:
-            raw = await f.read()
-            img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-            if img_bgr is None:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Cannot decode image: {f.filename or '[unnamed]'}")
+        for i, f in enumerate(files):
+            try:
+                raw = await f.read()
+                img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+                if img_bgr is None:
+                    logger.warning(f"Frame {i+1}/{total_frames}: Cannot decode image: {f.filename or '[unnamed]'}")
+                    failed_frames += 1
+                    continue
 
-            # Same face extraction path as /check_frame (YOLO)
-            processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr)
-            if processed_face_bgr is None:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}"
-                )
+                # Same face extraction path as /check_frame (YOLO)
+                processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr)
+                if processed_face_bgr is None:
+                    logger.warning(f"Frame {i+1}/{total_frames}: Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}")
+                    failed_frames += 1
+                    continue
 
-            if debug:
-                os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
-                timestamp = int(time.time() * 1000)
-                save_path = os.path.join(DEBUG_FRAME_DIR, f"batch_frame_{timestamp}.jpg")
-                cv2.imwrite(save_path, processed_face_bgr)
-                logger.info(f"Debug frame saved to: {save_path}")
+                if debug:
+                    os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
+                    timestamp = int(time.time() * 1000)
+                    save_path = os.path.join(DEBUG_FRAME_DIR, f"batch_frame_{i+1}_{timestamp}.jpg")
+                    cv2.imwrite(save_path, processed_face_bgr)
+                    logger.info(f"Debug frame saved to: {save_path}")
 
-            # To tensor (same as /check_frame)
-            rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
-            image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
-            tensors.append(image_tensor)
+                # To tensor (same as /check_frame)
+                rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
+                image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
+                tensors.append(image_tensor)
+
+            except Exception as e:
+                logger.warning(f"Frame {i+1}/{total_frames}: Processing failed: {e}")
+                failed_frames += 1
+                continue
+
+        # Handle case where no frames were successfully processed
+        if not tensors:
+            logger.info(f"No frames could be processed successfully. Failed: {failed_frames}/{total_frames}")
+            return BatchInferResponse(pred_label="REAL", confidence=0.0, probs=[])
 
         # Batch the frames to a single forward pass when possible
         batch_tensor = torch.cat(tensors, dim=0).to(device)  # (N, C, H, W)
+        successful_frames = len(tensors)
 
         with torch.inference_mode():
             preds = model({'image': batch_tensor}, inference=True)  # same call signature as /check_frame
@@ -550,9 +604,11 @@ async def check_frame_batch(
         else:
             probs_list = [float(p) for p in probs]
 
-        # 'mean' strategy over ALL frames
+        # 'mean' strategy over successfully processed frames
         confidence = float(np.mean(probs_list)) if probs_list else 0.0
         pred_label = "FAKE" if confidence >= threshold else "REAL"
+
+        logger.info(f"Batch inference complete: {successful_frames}/{total_frames} frames processed successfully, {failed_frames} failed")
 
         return BatchInferResponse(pred_label=pred_label, confidence=confidence, probs=probs_list)
 
