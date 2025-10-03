@@ -130,14 +130,14 @@ def initialize_haar_cascades():
 #     return cv2.cvtColor(warped_rgb, cv2.COLOR_RGB2BGR)
 #
 
-def _get_yolo_face_box(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+def _get_yolo_face_box(frame_bgr: np.ndarray, conf_threshold: float = YOLO_CONF_THRESHOLD) -> Optional[np.ndarray]:
     """Internal helper to get the largest face box from YOLO."""
     # This function is now self-contained. It always gets the model from the cache.
     model = initialize_yolo_model()
 
     h, w = frame_bgr.shape[:2]
     # Use the 'model' variable for prediction
-    results = model.predict(frame_bgr, conf=YOLO_CONF_THRESHOLD, iou=0.4, verbose=False)
+    results = model.predict(frame_bgr, conf=conf_threshold, iou=0.4, verbose=False)
     if not results or results[0].boxes.shape[0] == 0: return None
 
     boxes = results[0].boxes.xyxy.cpu().numpy()
@@ -152,10 +152,10 @@ def _get_yolo_face_box(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 
 
 # --- Method 2: YOLO (Simple Crop) ---
-def extract_yolo_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+def extract_yolo_face(frame_bgr: np.ndarray, conf_threshold: float = YOLO_CONF_THRESHOLD) -> Optional[np.ndarray]:
     """Detects and crops one face using YOLOv8 with a simple square crop."""
     # No longer need to initialize the model here; the helper function does it.
-    box = _get_yolo_face_box(frame_bgr)
+    box = _get_yolo_face_box(frame_bgr, conf_threshold)
     if box is None: return None
     x0, y0, x1, y1 = box.astype(int)
     h, w = frame_bgr.shape[:2]
@@ -174,12 +174,12 @@ def extract_yolo_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 
 
 # --- Method 3: YOLO + Haar (Best-Effort Alignment) ---
-def extract_yolo_haar_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+def extract_yolo_haar_face(frame_bgr: np.ndarray, conf_threshold: float = YOLO_CONF_THRESHOLD) -> Optional[np.ndarray]:
     """Detects with YOLO, aligns with Haar Cascades if possible, then crops."""
     h, w = frame_bgr.shape[:2]
     eye_cascade = initialize_haar_cascades()
 
-    box = _get_yolo_face_box(frame_bgr)
+    box = _get_yolo_face_box(frame_bgr, conf_threshold)
     if box is None: return None
     x0, y0, x1, y1 = box
 
@@ -214,7 +214,7 @@ def extract_yolo_haar_face(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
 
     # Fallback: If alignment failed, use the simple square crop on the original image
     if final_crop is None or final_crop.size == 0:
-        return extract_yolo_face(frame_bgr)
+        return extract_yolo_face(frame_bgr, conf_threshold)
 
     return cv2.resize(final_crop, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
 

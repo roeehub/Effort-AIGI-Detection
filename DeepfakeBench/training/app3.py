@@ -474,6 +474,7 @@ async def check_frame(
         file: UploadFile = File(...),
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
+        yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
         debug: bool = False
 ) -> InferResponse:
     if file.content_type not in {"image/jpeg", "image/png"}:
@@ -486,7 +487,7 @@ async def check_frame(
         if img_bgr is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot decode image")
 
-        processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr)
+        processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
 
         if processed_face_bgr is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST,
@@ -524,6 +525,7 @@ async def check_frame_batch(
         files: List[UploadFile] = File(...),
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
+        yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
         debug: bool = False
 ) -> BatchInferResponse:
     """
@@ -561,7 +563,7 @@ async def check_frame_batch(
                     continue
 
                 # Same face extraction path as /check_frame (YOLO)
-                processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr)
+                processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
                 if processed_face_bgr is None:
                     logger.warning(f"Frame {i+1}/{total_frames}: Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}")
                     failed_frames += 1
