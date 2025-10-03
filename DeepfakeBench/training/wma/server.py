@@ -15,11 +15,21 @@ import os
 import argparse
 from concurrent import futures
 from typing import AsyncIterator, Dict, Any, List
+import threading
+from collections import deque
+import cv2
+import numpy as np
 
 import grpc
 import grpc.aio
 from pydub import AudioSegment
 import io
+import queue
+import requests
+import soundfile as sf
+
+# For HTTP API calls
+import aiohttp
 
 # Import generated protobuf classes
 import wma_streaming_pb2 as pb2
@@ -29,18 +39,10 @@ import wma_streaming_pb2_grpc as pb2_grpc
 from wma.storage.data_writer import BackendDataWriter
 from wma.utils.banner_simulator import BannerSimulator
 
-# For Effort detector
-import threading, queue
-import cv2, numpy as np, torch
-from app3 import app as model_app, startup_event, calculate_analysis
-
 # Participant state manager
 from participant_manager import ParticipantManager, AudioWindowManager
 
-# for audio processing
-import requests
-import soundfile as sf
-import io
+# for audio processing (keep for audio endpoint)
 
 # Global variables for GCP buckets
 GCP_VIDEO_BUCKET = None
@@ -50,32 +52,8 @@ IO_WORKER_COUNT = 2
 DEBUG_MODE = True
 
 # ──────────────────────────
-# Inline image preprocessing (same as video_preprocessor)
+# Image utilities (keeping decode function for debugging)
 # ──────────────────────────
-_MODEL_IMG_SIZE = 224
-_MODEL_NORM_MEAN = (0.48145466, 0.4578275, 0.40821073)  # CLIP mean
-_MODEL_NORM_STD = (0.26862954, 0.26130258, 0.27577711)  # CLIP std
-
-
-def _prep_rgb_to_tensor(rgb_uint8):
-    """
-    Resize to 224x224 (INTER_AREA), then normalize with CLIP mean/std.
-    Input: HxWx3 uint8 RGB np.ndarray
-    Output: torch.FloatTensor [3, 224, 224]
-    """
-    # Ensure 224x224
-    h, w = rgb_uint8.shape[:2]
-    if (h, w) != (_MODEL_IMG_SIZE, _MODEL_IMG_SIZE):
-        rgb_uint8 = cv2.resize(rgb_uint8, (_MODEL_IMG_SIZE, _MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
-
-    # To [C,H,W] float32 in [0,1]
-    t = torch.from_numpy(rgb_uint8).permute(2, 0, 1).contiguous().float().div(255.0)
-
-    # Normalize (no torchvision import needed)
-    mean = torch.tensor(_MODEL_NORM_MEAN, dtype=t.dtype).view(3, 1, 1)
-    std = torch.tensor(_MODEL_NORM_STD, dtype=t.dtype).view(3, 1, 1)
-    t = (t - mean) / std
-    return t
 
 
 def get_base_path():
@@ -204,65 +182,73 @@ class MediaIOWorker:
             return self._count
 
 
-# ---------- Model manager (load once, reuse) ----------
-class ModelManager:
+# ---------- API manager for video inference ----------
+class VideoAPIManager:
     def __init__(self):
-        # Ensure app3 loads its models according to ENV (set in start_backend.py)
-        if not hasattr(model_app, "state") or not getattr(model_app.state, "models", None):
-            startup_event()  # app3's init hook
+        self.api_host = os.getenv("VIDEO_API_HOST", "34.16.217.28")
+        self.api_port = os.getenv("VIDEO_API_PORT", "8999")
+        self.api_timeout = int(os.getenv("VIDEO_API_TIMEOUT", "30"))
+        self.yolo_conf_threshold = float(os.getenv("VIDEO_YOLO_CONF_THRESHOLD", "0.80"))
+        self.threshold = float(os.getenv("WMA_INFER_THRESHOLD", "0.75"))
+        
+        self.api_url = f"http://{self.api_host}:{self.api_port}/check_frame_batch"
+        
+        print(f"[VideoAPIManager] Initialized with API URL: {self.api_url}")
+        print(f"[VideoAPIManager] YOLO confidence threshold: {self.yolo_conf_threshold}")
+        print(f"[VideoAPIManager] Inference threshold: {self.threshold}")
 
-        # prefer "custom" if available, else "base"
-        self.model = model_app.state.models.get("custom") or model_app.state.models["base"]
-        self.model.eval()
-        self.device = next(self.model.parameters()).device
+    async def infer_probs_from_bytes(self, image_bytes_list: List[bytes]) -> List[float]:
+        """Send image bytes to API and return probabilities."""
+        if not image_bytes_list:
+            return []
+            
+        try:
+            if DEBUG_MODE:
+                print(f"[VideoAPIManager] Sending {len(image_bytes_list)} frames to API: {self.api_url}")
+            
+            # Prepare multipart form data
+            data = aiohttp.FormData()
+            for i, img_bytes in enumerate(image_bytes_list):
+                data.add_field('files', img_bytes, filename=f'frame_{i}.jpg', content_type='image/jpeg')
+            
+            # API parameters
+            params = {
+                'model_type': 'custom',
+                'threshold': str(self.threshold),
+                'debug': 'false',
+                'yolo_conf_threshold': str(self.yolo_conf_threshold)
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=self.api_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(self.api_url, data=data, params=params) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        probs = result.get('probs', [])
+                        if DEBUG_MODE:
+                            print(f"[VideoAPIManager] API response: {len(probs)} frame probabilities")
+                        return probs
+                    else:
+                        error_text = await response.text()
+                        print(f"[VideoAPIManager] API error {response.status}: {error_text}")
+                        return []
+                        
+        except asyncio.TimeoutError:
+            print(f"[VideoAPIManager] API timeout after {self.api_timeout}s")
+            return []
+        except Exception as e:
+            print(f"[VideoAPIManager] API call failed: {e}")
+            return []
 
-        # Inline transform parameters (no torchvision import)
-        self.model_img_size = _MODEL_IMG_SIZE
-        self.threshold = float(os.getenv("WMA_INFER_THRESHOLD", "0.46"))
-        self.batch_size = int(os.getenv("WMA_INFER_BATCH", "16"))
-
-    @torch.inference_mode()
-    def infer_probs(self, frame_rgbs: List[np.ndarray]) -> List[float]:
-        """frame_rgbs: list of HxWx3 RGB uint8 arrays"""
-        probs: List[float] = []
-        tensors: List[torch.Tensor] = []
-        for rgb in frame_rgbs:
-            tensors.append(_prep_rgb_to_tensor(rgb))
-            if len(tensors) == self.batch_size:
-                probs.extend(self._forward_stack(tensors))
-                tensors = []
-        if tensors:
-            probs.extend(self._forward_stack(tensors))
-        return probs
-
-    @torch.inference_mode()
-    def infer_mean_decision(self, frames_rgb, bs=16, thr=None):
-        """frames_rgb: list of HxWx3 RGB uint8 arrays"""
-        device = self.device
-        thr = float(thr if thr is not None else os.getenv("WMA_INFER_THRESHOLD", "0.46"))
-        bs = int(os.getenv("WMA_INFER_BATCH", bs))
-        probs, buf = [], []
-
-        for rgb in frames_rgb:
-            buf.append(_prep_rgb_to_tensor(rgb))  # -> [C,H,W]
-            if len(buf) == bs:
-                out = self.model({"image": torch.stack(buf).to(device)}, inference=True)["prob"]
-                probs.extend(map(float, out.detach().cpu()))
-                buf = []
-
-        if buf:
-            out = self.model({"image": torch.stack(buf).to(device)}, inference=True)["prob"]
-            probs.extend(map(float, out.detach().cpu()))
-
+    async def infer_mean_decision_from_bytes(self, image_bytes_list: List[bytes], thr=None) -> Dict[str, Any]:
+        """Send image bytes to API and return decision with probabilities."""
+        probs = await self.infer_probs_from_bytes(image_bytes_list)
+        
+        thr = float(thr if thr is not None else self.threshold)
         mean_prob = float(np.mean(probs)) if probs else 0.0
         decision = "FAKE" if mean_prob >= thr else "REAL"
+        
         return {"decision": decision, "mean_prob": mean_prob, "probs": probs}
-
-    def _forward_stack(self, tensors: List[torch.Tensor]) -> List[float]:
-        batch = torch.stack(tensors, dim=0).to(self.device, non_blocking=True)
-        out = self.model({"image": batch}, inference=True)
-        fake_probs = out["prob"].detach().float().cpu().tolist()
-        return [float(p) for p in fake_probs]
 
 
 class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
@@ -277,8 +263,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # Disable random banners by default; we now use real inference
         self.banner_simulator = BannerSimulator(banner_probability=0.0, per_person_probability=0.0)
 
-        # --- Real Effort detector (batched) ---
-        self.mm = ModelManager()
+        # --- Video API manager ---
+        self.video_api = VideoAPIManager()
 
         # --- I/O Workers for video and audio (only if bucket saving is enabled) ---
         self.video_io_workers = []
@@ -305,7 +291,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         # --- Participant state manager ---
         self.participant_manager = ParticipantManager(
-            threshold=self.mm.threshold,
+            threshold=self.video_api.threshold,
             margin=self.margin
         )
 
@@ -386,7 +372,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         Kept for any part of the code that might still use it directly, but
         the main banner logic now uses the stateful manager.
         """
-        thr = self.mm.threshold
+        thr = self.video_api.threshold
         m = self.margin
         if mean_prob >= thr + m:
             return pb2.RED
@@ -569,10 +555,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
                     # 1. Send inference-driven per-participant banners for VIDEO
                     if uplink_msg.participants:
-                        loop = asyncio.get_running_loop()
-                        inference_banners = await loop.run_in_executor(
-                            None, self._generate_inference_banners, uplink_msg
-                        )
+                        inference_banners = await self._generate_inference_banners(uplink_msg)
                         for banner_msg in inference_banners:
                             self.stats["banners_sent"] += 1
                             yield banner_msg
@@ -880,7 +863,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         return down
 
-    def _generate_inference_banners(self, uplink_msg: pb2.Uplink) -> list:
+    async def _generate_inference_banners(self, uplink_msg: pb2.Uplink) -> list:
         """
         Generate per-participant banners using the stateful ParticipantManager
         to ensure stable and non-flickering verdicts.
@@ -902,8 +885,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 self.participant_manager.reset_all()
                 continue
 
-            # Decode all crops to RGB and push bytes to video workers
-            rgbs = []
+            # Collect image bytes for API call
+            image_bytes_list = []
             for crop in pf.crops:
                 img_bytes = getattr(crop, "image_data", b"")
                 if not img_bytes:
@@ -919,16 +902,19 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         }
                         worker.submit(img_bytes, frame_metadata)
 
-                rgb = self._decode_image_to_rgb(img_bytes)
-                if rgb is not None:
-                    rgbs.append(rgb)
+                image_bytes_list.append(img_bytes)
 
-            if not rgbs:
+            if not image_bytes_list:
                 continue
 
-            # Run inference to get probabilities (16 micro-batch by default)
-            res = self.mm.infer_mean_decision(rgbs)
-            individual_probs = res["probs"]
+            # Run inference via API to get probabilities
+            individual_probs = await self.video_api.infer_probs_from_bytes(image_bytes_list)
+            
+            # Skip if no faces were detected (empty probs)
+            if not individual_probs:
+                if DEBUG_MODE:
+                    print(f"[Backend] No faces detected for participant {participant_id}, skipping")
+                continue
 
             # Handle the new return type from the manager
             manager_result = self.participant_manager.process_and_decide(

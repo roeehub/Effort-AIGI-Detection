@@ -35,13 +35,11 @@ if local_utils_dir.is_dir():
 # --- end bootstrap ---
 
 DEFAULTS = {
-    # Your preferred default checkpoint (overridable via env)
-    # "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/o3wcb3lr/top_n_effort_20250927_ep1_auc0.9754_eer0.0785.pth",
-    # "CUSTOM_MODEL_USE_ARCFACE": "true",
-    # "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/rvfezpc0/top_n_effort_20250910_ep2_auc0.9808_eer0.0818.pth",
-    # "CUSTOM_MODEL_USE_ARCFACE": "false",
-    "CHECKPOINT_GCS_PATH": "gs://training-job-outputs/best_checkpoints/o08s5u94/top_n_effort_20250927_ep1_auc0.9672_eer0.0905.pth",
-    "CUSTOM_MODEL_USE_ARCFACE": "true",
+    # Video API configuration
+    "VIDEO_API_HOST": "34.16.217.28",
+    "VIDEO_API_PORT": "8999",
+    "VIDEO_API_TIMEOUT": "30",
+    "VIDEO_YOLO_CONF_THRESHOLD": "0.80",
 
     # Inference defaults for WMA backend
     # "WMA_INFER_THRESHOLD": "0.46",
