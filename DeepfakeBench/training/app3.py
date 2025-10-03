@@ -526,6 +526,7 @@ async def check_frame_batch(
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
+        recrop: bool = Query(False, description="Whether to perform face detection and cropping. If False, assumes frames are already cropped"),
         debug: bool = False
 ) -> BatchInferResponse:
     """
@@ -534,6 +535,9 @@ async def check_frame_batch(
       - confidence: mean of per-frame fake probabilities (from successful frames only)
       - probs: list of per-frame fake probabilities (from successful frames only)
     If no frames can be processed, returns pred_label="REAL", confidence=0.0, probs=[]
+    
+    Parameters:
+    - recrop: If True, performs YOLO face detection and cropping. If False, assumes frames are already cropped.
     """
     if not files:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files were uploaded.")
@@ -562,17 +566,22 @@ async def check_frame_batch(
                     failed_frames += 1
                     continue
 
-                # Same face extraction path as /check_frame (YOLO)
-                processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
-                if processed_face_bgr is None:
-                    logger.warning(f"Frame {i+1}/{total_frames}: Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}")
-                    failed_frames += 1
-                    continue
+                if recrop:
+                    # Same face extraction path as /check_frame (YOLO)
+                    processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
+                    if processed_face_bgr is None:
+                        logger.warning(f"Frame {i+1}/{total_frames}: Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}")
+                        failed_frames += 1
+                        continue
+                else:
+                    # Use the frame as-is, assuming it's already cropped
+                    processed_face_bgr = img_bgr
 
                 if debug:
                     os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
                     timestamp = int(time.time() * 1000)
-                    save_path = os.path.join(DEBUG_FRAME_DIR, f"batch_frame_{i+1}_{timestamp}.jpg")
+                    crop_status = "cropped" if recrop else "precropped"
+                    save_path = os.path.join(DEBUG_FRAME_DIR, f"batch_frame_{i+1}_{crop_status}_{timestamp}.jpg")
                     cv2.imwrite(save_path, processed_face_bgr)
                     logger.info(f"Debug frame saved to: {save_path}")
 
