@@ -147,7 +147,7 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
     logger.info(f"Loading detector from: {weights}")
     
     # Load checkpoint
-    ckpt = torch.load(weights, map_location=device)
+    ckpt = torch.load(weights, map_location=device, weights_only=False)
     
     # Handle both old and new checkpoint formats
     if isinstance(ckpt, dict) and 'state_dict' in ckpt:
