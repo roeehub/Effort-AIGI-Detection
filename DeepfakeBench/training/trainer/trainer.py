@@ -52,8 +52,8 @@ class Trainer(object):
             ood_loader=None,
             use_group_dro=False  # Argument to activate the feature
     ):
-        if config is None or model is None or optimizer is None or logger is None:
-            raise ValueError("config, model, optimizer, and logger must be implemented")
+        if config is None or model is None or logger is None:
+            raise ValueError("config, model, and logger must be provided")
 
         self.config = config
         self.model = model
@@ -377,22 +377,161 @@ class Trainer(object):
         except Exception as e:
             self.logger.error(f"Failed to delete GCS blob {gcs_path}. Error: {e}")
 
-    def load_ckpt(self, model_path):
+    def load_ckpt(self, model_path, validate):
         if os.path.isfile(model_path):
             saved = torch.load(model_path, map_location='cpu')
+            
+            # Handle both old (state_dict only) and new (complete checkpoint) formats
+            if isinstance(saved, dict) and 'state_dict' in saved:
+                # New format with configuration
+                state_dict = saved['state_dict']
+                model_config = saved.get('model_config', {})
+
+                if validate:
+                    # Validate critical configuration parameters
+                    self._validate_model_config(model_config, model_path)
+                
+                # Restore dynamic parameters if available
+                if model_config.get('use_arcface_head', False) and 'current_arcface_s' in model_config:
+                    model_instance = self.model.module if self.config['ddp'] else self.model
+                    if hasattr(model_instance, 'head') and hasattr(model_instance.head, 's'):
+                        current_s = model_config['current_arcface_s']
+                        model_instance.head.s.data.fill_(current_s)
+                        self.logger.info(f"Restored ArcFace s parameter to: {current_s}")
+                
+                self.logger.info(f"Loaded checkpoint from epoch {saved.get('epoch', 'unknown')} "
+                               f"with AUC: {saved.get('auc', 'unknown'):.4f}")
+            else:
+                # Old format (state_dict only) - issue warning
+                state_dict = saved
+                self.logger.warning(f"Loading old checkpoint format from {model_path}. "
+                                   "Configuration validation not possible.")
+            
+            # Load state dict with module prefix handling
             new_state_dict = OrderedDict()
-            for k, v in saved.items():
+            for k, v in state_dict.items():
                 name = k[7:] if k.startswith('module.') else k
                 new_state_dict[name] = v
+            
             self.model.load_state_dict(new_state_dict, strict=False)
+            
+            # Validate model checksum if available (skip if curriculum learning might modify parameters)
+            train_arcface = self.config.get('train_arcface', True)
+            if isinstance(saved, dict) and 'model_checksum' in saved and not train_arcface:
+                expected_checksum = saved['model_checksum']
+                actual_checksum = self.compute_model_checksum()
+                if expected_checksum == actual_checksum:
+                    self.logger.info(f'✅ Model checksum validated: {actual_checksum}')
+                else:
+                    self.logger.error(f'❌ Model checksum mismatch! Expected: {expected_checksum}, Got: {actual_checksum}')
+                    raise ValueError("Model checksum validation failed - model state may be corrupted")
+            elif isinstance(saved, dict) and 'model_checksum' in saved and train_arcface:
+                self.logger.info("⚠️  Skipping checksum validation - curriculum learning (train_arcface=True) may modify parameters")
+            else:
+                self.logger.warning("⚠️  No checksum available for validation (old checkpoint format)")
+            
             self.logger.info(f'Model loaded from {model_path}')
         else:
             raise FileNotFoundError(f"=> no model found at '{model_path}'")
 
-    def save_ckpt(self, epoch, auc, eer, ckpt_prefix='ckpt'):
+    def _validate_model_config(self, saved_config, checkpoint_path):
+        """Validate that the saved model configuration matches current configuration."""
+        if not saved_config:
+            self.logger.warning("No model configuration found in checkpoint. Skipping validation.")
+            return
+        
+        # Critical parameters that must match exactly
+        critical_params = [
+            'model_name', 'use_arcface_head', 
+            'use_focal_loss', 'focal_loss_gamma', 'focal_loss_alpha', 'rank'
+        ]
+        
+        # ArcFace parameters that can be overridden during curriculum learning
+        arcface_params = ['arcface_s', 'arcface_m']
+        
+        # Check if ArcFace curriculum learning is enabled
+        train_arcface = self.config.get('train_arcface', True)
+        
+        mismatches = []
+        for param in critical_params:
+            saved_val = saved_config.get(param)
+            current_val = self.config.get(param)
+            
+            if saved_val != current_val:
+                mismatches.append(f"{param}: saved={saved_val}, current={current_val}")
+        
+        # Only validate ArcFace parameters if curriculum learning is disabled
+        if not train_arcface:
+            for param in arcface_params:
+                saved_val = saved_config.get(param)
+                current_val = self.config.get(param)
+                
+                if saved_val != current_val:
+                    mismatches.append(f"{param}: saved={saved_val}, current={current_val}")
+        else:
+            # Log that we're allowing ArcFace parameter override
+            arcface_overrides = []
+            for param in arcface_params:
+                saved_val = saved_config.get(param)
+                current_val = self.config.get(param)
+                if saved_val != current_val:
+                    arcface_overrides.append(f"{param}: saved={saved_val}, will_override_to={current_val}")
+            
+            if arcface_overrides:
+                self.logger.info("ArcFace curriculum learning enabled - allowing parameter overrides:")
+                for override in arcface_overrides:
+                    self.logger.info(f"   - {override}")
+        
+        if mismatches:
+            error_msg = (f"Critical configuration mismatch detected when loading {checkpoint_path}:\n" + 
+                        "\n".join([f"  - {mm}" for mm in mismatches]))
+            self.logger.error(error_msg)
+            raise ValueError(f"Model configuration mismatch. {error_msg}")
+        
+        validation_mode = "strict" if not train_arcface else "curriculum learning enabled"
+        self.logger.info(f"✅ Model configuration validation passed ({validation_mode}).")
+
+    def compute_model_checksum(self):
+        """Compute a checksum of the model's current state for validation."""
+        import hashlib
+        
+        # Get model state dict
+        model_state = self.model.module.state_dict() if self.config['ddp'] else self.model.state_dict()
+        
+        # Create a deterministic string representation
+        checksum_data = []
+        for key in sorted(model_state.keys()):
+            tensor = model_state[key]
+            # Convert to numpy for consistent hashing across devices
+            tensor_np = tensor.detach().cpu().numpy()
+            checksum_data.append(f"{key}:{tensor_np.shape}:{tensor_np.sum():.10f}")
+        
+        # Add critical config parameters
+        config_items = [
+            f"use_arcface_head:{self.config.get('use_arcface_head', False)}",
+            f"arcface_s:{self.config.get('arcface_s', 30.0)}",
+            f"arcface_m:{self.config.get('arcface_m', 0.35)}",
+            f"rank:{self.config.get('rank', 1023)}",
+        ]
+        checksum_data.extend(config_items)
+        
+        # Create hash
+        combined_str = "|".join(checksum_data)
+        checksum = hashlib.sha256(combined_str.encode()).hexdigest()[:16]
+        
+        return checksum
+
+    def save_ckpt(self, epoch, auc, eer, ckpt_prefix='ckpt', step=None):
         """
         Saves model checkpoint locally, uploads to GCS with a prefix, and cleans up.
         Returns the GCS path of the uploaded file.
+        
+        Args:
+            epoch: The epoch number
+            auc: The AUC score
+            eer: The EER score
+            ckpt_prefix: Prefix for the checkpoint name (e.g., 'first_best', 'top_n')
+            step: Optional step count to use in naming instead of epoch (for top_n checkpoints)
         """
         gcs_config = self.config.get('checkpointing')
         if not gcs_config or not gcs_config.get('gcs_prefix'):
@@ -401,14 +540,53 @@ class Trainer(object):
 
         model_name = self.config.get('model_name', 'model')
         date_str = time.strftime("%Y%m%d")
-        ckpt_name = f"{ckpt_prefix}_{model_name}_{date_str}_ep{epoch}_auc{auc:.4f}_eer{eer:.4f}.pth"
+        
+        # Use step count for top_n checkpoints, epoch for others
+        if step is not None:
+            ckpt_name = f"{ckpt_prefix}_{model_name}_{date_str}_step{step}_auc{auc:.4f}_eer{eer:.4f}.pth"
+        else:
+            ckpt_name = f"{ckpt_prefix}_{model_name}_{date_str}_ep{epoch}_auc{auc:.4f}_eer{eer:.4f}.pth"
 
         local_save_dir = os.path.join(self.log_dir, "checkpoints")
         os.makedirs(local_save_dir, exist_ok=True)
         local_save_path = os.path.join(local_save_dir, ckpt_name)
 
         model_state = self.model.module.state_dict() if self.config['ddp'] else self.model.state_dict()
-        torch.save(model_state, local_save_path)
+        
+        # Save complete checkpoint with configuration for exact reconstruction
+        checkpoint = {
+            'state_dict': model_state,
+            'model_config': {
+                'model_name': self.config.get('model_name'),
+                'use_arcface_head': self.config.get('use_arcface_head', False),
+                'arcface_s': self.config.get('arcface_s', 30.0),
+                'arcface_m': self.config.get('arcface_m', 0.35),
+                's_start': self.config.get('s_start'),
+                's_end': self.config.get('s_end'),
+                'anneal_steps': self.config.get('anneal_steps', 0),
+                'use_focal_loss': self.config.get('use_focal_loss', False),
+                'focal_loss_gamma': self.config.get('focal_loss_gamma', 2.0),
+                'focal_loss_alpha': self.config.get('focal_loss_alpha'),
+                'lambda_reg': self.config.get('lambda_reg', 1.0),
+                'rank': self.config.get('rank', 1023),
+            },
+            'epoch': epoch,
+            'auc': auc,
+            'eer': eer,
+            'training_step': getattr(self, 'current_step', None),
+        }
+        
+        # If using ArcFace with annealing, save current s value
+        if self.config.get('use_arcface_head', False):
+            model_instance = self.model.module if self.config['ddp'] else self.model
+            if hasattr(model_instance, 'head') and hasattr(model_instance.head, 's'):
+                checkpoint['model_config']['current_arcface_s'] = float(model_instance.head.s)
+        
+        # Add model checksum for validation
+        checkpoint['model_checksum'] = self.compute_model_checksum()
+        
+        torch.save(checkpoint, local_save_path)
+        self.logger.info(f"💾 Saved checkpoint with checksum: {checkpoint['model_checksum']}")
 
         gcs_prefix = gcs_config['gcs_prefix']
         # <<< NEW: Ensure prefix ends with a slash for robust path joining
@@ -890,7 +1068,8 @@ class Trainer(object):
         self._run_ood_monitoring(epoch, step_cnt)
 
     @torch.no_grad()
-    def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool):
+    def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
+                   generate_detailed_reports: bool = False):
         """
         Performs a full evaluation on a given validation dataloader. This function is now
         general-purpose and can be used for any validation set.
@@ -902,6 +1081,8 @@ class Trainer(object):
             log_prefix (str): The prefix for WandB logs (e.g., "val_in_dist", "val_holdout").
             is_primary_metric (bool): If True, the results from this run will be used for
                                       checkpointing and early stopping decisions.
+            generate_detailed_reports (bool): If True, collects detailed per-frame and
+                                              per-video data and uploads CSV/TXT reports to GCS.
         """
         self.setEval()
 
@@ -920,6 +1101,15 @@ class Trainer(object):
         all_preds, all_labels = [], []
         all_losses = []
 
+        # --- NEW: Initialize lists for detailed reporting if flag is enabled ---
+        if generate_detailed_reports:
+            frame_report_data = []
+            video_report_data = []
+            processed_video_ids = set()  # Track processed videos to avoid duplicates
+        
+        # --- SANITY CHECK: Initialize data collection for model consistency verification ---
+        sanity_check_data = []  # Will store first 2 frames per method for verification
+
         # Iterate through methods from the provided loader.
         for method in validation_loader.keys():
             loader = validation_loader[method]
@@ -927,7 +1117,9 @@ class Trainer(object):
 
             self.logger.info(f"Validating method: {method} ({num_videos_in_method} videos) for '{log_prefix}' set")
 
+            batch_count = 0
             for data_dict in loader:
+                batch_count += 1
                 # Move tensors to the correct device
                 for key, value in data_dict.items():
                     if isinstance(value, torch.Tensor):
@@ -936,8 +1128,57 @@ class Trainer(object):
                 if data_dict['image'].shape[0] == 0 or data_dict['image'].dim() != 5: continue
 
                 B, T = data_dict['image'].shape[:2]
+                
+                # Debug logging to track potential duplicate processing
+                if generate_detailed_reports and batch_count % 10 == 0:
+                    self.logger.info(f"  Processing batch {batch_count} for method '{method}', B={B}, T={T}")
                 predictions = self.model(data_dict, inference=True)
                 video_probs = predictions['prob'].view(B, T).mean(dim=1)
+                
+                # --- SANITY CHECK: Collect first 2 frames from first batch of each method ---
+                if batch_count == 1:  # Only from the first batch
+                    try:
+                        frame_probs = predictions['prob'].view(B, T)  # Shape: [B, T]
+                        for video_idx in range(min(1, B)):  # Only first video
+                            # Safely get video_id with bounds checking
+                            if 'video_id' in data_dict and len(data_dict['video_id']) > video_idx:
+                                video_id = str(data_dict['video_id'][video_idx])
+                            else:
+                                video_id = f"unknown_video_{video_idx}"
+                            
+                            for frame_idx in range(min(2, T)):  # Only first 2 frames
+                                # Safely get frame path
+                                frame_path = f"video_{video_id}_frame_{frame_idx}"
+                                if ('frame_paths' in data_dict and 
+                                    data_dict['frame_paths'] is not None and 
+                                    len(data_dict['frame_paths']) > video_idx):
+                                    try:
+                                        if isinstance(data_dict['frame_paths'][video_idx], list) and len(data_dict['frame_paths'][video_idx]) > frame_idx:
+                                            frame_path = data_dict['frame_paths'][video_idx][frame_idx]
+                                        elif not isinstance(data_dict['frame_paths'][video_idx], list):
+                                            frame_path = str(data_dict['frame_paths'][video_idx])
+                                    except (IndexError, TypeError):
+                                        pass  # Keep default frame_path
+                                
+                                # Safely get label
+                                if 'label' in data_dict and len(data_dict['label']) > video_idx:
+                                    label = int(data_dict['label'][video_idx].cpu())
+                                else:
+                                    label = -1  # Unknown label
+                                
+                                sanity_check_data.append({
+                                    'method': method,
+                                    'video_id': video_id,
+                                    'frame_idx': frame_idx,
+                                    'frame_path': frame_path,
+                                    'probability': float(frame_probs[video_idx, frame_idx].cpu()),
+                                    'label': label,
+                                    'epoch': epoch + 1,
+                                    'step': step_cnt
+                                })
+                    except Exception as e:
+                        self.logger.warning(f"Failed to collect sanity check data for method {method}: {e}")
+                        # Continue validation without crashing
 
                 if type(self.model) is DDP:
                     losses = self.model.module.get_losses(data_dict, predictions)
@@ -954,8 +1195,41 @@ class Trainer(object):
                 method_preds[method].extend(probs_np)
                 videos_processed += data_dict['image'].shape[0]
 
-            self.logger.info(
-                f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
+                # --- NEW: Collect detailed data for reports if flag is enabled ---
+                if generate_detailed_reports:
+                    frame_level_probs = predictions['prob'].view(B, T)
+                    for i in range(B):  # Iterate over each video in the batch
+                        video_id = data_dict['video_id'][i]
+                        
+                        # Skip if we've already processed this video
+                        unique_video_key = f"{method}_{video_id}"
+                        if unique_video_key in processed_video_ids:
+                            if batch_count <= 5:  # Only log for first few batches to avoid spam
+                                self.logger.warning(f"Skipping duplicate video: {unique_video_key}")
+                            continue
+                        processed_video_ids.add(unique_video_key)
+                        
+                        label = labels_np[i]
+                        avg_prob = probs_np[i]
+                        prediction = 1 if avg_prob >= 0.5 else 0
+                        is_correct = 1 if prediction == label else 0
+
+                        # Append data for the video-level report
+                        video_report_data.append([method, label, video_id, avg_prob, prediction, is_correct])
+
+                        # Append data for the frame-level report
+                        for j in range(T):  # Iterate over each frame in the video
+                            frame_path = data_dict['frame_paths'][i][j]
+                            frame_prob = frame_level_probs[i, j].item()
+                            frame_report_data.append([method, label, video_id, frame_path, frame_prob])
+
+            if generate_detailed_reports:
+                unique_videos_for_method = len([vid for vid in processed_video_ids if vid.startswith(f"{method}_")])
+                self.logger.info(
+                    f"  Finished method '{method}'. Processed {batch_count} batches, {unique_videos_for_method} unique videos.")
+            else:
+                self.logger.info(
+                    f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
 
         if not all_labels:
             self.logger.error(f"Validation failed for '{log_prefix}': No data was processed.")
@@ -964,8 +1238,62 @@ class Trainer(object):
         total_val_time = time.time() - val_start_time
         self.logger.info(f"Validation for '{log_prefix}' finished in {total_val_time:.2f}s. Calculating metrics...")
 
+        # --- NEW: Generate and upload reports if the flag was set ---
+        if generate_detailed_reports:
+            try:
+                # Deduplicate frame data by method+frame_path (keep the first occurrence)
+                seen_frame_keys = set()
+                deduplicated_frame_data = []
+                for row in frame_report_data:
+                    method = row[0]      # method is at index 0
+                    frame_path = row[3]  # frame_path is at index 3
+                    unique_key = f"{method}_{frame_path}"  # Create unique key per method
+                    if unique_key not in seen_frame_keys:
+                        seen_frame_keys.add(unique_key)
+                        deduplicated_frame_data.append(row)
+                
+                # Deduplicate video data by method+video_id (keep the first occurrence)
+                seen_video_keys = set()
+                deduplicated_video_data = []
+                for row in video_report_data:
+                    method = row[0]   # method is at index 0
+                    video_id = row[2] # video_id is at index 2
+                    unique_key = f"{method}_{video_id}"  # Create unique key per method
+                    if unique_key not in seen_video_keys:
+                        seen_video_keys.add(unique_key)
+                        deduplicated_video_data.append(row)
+                
+                self.logger.info(f"Deduplication: Frame data reduced from {len(frame_report_data)} to {len(deduplicated_frame_data)} entries")
+                self.logger.info(f"Deduplication: Video data reduced from {len(video_report_data)} to {len(deduplicated_video_data)} entries")
+                
+                self._generate_and_upload_reports(
+                    log_prefix,
+                    deduplicated_frame_data,
+                    deduplicated_video_data,
+                    all_preds,
+                    all_labels,
+                    method_preds,
+                    method_labels,
+                    generate_detailed_reports
+                )
+                self.logger.info("✅ Detailed reports generated and uploaded successfully.")
+            except Exception as e:
+                self.logger.error(f"❌ Error generating detailed reports: {e}")
+                self.logger.error("Continuing with metric calculation...")
+
         self.logger.info(f"--- Calculating overall performance for '{log_prefix}' ---")
-        overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
+        try:
+            overall_metrics = get_test_metrics(np.array(all_preds), np.array(all_labels))
+        except Exception as e:
+            self.logger.error(f"❌ Error calculating test metrics: {e}")
+            overall_metrics = {
+                'loss': -1.0,
+                'acc': -1.0, 
+                'auc': -1.0,
+                'eer': -1.0,
+                'ap': -1.0,
+                'error': str(e)
+            }
 
         # Use the log_prefix for all WandB metrics to create separate charts.
         wandb_log_dict = {f"{log_prefix}/epoch": epoch + 1, "train/step": step_cnt}
@@ -1018,7 +1346,8 @@ class Trainer(object):
                                    self.top_n_checkpoints[-1]['metric']
                         if is_top_n:
                             new_gcs_path = self.save_ckpt(epoch=epoch + 1, auc=overall_metrics.get('auc'),
-                                                          eer=overall_metrics.get('eer'), ckpt_prefix='top_n')
+                                                          eer=overall_metrics.get('eer'), ckpt_prefix='top_n',
+                                                          step=step_cnt)
                             if new_gcs_path:
                                 self.top_n_checkpoints.append(
                                     {'metric': current_metric, 'epoch': epoch + 1, 'gcs_path': new_gcs_path})
@@ -1067,73 +1396,63 @@ class Trainer(object):
                 all_real_preds.extend(method_preds[method_name])
                 all_real_labels.extend(method_labels[method_name])
 
-        # 2. Calculate metrics for each FAKE method against the complete pool of REAL samples
-        if all_real_labels:
-            for method in sorted(method_preds.keys()):
-                # Only calculate for fake methods
-                if method not in real_source_names:
-                    combined_preds = np.array(method_preds[method] + all_real_preds)
-                    combined_labels = np.array(method_labels[method] + all_real_labels)
+        # 2. Calculate TRUE per-method accuracy for each FAKE method (threshold-based)
+        for method in sorted(method_preds.keys()):
+            # Only calculate for fake methods
+            if method not in real_source_names:
+                method_preds_array = np.array(method_preds[method])
+                method_labels_array = np.array(method_labels[method])
+                
+                # Calculate threshold-based accuracy: how many fake videos are correctly classified as fake (>=0.5)
+                predictions_binary = (method_preds_array >= 0.5).astype(int)
+                correct_predictions = np.sum(predictions_binary == method_labels_array)
+                per_method_accuracy = correct_predictions / len(method_labels_array) if len(method_labels_array) > 0 else 0.0
+                
+                # Store simplified metrics (only accuracy for fake methods)
+                method_table_metrics[method] = {'acc': per_method_accuracy, 'n_samples': len(method_labels_array)}
+                
+                # Log only the meaningful accuracy metric
+                wandb_log_dict[f'{log_prefix}/method/{method}/acc'] = per_method_accuracy
+                
+                self.logger.info(f"Method '{method}' per-method accuracy: {per_method_accuracy:.4f} ({correct_predictions}/{len(method_labels_array)})")
 
-                    # Ensure both classes (0 and 1) are present
-                    if len(np.unique(combined_labels)) > 1:
-                        # Calculate metrics on this combined (fake vs. all real) set
-                        fake_vs_real_metrics = get_test_metrics(combined_preds, combined_labels)
-                        method_table_metrics[method] = fake_vs_real_metrics
-
-                        # Log meaningful metrics for monitoring
-                        for metric_name in ['acc', 'auc', 'eer']:
-                            if metric_name in fake_vs_real_metrics:
-                                wandb_log_dict[f'{log_prefix}/method/{method}/{metric_name}'] = fake_vs_real_metrics[
-                                    metric_name]
-
-                        if 'auc' in fake_vs_real_metrics:
-                            per_method_aucs.append(fake_vs_real_metrics['auc'])
-                    else:
-                        self.logger.warning(
-                            f"Skipping metrics for method '{method}' in '{log_prefix}': not enough class diversity.")
-        else:
-            self.logger.warning(
-                f"No real samples found in validation set '{log_prefix}'. Cannot calculate per-method AUCs.")
-
-        # Also add real methods to the table and log their accuracy for monitoring
+        # 3. Calculate TRUE per-method accuracy for each REAL method (threshold-based)
         for method in sorted(method_preds.keys()):
             if method in real_source_names:
-                # For real methods, we calculate metrics on their own samples.
-                # Note: AUC/EER are not meaningful here as there's only one class (label 0),
-                # but ACC correctly measures the model's ability to classify them as real.
-                real_method_metrics = get_test_metrics(np.array(method_preds[method]),
-                                                       np.array(method_labels[method]))
-                method_table_metrics[method] = real_method_metrics
+                method_preds_array = np.array(method_preds[method])
+                method_labels_array = np.array(method_labels[method])
+                
+                # Calculate threshold-based accuracy: how many real videos are correctly classified as real (<0.5)
+                predictions_binary = (method_preds_array >= 0.5).astype(int)
+                correct_predictions = np.sum(predictions_binary == method_labels_array)
+                per_method_accuracy = correct_predictions / len(method_labels_array) if len(method_labels_array) > 0 else 0.0
+                
+                # Store simplified metrics (only accuracy for real methods)
+                method_table_metrics[method] = {'acc': per_method_accuracy, 'n_samples': len(method_labels_array)}
+                
+                # Log only the meaningful accuracy metric
+                wandb_log_dict[f'{log_prefix}/method/{method}/acc'] = per_method_accuracy
+                
+                self.logger.info(f"Method '{method}' per-method accuracy: {per_method_accuracy:.4f} ({correct_predictions}/{len(method_labels_array)})")
 
-                # Log the accuracy for this real method to get the time-series plot back
-                if 'acc' in real_method_metrics:
-                    wandb_log_dict[f'{log_prefix}/method/{method}/acc'] = real_method_metrics['acc']
-
-        # Create and log a W&B Table, namespaced with the prefix.
+        # Create and log a simplified W&B Table with only meaningful metrics
         if self.wandb_run:
-            columns = ["epoch", "method", "acc", "auc", "eer", "n_samples"]
+            columns = ["epoch", "method", "acc", "n_samples"]
             table_data = []
             for method, metrics in method_table_metrics.items():
                 table_data.append([
-                    epoch + 1, method, metrics.get('acc'), metrics.get('auc'),
-                    metrics.get('eer'), len(method_labels[method])
+                    epoch + 1, method, metrics.get('acc'), metrics.get('n_samples')
                 ])
             wandb_log_dict[f"{log_prefix}/method_table"] = wandb.Table(columns=columns, data=table_data)
 
-        if per_method_aucs:
-            # Macro AUC: Unweighted average of per-method AUCs
-            macro_auc = np.mean(per_method_aucs)
-            wandb_log_dict[f'{log_prefix}/derived/macro_auc'] = macro_auc
-
-            # Hardest-k AUC
-            k = self.config.get('lesson_gate', {}).get('hardest_k', 5)
-            sorted_aucs = sorted(per_method_aucs)
-            hardest_k_aucs = sorted_aucs[:k]
-            hardest_k_auc_mean = np.mean(hardest_k_aucs)
-            wandb_log_dict[f'{log_prefix}/derived/hardest_{k}_auc'] = hardest_k_auc_mean
+        # Calculate macro accuracy: Unweighted average of per-method accuracies
+        method_accuracies = [metrics.get('acc') for metrics in method_table_metrics.values() if metrics.get('acc') is not None]
+        if method_accuracies:
+            macro_accuracy = np.mean(method_accuracies)
+            wandb_log_dict[f'{log_prefix}/derived/macro_accuracy'] = macro_accuracy
+            self.logger.info(f"Macro per-method accuracy: {macro_accuracy:.4f}")
         else:
-            macro_auc, hardest_k_auc_mean = None, None
+            macro_accuracy = None
 
         # Real-Real AUC calculation can remain the same
         real_preds_for_auc = []
@@ -1150,13 +1469,30 @@ class Trainer(object):
         else:
             real_real_auc = None
 
+        # --- SANITY CHECK: Log verification data as W&B table ---
+        if self.wandb_run and sanity_check_data:
+            sanity_check_columns = ['method', 'video_id', 'frame_idx', 'frame_path', 'probability', 'label', 'epoch', 'step']
+            sanity_check_table_data = [[row[col] for col in sanity_check_columns] for row in sanity_check_data]
+            wandb_log_dict[f'{log_prefix}/sanity_check_predictions'] = wandb.Table(
+                columns=sanity_check_columns, 
+                data=sanity_check_table_data
+            )
+            
+            self.logger.info(f"✅ Logged {len(sanity_check_data)} sanity check predictions for verification")
+            
+            # Also log a summary for quick reference
+            sanity_summary = {}
+            for row in sanity_check_data:
+                method_key = f"{row['method']}_frame_{row['frame_idx']}"
+                sanity_summary[f"{log_prefix}/sanity/{method_key}"] = row['probability']
+            wandb_log_dict.update(sanity_summary)
+
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
 
         returned_metrics = {
             'overall': overall_metrics,
             'per_method': method_table_metrics,
-            'macro_auc': macro_auc,
-            f'hardest_{k}_auc' if 'k' in locals() else 'hardest_k_auc': hardest_k_auc_mean if 'hardest_k_auc_mean' in locals() else None,
+            'macro_accuracy': macro_accuracy if 'macro_accuracy' in locals() else None,
             'real_real_auc': real_real_auc
         }
 
@@ -1265,95 +1601,145 @@ class Trainer(object):
         self.logger.info("===> OOD Monitoring Done!")
 
     def _generate_and_upload_reports(self, log_prefix, frame_data, video_data, all_preds, all_labels, method_preds,
-                                     method_labels):
+                                     method_labels, generate_detailed_reports=False):
         """
         Generates and uploads detailed CSV and TXT reports to GCS.
         """
         self.logger.info("Generating detailed validation reports...")
         local_temp_dir = tempfile.mkdtemp()
+        
+        # Track what we successfully generated
+        files_generated = []
+        
         try:
             # 1. --- Create Frame-level CSV ---
-            frame_csv_path = os.path.join(local_temp_dir, 'frames_report.csv')
-            with open(frame_csv_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(['method', 'label', 'video_id', 'frame_path', 'frame_prob'])
-                writer.writerows(frame_data)
-            self.logger.info(f"Frame report generated with {len(frame_data)} entries.")
+            try:
+                frame_csv_path = os.path.join(local_temp_dir, 'frames_report.csv')
+                with open(frame_csv_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['method', 'label', 'video_id', 'frame_path', 'frame_prob'])
+                    writer.writerows(frame_data)
+                self.logger.info(f"Frame report generated with {len(frame_data)} entries.")
+                files_generated.append(('frames_report.csv', frame_csv_path))
+            except Exception as e:
+                self.logger.error(f"Failed to generate frame report: {e}")
 
             # 2. --- Create Video-level CSV ---
-            video_csv_path = os.path.join(local_temp_dir, 'videos_report.csv')
-            with open(video_csv_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(['method', 'label', 'video_id', 'avg_video_prob', 'prediction', 'is_correct'])
-                writer.writerows(video_data)
-            self.logger.info(f"Video report generated with {len(video_data)} entries.")
+            try:
+                video_csv_path = os.path.join(local_temp_dir, 'videos_report.csv')
+                with open(video_csv_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['method', 'label', 'video_id', 'avg_video_prob', 'prediction', 'is_correct'])
+                    writer.writerows(video_data)
+                self.logger.info(f"Video report generated with {len(video_data)} entries.")
+                files_generated.append(('videos_report.csv', video_csv_path))
+            except Exception as e:
+                self.logger.error(f"Failed to generate video report: {e}")
 
             # 3. --- Create Summary TXT file ---
-            summary_txt_path = os.path.join(local_temp_dir, 'summary_report.txt')
-            with open(summary_txt_path, 'w') as f:
-                f.write(f"Validation Summary Report for: {log_prefix}\n")
-                f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 40 + "\n")
-                f.write("Overall Performance\n")
-                f.write("-" * 40 + "\n")
+            try:
+                summary_txt_path = os.path.join(local_temp_dir, 'summary_report.txt')
+                with open(summary_txt_path, 'w') as f:
+                    f.write(f"Validation Summary Report for: {log_prefix}\n")
+                    f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("=" * 40 + "\n")
+                    f.write("Overall Performance\n")
+                    f.write("-" * 40 + "\n")
 
-                # Calculate overall confusion matrix
-                # Note: fake=1 (positive), real=0 (negative)
-                overall_preds_binary = (np.array(all_preds) >= 0.5).astype(int)
-                tn, fp, fn, tp = confusion_matrix(all_labels, overall_preds_binary, labels=[0, 1]).ravel()
-                total = tn + fp + fn + tp
-                acc = (tp + tn) / total if total > 0 else 0
-                f.write(f"Total Videos: {total}\n")
-                f.write(f"Accuracy: {acc:.4f}\n")
-                f.write(f"True Positives (Correctly identified Fake): {tp}\n")
-                f.write(f"True Negatives (Correctly identified Real): {tn}\n")
-                f.write(f"False Positives (Real misclassified as Fake): {fp}\n")
-                f.write(f"False Negatives (Fake misclassified as Real): {fn}\n\n")
+                    # Calculate overall confusion matrix
+                    # Note: fake=1 (positive), real=0 (negative)
+                    
+                    # When detailed reports are enabled, use video-level aggregated data for summary
+                    if generate_detailed_reports and video_data:
+                        # Extract video-level predictions and labels from the detailed report data
+                        video_labels = [row[1] for row in video_data]  # Column 1 is label
+                        video_preds = [row[4] for row in video_data]   # Column 4 is prediction (binary)
+                        
+                        tn, fp, fn, tp = confusion_matrix(video_labels, video_preds, labels=[0, 1]).ravel()
+                        total = len(video_labels)
+                        acc = (tp + tn) / total if total > 0 else 0
+                        f.write(f"Total Videos: {total}\n")
+                    else:
+                        # Fallback to frame-level data (original behavior)
+                        overall_preds_binary = (np.array(all_preds) >= 0.5).astype(int)
+                        tn, fp, fn, tp = confusion_matrix(all_labels, overall_preds_binary, labels=[0, 1]).ravel()
+                        total = tn + fp + fn + tp
+                        acc = (tp + tn) / total if total > 0 else 0
+                        f.write(f"Total Videos: {total}\n")
+                    f.write(f"Accuracy: {acc:.4f}\n")
+                    f.write(f"True Positives (Correctly identified Fake): {tp}\n")
+                    f.write(f"True Negatives (Correctly identified Real): {tn}\n")
+                    f.write(f"False Positives (Real misclassified as Fake): {fp}\n")
+                    f.write(f"False Negatives (Fake misclassified as Real): {fn}\n\n")
 
-                f.write("=" * 40 + "\n")
-                f.write("Per-Method Performance\n")
-                f.write("-" * 40 + "\n")
+                    f.write("=" * 40 + "\n")
+                    f.write("Per-Method Performance\n")
+                    f.write("-" * 40 + "\n")
 
-                for method in sorted(method_preds.keys()):
-                    labels = np.array(method_labels[method])
-                    preds = np.array(method_preds[method])
-                    preds_binary = (preds >= 0.5).astype(int)
+                    # Calculate per-method performance using deduplicated video data
+                    method_video_data = defaultdict(list)
+                    for row in video_data:  # video_data is deduplicated
+                        method = row[0]  # Column 0 is method
+                        method_video_data[method].append(row)
+                    
+                    for method in sorted(method_video_data.keys()):
+                        method_rows = method_video_data[method]
+                        if not method_rows:
+                            continue
+                            
+                        # Extract data from deduplicated video rows
+                        labels = [row[1] for row in method_rows]      # Column 1 is label
+                        predictions = [row[4] for row in method_rows] # Column 4 is prediction (binary)
+                        
+                        labels = np.array(labels)
+                        predictions = np.array(predictions)
 
-                    # Ensure we have labels to process
-                    if len(labels) == 0: continue
+                        # Determine method type
+                        is_real_method = (labels[0] == 0)
+                        method_type = "REAL" if is_real_method else "FAKE"
 
-                    is_real_method = (labels[0] == 0)
-                    method_type = "REAL" if is_real_method else "FAKE"
+                        f.write(f"----- Method: {method} ({method_type}) -----\n")
+                        f.write(f"Total Videos: {len(labels)}\n")
 
-                    f.write(f"----- Method: {method} ({method_type}) -----\n")
-                    f.write(f"Total Videos: {len(labels)}\n")
-
-                    # For a single class, confusion matrix is simpler
-                    if len(np.unique(labels)) == 1:
-                        correct_predictions = np.sum(labels == preds_binary)
-                        accuracy = correct_predictions / len(labels)
-                        f.write(f"Accuracy: {accuracy:.4f} ({correct_predictions}/{len(labels)} correct)\n\n")
-                    else:  # Mixed labels (e.g., in overall calculation, though not typical for per-method)
-                        m_tn, m_fp, m_fn, m_tp = confusion_matrix(labels, preds_binary, labels=[0, 1]).ravel()
-                        m_total = m_tn + m_fp + m_fn + m_tp
-                        m_acc = (m_tp + m_tn) / m_total if m_total > 0 else 0
-                        f.write(f"Accuracy: {m_acc:.4f}\n")
-                        f.write(f"  TN: {m_tn}, FP: {m_fp}, FN: {m_fn}, TP: {m_tp}\n\n")
+                        # Calculate accuracy using deduplicated data
+                        if len(np.unique(labels)) == 1:
+                            correct_predictions = np.sum(labels == predictions)
+                            accuracy = correct_predictions / len(labels)
+                            f.write(f"Accuracy: {accuracy:.4f} ({correct_predictions}/{len(labels)} correct)\n\n")
+                        else:  # Mixed labels (rare case)
+                            m_tn, m_fp, m_fn, m_tp = confusion_matrix(labels, predictions, labels=[0, 1]).ravel()
+                            m_total = m_tn + m_fp + m_fn + m_tp
+                            m_acc = (m_tp + m_tn) / m_total if m_total > 0 else 0
+                            f.write(f"Accuracy: {m_acc:.4f}\n")
+                            f.write(f"  TN: {m_tn}, FP: {m_fp}, FN: {m_fn}, TP: {m_tp}\n\n")
+                files_generated.append(('summary_report.txt', summary_txt_path))
+            except Exception as e:
+                self.logger.error(f"Failed to generate summary report: {e}")
 
             # 4. --- Upload files to GCS ---
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             gcs_folder = f"{timestamp}_{log_prefix}"
             gcs_base_path = "gs://training-job-outputs/test_results"
 
-            for filename in os.listdir(local_temp_dir):
-                local_path = os.path.join(local_temp_dir, filename)
-                gcs_path = f"{gcs_base_path}/{gcs_folder}/{filename}"
-                self._upload_to_gcs(local_path, gcs_path)
+            # Only upload files that were successfully generated
+            for filename, local_path in files_generated:
+                try:
+                    gcs_path = f"{gcs_base_path}/{gcs_folder}/{filename}"
+                    self._upload_to_gcs(local_path, gcs_path)
+                except Exception as e:
+                    self.logger.error(f"Failed to upload {filename} to GCS: {e}")
+            
+            if files_generated:
+                self.logger.info(f"Successfully processed {len(files_generated)}/{3} report files.")
+            else:
+                self.logger.warning("No report files were successfully generated.")
 
         finally:
             # 5. --- Clean up local temporary directory ---
-            shutil.rmtree(local_temp_dir)
-            self.logger.info("Detailed reports generated and uploaded successfully.")
+            try:
+                shutil.rmtree(local_temp_dir)
+            except Exception as e:
+                self.logger.error(f"Failed to clean up temporary directory: {e}")
 
     def run_validation_on_demand(
             self,
@@ -1392,16 +1778,37 @@ class Trainer(object):
         # early stopping state changes from being triggered.
         # The `generate_detailed_reports` flag will activate the new logic
         # inside the `test_epoch` method.
-        metrics = self.test_epoch(
-            epoch=-1,
-            step_cnt=-1,
-            validation_loader=validation_loader,
-            log_prefix=log_prefix,
-            is_primary_metric=False,
-            generate_detailed_reports=generate_detailed_reports  # Pass the new flag
-        )
+        try:
+            metrics = self.test_epoch(
+                epoch=-1,
+                step_cnt=-1,
+                validation_loader=validation_loader,
+                log_prefix=log_prefix,
+                is_primary_metric=False,
+                generate_detailed_reports=generate_detailed_reports  # Pass the new flag
+            )
+        except Exception as e:
+            self.logger.error(f"Error during test_epoch: {e}")
+            # Return a minimal metrics dict so the caller can continue
+            metrics = {
+                'overall': {
+                    'loss': -1.0,
+                    'acc': -1.0,
+                    'auc': -1.0,
+                    'eer': -1.0,
+                    'ap': -1.0,
+                    'error': str(e)
+                }
+            }
+            # Still try to log the error but don't crash completely
+            self.logger.error("Returning default metrics to prevent total failure.")
 
         overall_auc = metrics.get('overall', {}).get('auc', 'N/A')
+        # Fix formatting to handle non-float values properly
+        if isinstance(overall_auc, (int, float)) and overall_auc >= 0:
+            auc_str = f"{overall_auc:.4f}"
+        else:
+            auc_str = str(overall_auc)
         self.logger.info(
-            f"--- On-demand validation for '{log_prefix}' complete. Overall AUC: {overall_auc:.4f if isinstance(overall_auc, float) else 'N/A'} ---")
+            f"--- On-demand validation for '{log_prefix}' complete. Overall AUC: {auc_str} ---")
         return metrics
