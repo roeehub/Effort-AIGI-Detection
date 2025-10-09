@@ -18,7 +18,7 @@ import wma_streaming_pb2 as pb2
 
 # --- Configuration Constants ---
 HISTORY_WINDOW_SIZE = 48  # Total number of probabilities to keep per participant
-ACTIVE_TEST_WINDOW = 16  # Number of recent probabilities to use for verdict calculation
+ACTIVE_TEST_WINDOW = 20  # Number of recent probabilities to use for verdict calculation
 DEFAULT_START_PROB = 0.2  # Assumed probability for a new, unseen participant
 MIN_RESPONSE_INTERVAL = 1  # Send a response every N batches even if verdict is stable
 RESET_AFTER_INACTIVE_MIN = 2.0  # Forget a participant after this many minutes of inactivity
