@@ -43,10 +43,10 @@ DEFAULTS = {
 
     # Inference defaults for WMA backend
     # "WMA_INFER_THRESHOLD": "0.46",
-    "WMA_INFER_THRESHOLD": "0.75",
+    "WMA_INFER_THRESHOLD": "0.85",
     "WMA_INFER_BATCH": "16",
     # "WMA_BAND_MARGIN": "0.03",
-    "WMA_BAND_MARGIN": "0.02",
+    "WMA_BAND_MARGIN": "0.05",
 }
 for k, v in DEFAULTS.items():
     os.environ.setdefault(k, v)
