@@ -42,6 +42,9 @@ from wma.utils.banner_simulator import BannerSimulator
 # Participant state manager
 from participant_manager import ParticipantManager, AudioWindowManager
 
+# Participant name matcher
+from participant_name_matcher import ParticipantNameMatcher
+
 # for audio processing (keep for audio endpoint)
 
 # Global variables for GCP buckets
@@ -295,6 +298,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             margin=self.margin
         )
 
+        # --- Participant name matcher ---
+        # Initialize with configurable sensitivity (can be adjusted via env var)
+        name_match_threshold = float(os.getenv("WMA_NAME_MATCH_THRESHOLD", "0.3"))
+        self.name_matcher = ParticipantNameMatcher(similarity_threshold=name_match_threshold)
+        print(f"[Backend] Participant name matching threshold: {name_match_threshold}")
+
         # --- Audio sliding window manager ---
         self.audio_window_manager = AudioWindowManager()
 
@@ -414,6 +423,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     def _sanitize_participant_id(self, participant_id_raw: str) -> str:
         """
         Sanitize participant_id to handle JSON corruption in gRPC messages.
+        Now includes similarity matching to handle OCR errors in participant names.
 
         The participant_id field sometimes contains raw JSON fragments instead of clean IDs.
         This method extracts the actual participant ID and sanitizes it for banner generation.
@@ -433,7 +443,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
         # Check for nonsensical IDs and aggregate them under 'UNKNOWN'
         if self._is_nonsensical_id(participant_id_raw):
-            print(f"� [AGGREGATING] NONSENSICAL PARTICIPANT ID: '{participant_id_raw}' - "
+            print(f"⚠️ [AGGREGATING] NONSENSICAL PARTICIPANT ID: '{participant_id_raw}' - "
                   f"Aggregating under 'UNKNOWN' participant")
             return "UNKNOWN"
 
@@ -444,9 +454,21 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 import re
                 invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
                 sanitized = re.sub(invalid_chars, '_', participant_id_raw).strip(' .')
-                if DEBUG_MODE:
-                    print(f"[DEBUG] ID sanitized: '{participant_id_raw}' → '{sanitized}'")
-                return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
+                
+                # Try to find a matching participant using similarity matching
+                matched_name = self.name_matcher.find_matching_participant(sanitized)
+                if matched_name:
+                    # Use the matched canonical name
+                    if DEBUG_MODE:
+                        print(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
+                    return matched_name
+                else:
+                    # Register as new participant
+                    final_name = sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
+                    self.name_matcher.register_participant(final_name)
+                    if DEBUG_MODE:
+                        print(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
+                    return final_name
 
             # Handle JSON corruption - extract participant ID from corrupted data
             import re
@@ -458,17 +480,37 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 clean_id = match.group(1)
                 invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
                 sanitized = re.sub(invalid_chars, '_', clean_id).strip(' .')
-                if DEBUG_MODE:
-                    print(f"[DEBUG] ID sanitized: '{participant_id_raw}' → '{sanitized}'")
-                return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
+                
+                # Try matching
+                matched_name = self.name_matcher.find_matching_participant(sanitized)
+                if matched_name:
+                    if DEBUG_MODE:
+                        print(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
+                    return matched_name
+                else:
+                    final_name = sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
+                    self.name_matcher.register_participant(final_name)
+                    if DEBUG_MODE:
+                        print(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
+                    return final_name
 
             # Fallback: Take first part before any JSON punctuation and sanitize
             clean_id = participant_id_raw.split('"')[0].split(',')[0].strip()
             invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
             sanitized = re.sub(invalid_chars, '_', clean_id).strip(' .')
-            if DEBUG_MODE:
-                print(f"[DEBUG] ID sanitized: '{participant_id_raw}' → '{sanitized}'")
-            return sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
+            
+            # Try matching
+            matched_name = self.name_matcher.find_matching_participant(sanitized)
+            if matched_name:
+                if DEBUG_MODE:
+                    print(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
+                return matched_name
+            else:
+                final_name = sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
+                self.name_matcher.register_participant(final_name)
+                if DEBUG_MODE:
+                    print(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
+                return final_name
 
         except Exception:
             # Last resort: generate a safe ID
@@ -873,7 +915,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         request_seq = uplink_msg.sequence_number
 
         for pf in uplink_msg.participants:
-            # Sanitize participant id (your existing utility)
+            # Sanitize participant id (now includes similarity matching)
             pid_raw = getattr(pf, "participant_id", "") or ""
             participant_id = self._sanitize_participant_id(pid_raw)
 
@@ -883,6 +925,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             if participant_id == "[RESTART]":
                 print("[Backend] Received [RESTART] signal from client. Resetting all participant states.")
                 self.participant_manager.reset_all()
+                self.name_matcher.reset()  # Also reset name matcher
                 continue
 
             # Collect image bytes for API call
@@ -1104,6 +1147,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             "uptime_seconds": uptime,
             "data_writer_stats": self.data_writer.get_statistics(),
             "banner_simulator_stats": self.banner_simulator.get_banner_stats(),
+            "name_matcher_stats": self.name_matcher.get_statistics(),
             "active_streams": len(self.active_streams),
             "video_worker_processed": video_worker_count,
             "audio_worker_processed": audio_worker_count,
