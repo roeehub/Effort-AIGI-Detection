@@ -390,6 +390,79 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         else:
             return pb2.GREEN
 
+    def _calculate_confidence_label(self, verdict_level: int, confidence_score: float,
+                                   green_split: tuple = (0.5, 0.25, 0.25),
+                                   red_split: tuple = (1/3, 1/3, 1/3)) -> str:
+        """
+        Calculate a confidence label (High/Medium/Low) based on verdict and score.
+        
+        For GREEN verdicts: Lower scores indicate higher confidence (it's real)
+        For RED verdicts: Higher scores indicate higher confidence (it's fake)
+        For YELLOW verdicts: Return "Uncertain" (no confidence calculation)
+        
+        Args:
+            verdict_level: The banner level (GREEN, YELLOW, or RED)
+            confidence_score: The mean probability score (0.0 to 1.0)
+            green_split: Tuple of (high_fraction, medium_fraction, low_fraction) for GREEN range
+                        Default: (0.5, 0.25, 0.25) - half high confidence, quarter medium, quarter low
+            red_split: Tuple of (low_fraction, medium_fraction, high_fraction) for RED range
+                      Default: (1/3, 1/3, 1/3) - equal thirds
+            
+        Returns:
+            Confidence label: "High", "Medium", "Low", or "Uncertain"
+        """
+        thr = self.video_api.threshold
+        m = self.margin
+        
+        if verdict_level == pb2.YELLOW:
+            return "Uncertain"
+        
+        elif verdict_level == pb2.GREEN:
+            # GREEN range: [0, threshold - margin]
+            green_max = thr - m
+            
+            # Validate split proportions sum to 1.0
+            assert abs(sum(green_split) - 1.0) < 0.001, "green_split must sum to 1.0"
+            
+            high_fraction, medium_fraction, low_fraction = green_split
+            
+            # Calculate boundaries
+            high_boundary = green_max * high_fraction
+            medium_boundary = green_max * (high_fraction + medium_fraction)
+            
+            # Map: A->High, B->Medium, C->Low (lower score = more confident it's real)
+            if confidence_score < high_boundary:
+                return "High"
+            elif confidence_score < medium_boundary:
+                return "Medium"
+            else:
+                return "Low"
+        
+        elif verdict_level == pb2.RED:
+            # RED range: [threshold + margin, 1.0]
+            red_min = thr + m
+            red_range = 1.0 - red_min
+            
+            # Validate split proportions sum to 1.0
+            assert abs(sum(red_split) - 1.0) < 0.001, "red_split must sum to 1.0"
+            
+            low_fraction, medium_fraction, high_fraction = red_split
+            
+            # Calculate boundaries
+            low_boundary = red_range * low_fraction
+            medium_boundary = red_range * (low_fraction + medium_fraction)
+            
+            # Map: A->Low, B->Medium, C->High (higher score = more confident it's fake)
+            relative_score = confidence_score - red_min
+            if relative_score < low_boundary:
+                return "Low"
+            elif relative_score < medium_boundary:
+                return "Medium"
+            else:
+                return "High"
+        
+        return "Unknown"
+
     def _convert_audio_to_mp3(self, audio_data: bytes, source_format: str) -> bytes:
         """
         Convert audio data to MP3 format.
@@ -969,17 +1042,31 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 new_verdict_level, confidence_score = manager_result
                 ttl_ms = self.ttl_map.get(new_verdict_level, 2500)
 
-                # --- CONFIDENCE ENCODING LOGIC ---
+                # --- CONFIDENCE LABEL CALCULATION ---
+                confidence_label = self._calculate_confidence_label(new_verdict_level, confidence_score)
+                print(f"[Backend] Confidence calculation for {participant_id}: "
+                      f"verdict={pb2.BannerLevel.Name(new_verdict_level)}, "
+                      f"score={confidence_score:.3f}, "
+                      f"label={confidence_label}")
+
+                # --- CONFIDENCE ENCODING LOGIC (BINARY) ---
                 # 1. Calculate the true expiry timestamp.
                 true_expiry_ms = now_ms + ttl_ms
 
-                # 2. Convert confidence (0.0 to 1.0) to a two-digit integer (0 to 99).
-                confidence_code = int(confidence_score * 100) % 100
+                # 2. Map confidence label to binary code in last 3 digits
+                #    Low -> 100, Medium -> 101, High -> 110, Uncertain -> 111
+                confidence_code_map = {
+                    "Low": 100,
+                    "Medium": 101,
+                    "High": 110,
+                    "Uncertain": 111
+                }
+                confidence_code = confidence_code_map.get(confidence_label, 111)
 
                 # 3. Create the encoded timestamp: zero out the last 3 digits of the
-                #    true expiry and add the confidence code.
+                #    true expiry and add the binary confidence code.
                 #    This "hides" the confidence in a way that minimally affects the
-                #    absolute expiry time for old clients.
+                #    absolute expiry time for old clients (max 7ms difference).
                 encoded_expiry_ms = (true_expiry_ms // 1000) * 1000 + confidence_code
 
                 # --- BANNER CONSTRUCTION ---
@@ -1009,7 +1096,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
                 print(f"[Backend] Sending banner for {participant_id}. "
                       f"Level={pb2.BannerLevel.Name(new_verdict_level)}, "
-                      f"Conf={confidence_score:.3f}, "
+                      f"Score={confidence_score:.3f}, "
+                      f"ConfLabel={confidence_label}, "
                       f"EncodedExpiry={encoded_expiry_ms} (code={confidence_code})")
 
                 responses.append(down)
