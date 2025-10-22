@@ -1000,6 +1000,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 self.participant_manager.reset_all()
                 self.name_matcher.reset()  # Also reset name matcher
                 continue
+            
+            # Skip UNKNOWN participants - don't send banners for them
+            if participant_id == "UNKNOWN":
+                if DEBUG_MODE:
+                    print(f"[Backend] Skipping UNKNOWN participant (raw: {pid_raw})")
+                continue
 
             # Collect image bytes for API call
             image_bytes_list = []
