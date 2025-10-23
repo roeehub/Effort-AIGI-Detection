@@ -80,11 +80,15 @@ def setup_logging(log_file: str = "wma_server.log"):
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     
-    # Console handler
+    # Console handler with immediate flushing
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
+    console_handler.flush = lambda: sys.stdout.flush()  # Ensure immediate flushing
     logger.addHandler(console_handler)
+    
+    # Force Python to not buffer stdout
+    sys.stdout.reconfigure(line_buffering=True)
     
     logging.info(f"Logging initialized - writing to {log_file}")
     return logger
