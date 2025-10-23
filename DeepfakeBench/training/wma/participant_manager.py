@@ -6,6 +6,7 @@ Also manages audio sliding window for stable audio verdicts.
 """
 
 import time
+import logging
 import threading
 from collections import deque
 from dataclasses import dataclass, field
@@ -55,7 +56,7 @@ class ParticipantManager:
         self.lock = threading.Lock()
         self.threshold = threshold
         self.margin = margin
-        print(f"[ParticipantManager] Initialized with threshold={threshold:.2f}, margin={margin:.2f}")
+        logging.info(f"[ParticipantManager] Initialized with threshold={threshold:.2f}, margin={margin:.2f}")
 
     def _calculate_band_level(self, mean_prob: float) -> int:
         """Maps a mean probability score to a GREEN, YELLOW, or RED verdict."""
@@ -77,12 +78,12 @@ class ParticipantManager:
         if inactive_pids:
             for pid in inactive_pids:
                 del self.participants[pid]
-            print(f"[ParticipantManager] Cleaned up inactive participants: {inactive_pids}")
+            logging.info(f"[ParticipantManager] Cleaned up inactive participants: {inactive_pids}")
 
     def _get_or_create_state(self, participant_id: str) -> ParticipantState:
         """Retrieves or creates the state for a given participant."""
         if participant_id not in self.participants:
-            print(f"[ParticipantManager] New participant seen: {participant_id}. Creating initial state.")
+            logging.info(f"[ParticipantManager] New participant seen: {participant_id}. Creating initial state.")
             self.participants[participant_id] = ParticipantState()
         return self.participants[participant_id]
 
@@ -124,7 +125,7 @@ class ParticipantManager:
             verdict_changed = new_verdict != state.current_verdict
             interval_reached = state.batch_counter >= MIN_RESPONSE_INTERVAL
 
-            print(
+            logging.info(
                 f"[ParticipantManager] ID: {participant_id}, MeanProb: {mean_prob:.3f}, NewVerdict: {pb2.BannerLevel.Name(new_verdict)}, "
                 f"OldVerdict: {pb2.BannerLevel.Name(state.current_verdict)}, Changed: {verdict_changed}, "
                 f"Counter: {state.batch_counter}/{MIN_RESPONSE_INTERVAL}, IsNew: {is_new_participant}")
@@ -132,7 +133,7 @@ class ParticipantManager:
             # Always send a banner for new participants
             if is_new_participant or verdict_changed or interval_reached:
                 reason = "New" if is_new_participant else "Change" if verdict_changed else "Interval"
-                print(
+                logging.info(
                     f"[ParticipantManager] TRIGGER! Sending verdict for {participant_id}. Reason: {reason}.")
                 state.current_verdict = new_verdict
                 state.batch_counter = 0
@@ -147,10 +148,10 @@ class ParticipantManager:
         """Clears the state of all participants."""
         with self.lock:
             if self.participants:
-                print(f"[ParticipantManager] RESETTING ALL {len(self.participants)} PARTICIPANT STATES.")
+                logging.info(f"[ParticipantManager] RESETTING ALL {len(self.participants)} PARTICIPANT STATES.")
                 self.participants.clear()
             else:
-                print("[ParticipantManager] Reset requested, but no active participants.")
+                logging.info("[ParticipantManager] Reset requested, but no active participants.")
 
 
 # --- Audio Sliding Window Manager ---
@@ -168,7 +169,7 @@ class AudioWindowManager:
         self.lock = threading.Lock()
         # Start with 5 green datapoints (prediction=True means real/green)
         self.audio_window = deque([True] * self.AUDIO_WINDOW_SIZE, maxlen=self.AUDIO_WINDOW_SIZE)
-        print(f"[AudioWindowManager] Initialized with {self.AUDIO_WINDOW_SIZE} green datapoints")
+        logging.info(f"[AudioWindowManager] Initialized with {self.AUDIO_WINDOW_SIZE} green datapoints")
     
     def process_audio_result(self, api_result: Dict) -> Optional[int]:
         """
@@ -190,7 +191,7 @@ class AudioWindowManager:
         # Check if audio is silent (negative probability)
         prob_value = probs[0]  # First (and usually only) probability value
         if prob_value < 0:
-            print(f"[AudioWindowManager] Ignoring silent audio with prob={prob_value:.3f}")
+            logging.info(f"[AudioWindowManager] Ignoring silent audio with prob={prob_value:.3f}")
             return None
         
         # Get the current prediction (True=real/green, False=fake/red)
@@ -203,13 +204,13 @@ class AudioWindowManager:
             # Calculate current verdict
             current_verdict = self._calculate_verdict()
 
-            print(f"!******** WINDOW ********!")
-            print(f"[AudioWindowManager] Audio prob={prob_value:.3f}, prediction={current_prediction}, "
+            logging.info(f"!******** WINDOW ********!")
+            logging.info(f"[AudioWindowManager] Audio prob={prob_value:.3f}, prediction={current_prediction}, "
                   f"window={list(self.audio_window)}, verdict={pb2.BannerLevel.Name(current_verdict)}")
             
-            print(f"!******** AUDIO WILL SEND RESPONSE ********!")
-            print(f"[AudioWindowManager] Sending audio verdict: {pb2.BannerLevel.Name(current_verdict)}")
-            print(f"!*******************************************!")
+            logging.info(f"!******** AUDIO WILL SEND RESPONSE ********!")
+            logging.info(f"[AudioWindowManager] Sending audio verdict: {pb2.BannerLevel.Name(current_verdict)}")
+            logging.info(f"!*******************************************!")
 
             # Always return the current verdict (changed behavior)
             return current_verdict
@@ -238,4 +239,4 @@ class AudioWindowManager:
         with self.lock:
             self.audio_window.clear()
             self.audio_window.extend([True] * self.AUDIO_WINDOW_SIZE)
-            print(f"[AudioWindowManager] Reset to {self.AUDIO_WINDOW_SIZE} green datapoints")
+            logging.info(f"[AudioWindowManager] Reset to {self.AUDIO_WINDOW_SIZE} green datapoints")

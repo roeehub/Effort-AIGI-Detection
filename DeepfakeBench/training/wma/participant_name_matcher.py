@@ -4,6 +4,7 @@ Handles OCR errors and minor variations in participant names.
 """
 
 import re
+import logging
 from typing import Optional, Dict
 import Levenshtein
 
@@ -30,7 +31,7 @@ class ParticipantNameMatcher:
         """
         self.similarity_threshold = similarity_threshold
         self.known_participants: Dict[str, str] = {}  # normalized_name -> original_name
-        print(f"[ParticipantNameMatcher] Initialized with threshold={similarity_threshold:.2f}")
+        logging.info(f"[ParticipantNameMatcher] Initialized with threshold={similarity_threshold:.2f}")
     
     def _normalize_name(self, name: str) -> str:
         """
@@ -107,7 +108,7 @@ class ParticipantNameMatcher:
         if normalized_input in self.known_participants:
             canonical_name = self.known_participants[normalized_input]
             if canonical_name != raw_name:
-                print(f"[ParticipantNameMatcher] Exact normalized match: '{raw_name}' -> '{canonical_name}'")
+                logging.info(f"[ParticipantNameMatcher] Exact normalized match: '{raw_name}' -> '{canonical_name}'")
             return canonical_name
         
         # Find best match among known participants
@@ -124,12 +125,12 @@ class ParticipantNameMatcher:
         # Check if best match is within threshold
         if best_match and best_distance <= self.similarity_threshold:
             similarity_pct = (1.0 - best_distance) * 100
-            print(f"[ParticipantNameMatcher] ✅ SIMILARITY MATCH FOUND!")
-            print(f"[ParticipantNameMatcher]   Input: '{raw_name}'")
-            print(f"[ParticipantNameMatcher]   Matched to: '{best_match}'")
-            print(f"[ParticipantNameMatcher]   Similarity: {similarity_pct:.1f}% (distance: {best_distance:.3f})")
-            print(f"[ParticipantNameMatcher]   Normalized input: '{normalized_input}'")
-            print(f"[ParticipantNameMatcher]   Normalized match: '{self._get_normalized_for_canonical(best_match)}'")
+            logging.info(f"[ParticipantNameMatcher] ✅ SIMILARITY MATCH FOUND!")
+            logging.info(f"[ParticipantNameMatcher]   Input: '{raw_name}'")
+            logging.info(f"[ParticipantNameMatcher]   Matched to: '{best_match}'")
+            logging.info(f"[ParticipantNameMatcher]   Similarity: {similarity_pct:.1f}% (distance: {best_distance:.3f})")
+            logging.info(f"[ParticipantNameMatcher]   Normalized input: '{normalized_input}'")
+            logging.info(f"[ParticipantNameMatcher]   Normalized match: '{self._get_normalized_for_canonical(best_match)}'")
             return best_match
         
         return None
@@ -152,19 +153,19 @@ class ParticipantNameMatcher:
         
         if normalized not in self.known_participants:
             self.known_participants[normalized] = canonical_name
-            print(f"[ParticipantNameMatcher] Registered new participant: '{canonical_name}' "
+            logging.info(f"[ParticipantNameMatcher] Registered new participant: '{canonical_name}' "
                   f"(normalized: '{normalized}')")
         else:
             existing = self.known_participants[normalized]
             if existing != canonical_name:
-                print(f"[ParticipantNameMatcher] ⚠️ Normalized collision: '{canonical_name}' "
+                logging.warning(f"[ParticipantNameMatcher] ⚠️ Normalized collision: '{canonical_name}' "
                       f"normalizes same as existing '{existing}'")
     
     def reset(self):
         """Clear all known participants."""
         count = len(self.known_participants)
         self.known_participants.clear()
-        print(f"[ParticipantNameMatcher] Reset: cleared {count} known participants")
+        logging.info(f"[ParticipantNameMatcher] Reset: cleared {count} known participants")
     
     def get_statistics(self) -> Dict[str, any]:
         """Get statistics about known participants."""

@@ -13,6 +13,7 @@ import uuid
 import sys
 import os
 import argparse
+import logging
 from concurrent import futures
 from typing import AsyncIterator, Dict, Any, List
 import threading
@@ -46,6 +47,48 @@ from participant_manager import ParticipantManager, AudioWindowManager
 from participant_name_matcher import ParticipantNameMatcher
 
 # for audio processing (keep for audio endpoint)
+
+
+# ──────────────────────────
+# Logging Configuration
+# ──────────────────────────
+
+def setup_logging(log_file: str = "wma_server.log"):
+    """
+    Configure logging to write to both file and console with timestamps.
+    The log file is overwritten on each server start.
+    
+    Args:
+        log_file: Path to the log file (default: wma_server.log)
+    """
+    # Create a custom formatter with timestamps
+    formatter = logging.Formatter(
+        fmt='%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Configure root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Remove any existing handlers
+    logger.handlers.clear()
+    
+    # File handler (mode='w' overwrites the file on each start)
+    file_handler = logging.FileHandler(log_file, mode='w')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    logging.info(f"Logging initialized - writing to {log_file}")
+    return logger
+
 
 # Global variables for GCP buckets
 GCP_VIDEO_BUCKET = None
@@ -97,9 +140,9 @@ class MediaIOWorker:
                 from google.cloud import storage
                 self.gcp_client = storage.Client()
                 self.gcp_bucket = self.gcp_client.bucket(bucket_name)
-                print(f"[{self.name}] Initialized GCP bucket: {bucket_name}")
+                logging.info(f"[{self.name}] Initialized GCP bucket: {bucket_name}")
             except Exception as e:
-                print(f"[{self.name}] Failed to initialize GCP bucket {bucket_name}: {e}")
+                logging.error(f"[ to initialize GCP bucket {bucket_name}: {e}")
 
     def submit(self, data: bytes, metadata: Dict[str, Any] = None):
         """Submit data for processing."""
@@ -108,7 +151,7 @@ class MediaIOWorker:
             self.q.put_nowait(item)
         except queue.Full:
             # drop or log; choose your policy
-            print(f"[{self.name}] Queue full, dropping item")
+            logging.info(f"[{self.name}] Queue full, dropping item")
 
     def _loop(self):
         """Main processing loop."""
@@ -124,7 +167,7 @@ class MediaIOWorker:
             with self._lock:
                 self._count += 1
                 if self._count % 100 == 0:
-                    print(f"[{self.name}] processed items so far: {self._count}")
+                    logging.info(f"[{self.name}] processed items so far: {self._count}")
 
             self.q.task_done()
 
@@ -168,10 +211,10 @@ class MediaIOWorker:
                 blob.metadata = {k: str(v) for k, v in metadata.items()}
                 blob.patch()
 
-            print(f"[{self.name}] Saved to bucket: {filename} ({len(data)} bytes)")
+            logging.info(f"[{self.name}] Saved to bucket: {filename} ({len(data)} bytes)")
 
         except Exception as e:
-            print(f"[{self.name}] Error saving to bucket: {e}")
+            logging.error(f"[ saving to bucket: {e}")
 
     def stop(self):
         """Stop the worker."""
@@ -196,9 +239,9 @@ class VideoAPIManager:
         
         self.api_url = f"http://{self.api_host}:{self.api_port}/check_frame_batch"
         
-        print(f"[VideoAPIManager] Initialized with API URL: {self.api_url}")
-        print(f"[VideoAPIManager] YOLO confidence threshold: {self.yolo_conf_threshold}")
-        print(f"[VideoAPIManager] Inference threshold: {self.threshold}")
+        logging.info(f"[VideoAPIManager] Initialized with API URL: {self.api_url}")
+        logging.info(f"[VideoAPIManager] YOLO confidence threshold: {self.yolo_conf_threshold}")
+        logging.info(f"[VideoAPIManager] Inference threshold: {self.threshold}")
 
     async def infer_probs_from_bytes(self, image_bytes_list: List[bytes]) -> List[float]:
         """Send image bytes to API and return probabilities."""
@@ -207,7 +250,7 @@ class VideoAPIManager:
             
         try:
             if DEBUG_MODE:
-                print(f"[VideoAPIManager] Sending {len(image_bytes_list)} frames to API: {self.api_url}")
+                logging.info(f"[VideoAPIManager] Sending {len(image_bytes_list)} frames to API: {self.api_url}")
             
             # Prepare multipart form data
             data = aiohttp.FormData()
@@ -229,18 +272,18 @@ class VideoAPIManager:
                         result = await response.json()
                         probs = result.get('probs', [])
                         if DEBUG_MODE:
-                            print(f"[VideoAPIManager] API response: {len(probs)} frame probabilities")
+                            logging.info(f"[VideoAPIManager] API response: {len(probs)} frame probabilities")
                         return probs
                     else:
                         error_text = await response.text()
-                        print(f"[VideoAPIManager] API error {response.status}: {error_text}")
+                        logging.info(f"[VideoAPIManager] API error {response.status}: {error_text}")
                         return []
                         
         except asyncio.TimeoutError:
-            print(f"[VideoAPIManager] API timeout after {self.api_timeout}s")
+            logging.info(f"[VideoAPIManager] API timeout after {self.api_timeout}s")
             return []
         except Exception as e:
-            print(f"[VideoAPIManager] API call failed: {e}")
+            logging.info(f"[VideoAPIManager] API call failed: {e}")
             return []
 
     async def infer_mean_decision_from_bytes(self, image_bytes_list: List[bytes], thr=None) -> Dict[str, Any]:
@@ -284,11 +327,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 worker = MediaIOWorker(f"Audio-IO-{i + 1}", GCP_AUDIO_BUCKET)
                 self.audio_io_workers.append(worker)
 
-            print(
+            logging.info(
                 f"[Backend] Initialized {len(self.video_io_workers)} video workers and {len(self.audio_io_workers)} audio workers")
-            print(f"[Backend] GCP bucket saving enabled - Video: {GCP_VIDEO_BUCKET}, Audio: {GCP_AUDIO_BUCKET}")
+            logging.info(f"[Backend] GCP bucket saving enabled - Video: {GCP_VIDEO_BUCKET}, Audio: {GCP_AUDIO_BUCKET}")
         else:
-            print(f"[Backend] GCP bucket saving disabled - no I/O workers created")
+            logging.info(f"[Backend] GCP bucket saving disabled - no I/O workers created")
 
         self.margin = float(os.getenv("WMA_BAND_MARGIN", "0.05"))
 
@@ -302,7 +345,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # Initialize with configurable sensitivity (can be adjusted via env var)
         name_match_threshold = float(os.getenv("WMA_NAME_MATCH_THRESHOLD", "0.3"))
         self.name_matcher = ParticipantNameMatcher(similarity_threshold=name_match_threshold)
-        print(f"[Backend] Participant name matching threshold: {name_match_threshold}")
+        logging.info(f"[Backend] Participant name matching threshold: {name_match_threshold}")
 
         # --- Audio sliding window manager ---
         self.audio_window_manager = AudioWindowManager()
@@ -343,7 +386,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             "start_time": time.time()
         }
 
-        print(f"[Backend] StreamingService initialized with server_id: {self.server_id}")
+        logging.info(f"[Backend] StreamingService initialized with server_id: {self.server_id}")
 
     def _get_next_video_worker(self) -> MediaIOWorker:
         """Round-robin selection of video workers."""
@@ -367,12 +410,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             arr = np.frombuffer(image_bytes, np.uint8)
             bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if bgr is None:
-                print(f"[Backend] Failed to decode image data ({len(image_bytes)} bytes)")
+                logging.error(f"[ to decode image data ({len(image_bytes)} bytes)")
                 return None
             # Convert BGR to RGB
             return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         except Exception as e:
-            print(f"[Backend] Error decoding image: {e}")
+            logging.error(f"[ decoding image: {e}")
             return None
 
     def _band_level(self, mean_prob: float) -> int:
@@ -486,11 +529,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             audio_segment.export(mp3_buffer, format="mp3", bitrate="128k")
             mp3_data = mp3_buffer.getvalue()
 
-            print(f"[Audio Conversion] {source_format.upper()} -> MP3: {len(audio_data)} -> {len(mp3_data)} bytes")
+            logging.info(f"[Audio Conversion] {source_format.upper()} -> MP3: {len(audio_data)} -> {len(mp3_data)} bytes")
             return mp3_data
 
         except Exception as e:
-            print(f"[Audio Conversion] Failed to convert {source_format} to MP3: {e}")
+            logging.error(f"[ to convert {source_format} to MP3: {e}")
             return audio_data  # Return original data as fallback
 
     def _sanitize_participant_id(self, participant_id_raw: str) -> str:
@@ -512,11 +555,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         """
 
         if DEBUG_MODE:
-            print(f"[DEBUG] Sanitizing participant ID: '{participant_id_raw}'")
+            logging.info(f"[DEBUG] Sanitizing participant ID: '{participant_id_raw}'")
 
         # Check for nonsensical IDs and aggregate them under 'UNKNOWN'
         if self._is_nonsensical_id(participant_id_raw):
-            print(f"⚠️ [AGGREGATING] NONSENSICAL PARTICIPANT ID: '{participant_id_raw}' - "
+            logging.warning(f"⚠️ [AGGREGATING] NONSENSICAL PARTICIPANT ID: '{participant_id_raw}' - "
                   f"Aggregating under 'UNKNOWN' participant")
             return "UNKNOWN"
 
@@ -533,14 +576,14 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 if matched_name:
                     # Use the matched canonical name
                     if DEBUG_MODE:
-                        print(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
+                        logging.info(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
                     return matched_name
                 else:
                     # Register as new participant
                     final_name = sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
                     self.name_matcher.register_participant(final_name)
                     if DEBUG_MODE:
-                        print(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
+                        logging.info(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
                     return final_name
 
             # Handle JSON corruption - extract participant ID from corrupted data
@@ -558,13 +601,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 matched_name = self.name_matcher.find_matching_participant(sanitized)
                 if matched_name:
                     if DEBUG_MODE:
-                        print(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
+                        logging.info(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
                     return matched_name
                 else:
                     final_name = sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
                     self.name_matcher.register_participant(final_name)
                     if DEBUG_MODE:
-                        print(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
+                        logging.info(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
                     return final_name
 
             # Fallback: Take first part before any JSON punctuation and sanitize
@@ -576,13 +619,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             matched_name = self.name_matcher.find_matching_participant(sanitized)
             if matched_name:
                 if DEBUG_MODE:
-                    print(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
+                    logging.info(f"[DEBUG] ID matched to existing participant: '{sanitized}' → '{matched_name}'")
                 return matched_name
             else:
                 final_name = sanitized[:50] if len(sanitized) > 50 else (sanitized or "participant_unknown")
                 self.name_matcher.register_participant(final_name)
                 if DEBUG_MODE:
-                    print(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
+                    logging.info(f"[DEBUG] ID sanitized and registered: '{participant_id_raw}' → '{final_name}'")
                 return final_name
 
         except Exception:
@@ -619,7 +662,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         is_nonsensical = digit_count > 1 or special_count > 1
         
         if DEBUG_MODE and is_nonsensical:
-            print(f"[DEBUG] Nonsensical ID detected: '{participant_id_raw}' - "
+            logging.info(f"[DEBUG] Nonsensical ID detected: '{participant_id_raw}' - "
                   f"Digits: {digit_count}, SpecialChars: {special_count} (excluding parentheses)")
         
         return is_nonsensical
@@ -644,7 +687,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             self.stats["active_connections"] += 1
             self.stats["total_connections"] += 1
 
-            print(f"[Backend] New streaming connection established: {stream_id}")
+            logging.info(f"[Backend] New streaming connection established: {stream_id}")
 
             # Process incoming messages
             async for uplink_msg in request_iterator:
@@ -657,7 +700,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                             "start_time": time.time(),
                             "messages_received": 0
                         }
-                        print(f"[Backend] Client identified: {client_id} on stream {stream_id}")
+                        logging.info(f"[Backend] Client identified: {client_id} on stream {stream_id}")
 
                     # Update message counter
                     self.stats["uplink_messages"] += 1
@@ -683,21 +726,21 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                             yield audio_banner_msg
 
                 except Exception as e:
-                    print(f"[Backend] Error processing uplink message: {e}")
+                    logging.error(f"[ processing uplink message: {e}")
                     # Send error response
                     error_response = self._create_error_response(str(e))
                     yield error_response
 
         except grpc.aio.AbortedError:
-            print(f"[Backend] Stream {stream_id} aborted by client")
+            logging.info(f"[Backend] Stream {stream_id} aborted by client")
         except Exception as e:
-            print(f"[Backend] Stream {stream_id} error: {e}")
+            logging.info(f"[Backend] Stream {stream_id} error: {e}")
         finally:
             # Clean up connection
             if stream_id in self.active_streams:
                 duration = time.time() - self.active_streams[stream_id]["start_time"]
                 messages = self.active_streams[stream_id]["messages_received"]
-                print(f"[Backend] Stream {stream_id} closed: {duration:.1f}s, {messages} messages")
+                logging.info(f"[Backend] Stream {stream_id} closed: {duration:.1f}s, {messages} messages")
                 del self.active_streams[stream_id]
 
             self.stats["active_connections"] -= 1
@@ -723,42 +766,42 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         }
 
         if DEBUG_MODE:
-            print(f"[DEBUG] Received message from {uplink_msg.client_id} (seq: {uplink_msg.sequence_number})")
-            print(
+            logging.info(f"[DEBUG] Received message from {uplink_msg.client_id} (seq: {uplink_msg.sequence_number})")
+            logging.info(
                 f"[DEBUG] Message has: participants={bool(uplink_msg.participants)}, audio={uplink_msg.HasField('audio')}")
 
             # Detailed participant inspection
             if uplink_msg.participants:
                 for i, p in enumerate(uplink_msg.participants):
-                    print(f"[DEBUG] Participant #{i + 1}:")
-                    print(f"[DEBUG]   - ID: '{p.participant_id}'")
-                    print(f"[DEBUG]   - Has {len(p.crops)} crops")
+                    logging.info(f"[DEBUG] Participant #{i + 1}:")
+                    logging.info(f"[DEBUG]   - ID: '{p.participant_id}'")
+                    logging.info(f"[DEBUG]   - Has {len(p.crops)} crops")
 
                     # Check for problematic IDs
                     if ' ' in p.participant_id:
-                        print(f"[DEBUG] ⚠️ WARNING: Participant ID contains spaces: '{p.participant_id}'")
+                        logging.warning(f"[DEBUG] ⚠️ WARNING: Participant ID contains spaces: '{p.participant_id}'")
                     if not p.participant_id:
-                        print(f"[DEBUG] ⚠️ WARNING: Empty participant ID")
+                        logging.warning(f"[DEBUG] ⚠️ WARNING: Empty participant ID")
 
                     # Inspect crops
                     for j, crop in enumerate(p.crops):
                         img_bytes = getattr(crop, "image_data", b"")
-                        print(f"[DEBUG]   - Crop #{j + 1}: {len(img_bytes)} bytes")
+                        logging.info(f"[DEBUG]   - Crop #{j + 1}: {len(img_bytes)} bytes")
                         if not img_bytes:
-                            print(f"[DEBUG] ⚠️ WARNING: Empty crop data")
+                            logging.warning(f"[DEBUG] ⚠️ WARNING: Empty crop data")
 
             # Audio inspection
             if uplink_msg.HasField('audio'):
                 audio = uplink_msg.audio
                 ogg_size = len(audio.ogg_data) if hasattr(audio, 'ogg_data') and audio.ogg_data else 0
                 wav_size = len(audio.wav_data) if hasattr(audio, 'wav_data') and audio.wav_data else 0
-                print(f"[DEBUG] Audio chunk: '{audio.chunk_id}'")
-                print(f"[DEBUG]   - OGG data: {ogg_size} bytes")
-                print(f"[DEBUG]   - WAV data: {wav_size} bytes")
-                print(f"[DEBUG]   - Duration: {audio.duration_ms}ms")
+                logging.info(f"[DEBUG] Audio chunk: '{audio.chunk_id}'")
+                logging.info(f"[DEBUG]   - OGG data: {ogg_size} bytes")
+                logging.info(f"[DEBUG]   - WAV data: {wav_size} bytes")
+                logging.info(f"[DEBUG]   - Duration: {audio.duration_ms}ms")
 
                 if ogg_size == 0 and wav_size == 0:
-                    print(f"[DEBUG] ⚠️ WARNING: No audio data found (both OGG and WAV empty)")
+                    logging.warning(f"[DEBUG] ⚠️ WARNING: No audio data found (both OGG and WAV empty)")
 
         # Process participant video frames
         if uplink_msg.participants:
@@ -803,13 +846,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             total_crops = sum(len(pf.crops) for pf in participant_frames)
             total_files = len(api_data.get('files', {}))
 
-            print(f"[Backend] Processed video batch: {participant_count} participants, "
+            logging.info(f"[Backend] Processed video batch: {participant_count} participants, "
                   f"{total_crops} crops -> {chunk_path}")
             if ENABLE_BUCKET_SAVE and self.video_io_workers:
-                print(f"[Backend] Submitted {total_crops} frames to video workers")
+                logging.info(f"[Backend] Submitted {total_crops} frames to video workers")
 
         except Exception as e:
-            print(f"[Backend] Error processing participant frames: {e}")
+            logging.error(f"[ processing participant frames: {e}")
 
     async def _process_audio_batch(self, audio_batch: pb2.AudioBatch,
                                    metadata: Dict[str, Any]) -> None:
@@ -829,7 +872,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 original_format = 'wav'
 
             if not mp3_data:
-                print("[Backend] No valid audio data found for conversion")
+                logging.info("[Backend] No valid audio data found for conversion")
                 return
 
             # Update metadata to reflect MP3 conversion
@@ -856,14 +899,14 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
             # Log processing
             frame_count = audio_batch.frame_count if hasattr(audio_batch, 'frame_count') else 0
-            print(f"[Backend] Processed audio batch: {audio_batch.chunk_id}, "
+            logging.info(f"[Backend] Processed audio batch: {audio_batch.chunk_id}, "
                   f"{frame_count} frames, {len(mp3_data)} bytes MP3 (from {original_format}), "
                   f"{audio_batch.duration_ms}ms -> {audio_path}")
             if ENABLE_BUCKET_SAVE and self.audio_io_workers:
-                print(f"[Backend] Submitted {len(mp3_data)} byte MP3 chunk to worker")
+                logging.info(f"[Backend] Submitted {len(mp3_data)} byte MP3 chunk to worker")
 
         except Exception as e:
-            print(f"[Backend] Error processing audio batch: {e}")
+            logging.error(f"[ processing audio batch: {e}")
 
     async def _create_response(self, uplink_msg: pb2.Uplink) -> pb2.Downlink:
         """ACK-only response (no random banners)."""
@@ -891,7 +934,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 original_format = 'wav'
 
             if not mp3_data:
-                print(f"[ASV API] No valid audio data found for conversion")
+                logging.info(f"[ASV API] No valid audio data found for conversion")
                 return None
 
             # Prepare the multipart/form-data payload
@@ -906,20 +949,20 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             }
 
             # Make the HTTP POST request with multipart/form-data
-            print(
+            logging.info(
                 f"[ASV API] Sending {len(mp3_data)} bytes of MP3 audio (from {original_format}) for analysis to {self.asv_api_url}...")
             response = requests.post(self.asv_api_url, data=form_data, files=files, timeout=self.asv_api_timeout)
             response.raise_for_status()
 
             result = response.json()
-            print(f"[ASV API] Received response: {result}")
+            logging.info(f"[ASV API] Received response: {result}")
             return result
 
         except requests.exceptions.RequestException as e:
-            print(f"[ASV API] Error calling API: {e}")
+            logging.error(f"[ calling API: {e}")
             return None
         except Exception as e:
-            print(f"[ASV API] Error processing audio for API call: {e}")
+            logging.error(f"[ processing audio for API call: {e}")
             return None
 
     async def _generate_audio_inference_banner(self, uplink_msg: pb2.Uplink) -> pb2.Downlink | None:
@@ -933,7 +976,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         
         # Check for restart signal in session_id
         if hasattr(audio_batch, 'session_id') and audio_batch.session_id == "[RESTART]":
-            print(f"[Backend] *** RESTART SIGNAL DETECTED IN AUDIO SESSION_ID ***")
+            logging.info(f"[Backend] *** RESTART SIGNAL DETECTED IN AUDIO SESSION_ID ***")
             self.audio_window_manager.reset()
             return None  # Don't process this as a normal audio batch
 
@@ -972,9 +1015,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         down.received = True
         down.screen_banner.CopyFrom(banner)
 
-        print(f"!******** SENDING AUDIO BANNER RESPONSE ********!")
-        print(f"[Backend] Generated GLOBAL audio banner (sliding window) -> {pb2.BannerLevel.Name(verdict_level)}")
-        print(f"!***********************************************!")
+        logging.info(f"!******** SENDING AUDIO BANNER RESPONSE ********!")
+        logging.info(f"[Backend] Generated GLOBAL audio banner (sliding window) -> {pb2.BannerLevel.Name(verdict_level)}")
+        logging.info(f"!***********************************************!")
 
         return down
 
@@ -996,7 +1039,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
             #  Handle the special [RESTART] signal
             if participant_id == "[RESTART]":
-                print("[Backend] Received [RESTART] signal from client. Resetting all participant states.")
+                logging.info("[Backend] Received [RESTART] signal from client. Resetting all participant states.")
                 self.participant_manager.reset_all()
                 self.name_matcher.reset()  # Also reset name matcher
                 continue
@@ -1004,7 +1047,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             # Skip UNKNOWN participants - don't send banners for them
             if participant_id == "UNKNOWN":
                 if DEBUG_MODE:
-                    print(f"[Backend] Skipping UNKNOWN participant (raw: {pid_raw})")
+                    logging.info(f"[Backend] Skipping UNKNOWN participant (raw: {pid_raw})")
                 continue
 
             # Collect image bytes for API call
@@ -1035,7 +1078,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             # Skip if no faces were detected (empty probs)
             if not individual_probs:
                 if DEBUG_MODE:
-                    print(f"[Backend] No faces detected for participant {participant_id}, skipping")
+                    logging.info(f"[Backend] No faces detected for participant {participant_id}, skipping")
                 continue
 
             # Handle the new return type from the manager
@@ -1050,7 +1093,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
                 # --- CONFIDENCE LABEL CALCULATION ---
                 confidence_label = self._calculate_confidence_label(new_verdict_level, confidence_score)
-                print(f"[Backend] Confidence calculation for {participant_id}: "
+                logging.info(f"[Backend] Confidence calculation for {participant_id}: "
                       f"verdict={pb2.BannerLevel.Name(new_verdict_level)}, "
                       f"score={confidence_score:.3f}, "
                       f"label={confidence_label}")
@@ -1100,7 +1143,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 down.received = True
                 down.screen_banner.CopyFrom(banner)
 
-                print(f"[Backend] Sending banner for {participant_id}. "
+                logging.info(f"[Backend] Sending banner for {participant_id}. "
                       f"Level={pb2.BannerLevel.Name(new_verdict_level)}, "
                       f"Score={confidence_score:.3f}, "
                       f"ConfLabel={confidence_label}, "
@@ -1123,7 +1166,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 response.received = True
                 response.screen_banner.CopyFrom(banner)
 
-                print(f"[Backend] Async banner trigger: {pb2.BannerLevel.Name(banner.level)} "
+                logging.info(f"[Backend] Async banner trigger: {pb2.BannerLevel.Name(banner.level)} "
                       f"TTL={banner.ttl_ms}ms ID={banner.action_id}")
                 return response
 
@@ -1153,7 +1196,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         response.version = "1.0.0-stub"
         response.request_timestamp_ms = request.timestamp_ms
 
-        print(f"[Backend] Ping from client {request.client_id}")
+        logging.info(f"[Backend] Ping from client {request.client_id}")
         return response
 
     async def _generate_per_person_banners(self, participant_frames: list) -> list:
@@ -1169,12 +1212,12 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         responses = []
 
         # Extract AND SANITIZE participant IDs
-        print(f"[Backend] Processing {len(participant_frames)} participant frames for per-person banners")
+        logging.info(f"[Backend] Processing {len(participant_frames)} participant frames for per-person banners")
         raw_participant_ids = []
         sanitized_participant_ids = []
 
         for i, pf in enumerate(participant_frames):
-            print(f"[Backend] Frame {i + 1}: participant_id='{pf.participant_id}' has_id={bool(pf.participant_id)}")
+            logging.info(f"[Backend] Frame {i + 1}: participant_id='{pf.participant_id}' has_id={bool(pf.participant_id)}")
             if pf.participant_id:
                 raw_id = pf.participant_id
                 sanitized_id = self._sanitize_participant_id(raw_id)
@@ -1182,23 +1225,23 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 # Note: nonsensical participant IDs are now aggregated under 'UNKNOWN'
                 raw_participant_ids.append(raw_id)
                 sanitized_participant_ids.append(sanitized_id)
-                print(f"[Backend] Frame {i + 1}: raw_id='{raw_id}' -> sanitized_id='{sanitized_id}'")
+                logging.info(f"[Backend] Frame {i + 1}: raw_id='{raw_id}' -> sanitized_id='{sanitized_id}'")
                 if sanitized_id == "UNKNOWN":
-                    print(f"[Backend] Frame {i + 1}: Nonsensical ID '{raw_id}' aggregated as 'UNKNOWN'")
+                    logging.info(f"[Backend] Frame {i + 1}: Nonsensical ID '{raw_id}' aggregated as 'UNKNOWN'")
 
-        print(
+        logging.info(
             f"[Backend] Extracted {len(sanitized_participant_ids)} participant IDs for banner generation: {sanitized_participant_ids}")
 
         # 🔧 TEMPORARY FIX FOR TESTING: If no participant IDs received, generate test ones
         if not sanitized_participant_ids and len(participant_frames) > 0:
-            print(f"[Backend] ⚠️ No participant IDs received, generating test participant IDs for debugging")
+            logging.info(f"[Backend] ⚠️ No participant IDs received, generating test participant IDs for debugging")
             test_participant_ids = [f"participant_{i + 1000}" for i in range(min(3, len(participant_frames)))]
             sanitized_participant_ids = test_participant_ids
-            print(f"[Backend] Using test participant IDs: {sanitized_participant_ids}")
+            logging.info(f"[Backend] Using test participant IDs: {sanitized_participant_ids}")
 
         # Generate banners for participants with clean IDs
         banners = self.banner_simulator.generate_participant_banners(sanitized_participant_ids)
-        print(f"[Backend] Generated {len(banners)} per-person banners")
+        logging.info(f"[Backend] Generated {len(banners)} per-person banners")
 
         # Create response messages for each banner
         for banner in banners:
@@ -1209,17 +1252,17 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             response.received = True
             response.screen_banner.CopyFrom(banner)
 
-            print(f"[Backend] Generated per-person banner for {banner.participant_id}: "
+            logging.info(f"[Backend] Generated per-person banner for {banner.participant_id}: "
                   f"{pb2.BannerLevel.Name(banner.level)} "
                   f"TTL={banner.ttl_ms}ms Type={banner.banner_type} ID={banner.action_id} "
                   f"Scope={banner.scope} ScopeEnum={banner.scope_enum}")
 
             # DEBUG: Check what fields are actually set in the banner
-            print(
+            logging.info(
                 f"[Backend] Banner protobuf fields - participant_id='{banner.participant_id}' banner_type='{banner.banner_type}' scope='{banner.scope}' level={banner.level}")
 
             # DEBUG: Check what fields are set in the response
-            print(f"[Backend] Downlink protobuf fields - has_screen_banner={response.HasField('screen_banner')} " +
+            logging.info(f"[Backend] Downlink protobuf fields - has_screen_banner={response.HasField('screen_banner')} " +
                   f"screen_banner.participant_id='{response.screen_banner.participant_id}' " +
                   f"screen_banner.banner_type='{response.screen_banner.banner_type}' " +
                   f"screen_banner.scope='{response.screen_banner.scope}'")
@@ -1257,13 +1300,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
 
     def cleanup(self):
         """Clean up resources."""
-        print("[Backend] Cleaning up I/O workers...")
+        logging.info("[Backend] Cleaning up I/O workers...")
         for worker in self.video_io_workers + self.audio_io_workers:
             worker.stop()
         
         # Reset audio window manager
         self.audio_window_manager.reset()
-        print("[Backend] Audio window manager reset")
+        logging.info("[Backend] Audio window manager reset")
 
 
 def parse_args():
@@ -1300,17 +1343,17 @@ async def serve():
     IO_WORKER_COUNT = args.io_workers
     DEBUG_MODE = args.debug
 
-    print(f"[Backend] Configuration:")
-    print(f"  - Debug mode: {'Enabled' if DEBUG_MODE else 'Disabled'}")
-    print(f"  - Video bucket: {GCP_VIDEO_BUCKET or 'None'}")
-    print(f"  - Audio bucket: {GCP_AUDIO_BUCKET or 'None'}")
-    print(f"  - Bucket saving: {'Enabled' if ENABLE_BUCKET_SAVE else 'Disabled'}")
-    print(f"  - I/O workers per media type: {IO_WORKER_COUNT}")
-    print(f"  - Port: {args.port}")
+    logging.info("[Backend] Configuration:")
+    logging.info(f"  - Debug mode: {'Enabled' if DEBUG_MODE else 'Disabled'}")
+    logging.info(f"  - Video bucket: {GCP_VIDEO_BUCKET or 'None'}")
+    logging.info(f"  - Audio bucket: {GCP_AUDIO_BUCKET or 'None'}")
+    logging.info(f"  - Bucket saving: {'Enabled' if ENABLE_BUCKET_SAVE else 'Disabled'}")
+    logging.info(f"  - I/O workers per media type: {IO_WORKER_COUNT}")
+    logging.info(f"  - Port: {args.port}")
 
     # Validate bucket configuration
     if ENABLE_BUCKET_SAVE and (not GCP_VIDEO_BUCKET or not GCP_AUDIO_BUCKET):
-        print("[Backend] Error: --enable-bucket-save requires both --video-bucket and --audio-bucket")
+        logging.error("[Backend] Error: --enable-bucket-save requires both --video-bucket and --audio-bucket")
         return
 
     # Raise gRPC message size limits (default is 4 MiB). 50 MiB is usually plenty.
@@ -1334,20 +1377,20 @@ async def serve():
 
     # Setup graceful shutdown handlers
     def signal_handler(signum, frame):
-        print(f"[Backend] Received signal {signum}, initiating graceful shutdown...")
+        logging.info(f"[Backend] Received signal {signum}, initiating graceful shutdown...")
         shutdown_event.set()
 
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    print(f"[Backend] Starting gRPC server on {listen_addr}")
+    logging.info(f"[Backend] Starting gRPC server on {listen_addr}")
     await server.start()
 
     # Print startup information
-    print(f"[Backend] Server started successfully")
-    print(f"[Backend] Server ID: {service_impl.server_id}")
-    print(f"[Backend] Data directory: data/")
-    print(f"[Backend] Ready to receive streaming data from Service 5")
+    logging.info(f"[Backend] Server started successfully")
+    logging.info(f"[Backend] Server ID: {service_impl.server_id}")
+    logging.info(f"[Backend] Data directory: data/")
+    logging.info(f"[Backend] Ready to receive streaming data from Service 5")
 
     try:
         # Keep server running and print stats periodically
@@ -1358,7 +1401,7 @@ async def serve():
             except asyncio.TimeoutError:
                 # Print stats every 30 seconds
                 stats = service_impl.get_statistics()
-                print(f"[Backend] Stats: {stats['active_connections']} active, "
+                logging.info(f"[Backend] Stats: {stats['active_connections']} active, "
                       f"{stats['uplink_messages']} uplink msgs, "
                       f"{stats['participant_batches']} video batches, "
                       f"{stats['audio_batches']} audio batches, "
@@ -1366,19 +1409,22 @@ async def serve():
                       f"I/O processed: {stats['video_worker_processed']} video, {stats['audio_worker_processed']} audio")
 
     except KeyboardInterrupt:
-        print("[Backend] Shutting down server...")
+        logging.info("[Backend] Shutting down server...")
     finally:
-        print("[Backend] Closing active connections...")
+        logging.info("[Backend] Closing active connections...")
         service_impl.cleanup()
         await server.stop(5)
 
 
 if __name__ == '__main__':
-    print("=== WMA Backend gRPC Server ===")
-    print("Stub implementation for testing Service 5 communication")
-    print("Press Ctrl+C to stop\n")
+    # Setup logging before any log messages
+    setup_logging()
+    
+    logging.info("=== WMA Backend gRPC Server ===")
+    logging.info("Stub implementation for testing Service 5 communication")
+    logging.info("Press Ctrl+C to stop\n")
 
     try:
         asyncio.run(serve())
     except KeyboardInterrupt:
-        print("\n[Backend] Server stopped")
+        logging.info("\n[Backend] Server stopped")
