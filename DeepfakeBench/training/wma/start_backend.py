@@ -53,21 +53,27 @@ for k, v in DEFAULTS.items():
 
 # Import and run the server
 try:
-    from server import serve
+    from server import serve, setup_logging
     import asyncio
 
-    print("[BackendStartup] Starting WMA Backend gRPC Server")
-    print(f"[BackendStartup] Backend directory: {backend_dir}")
-    print(f"[BackendStartup] Python version: {sys.version}")
+    # Setup logging first so all messages go to both console and file
+    setup_logging(log_file=str(backend_dir / "wma_server.log"))
+    
+    import logging
+    logging.info("[BackendStartup] Starting WMA Backend gRPC Server")
+    logging.info(f"[BackendStartup] Backend directory: {backend_dir}")
+    logging.info(f"[BackendStartup] Python version: {sys.version}")
 
     # Run the server
     asyncio.run(serve())
 
 except KeyboardInterrupt:
-    print("\n[BackendStartup] Received interrupt, shutting down...")
+    import logging
+    logging.info("\n[BackendStartup] Received interrupt, shutting down...")
     sys.exit(0)
 except Exception as e:
-    print(f"[BackendStartup] Error starting backend: {e}")
+    import logging
+    logging.error(f"[BackendStartup] Error starting backend: {e}")
     import traceback
 
     traceback.print_exc()
