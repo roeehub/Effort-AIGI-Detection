@@ -40,6 +40,10 @@ import wma_streaming_pb2_grpc as pb2_grpc
 from wma.storage.data_writer import BackendDataWriter
 from wma.utils.banner_simulator import BannerSimulator
 
+# NEW: Import queue manager and API pool
+from wma.queue_manager import ParticipantFrameQueue, AudioBatchQueue
+from wma.api_pool import VideoAPIPool
+
 # Participant state manager
 from participant_manager import ParticipantManager, AudioWindowManager
 
@@ -373,6 +377,69 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         #     pb2.RED: 4000,
         # }
 
+        # --- NEW: Performance improvement configuration ---
+        self.config = {
+            'video': {
+                'worker_count': int(os.getenv("VIDEO_WORKER_COUNT", "4")),
+                'batch_size': int(os.getenv("BATCH_SIZE", "32")),
+                'min_batch_size': int(os.getenv("MIN_BATCH_SIZE", "16")),
+                'queue_max_age': 3.2,  # batch_size / client_fps (32/10)
+            },
+            'audio': {
+                'worker_count': int(os.getenv("AUDIO_WORKER_COUNT", "2")),
+                'queue_size': int(os.getenv("AUDIO_QUEUE_SIZE", "50")),
+            },
+            'api': {
+                'video_urls': os.getenv(
+                    "VIDEO_API_URLS", 
+                    "http://34.16.217.28:8999/check_frame_batch"
+                ).split(','),
+                'audio_urls': os.getenv(
+                    "AUDIO_API_URLS",
+                    "http://34.125.106.206:8000/asv/predict"
+                ).split(','),
+                'timeout': float(os.getenv("API_TIMEOUT", "5.0")),
+            },
+            'performance': {
+                'client_fps': int(os.getenv("CLIENT_FPS", "10")),
+            }
+        }
+        
+        logging.info(f"[Backend] Performance config: {self.config}")
+        
+        # --- NEW: Per-participant frame queues ---
+        self.participant_queues: Dict[str, ParticipantFrameQueue] = {}
+        self.participant_queue_lock = asyncio.Lock()
+        
+        # --- NEW: Global audio queue ---
+        self.audio_queue = AudioBatchQueue(max_size=self.config['audio']['queue_size'])
+        
+        # --- NEW: Video API pool for load balancing ---
+        self.video_api_pool = VideoAPIPool(
+            api_urls=self.config['api']['video_urls'],
+            timeout=self.config['api']['timeout']
+        )
+        
+        # --- NEW: Worker management ---
+        self.inference_workers = []  # Video inference worker tasks
+        self.audio_workers = []      # Audio inference worker tasks
+        self.running = False         # Flag to control worker lifecycle
+        self.worker_tasks = []       # Track all async tasks
+        
+        # --- NEW: Participant scheduling (round-robin) ---
+        self._participant_schedule = []  # List of participant IDs for round-robin
+        self._schedule_index = 0         # Current position in round-robin
+        
+        # --- NEW: Response queue for sending banners back to client ---
+        self.response_queue: asyncio.Queue[pb2.Downlink] = asyncio.Queue(maxsize=1000)
+        self.response_sender_task = None  # Task for sending responses
+        
+        logging.info(
+            f"[Backend] NEW ARCHITECTURE: {self.config['video']['worker_count']} video workers, "
+            f"{self.config['audio']['worker_count']} audio workers, "
+            f"batch_size={self.config['video']['batch_size']}"
+        )
+
         # Server state
         self.server_id = f"backend-{uuid.uuid4().hex[:8]}"
         self.active_streams = {}
@@ -403,6 +470,445 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         if not self.audio_io_workers:
             return None
         return self.audio_io_workers[self.stats["audio_batches"] % len(self.audio_io_workers)]
+
+    # ──────────────────────────
+    # NEW: Queue Management Methods
+    # ──────────────────────────
+
+    async def _get_or_create_participant_queue(self, participant_id: str) -> ParticipantFrameQueue:
+        """
+        Get existing queue for participant or create new one.
+        
+        Args:
+            participant_id: Unique participant identifier
+            
+        Returns:
+            ParticipantFrameQueue for this participant
+        """
+        async with self.participant_queue_lock:
+            if participant_id not in self.participant_queues:
+                # Create new queue
+                queue = ParticipantFrameQueue(
+                    participant_id=participant_id,
+                    max_size=self.config['video']['batch_size']
+                )
+                self.participant_queues[participant_id] = queue
+                
+                # Add to round-robin schedule
+                self._participant_schedule.append(participant_id)
+                
+                logging.info(
+                    f"[QueueMgr] Created new queue for participant '{participant_id}' "
+                    f"(total participants: {len(self.participant_queues)})"
+                )
+            
+            return self.participant_queues[participant_id]
+
+    def _sanitize_participant_id(self, raw_id: str) -> str:
+        """
+        Sanitize participant ID to handle problematic values.
+        
+        Args:
+            raw_id: Raw participant ID from client
+            
+        Returns:
+            Cleaned participant ID
+        """
+        if not raw_id or not raw_id.strip():
+            return "unknown"
+        
+        # Remove leading/trailing whitespace
+        clean_id = raw_id.strip()
+        
+        # Replace internal spaces with underscores
+        clean_id = clean_id.replace(' ', '_')
+        
+        return clean_id
+
+    async def _route_frame_to_queue(self, participant_id: str, frame_data: bytes, metadata: Dict[str, Any]):
+        """
+        Route a frame to the appropriate participant queue.
+        
+        Args:
+            participant_id: Participant identifier
+            frame_data: JPEG-encoded frame bytes
+            metadata: Frame metadata
+        """
+        # Sanitize ID
+        clean_id = self._sanitize_participant_id(participant_id)
+        
+        # Get or create queue
+        queue = await self._get_or_create_participant_queue(clean_id)
+        
+        # Add frame to queue
+        await queue.add_frame(frame_data, metadata)
+
+    async def _route_audio_to_queue(self, audio_data: bytes, metadata: Dict[str, Any]):
+        """
+        Route audio batch to global audio queue.
+        
+        Args:
+            audio_data: Audio bytes
+            metadata: Audio metadata
+        """
+        await self.audio_queue.add_batch(audio_data, metadata)
+
+    # ──────────────────────────
+    # NEW: Fast Consumer Loop
+    # ──────────────────────────
+
+    async def _fast_consumer_loop(self, request_iterator: AsyncIterator[pb2.Uplink], stream_id: str):
+        """
+        Fast consumer loop that drains gRPC stream immediately.
+        
+        This loop runs continuously with NO blocking operations.
+        It only routes frames to queues - inference happens in worker tasks.
+        
+        Args:
+            request_iterator: Stream of Uplink messages from client
+            stream_id: Unique stream identifier
+        """
+        message_count = 0
+        
+        try:
+            logging.info(f"[FastConsumer] Started for stream {stream_id}")
+            
+            async for uplink_msg in request_iterator:
+                message_count += 1
+                
+                try:
+                    # Extract metadata (fast, no I/O)
+                    metadata = {
+                        "timestamp_ms": uplink_msg.timestamp_ms,
+                        "client_id": uplink_msg.client_id,
+                        "sequence_number": uplink_msg.sequence_number,
+                        "stream_id": stream_id,
+                        "received_at": time.time()
+                    }
+                    
+                    # Route video frames to participant queues (fast, just queuing)
+                    if uplink_msg.participants:
+                        for participant_frame in uplink_msg.participants:
+                            participant_id = participant_frame.participant_id
+                            
+                            # Handle restart signal
+                            if participant_id == "[RESTART]":
+                                logging.info("[FastConsumer] RESTART signal detected, resetting state")
+                                self.participant_manager.reset_all()
+                                self.name_matcher.reset()
+                                continue
+                            
+                            # Route each crop to the participant's queue
+                            for crop in participant_frame.crops:
+                                img_bytes = getattr(crop, "image_data", b"")
+                                if img_bytes:
+                                    await self._route_frame_to_queue(
+                                        participant_id=participant_id,
+                                        frame_data=img_bytes,
+                                        metadata=metadata
+                                    )
+                    
+                    # Route audio to global queue (fast, just queuing)
+                    if uplink_msg.HasField('audio'):
+                        audio_batch = uplink_msg.audio
+                        
+                        # Handle restart signal in audio
+                        if hasattr(audio_batch, 'session_id') and audio_batch.session_id == "[RESTART]":
+                            logging.info("[FastConsumer] Audio RESTART signal detected")
+                            self.audio_window_manager.reset()
+                            continue
+                        
+                        # Get audio data (prefer WAV for processing)
+                        audio_data = None
+                        if hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
+                            audio_data = audio_batch.wav_data
+                        elif hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
+                            audio_data = audio_batch.ogg_data
+                        
+                        if audio_data:
+                            audio_metadata = {
+                                **metadata,
+                                "chunk_id": audio_batch.chunk_id,
+                                "duration_ms": audio_batch.duration_ms,
+                            }
+                            await self._route_audio_to_queue(audio_data, audio_metadata)
+                    
+                    # Update stats (fast, just increment)
+                    self.stats["uplink_messages"] += 1
+                    
+                    # Log every 100 messages
+                    if message_count % 100 == 0:
+                        logging.info(
+                            f"[FastConsumer] Processed {message_count} messages, "
+                            f"{len(self.participant_queues)} participants tracked"
+                        )
+                
+                except Exception as e:
+                    logging.error(f"[FastConsumer] Error processing message: {e}", exc_info=True)
+                    # Continue processing - don't let one bad message stop the stream
+        
+        except grpc.aio.AbortedError:
+            logging.info(f"[FastConsumer] Stream {stream_id} aborted by client")
+        except Exception as e:
+            logging.error(f"[FastConsumer] Unexpected error: {e}", exc_info=True)
+        finally:
+            logging.info(
+                f"[FastConsumer] Stopped for stream {stream_id}. "
+                f"Processed {message_count} messages total"
+            )
+
+    # ──────────────────────────
+    # NEW: Video Inference Workers
+    # ──────────────────────────
+
+    async def _get_next_ready_participant(self) -> Optional[str]:
+        """
+        Find next participant with enough frames for batch processing.
+        Uses round-robin to ensure fairness across participants.
+        
+        Returns:
+            Participant ID ready for processing, or None if no participant has enough frames
+        """
+        async with self.participant_queue_lock:
+            if not self._participant_schedule:
+                return None
+            
+            # Check all participants in round-robin order
+            checked = 0
+            while checked < len(self._participant_schedule):
+                # Get next participant in rotation
+                participant_id = self._participant_schedule[self._schedule_index]
+                self._schedule_index = (self._schedule_index + 1) % len(self._participant_schedule)
+                
+                # Check if this participant has enough frames
+                queue = self.participant_queues.get(participant_id)
+                if queue and queue.get_size() >= self.config['video']['min_batch_size']:
+                    return participant_id
+                
+                checked += 1
+            
+            return None  # No participant has enough frames yet
+
+    async def _video_inference_worker(self, worker_id: int):
+        """
+        Video inference worker that processes batches from participant queues.
+        
+        This worker runs continuously:
+        1. Finds participants with enough frames (round-robin)
+        2. Extracts full batch from participant's queue
+        3. Calls API via load-balanced pool
+        4. Generates and yields banner response
+        
+        Args:
+            worker_id: Unique worker identifier
+        """
+        logging.info(f"[Worker-{worker_id}] Video inference worker started")
+        
+        while self.running:
+            try:
+                # 1. Find participant with enough frames for batch
+                participant_id = await self._get_next_ready_participant()
+                
+                if participant_id is None:
+                    # No work available, brief pause
+                    await asyncio.sleep(0.1)
+                    continue
+                
+                # 2. Get participant's queue
+                queue = self.participant_queues.get(participant_id)
+                if not queue:
+                    continue
+                
+                # 3. Extract full batch from queue
+                batch = await queue.get_full_batch()
+                
+                if len(batch) < self.config['video']['min_batch_size']:
+                    # Not enough frames after all, skip
+                    logging.debug(
+                        f"[Worker-{worker_id}] Participant {participant_id} "
+                        f"has only {len(batch)} frames (min: {self.config['video']['min_batch_size']})"
+                    )
+                    continue
+                
+                # 4. Get next available API server (load balancing)
+                api_url = await self.video_api_pool.get_next_available_url()
+                
+                # 5. Call API with full batch
+                start_time = time.time()
+                
+                try:
+                    # Extract frame bytes from batch
+                    image_bytes_list = [frame['data'] for frame in batch]
+                    
+                    # Call API via pool (includes health tracking)
+                    result = await self.video_api_pool.infer_batch(
+                        api_url=api_url,
+                        image_bytes_list=image_bytes_list
+                    )
+                    
+                    elapsed = time.time() - start_time
+                    
+                    # Extract probabilities from result
+                    probs = result.get('probs', [])
+                    
+                    if not probs:
+                        logging.warning(
+                            f"[Worker-{worker_id}] No faces detected in batch for {participant_id}"
+                        )
+                        continue
+                    
+                    logging.info(
+                        f"[Worker-{worker_id}] Processed {len(batch)} frames for {participant_id} "
+                        f"in {elapsed:.2f}s via {api_url} → {len(probs)} face probs"
+                    )
+                    
+                    # 6. Process result through participant manager
+                    manager_result = self.participant_manager.process_and_decide(
+                        participant_id, probs
+                    )
+                    
+                    # 7. Generate banner if verdict changed
+                    if manager_result is not None:
+                        new_verdict_level, confidence_score = manager_result
+                        
+                        # Calculate confidence label
+                        confidence_label = self._calculate_confidence_label(
+                            new_verdict_level, confidence_score
+                        )
+                        
+                        logging.info(
+                            f"[Worker-{worker_id}] {participant_id}: "
+                            f"verdict={pb2.BannerLevel.Name(new_verdict_level)}, "
+                            f"score={confidence_score:.3f}, "
+                            f"confidence={confidence_label}"
+                        )
+                        
+                        # Create banner and queue for sending
+                        banner_response = self._create_banner_from_verdict(
+                            participant_id=participant_id,
+                            verdict_level=new_verdict_level,
+                            confidence_score=confidence_score,
+                            confidence_label=confidence_label
+                        )
+                        
+                        # Queue the response for sending to client
+                        try:
+                            await self.response_queue.put(banner_response)
+                            logging.info(
+                                f"[Worker-{worker_id}] ✓ Queued banner for {participant_id} "
+                                f"({pb2.BannerLevel.Name(new_verdict_level)}, {confidence_label})"
+                            )
+                        except asyncio.QueueFull:
+                            logging.warning(
+                                f"[Worker-{worker_id}] ⚠️ Response queue full, dropping banner for {participant_id}"
+                            )
+                
+                except Exception as e:
+                    elapsed = time.time() - start_time
+                    logging.error(
+                        f"[Worker-{worker_id}] API call failed for {participant_id} "
+                        f"after {elapsed:.2f}s: {e}"
+                    )
+                    # Mark API as potentially unhealthy
+                    await self.video_api_pool.mark_api_error(api_url)
+            
+            except Exception as e:
+                logging.error(
+                    f"[Worker-{worker_id}] Unexpected error: {e}",
+                    exc_info=True
+                )
+                await asyncio.sleep(1)  # Prevent tight error loop
+        
+        logging.info(f"[Worker-{worker_id}] Video inference worker stopped")
+
+    async def _start_video_workers(self):
+        """Start video inference worker pool."""
+        self.running = True
+        worker_count = self.config['video']['worker_count']
+        
+        logging.info(f"[Backend] Starting {worker_count} video inference workers...")
+        
+        for i in range(worker_count):
+            task = asyncio.create_task(self._video_inference_worker(i + 1))
+            self.inference_workers.append(task)
+            self.worker_tasks.append(task)
+        
+        logging.info(f"[Backend] {worker_count} video workers started")
+
+    async def _stop_video_workers(self):
+        """Stop video inference worker pool."""
+        logging.info("[Backend] Stopping video inference workers...")
+        
+        self.running = False
+        
+        # Wait for workers to finish current tasks
+        if self.inference_workers:
+            await asyncio.gather(*self.inference_workers, return_exceptions=True)
+        
+        self.inference_workers.clear()
+        
+        logging.info("[Backend] Video inference workers stopped")
+
+    async def _response_sender_loop(self) -> AsyncIterator[pb2.Downlink]:
+        """
+        Response sender loop - yields banners from response queue back to client.
+        
+        This is the critical piece that enables bidirectional streaming:
+        - Workers queue banners into response_queue
+        - This generator yields them to the gRPC stream
+        - Client receives banners as they're generated
+        
+        Yields:
+            pb2.Downlink messages containing banners
+        """
+        logging.info("[ResponseSender] Starting response sender loop")
+        
+        try:
+            while self.running:
+                try:
+                    # Wait for response with timeout to allow checking self.running
+                    response = await asyncio.wait_for(
+                        self.response_queue.get(),
+                        timeout=0.5
+                    )
+                    
+                    logging.info(
+                        f"[ResponseSender] Sending banner: "
+                        f"participant={response.screen_banner.participant_id}, "
+                        f"level={pb2.BannerLevel.Name(response.screen_banner.level)}, "
+                        f"seq={response.sequence_number}"
+                    )
+                    
+                    yield response
+                    
+                except asyncio.TimeoutError:
+                    # No response available, continue loop
+                    continue
+                    
+        except asyncio.CancelledError:
+            logging.info("[ResponseSender] Response sender loop cancelled")
+            raise
+        except Exception as e:
+            logging.error(f"[ResponseSender] Error in response sender: {e}", exc_info=True)
+        finally:
+            # Drain any remaining responses
+            remaining = 0
+            while not self.response_queue.empty():
+                try:
+                    response = self.response_queue.get_nowait()
+                    logging.info(
+                        f"[ResponseSender] Draining remaining response for "
+                        f"{response.screen_banner.participant_id}"
+                    )
+                    yield response
+                    remaining += 1
+                except asyncio.QueueEmpty:
+                    break
+            
+            if remaining > 0:
+                logging.info(f"[ResponseSender] Drained {remaining} remaining responses")
+            
+            logging.info("[ResponseSender] Response sender loop stopped")
 
     def _decode_image_to_rgb(self, image_bytes: bytes):
         """
@@ -509,6 +1015,58 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 return "High"
         
         return "Unknown"
+
+    def _create_banner_from_verdict(
+        self, 
+        participant_id: str, 
+        verdict_level: int, 
+        confidence_score: float,
+        confidence_label: str
+    ) -> pb2.Downlink:
+        """
+        Create a Downlink message with a ScreenBanner based on verdict data.
+        
+        Args:
+            participant_id: Participant identifier
+            verdict_level: Banner level (GREEN, YELLOW, RED)
+            confidence_score: Confidence score from API
+            confidence_label: Human-readable confidence label
+            
+        Returns:
+            pb2.Downlink message with screen_banner populated
+        """
+        now_ms = int(time.time() * 1000)
+        ttl_ms = self.ttl_map.get(verdict_level, 5000)
+        
+        # Encode confidence in expiry timestamp (similar to existing logic)
+        confidence_code = {"High": 1, "Medium": 2, "Low": 3, "Uncertain": 4}.get(confidence_label, 0)
+        encoded_expiry_ms = now_ms + ttl_ms + confidence_code
+        
+        # Determine banner type
+        banner_type = "alert" if verdict_level == pb2.RED else \
+                     ("attention" if verdict_level == pb2.YELLOW else "info")
+        
+        # Build ScreenBanner
+        banner = pb2.ScreenBanner()
+        banner.level = verdict_level
+        banner.ttl_ms = ttl_ms
+        banner.placement = "TopRight"
+        banner.action_id = f"act-{uuid.uuid4().hex[:8]}"
+        banner.scope = "participant"
+        banner.scope_enum = pb2.SCOPE_PARTICIPANT
+        banner.participant_id = participant_id
+        banner.banner_type = banner_type
+        banner.expiry_timestamp_ms = encoded_expiry_ms
+        
+        # Wrap into Downlink
+        downlink = pb2.Downlink()
+        downlink.timestamp_ms = now_ms
+        downlink.server_id = self.server_id
+        downlink.sequence_number = self._next_sequence()
+        downlink.received = True
+        downlink.screen_banner.CopyFrom(banner)
+        
+        return downlink
 
     def _convert_audio_to_mp3(self, audio_data: bytes, source_format: str) -> bytes:
         """
@@ -674,7 +1232,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
     async def StreamData(self, request_iterator: AsyncIterator[pb2.Uplink],
                          context: grpc.aio.ServicerContext) -> AsyncIterator[pb2.Downlink]:
         """
-        Bidirectional streaming endpoint for video/audio data exchange.
+        NEW ARCHITECTURE: Bidirectional streaming with decoupled processing.
+        
+        This method launches a fast consumer loop that drains the gRPC stream,
+        while workers process batches in parallel. This eliminates the sequential
+        bottleneck and ensures fresh data processing.
 
         Args:
             request_iterator: Stream of Uplink messages from Service 5
@@ -685,69 +1247,84 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         """
         client_id = None
         stream_id = f"stream-{uuid.uuid4().hex[:8]}"
+        consumer_task = None
 
         try:
             # Update connection stats
             self.stats["active_connections"] += 1
             self.stats["total_connections"] += 1
+            
+            self.active_streams[stream_id] = {
+                "client_id": "unknown",
+                "start_time": time.time(),
+                "messages_received": 0
+            }
 
-            logging.info(f"[Backend] New streaming connection established: {stream_id}")
-
-            # Process incoming messages
-            async for uplink_msg in request_iterator:
-                try:
-                    # Extract client information
-                    if not client_id and uplink_msg.client_id:
-                        client_id = uplink_msg.client_id
-                        self.active_streams[stream_id] = {
-                            "client_id": client_id,
-                            "start_time": time.time(),
-                            "messages_received": 0
-                        }
-                        logging.info(f"[Backend] Client identified: {client_id} on stream {stream_id}")
-
-                    # Update message counter
-                    self.stats["uplink_messages"] += 1
-                    if stream_id in self.active_streams:
-                        self.active_streams[stream_id]["messages_received"] += 1
-
-                    await self._process_uplink_message(uplink_msg, stream_id)
-
-                    # --- INFERENCE SECTION ---
-
-                    # 1. Send inference-driven per-participant banners for VIDEO
-                    if uplink_msg.participants:
-                        inference_banners = await self._generate_inference_banners(uplink_msg)
-                        for banner_msg in inference_banners:
-                            self.stats["banners_sent"] += 1
-                            yield banner_msg
-
-                    # 2. Send inference-driven global banner for AUDIO
-                    if uplink_msg.HasField('audio'):
-                        audio_banner_msg = await self._generate_audio_inference_banner(uplink_msg)
-                        if audio_banner_msg:
-                            self.stats["banners_sent"] += 1
-                            yield audio_banner_msg
-
-                except Exception as e:
-                    logging.error(f"[ processing uplink message: {e}")
-                    # Send error response
-                    error_response = self._create_error_response(str(e))
-                    yield error_response
+            logging.info(f"[Backend] NEW ARCHITECTURE: Stream {stream_id} established")
+            
+            # Initialize API pool session if not done
+            await self.video_api_pool.initialize()
+            
+            # Set running flag for workers and response sender
+            self.running = True
+            
+            # Launch fast consumer loop as background task
+            consumer_task = asyncio.create_task(
+                self._fast_consumer_loop(request_iterator, stream_id)
+            )
+            
+            logging.info(f"[Backend] Fast consumer loop started for stream {stream_id}")
+            
+            # PHASE 2: Launch video inference workers
+            await self._start_video_workers()
+            
+            # PHASE 4: Yield responses from the response sender
+            # This is the key to bidirectional streaming - we yield banners as they're generated
+            async for response in self._response_sender_loop():
+                yield response
+            
+            logging.info(f"[Backend] Response sender loop completed for stream {stream_id}")
 
         except grpc.aio.AbortedError:
             logging.info(f"[Backend] Stream {stream_id} aborted by client")
+        except asyncio.CancelledError:
+            logging.info(f"[Backend] Stream {stream_id} cancelled")
         except Exception as e:
-            logging.info(f"[Backend] Stream {stream_id} error: {e}")
+            logging.error(f"[Backend] Stream {stream_id} error: {e}", exc_info=True)
         finally:
+            # Stop workers (sets self.running = False)
+            await self._stop_video_workers()
+            
+            # Cancel consumer task if still running
+            if consumer_task and not consumer_task.done():
+                consumer_task.cancel()
+                try:
+                    await consumer_task
+                except asyncio.CancelledError:
+                    pass
+            
             # Clean up connection
             if stream_id in self.active_streams:
                 duration = time.time() - self.active_streams[stream_id]["start_time"]
                 messages = self.active_streams[stream_id]["messages_received"]
-                logging.info(f"[Backend] Stream {stream_id} closed: {duration:.1f}s, {messages} messages")
+                logging.info(
+                    f"[Backend] Stream {stream_id} closed: {duration:.1f}s, {messages} messages"
+                )
                 del self.active_streams[stream_id]
 
             self.stats["active_connections"] -= 1
+            
+            # Log queue statistics
+            logging.info(
+                f"[Backend] Stream {stream_id} final stats: "
+                f"{len(self.participant_queues)} participant queues"
+            )
+            for pid, queue in list(self.participant_queues.items())[:5]:  # Show first 5
+                stats = queue.get_stats()
+                logging.info(
+                    f"  - {pid}: {stats['current_size']}/{stats['max_size']} frames, "
+                    f"{stats['total_received']} received, {stats['total_dropped']} dropped"
+                )
 
     async def _process_uplink_message(self, uplink_msg: pb2.Uplink,
                                       stream_id: str) -> pb2.Downlink:
@@ -839,7 +1416,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                             img_bytes = getattr(crop, "image_data", b"")
                             if img_bytes:
                                 frame_metadata = {
-                                    "participant_id": getattr(pf, "participant_id", ""),
+                   but first, I need your analysis on the                 "participant_id": getattr(pf, "participant_id", ""),
                                     "timestamp_ms": metadata.get("timestamp_ms", 0),
                                     "stream_id": metadata.get("stream_id", "")
                                 }
