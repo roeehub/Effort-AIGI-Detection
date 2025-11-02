@@ -397,9 +397,11 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
 
 def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[VideoInfo], List[VideoInfo], Dict]:
     """
-    [REVISED & FIXED]
-    Prepares data splits using frame properties and a strict identity-based split.
-    This version correctly populates the stats dictionary for the run overview.
+    [REVISED & FIXED v2]
+    Prepares data splits using a guarantee-aware, strict identity-based split.
+    This version ensures that at least one video for every required training method
+    is reserved for the training set before performing the random split, preventing
+    data starvation for rare methods.
     """
     cfg = data_cfg
     SEED = cfg['data_params']['seed']
@@ -410,25 +412,19 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     log.info(f"Loading frame properties from: {PROPERTIES_FILE}")
 
     # --- 1. Define method sets from config ---
-    real_methods = set(cfg['methods']['use_real_sources'])
-    train_fake_methods = set(cfg['methods']['use_fake_methods_for_training'])
-    val_fake_methods = set(cfg['methods']['use_fake_methods_for_validation'])
+    real_methods = set(cfg['dataset_methods']['use_real_sources'])
+    train_fake_methods = set(cfg['dataset_methods']['use_fake_methods_for_training'])
+    val_fake_methods = set(cfg['dataset_methods']['use_fake_methods_for_validation'])
     all_allowed_methods = real_methods | train_fake_methods | val_fake_methods
     stats = {}
 
     # --- 2. Load and filter data ---
     df = pd.read_parquet(PROPERTIES_FILE)
 
-    # Create a consistent mapping from method name to a unique integer ID
     all_method_names = sorted(list(df['method'].unique()))
     method_mapping = {name: i for i, name in enumerate(all_method_names)}
-    stats['method_mapping'] = method_mapping  # Add mapping to stats to be passed to config
-
-    # Add the integer method_id to the DataFrame for easy access later
+    stats['method_mapping'] = method_mapping
     df['method_id'] = df['method'].map(method_mapping)
-
-    # [FIX] Populate initial discovery stats from the raw Parquet file
-    # before any filtering, to match the legacy path's logic and prevent the error.
     stats['discovered_videos'] = df.groupby(['method', 'original_video_id']).ngroups
     stats['discovered_methods'] = df['method'].nunique()
     stats['total_frames_in_parquet'] = len(df)
@@ -450,44 +446,99 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     )
     log.info(f"Value counts for new 'sharpness_bucket' column:\n{df_filtered['sharpness_bucket'].value_counts()}")
 
-    # --- 3. Perform strict identity-based split using the 'video_id' column ---
-    log.info(f"Performing identity-based split with validation ratio: {VAL_SPLIT_RATIO}")
-    unique_ids = df_filtered['video_id'].unique()
-    train_ids, val_ids = train_test_split(unique_ids, test_size=VAL_SPLIT_RATIO, random_state=SEED)
-    train_ids, val_ids = set(train_ids), set(val_ids)
+    # --- 3. [NEW] Guarantee-Aware Identity-Based Split ---
+    log.info(f"Performing guarantee-aware identity split with validation ratio: ~{VAL_SPLIT_RATIO}")
+
+    # Step 3.1: Identify all unique IDs and required training methods
+    all_unique_ids = df_filtered['video_id'].unique()
+    required_train_methods = real_methods | train_fake_methods
+
+    # Step 3.2: Create a map of methods to the video_ids that contain them
+    method_to_ids_map = df_filtered.groupby('method')['video_id'].unique().apply(set).to_dict()
+
+    # Step 3.3: Reserve one video_id for each required training method
+    reserved_for_train_ids = set()
+    for method in sorted(list(required_train_methods)):
+        if method not in method_to_ids_map:
+            raise ValueError(
+                f"Configuration error: Method '{method}' is required for training, "
+                "but was not found in the filtered Parquet data."
+            )
+
+        # Find candidate IDs for this method that are not already reserved
+        candidate_ids = method_to_ids_map[method]
+        available_candidates = list(candidate_ids - reserved_for_train_ids)
+
+        if not available_candidates:
+            # This is not an error; it means all videos for this method were already
+            # reserved by another required method they share a video_id with.
+            log.info(f"Method '{method}' is already covered by existing reservations. Skipping.")
+            continue
+
+        # Reserve one random video ID for this method
+        random.seed(SEED)  # Ensure reproducibility
+        chosen_id = random.choice(available_candidates)
+        reserved_for_train_ids.add(chosen_id)
+        log.info(f"Reserved video_id '{chosen_id}' to guarantee method '{method}' in training set.")
+
+    log.info(f"Reserved a total of {len(reserved_for_train_ids)} video_ids for the training set.")
+
+    # Step 3.4: Split the *remaining* IDs randomly
+    remaining_ids = np.array([vid for vid in all_unique_ids if vid not in reserved_for_train_ids])
+
+    # Adjust split size to maintain the overall validation ratio
+    target_val_size = int(len(all_unique_ids) * VAL_SPLIT_RATIO)
+    if len(remaining_ids) < target_val_size:
+        log.warning(
+            f"Cannot achieve target validation size of {target_val_size} after reservations. "
+            f"Using all {len(remaining_ids)} remaining IDs for validation."
+        )
+        val_from_remaining_ids = remaining_ids
+        train_from_remaining_ids = np.array([])
+    else:
+        train_from_remaining_ids, val_from_remaining_ids = train_test_split(
+            remaining_ids,
+            test_size=target_val_size,
+            random_state=SEED
+        )
+
+    # Step 3.5: Combine reserved IDs with the split training IDs
+    train_ids = reserved_for_train_ids.union(set(train_from_remaining_ids))
+    val_ids = set(val_from_remaining_ids)
+
+    # Final sanity check for leakage
+    if train_ids.intersection(val_ids):
+        raise RuntimeError("Identity leakage detected after split! This should not happen.")
 
     train_df = df_filtered[df_filtered['video_id'].isin(train_ids)]
     val_df = df_filtered[df_filtered['video_id'].isin(val_ids)]
 
-    # [FIX] Rename keys to match what the train script expects for the overview.
-    # The train script expects 'unbalanced_train_count' for frames and 'unbalanced_val_count' for videos.
+    # --- The rest of the function proceeds as before ---
+
     stats['unbalanced_train_count'] = len(train_df)
     stats['unbalanced_val_count'] = val_df['video_id'].nunique()
     log.info(
-        f"Split pools by identity ▶ Train: {stats['unbalanced_train_count']:,} frames | Val: {stats['unbalanced_val_count']:,} videos")
+        f"Split pools by identity ▶ Train: {stats['unbalanced_train_count']:,} frames ({len(train_ids)} videos) | "
+        f"Val: {stats['unbalanced_val_count']:,} videos"
+    )
 
     # --- 4. Balance the training set (DataFrame) and convert to dicts ---
     log.info("--- Balancing Training Set ---")
     train_df_balanced = _balance_df_by_label(train_df, real_methods, SEED)
 
-    # apply method-aware weights (TRAIN ONLY)
-    # Ensure your df has 'method_category' (your parquet does). If not, map it before.
+    # ... (the rest of the function, including weight calculation, val pool assembly, etc., is unchanged) ...
     method_multipliers = _get_method_multipliers_from_cfg(cfg)
-
     train_df_balanced['sample_weight'] = compute_frame_weights_vectorized(
         df=train_df_balanced,
         real_category_weights=cfg['dataloader_params']['real_category_weights'],
         fake_category_weights=cfg['dataloader_params']['fake_category_weights'],
         method_multipliers=method_multipliers,
-        by='video',  # or 'frame' if you prefer
+        by='video',
     )
-
-    # Convert to dict *after* we added 'sample_weight'
     final_train_data = train_df_balanced.to_dict('records')
     stats['train_frame_count'] = len(final_train_data)
     stats['train_video_count'] = len(train_df_balanced['video_id'].unique())
 
-    # --- 5. Assemble val pool into VideoInfo objects and subdivide ---
     log.info("Assembling validation videos and subdividing...")
     val_pool: List[VideoInfo] = []
     for (label, method, original_video_id), group in val_df.groupby(['label', 'method', 'original_video_id']):
@@ -510,7 +561,6 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
         elif is_val_fake:
             val_holdout_pool.append(video)
 
-    # --- 6. Balance both validation sets independently ---
     log.info("--- Balancing In-Distribution Validation Set ---")
     val_in_dist_videos = _balance_video_list(val_in_dist_pool, list(real_methods))
 
@@ -584,6 +634,71 @@ def prepare_ood_videos(data_cfg: dict) -> List[VideoInfo]:
 
     log.info(f"[OOD] Discovered {len(ood_videos):,} videos across {len(vids_dict)} methods in the OOD set.")
     return ood_videos
+
+
+def prepare_pure_validation(
+        data_cfg: Dict,
+        methods: List[str]
+) -> List[VideoInfo]:
+    """
+    Creates a simple, pure validation set from a properties file.
+
+    This function loads frame data, filters it to include only the specified
+    methods, and converts the data into a list of VideoInfo objects. It does
+    not perform any balancing, splitting, or subsetting.
+
+    Args:
+        data_cfg: The configuration dictionary, which must contain the path
+                  to the frame properties Parquet file.
+        methods: A list of method names to include in the validation set.
+
+    Returns:
+        A list of VideoInfo objects representing the validation set.
+    """
+    PROPERTIES_FILE = data_cfg.get('property_balancing', {}).get('frame_properties_parquet_path')
+    if not PROPERTIES_FILE:
+        raise ValueError("Path to 'frame_properties_parquet_path' not found in data_cfg.")
+
+    log.info(f"--- Preparing Pure Validation Set from {len(methods)} methods ---")
+    log.info(f"Loading frame properties from: {PROPERTIES_FILE}")
+
+    # 1. Load and filter the data
+    df = pd.read_parquet(PROPERTIES_FILE)
+    log.info(f"Loaded {len(df):,} total frame records from Parquet file.")
+
+    df_filtered = df[df['method'].isin(methods)].copy()
+    if df_filtered.empty:
+        log.warning(f"No frames found for the specified methods: {methods}. Returning empty list.")
+        return []
+
+    log.info(f"Filtered to {len(df_filtered):,} frames matching the provided methods.")
+
+    # 2. Group frames into VideoInfo objects
+    validation_videos: List[VideoInfo] = []
+    # Group by the unique video identifier components
+    grouped = df_filtered.groupby(['label', 'method', 'original_video_id'])
+    
+    log.info(f"Found {len(grouped)} unique video groups.")
+
+    for (label, method, original_video_id), group in grouped:
+        # Sort frames to ensure consistent order
+        frame_paths = sorted(group['path'].tolist())
+
+        # Identity is the numeric 'video_id' which is consistent per group
+        identity = int(group['video_id'].iloc[0])
+
+        video = VideoInfo(
+            label=label,
+            method=method,
+            video_id=original_video_id,
+            frame_paths=frame_paths,
+            identity=identity
+        )
+        validation_videos.append(video)
+
+    log.info(f"Assembled {len(validation_videos)} videos for the pure validation set.")
+
+    return validation_videos
 
 
 if __name__ == "__main__":

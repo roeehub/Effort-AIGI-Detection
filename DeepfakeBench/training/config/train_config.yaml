@@ -7,13 +7,20 @@ dataset_json_folder: '/Youtu_Pangu_Security_Public/youtu-pangu-public/zhiyuanyan
 SWA: False
 
 
+# Winner L0:
+# "gs://training-job-outputs/best_checkpoints/3j70a0qa/top_n_effort_20250926_ep1_auc0.9446_eer0.1239.pth"
+# Winner L1 (v2, extra reals) (stopped Third before best):
+# gs://training-job-outputs/best_checkpoints/4w1w1evf/top_n_effort_20250927_ep1_auc0.9594_eer0.1080.pth
+# Winner L1 (v2, no extra reals) (took best):
+# gs://training-job-outputs/best_checkpoints/o3wcb3lr/top_n_effort_20250927_ep1_auc0.9754_eer0.0785.pth
+
 
 gcs_assets:
   base_checkpoint:
-    gcs_path: "gs://base-checkpoints/effort-aigi/effort_clip_L14_trainOn_FaceForensic.pth"
-    local_path: "./weights/effort_clip_L14_trainOn_FaceForensic.pth"
-#    gcs_path: "gs://training-job-outputs/best_checkpoints/60mara08/top_n_effort_20250919_ep1_auc0.9817_eer0.0753.pth"
-#    local_path: "./weights/M4_top_n_effort_20250919_ep1_auc0.9817_eer0.0753.pth"
+#    gcs_path: "gs://base-checkpoints/effort-aigi/effort_clip_L14_trainOn_FaceForensic.pth"
+#    local_path: "./weights/effort_clip_L14_trainOn_FaceForensic.pth"
+    gcs_path: "gs://training-job-outputs/best_checkpoints/7a19nea9/top_n_effort_20251003_ep1_auc0.9460_eer0.1222.pth"
+    local_path: "./weights/base.pth"
   clip_backbone:
     gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
     local_path: "./weights/models--openai--clip-vit-large-patch14/"
@@ -21,7 +28,7 @@ gcs_assets:
     gcs_path: 'gs://df40-frames/manifests/frame_manifest_v3.json'
     local_path: './frame_manifest.json'
   property_manifest_parquet:
-    gcs_path: 'gs://df40-frames/manifests/frame_properties_v6.parquet'
+    gcs_path: 'gs://df40-frames/manifests/frame_properties_v8.parquet'
     local_path: './frame_properties.parquet'
 
 

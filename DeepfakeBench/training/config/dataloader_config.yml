@@ -22,59 +22,59 @@ property_balancing:
 
 
 # --- test ----
-methods:
-  use_real_sources:  # Real sources are shared for training and validation
-    - "FaceForensics++"
-    - "Celeb-real"
-    - "YouTube-real"
-    - "external_youtube_avspeech"
-
-  use_fake_methods_for_training:
-    # TRAINING: Select one foundational or "classic" representative from each bucket.
-    # The goal is to learn the core signature of each forgery family.
-
-    # Bucket 1: StyleGAN Family
-    - "StyleGAN2"          # The most classic and influential StyleGAN.
-
-    # Bucket 2: Diffusion Models
-    - "ddim"               # Represents a foundational and fast diffusion sampling technique.
-
-    # Bucket 3: Audio-Driven Lip-Sync
-    - "wav2lip"            # A widely used and foundational lip-sync model.
-
-    # Bucket 4: General Motion Transfer
-    - "fomm"               # The "First-Order Motion Model" is a seminal paper in this area.
-
-    # Bucket 5 & 6: Face Swaps
-    - "faceswap"           # The original deepfake technique.
-    - "fsgan"              # A key subject-agnostic swapping GAN.
-    - "simswap"            # A popular and strong baseline for modern swaps.
-
-    # Outlier EFS (to maintain some diversity)
-    - "VQGAN"              # A different architectural approach (VQ + GAN + Transformer).
-
-  use_fake_methods_for_validation:
-    # VALIDATION: Test generalization on the more advanced/different members of each family.
-    # If the model succeeds here, it learned the family's "essence", not just one implementation.
-
-    # Bucket 1: StyleGAN Family (Modern)
-    - "StyleGAN3"          # Tests generalization to alias-free GANs.
-    - "StyleGAN-XL"        # Tests generalization to scaled-up GANs.
-
-    # Bucket 2: Diffusion Models (Modern)
-    - "RDDM"               # A very recent (2024) diffusion architecture.
-    - "DiT"                # Tests generalization to Transformer-based diffusion.
-
-    # Bucket 3: Audio-Driven Lip-Sync (Modern)
-    - "sadtalker"          # A popular, recent (2023) and high-quality talking head generator.
-
-    # Bucket 4: General Motion Transfer (Modern)
-    - "MRAA"               # Based on the newer AnimateAnyone pipeline.
-    - "pirender"           # A different approach using 3DMMs.
-
-    # Bucket 5: Modern Face Swaps (SOTA)
-    - "facedancer"         # High-fidelity swap from 2023.
-    - "e4s"                # High-fidelity swap framed as an "editing" task (2023).
+#methods:
+#  use_real_sources:  # Real sources are shared for training and validation
+#    - "FaceForensics++"
+#    - "Celeb-real"
+#    - "YouTube-real"
+#    - "external_youtube_avspeech"
+#
+#  use_fake_methods_for_training:
+#    # TRAINING: Select one foundational or "classic" representative from each bucket.
+#    # The goal is to learn the core signature of each forgery family.
+#
+#    # Bucket 1: StyleGAN Family
+#    - "StyleGAN2"          # The most classic and influential StyleGAN.
+#
+#    # Bucket 2: Diffusion Models
+#    - "ddim"               # Represents a foundational and fast diffusion sampling technique.
+#
+#    # Bucket 3: Audio-Driven Lip-Sync
+#    - "wav2lip"            # A widely used and foundational lip-sync model.
+#
+#    # Bucket 4: General Motion Transfer
+#    - "fomm"               # The "First-Order Motion Model" is a seminal paper in this area.
+#
+#    # Bucket 5 & 6: Face Swaps
+#    - "faceswap"           # The original deepfake technique.
+#    - "fsgan"              # A key subject-agnostic swapping GAN.
+#    - "simswap"            # A popular and strong baseline for modern swaps.
+#
+#    # Outlier EFS (to maintain some diversity)
+#    - "VQGAN"              # A different architectural approach (VQ + GAN + Transformer).
+#
+#  use_fake_methods_for_validation:
+#    # VALIDATION: Test generalization on the more advanced/different members of each family.
+#    # If the model succeeds here, it learned the family's "essence", not just one implementation.
+#
+#    # Bucket 1: StyleGAN Family (Modern)
+#    - "StyleGAN3"          # Tests generalization to alias-free GANs.
+#    - "StyleGAN-XL"        # Tests generalization to scaled-up GANs.
+#
+#    # Bucket 2: Diffusion Models (Modern)
+#    - "RDDM"               # A very recent (2024) diffusion architecture.
+#    - "DiT"                # Tests generalization to Transformer-based diffusion.
+#
+#    # Bucket 3: Audio-Driven Lip-Sync (Modern)
+#    - "sadtalker"          # A popular, recent (2023) and high-quality talking head generator.
+#
+#    # Bucket 4: General Motion Transfer (Modern)
+#    - "MRAA"               # Based on the newer AnimateAnyone pipeline.
+#    - "pirender"           # A different approach using 3DMMs.
+#
+#    # Bucket 5: Modern Face Swaps (SOTA)
+#    - "facedancer"         # High-fidelity swap from 2023.
+#    - "e4s"                # High-fidelity swap framed as an "editing" task (2023).
 # -----------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -125,48 +125,48 @@ methods:
 
 # Define which sources/methods to include in the dataset.
 # To exclude a method, simply remove it from the list.
-all_methods:
-  use_real_sources:
-    ### Original DF40 real videos from various sources
-    - "FaceForensics++"
-    - "Celeb-real"
-    - "YouTube-real"
-    ### My own collected real videos - bigger and more diverse
-    - "external_youtube_avspeech"
-  use_fake_methods:
-    ### Face-swapping (FS): Methods that swap a face from a source to a target.
-    - "simswap"
-    - "mobileswap"
-    - "e4s"
-    - "facedancer"
-    - "faceswap"
-    - "inswap"
-    - "blendface"
-    - "fsgan"
-    - "uniface"
-    ### Face-reenactment (FR): Methods that transfer facial movements and expressions.
-    - "one_shot_free"
-    - "pirender"
-    - "facevid2vid"
-    - "lia"
-    - "fomm"
-    - "MRAA"
-    - "wav2lip"
-    - "mcnet"
-    - "sadtalker"
-    - "danet"
-    #      - "hyperreenact"
-    ### Entire Face Synthesis (EFS): Methods that generate a new, entire face from scratch.
-    - "VQGAN"
-    - "StyleGANXL"
-    - "StyleGAN3"
-    - "StyleGAN2"
-    - "SiT"
-    - "RDDM"
-    - "DiT"
-    - "ddim"
-  ### To be sorted/unused
-  # - "tpsm"
+#all_methods:
+#  use_real_sources:
+#    ### Original DF40 real videos from various sources
+#    - "FaceForensics++"
+#    - "Celeb-real"
+#    - "YouTube-real"
+#    ### My own collected real videos - bigger and more diverse
+#    - "external_youtube_avspeech"
+#  use_fake_methods:
+#    ### Face-swapping (FS): Methods that swap a face from a source to a target.
+#    - "simswap"
+#    - "mobileswap"
+#    - "e4s"
+#    - "facedancer"
+#    - "faceswap"
+#    - "inswap"
+#    - "blendface"
+#    - "fsgan"
+#    - "uniface"
+#    ### Face-reenactment (FR): Methods that transfer facial movements and expressions.
+#    - "one_shot_free"
+#    - "pirender"
+#    - "facevid2vid"
+#    - "lia"
+#    - "fomm"
+#    - "MRAA"
+#    - "wav2lip"
+#    - "mcnet"
+#    - "sadtalker"
+#    - "danet"
+#    #      - "hyperreenact"
+#    ### Entire Face Synthesis (EFS): Methods that generate a new, entire face from scratch.
+#    - "VQGAN"
+#    - "StyleGANXL"
+#    - "StyleGAN3"
+#    - "StyleGAN2"
+#    - "SiT"
+#    - "RDDM"
+#    - "DiT"
+#    - "ddim"
+#  ### To be sorted/unused
+#  # - "tpsm"
 
 dataloader_params:
   batch_size: 4  # This means actually 4 * num_frames_per_video = 32 frames per batch

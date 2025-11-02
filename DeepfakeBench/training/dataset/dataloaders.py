@@ -37,6 +37,10 @@ def _map_video(video_info, config, mode):
     return load_and_process_video(video_info, config, mode)
 
 
+def _map_video_detailed(video_info, config, mode):
+    return load_and_process_video_detailed(video_info, config, mode)
+
+
 def _not_none(x):
     return x is not None
 
@@ -293,7 +297,7 @@ def apply_augmentation_v6(img_np: np.ndarray, frame_dict: dict) -> np.ndarray:
 
 def apply_augmentation_v7(img_np: np.ndarray) -> np.ndarray:
     pipelines = [AUG_PIPELINE_V6_SIMULATOR, AUG_PIPELINE_V4_GENERALIST, AUG_PIPELINE_PURIST]
-    weights = [0.2, 0.4, 0.4]
+    weights = [0.4, 0.45, 0.15]
     chosen_pipeline = random.choices(pipelines, weights=weights, k=1)[0]
     return chosen_pipeline(image=img_np)['image']
 
@@ -776,15 +780,100 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame
     # MODIFICATION END
 
 
+def load_and_process_video_detailed(video_info: VideoInfo, config: dict, mode: str, frame_count_override: int = None):
+    """
+    Enhanced version of load_and_process_video that returns additional metadata for detailed reporting.
+    Returns: (video_tensor, label, method_id, path, video_id, frame_paths)
+    """
+    if frame_count_override is not None:
+        frame_num = frame_count_override
+    else:
+        dl_params = config.get('dataloader_params', {})
+        frame_num = dl_params.get('frames_per_video', 8)
+
+    resolution = config['resolution']
+    all_frame_paths = list(video_info.frame_paths)
+
+    if len(all_frame_paths) < frame_num:
+        return None
+
+    random.shuffle(all_frame_paths)
+    selected_paths = all_frame_paths[:frame_num]
+
+    def _load_single_frame(path):
+        """Helper function for a single thread to load one frame."""
+        try:
+            with fsspec.open(path, "rb") as f:
+                img = Image.open(f).convert("RGB")
+                img = img.resize((resolution, resolution), Image.BICUBIC)
+            return img
+        except Exception:
+            return None
+
+    # Use a ThreadPoolExecutor to fetch all frames for this video in parallel
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        image_results = list(executor.map(_load_single_frame, selected_paths))
+
+    # Filter out any frames that failed to load
+    images = [img for img in image_results if img is not None]
+
+    if len(images) < frame_num:
+        return None
+
+    if mode == 'train' and config['use_data_augmentation']:
+        aug_seed = random.randint(0, 2 ** 32 - 1)
+        images = [data_aug_v2(img, config, augmentation_seed=aug_seed) for img in images]
+
+    normalize_transform = T.Compose([
+        T.ToTensor(),
+        T.Normalize(mean=config['mean'], std=config['std'])
+    ])
+
+    image_tensors = [normalize_transform(img) for img in images]
+    video_tensor = torch.stack(image_tensors, dim=0)
+    label = 0 if video_info.label == 'real' else 1
+
+    # Return 6 items for detailed reporting
+    return (
+        video_tensor, 
+        label, 
+        -1, 
+        f"{video_info.method}/{video_info.video_id}",
+        video_info.video_id,
+        selected_paths
+    )
+
+
 def collate_fn(batch):
     """
     A simplified collate_fn, matching the one in abstract_dataset.py.
+    Enhanced to support detailed reporting with video_id and frame_paths.
     """
     batch = [b for b in batch if b is not None]
     if not batch:
-        return {'image': torch.empty(0), 'label': torch.empty(0), 'method_id': torch.empty(0), 'path': []}
+        return {
+            'image': torch.empty(0), 
+            'label': torch.empty(0), 
+            'method_id': torch.empty(0), 
+            'path': [],
+            'video_id': [],
+            'frame_paths': []
+        }
 
-    images, labels, method_ids, paths = zip(*batch)  # Unpack method_ids
+    # Handle both old 4-tuple format and new 6-tuple format for backward compatibility
+    if len(batch[0]) == 4:
+        # Old format: (image, label, method_id, path)
+        images, labels, method_ids, paths = zip(*batch)
+        video_ids = []
+        frame_paths = []
+    elif len(batch[0]) == 6:
+        # New format: (image, label, method_id, path, video_id, frame_paths)
+        images, labels, method_ids, paths, video_ids, frame_paths = zip(*batch)
+        video_ids = list(video_ids)
+        frame_paths = list(frame_paths)
+    else:
+        raise ValueError(f"Unexpected batch format with {len(batch[0])} elements")
+        
     images = torch.stack(images, dim=0)
     labels = torch.LongTensor(labels)
     method_ids = torch.LongTensor(method_ids)  # Convert method_ids to a tensor
@@ -793,7 +882,43 @@ def collate_fn(batch):
         'image': images,
         'label': labels,
         'method_id': method_ids,
-        'path': list(paths)
+        'path': list(paths),
+        'video_id': video_ids,
+        'frame_paths': frame_paths
+    }
+    return data_dict
+
+
+def collate_fn_detailed(batch):
+    """
+    Specialized collate function for detailed reporting that expects 6-tuple format.
+    """
+    batch = [b for b in batch if b is not None]
+    if not batch:
+        return {
+            'image': torch.empty(0), 
+            'label': torch.empty(0), 
+            'method_id': torch.empty(0), 
+            'path': [],
+            'video_id': [],
+            'frame_paths': []
+        }
+
+    if len(batch[0]) != 6:
+        raise ValueError(f"collate_fn_detailed expects 6-tuple format, got {len(batch[0])} elements")
+        
+    images, labels, method_ids, paths, video_ids, frame_paths = zip(*batch)
+    images = torch.stack(images, dim=0)
+    labels = torch.LongTensor(labels)
+    method_ids = torch.LongTensor(method_ids)
+
+    data_dict = {
+        'image': images,
+        'label': labels,
+        'method_id': method_ids,
+        'path': list(paths),
+        'video_id': list(video_ids),
+        'frame_paths': list(frame_paths)
     }
     return data_dict
 
@@ -985,7 +1110,14 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     Creates the property-balanced dataloader using the Anchor-Mate strategy.
     This implementation performs hierarchical sampling based on weights defined in the config.
     It first samples by 'method_category' and then balances by 'property_bucket' within that category.
+    
+    The real/fake ratio can be customized via the 'real_label_ratio' parameter in dataloader_params.
+    If not specified or set to None, defaults to 0.5 (50/50 balance).
     """
+
+    # Check if using the new lesson data control system first
+    lesson_data_control = config.get('lesson_data_control', {})
+    use_lesson_control = lesson_data_control.get('enabled', False)
 
     # The data from the Parquet file has 'label' (str) but not 'label_id' (int).
     # This loop ensures 'label_id' is present before the main logic begins.
@@ -1005,6 +1137,19 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     # Get frames_per_video, default to 2 for backward compatibility
     FRAMES_PER_VIDEO = dl_params.get('frames_per_video', 2)
     print(f"Configuring property-balanced loader with {FRAMES_PER_VIDEO} frames per video.")
+    
+    # Get real_label_ratio parameter for customizing real/fake balance
+    # If None or not specified, defaults to 0.5 (50/50 balance)
+    real_label_ratio = dl_params.get('real_label_ratio', None)
+    if real_label_ratio is None:
+        real_label_ratio = 0.5
+    elif not (0.0 < real_label_ratio < 1.0):
+        print(f"real_label_ratio must be between 0 and 1 (exclusive). Got: {real_label_ratio}")
+        print("Defaulting to 0.5 (50/50 balance).")
+        real_label_ratio = 0.5
+
+    fake_label_ratio = 1.0 - real_label_ratio
+    print(f"Using real/fake label ratio: {real_label_ratio:.2f} / {fake_label_ratio:.2f}")
 
     # A sensible minimum to avoid creating tiny, inefficient cycled iterators for small buckets
     MIN_BUCKET_SIZE = BATCH_SIZE
@@ -1012,37 +1157,47 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     # --- 1. Get category weights from config ---
     # These dictionaries define the sampling probability for each high-level category.
     # The keys MUST match the 'method_category' strings in your Parquet manifest.
-    real_category_weights = dl_params.get('real_category_weights', {})
-    fake_category_weights = dl_params.get('fake_category_weights', {})
+    # Only validate legacy weights if NOT using lesson control
+    if not use_lesson_control:
+        real_category_weights = dl_params.get('real_category_weights', {})
+        fake_category_weights = dl_params.get('fake_category_weights', {})
 
-    if not math.isclose(sum(real_category_weights.values()), 1.0):
-        raise ValueError(f"Real category weights do not sum to 1.0! Got: {sum(real_category_weights.values())}")
-    if not math.isclose(sum(fake_category_weights.values()), 1.0):
-        raise ValueError(f"Fake category weights do not sum to 1.0! Got: {sum(fake_category_weights.values())}")
+        if not real_category_weights or abs(sum(real_category_weights.values()) - 1.0) > 1e-6:
+            raise ValueError(f"Real category weights do not sum to 1.0! Got: {sum(real_category_weights.values())}")
 
-    if not real_category_weights or not fake_category_weights:
-        raise ValueError("`real_category_weights` and `fake_category_weights` must be defined "
-                         "in the dataloader config for property balancing strategy.")
+        if not fake_category_weights or abs(sum(fake_category_weights.values()) - 1.0) > 1e-6:
+            raise ValueError(f"Fake category weights do not sum to 1.0! Got: {sum(fake_category_weights.values())}")
 
-    print(f"Using REAL category weights: {real_category_weights}")
-    print(f"Using FAKE category weights: {fake_category_weights}")
+        print(f"Using REAL category weights: {real_category_weights}")
+        print(f"Using FAKE category weights: {fake_category_weights}")
+    else:
+        # When using lesson control, set empty weights to avoid the validation
+        real_category_weights = {}
+        fake_category_weights = {}
+        print("Using lesson data control - skipping legacy weight validation")
 
     # --- 2. Build the lookup table for finding mates efficiently ---
     clip_lookup = _build_clip_to_frames_lookup(all_train_frames)
     print(f"Built clip_id lookup table with {len(clip_lookup)} unique clips.")
 
     # --- 3. Segregate all frames by method category ---
+    # [MODIFICATION] This section is now less critical for 'real' but still useful for legacy 'fake' path.
+    # We will build the real frame list more directly in the next step.
     real_frames_by_category = defaultdict(list)
     fake_frames_by_category = defaultdict(list)
+
+    # Get the list of fake categories for the legacy path
+    fake_category_weights = dl_params.get('fake_category_weights', {})
+
     for frame_info in all_train_frames:
-        # These columns must exist in your Parquet file
         category = frame_info.get('method_category')
         if category is None:
-            continue  # Skip frames that don't have a category
+            continue
 
         if frame_info['label_id'] == 0:
-            if category in real_category_weights:
-                real_frames_by_category[category].append(frame_info)
+            # We no longer need to segregate real frames by category here.
+            # This will be handled in the next step.
+            pass
         else:
             if category in fake_category_weights:
                 fake_frames_by_category[category].append(frame_info)
@@ -1050,62 +1205,215 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     # --- 4. Create the hierarchical master stream for REAL data ---
     real_category_streams = []
     real_weights = []
-    for category, weight in real_category_weights.items():
-        frames = real_frames_by_category.get(category)
-        if not frames:
-            print(f"WARNING: No frames found for REAL category '{category}', skipping.")
-            continue
 
-        # A. Group frames within this category by property bucket
-        frames_by_bucket = defaultdict(list)
-        for frame in frames:
-            # [FIXED] Use 'sharpness_bucket' which is now created in prepare_splits.py
-            frames_by_bucket[frame['sharpness_bucket']].append(frame)
+    lesson_data_control = config.get('lesson_data_control', {})
 
-        # B. Consolidate small buckets and create a property-balanced stream for THIS CATEGORY
-        consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
-        category_stream = _create_master_stream_for_label(consolidated)
+    if lesson_data_control.get('enabled', False) and lesson_data_control.get('real_method_groups'):
+        # --- NEW: Dynamic Grouping Logic for Real Methods (mirrors fake logic) ---
+        print("--- Using DYNAMIC method grouping for REAL data stream. ---")
+        
+        real_method_groups = lesson_data_control.get('real_method_groups', {})
+        all_real_frames = [f for f in all_train_frames if f['label_id'] == 0]
+        
+        # Track group info for logging
+        group_info_log = []
+        
+        for group_name, group_info in real_method_groups.items():
+            group_methods = set(group_info.get('methods', []))
+            group_weight = group_info.get('weight', None)  # Allow None for default equal weighting
+            
+            frames_for_group = [f for f in all_real_frames if f.get('method') in group_methods]
+            
+            if not frames_for_group:
+                print(f"WARNING: No frames found for real group '{group_name}', skipping.")
+                continue
+            
+            print(f"  - Group '{group_name}': Found {len(frames_for_group)} frames from {len(group_methods)} method(s).")
+            
+            # Group by property bucket
+            frames_by_bucket = defaultdict(list)
+            for frame in frames_for_group:
+                frames_by_bucket[frame['sharpness_bucket']].append(frame)
+            
+            # Create property-balanced stream for this group
+            consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, group_name)
+            group_stream = _create_master_stream_for_label(consolidated)
+            
+            if group_stream:
+                real_category_streams.append(group_stream)
+                real_weights.append(group_weight if group_weight is not None else 1.0)  # Default to 1.0 for equal weighting
+                group_info_log.append({
+                    'name': group_name,
+                    'methods': list(group_methods),
+                    'frame_count': len(frames_for_group),
+                    'specified_weight': group_weight
+                })
+        
+        if not real_category_streams:
+            raise ValueError("Cannot create dataloader: no valid REAL data streams created.")
+        
+        # Normalize weights to sum to 1.0 (handles both explicit weights and default equal weighting)
+        weight_sum = sum(real_weights)
+        if not math.isclose(weight_sum, 1.0):
+            if any(w is None for w in [g.get('weight') for g in real_method_groups.values()]):
+                print(f"INFO: Real weights not specified or don't sum to 1.0 (sum={weight_sum:.3f}). Applying equal weighting.")
+            else:
+                print(f"WARNING: Real weights sum to {weight_sum:.3f}, renormalizing to 1.0")
+            real_weights = [w/weight_sum for w in real_weights]
+        
+        # --- Enhanced Logging: Show final weight distribution ---
+        print("\n=== REAL METHOD SAMPLING SUMMARY ===")
+        for i, group_info in enumerate(group_info_log):
+            print(f"  Group '{group_info['name']}':")
+            print(f"    Methods: {', '.join(group_info['methods'])}")
+            print(f"    Frame count: {group_info['frame_count']:,}")
+            print(f"    Specified weight: {group_info['specified_weight']}")
+            print(f"    Final sampling weight: {real_weights[i]:.4f} ({real_weights[i]*100:.2f}%)")
+        print(f"Total real streams: {len(real_category_streams)}")
+        print(f"Total real weight: {sum(real_weights):.6f}")
+        print("=" * 40 + "\n")
+    
+        master_real_stream = CustomSampleMultiplexerDataPipe(real_category_streams, real_weights)
 
-        if category_stream:
-            real_category_streams.append(category_stream)
-            real_weights.append(weight)
+    else:
+        # --- FALLBACK: Original logic (all real methods pooled together) ---
+        print("--- Using UNIFIED real data stream (no per-method weighting). ---")
+        
+        allowed_real_sources = data_config.get('dataset_methods', {}).get('use_real_sources', [])
+        if not allowed_real_sources:
+            raise ValueError("`dataset_methods.use_real_sources` is empty or not defined.")
+        
+        allowed_real_sources_set = set(allowed_real_sources)
+        all_real_frames = [
+            f for f in all_train_frames
+            if f['label_id'] == 0 and f.get('method') in allowed_real_sources_set
+        ]
+        
+        if not all_real_frames:
+            raise ValueError("No REAL frames found for the sources specified in `use_real_sources`.")
+        
+        real_frames_by_bucket = defaultdict(list)
+        for frame in all_real_frames:
+            real_frames_by_bucket[frame['sharpness_bucket']].append(frame)
+        
+        consolidated_real_buckets = _consolidate_small_buckets(real_frames_by_bucket, MIN_BUCKET_SIZE, "real_master")
+        master_real_stream = _create_master_stream_for_label(consolidated_real_buckets)
+        
+        if not master_real_stream:
+            raise ValueError("Cannot create dataloader: the master REAL data stream could not be created.")
 
-    if not real_category_streams:
-        raise ValueError(
-            "Cannot create dataloader: no valid REAL data streams were created. Check config and Parquet file.")
-
-    # C. Create the master REAL stream by sampling from category streams
-    master_real_stream = CustomSampleMultiplexerDataPipe(real_category_streams, real_weights)
-
-    # --- 5. Create the hierarchical master stream for FAKE data (Symmetrical Logic) ---
+    # --- 5. Create the hierarchical master stream for FAKE data (Symmetrical or Dynamic Logic) ---
     fake_category_streams = []
     fake_weights = []
-    for category, weight in fake_category_weights.items():
-        frames = fake_frames_by_category.get(category)
-        if not frames:
-            print(f"WARNING: No frames found for FAKE category '{category}', skipping.")
-            continue
 
-        frames_by_bucket = defaultdict(list)
-        for frame in frames:
-            # [FIXED] Use 'sharpness_bucket' which is now created in prepare_splits.py
-            frames_by_bucket[frame['sharpness_bucket']].append(frame)
+    lesson_data_control = config.get('lesson_data_control', {})
 
-        consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
-        category_stream = _create_master_stream_for_label(consolidated)
+    if lesson_data_control.get('enabled', False):
+        # --- NEW: Dynamic Grouping Logic for Lessons ---
+        print("--- Using DYNAMIC method grouping for FAKE data stream. ---")
 
-        if category_stream:
-            fake_category_streams.append(category_stream)
-            fake_weights.append(weight)
+        fake_method_groups = lesson_data_control.get('fake_method_groups', {})
+        if not fake_method_groups:
+            raise ValueError("`lesson_data_control` is enabled, but `fake_method_groups` is empty or missing.")
+
+        # Pre-filter fake frames for efficiency
+        all_fake_frames = [f for f in all_train_frames if f['label_id'] == 1]
+        
+        # Track group info for logging
+        group_info_log = []
+
+        for group_name, group_info in fake_method_groups.items():
+            group_methods = set(group_info.get('methods', []))
+            group_weight = group_info.get('weight', None)  # Allow None for default equal weighting
+
+            if not group_methods:
+                print(f"WARNING: Dynamic group '{group_name}' has no methods defined, skipping.")
+                continue
+
+            # A. Gather all frames belonging to this dynamic group
+            frames_for_group = [f for f in all_fake_frames if f['method'] in group_methods]
+
+            if not frames_for_group:
+                print(f"WARNING: No frames found for dynamic group '{group_name}', skipping.")
+                continue
+
+            print(
+                f"  - Group '{group_name}': Found {len(frames_for_group)} frames across {len(group_methods)} methods.")
+
+            # B. Group frames within this dynamic group by property bucket
+            frames_by_bucket = defaultdict(list)
+            for frame in frames_for_group:
+                frames_by_bucket[frame['sharpness_bucket']].append(frame)
+
+            # C. Consolidate small buckets and create a property-balanced stream for this group
+            consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, group_name)
+            group_stream = _create_master_stream_for_label(consolidated)
+
+            if group_stream:
+                fake_category_streams.append(group_stream)
+                fake_weights.append(group_weight if group_weight is not None else 1.0)  # Default to 1.0 for equal weighting
+                group_info_log.append({
+                    'name': group_name,
+                    'methods': list(group_methods),
+                    'frame_count': len(frames_for_group),
+                    'specified_weight': group_weight
+                })
+
+    else:
+        # --- ORIGINAL: Static Grouping Logic (Fallback) ---
+        print("--- Using STATIC method_category grouping for FAKE data stream. ---")
+        for category, weight in fake_category_weights.items():
+            frames = fake_frames_by_category.get(category)
+            if not frames:
+                print(f"WARNING: No frames found for FAKE category '{category}', skipping.")
+                continue
+
+            frames_by_bucket = defaultdict(list)
+            for frame in frames:
+                frames_by_bucket[frame['sharpness_bucket']].append(frame)
+
+            consolidated = _consolidate_small_buckets(frames_by_bucket, MIN_BUCKET_SIZE, category)
+            category_stream = _create_master_stream_for_label(consolidated)
+
+            if category_stream:
+                fake_category_streams.append(category_stream)
+                fake_weights.append(weight)
 
     if not fake_category_streams:
         raise ValueError(
             "Cannot create dataloader: no valid FAKE data streams were created. Check config and Parquet file.")
 
+    # Normalize weights to sum to 1.0 (handles both explicit weights and default equal weighting)
+    weight_sum = sum(fake_weights)
+    if not math.isclose(weight_sum, 1.0):
+        if lesson_data_control.get('enabled', False):
+            # Check if any weights were unspecified (None)
+            fake_method_groups = lesson_data_control.get('fake_method_groups', {})
+            if any(g.get('weight') is None for g in fake_method_groups.values()):
+                print(f"INFO: Fake weights not specified or don't sum to 1.0 (sum={weight_sum:.3f}). Applying equal weighting.")
+            else:
+                print(f"WARNING: Fake weights sum to {weight_sum:.3f}, renormalizing to 1.0")
+        else:
+            print(f"WARNING: Fake weights sum to {weight_sum:.3f}, renormalizing to 1.0")
+        fake_weights = [w/weight_sum for w in fake_weights]
+    
+    # --- Enhanced Logging: Show final weight distribution ---
+    if lesson_data_control.get('enabled', False):
+        print("\n=== FAKE METHOD SAMPLING SUMMARY ===")
+        for i, group_info in enumerate(group_info_log):
+            print(f"  Group '{group_info['name']}':")
+            print(f"    Methods: {', '.join(group_info['methods'])}")
+            print(f"    Frame count: {group_info['frame_count']:,}")
+            print(f"    Specified weight: {group_info['specified_weight']}")
+            print(f"    Final sampling weight: {fake_weights[i]:.4f} ({fake_weights[i]*100:.2f}%)")
+        print(f"Total fake streams: {len(fake_category_streams)}")
+        print(f"Total fake weight: {sum(fake_weights):.6f}")
+        print("=" * 40 + "\n")
+
     master_fake_stream = CustomSampleMultiplexerDataPipe(fake_category_streams, fake_weights)
 
-    # --- 6. The final multiplexer uses the new master streams with a 50/50 real/fake balance ---
-    anchor_pipe = CustomSampleMultiplexerDataPipe([master_real_stream, master_fake_stream], [0.5, 0.5])
+    # --- 6. The final multiplexer uses the new master streams with configurable real/fake balance ---
+    anchor_pipe = CustomSampleMultiplexerDataPipe([master_real_stream, master_fake_stream], [real_label_ratio, fake_label_ratio])
 
     # --- 7. Downstream logic remains the same (sharding, finding mates, parallel loading) ---
     if NUM_WORKERS > 0:
@@ -1153,6 +1461,109 @@ def create_ood_loader(ood_videos: list[VideoInfo], config: dict, data_config: di
         map_fn=ood_map_fn
     )
     return ood_loader
+
+
+def create_pure_validation_loader(
+        videos: List[VideoInfo],
+        config: Dict,
+        data_config: Dict,
+        detailed_reporting: bool = False
+) -> "LazyDataLoaderManager":
+    """
+    Creates a validation dataloader for a specific, pre-selected set of videos.
+
+    This function is designed to work with a prepared list of `VideoInfo` objects
+    (e.g., from `prepare_pure_validation`) to create a dataloader that perfectly
+    mimics the behavior of the standard validation loaders used during training.
+
+    It groups the provided videos by their method and uses the LazyDataLoaderManager,
+    ensuring that the data loading, batching, and lack of augmentation match the
+    standard validation pipeline.
+
+    Args:
+        videos: A list of VideoInfo objects for the validation set.
+        config: The main model/training configuration dictionary.
+        data_config: The data-specific configuration dictionary.
+        detailed_reporting: If True, use detailed version that includes video_id and frame_paths.
+
+    Returns:
+        A configured LazyDataLoaderManager instance ready for validation.
+    """
+    print("--- Creating Pure Validation Loader ---")
+
+    if not videos:
+        print("Received an empty list of videos. The validation loader will be empty.")
+        # Return an empty but valid manager to prevent downstream errors
+        return LazyDataLoaderManager(
+            videos_by_method={},
+            config=config,
+            data_config=data_config,
+            batch_size=config['test_batchSize'],
+            mode='test',
+            max_loaders=MAX_LOADERS_IN_MEMORY
+        )
+
+    # 1. Group the provided videos by their method name, just like in the original helper.
+    videos_by_method = defaultdict(list)
+    video_ids_seen = set()
+    duplicates_found = 0
+    
+    for v in videos:
+        video_key = f"{v.method}_{v.video_id}"
+        if video_key in video_ids_seen:
+            duplicates_found += 1
+            print(f"WARNING: Duplicate video found: {video_key}")
+        else:
+            video_ids_seen.add(video_key)
+            videos_by_method[v.method].append(v)
+
+    if duplicates_found > 0:
+        print(f"WARNING: Found and removed {duplicates_found} duplicate videos during grouping.")
+        
+    print(f"Assembled validation data for {len(videos_by_method)} method(s) with {len(sum(videos_by_method.values(), []))} total unique videos.")
+
+    # 2. Choose the appropriate map function and collate function based on detailed_reporting
+    if detailed_reporting:
+        map_fn = partial(_map_video_detailed, config=config, mode='test')
+        collate_function = collate_fn_detailed
+        print("Using detailed reporting mode with metadata preservation.")
+    else:
+        map_fn = partial(_map_video, config=config, mode='test')
+        collate_function = collate_fn
+        print("Using standard validation mode.")
+
+    # 3. Create a specialized LazyDataLoaderManager that supports the detailed map function
+    class DetailedLazyDataLoaderManager(LazyDataLoaderManager):
+        def _create_loader(self, method):
+            """Creates a DataLoader for a specific method with custom map function."""
+            videos = self.videos_by_method[method]
+            is_train = self.mode == 'train'
+
+            pipe = IterableWrapper(videos).shuffle() if is_train else IterableWrapper(videos)
+            pipe = Mapper(pipe, map_fn)
+            pipe = Filter(pipe, _not_none)
+
+            loader = DataLoader(
+                pipe,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                collate_fn=collate_function,
+                persistent_workers=is_train and self.num_workers > 0,
+                prefetch_factor=self.prefetch_factor
+            )
+            return loader
+
+    # 4. Instantiate the specialized LazyDataLoaderManager
+    validation_loader_manager = DetailedLazyDataLoaderManager(
+        videos_by_method=videos_by_method,
+        config=config,
+        data_config=data_config,
+        batch_size=config['test_batchSize'],
+        mode='test',
+        max_loaders=MAX_LOADERS_IN_MEMORY
+    )
+
+    return validation_loader_manager
 
 
 def _create_validation_loader(

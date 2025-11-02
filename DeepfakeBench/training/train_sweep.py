@@ -15,6 +15,7 @@ import pandas as pd  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
 from google.cloud.storage import Bucket  # noqa
+
 from detectors import DETECTOR  # noqa
 from PIL.ImageFilter import RankFilter  # noqa
 from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
@@ -318,12 +319,24 @@ def main():
 
     # ArcFace margin loss params (from wandb.config)
     config['use_arcface_head'] = wandb.config.get('use_arcface_head', False)
+    config['train_arcface'] = wandb.config.get('train_arcface', True)
     if config['use_arcface_head']:
         config['arcface_s'] = float(wandb.config.get('arcface_s', 30.0))
         config['arcface_m'] = float(wandb.config.get('arcface_m', 0.35))
         config['s_start'] = float(wandb.config.get('s_start', config['arcface_s']))
         config['s_end'] = float(wandb.config.get('s_end', config['arcface_s']))
         config['anneal_steps'] = int(wandb.config.get('anneal_steps', 0))
+        
+        # Log ArcFace configuration for curriculum learning
+        if config['train_arcface']:
+            print(f"--- ArcFace curriculum learning enabled with parameters: ---")
+            print(f"   - arcface_s: {config['arcface_s']}")
+            print(f"   - arcface_m: {config['arcface_m']}")
+            print(f"   - s_start: {config['s_start']}")
+            print(f"   - s_end: {config['s_end']}")
+            print(f"   - anneal_steps: {config['anneal_steps']}")
+        else:
+            print("--- ArcFace curriculum learning disabled: using checkpoint parameters. ---")
 
     config['early_stopping'] = {
         'enabled': wandb.config.get('early_stopping_enabled', False),
@@ -332,11 +345,17 @@ def main():
     }
     config['metric_scoring'] = 'auc'
 
+    # --- Curriculum / Lesson Gate parameters (from wandb.config) ---
+    # These parameters control the duration and success criteria for a curriculum lesson.
+    config['max_train_steps'] = wandb.config.get('max_train_steps', None)
+    config['evaluate_every_steps'] = wandb.config.get('evaluate_every_steps', None)
+
     # --- 2. Data and Dataloader params (Search Space) ---
     data_config['dataloader_params']['strategy'] = wandb.config.dataloader_strategy
     data_config['dataloader_params']['frames_per_batch'] = wandb.config.frames_per_batch
     data_config['dataloader_params']['videos_per_batch'] = wandb.config.get('videos_per_batch', 8)
     data_config['dataloader_params']['frames_per_video'] = wandb.config.get('frames_per_video', 8)
+    data_config['dataloader_params']['real_label_ratio'] = wandb.config.get('real_label_ratio', None)
     data_config['data_params']['val_split_ratio'] = wandb.config.val_split_ratio
     data_config['data_params']['evaluation_frequency'] = wandb.config.evaluation_frequency
     data_config['property_balancing']['enabled'] = wandb.config.property_balancing_enabled
@@ -347,9 +366,6 @@ def main():
     data_config['dataloader_params']['test_batch_size'] = wandb.config.test_batch_size
     data_config['dataloader_params']['num_workers'] = wandb.config.num_workers
     data_config['dataloader_params']['prefetch_factor'] = wandb.config.prefetch_factor
-
-    # Update the main config with the now-populated data_config
-    config.update(data_config)
 
     # Log a curated snapshot of the config for filtering in W&B
     curated_config_log = {
@@ -444,31 +460,32 @@ def main():
     if 'dataset_methods' in wandb.config and wandb.config.dataset_methods:
         logger.info("--- Overriding dataset methods from the run's configuration. ---")
 
+        # Ensure the parent dictionary exists before we try to add keys to it.
+        if 'dataset_methods' not in data_config:
+            data_config['dataset_methods'] = {}
+
         # Create a reference to the override config for cleaner code
-        method_overrides = wandb.config.dataset_methods
-
-        # Check and override each list individually for maximum flexibility
-        if 'use_real_sources' in method_overrides:
-            data_config['methods']['use_real_sources'] = list(method_overrides['use_real_sources'])
-            logger.info(f"Overriding REAL sources with: {data_config['methods']['use_real_sources']}")
-
-        if 'use_fake_methods_for_training' in method_overrides:
-            data_config['methods']['use_fake_methods_for_training'] = list(
-                method_overrides['use_fake_methods_for_training'])
-            logger.info(
-                f"Overriding FAKE TRAINING methods with: {data_config['methods']['use_fake_methods_for_training']}")
-
-        if 'use_fake_methods_for_validation' in method_overrides:
-            data_config['methods']['use_fake_methods_for_validation'] = list(
-                method_overrides['use_fake_methods_for_validation'])
-            logger.info(
-                f"Overriding FAKE VALIDATION methods with: {data_config['methods']['use_fake_methods_for_validation']}")
+        data_config['dataset_methods'] = dict(wandb.config.dataset_methods)
+        logger.info(f"Successfully overrode dataset methods. New settings: {data_config['dataset_methods']}")
 
     else:
         logger.info("--- Using default dataset methods from ./config/dataloader_config.yml ---")
         # Log the defaults for clarity
-        logger.info(f"Default FAKE TRAINING methods: {data_config['methods']['use_fake_methods_for_training']}")
-        logger.info(f"Default FAKE VALIDATION methods: {data_config['methods']['use_fake_methods_for_validation']}")
+        logger.info(f"Default FAKE TRAINING methods: {data_config['dataset_methods']['use_fake_methods_for_training']}")
+        logger.info(
+            f"Default FAKE VALIDATION methods: {data_config['dataset_methods']['use_fake_methods_for_validation']}")
+
+    # The entire lesson_gate dictionary is pulled directly.
+    # We use .get() with a default empty dict for safety if it's not in the config.
+    lesson_gate_config = wandb.config.get('lesson_gate', {})
+    if lesson_gate_config and lesson_gate_config.get('enabled', False):
+        # Convert the W&B Config object to a standard Python dictionary
+        config['lesson_gate'] = dict(lesson_gate_config)
+        logger.info("✅ Loaded Lesson Gate configuration from wandb.config.")
+        logger.info(f"   - Gate settings: {config['lesson_gate']}")
+    else:
+        # Explicitly disable if not configured to avoid ambiguity
+        config['lesson_gate'] = {'enabled': False}
 
     # --- 6. Property Balancing Weights (from wandb.config) ---
     # This section transfers the hierarchical sampling weights from the W&B run config
@@ -494,11 +511,27 @@ def main():
             logger.warning("`fake_category_weights` not found in run config. Dataloader will likely fail.")
             data_config['dataloader_params']['fake_category_weights'] = {}
 
+    # --- 7. Lesson Data Control (Dynamic Method Grouping) ---
+    # This section allows for dynamic grouping of training methods for curriculum learning.
+    # It overrides the default 'method_category' grouping when enabled.
+    lesson_data_control_config = wandb.config.get('lesson_data_control', {})
+    if lesson_data_control_config and lesson_data_control_config.get('enabled', False):
+        config['lesson_data_control'] = dict(lesson_data_control_config)
+        logger.info("✅ Loaded Lesson Data Control configuration for dynamic method grouping.")
+        logger.info(f"   - Group settings: {config['lesson_data_control']}")
+    else:
+        config['lesson_data_control'] = {'enabled': False}
+
     # Conditionally remove the base checkpoint from the download list if not needed
     if not config.get('load_base_checkpoint', False):
         if 'gcs_assets' in config and 'base_checkpoint' in config['gcs_assets']:
             logger.info("`load_base_checkpoint` is False. Skipping download of the base checkpoint.")
             del config['gcs_assets']['base_checkpoint']
+
+    # override the config gcs_assets - base_checkpoint - gcs_path with the wandb.config
+    if wandb.config.get('gcs_base_checkpoint') and config.get('load_base_checkpoint', False):
+        config['gcs_assets']['base_checkpoint']['gcs_path'] = wandb.config.get('gcs_base_checkpoint')
+        logger.info(f"Overrode base checkpoint GCS path to: {config['gcs_assets']['base_checkpoint']['gcs_path']}")
 
     # Download assets from GCS
     download_assets_from_gcs(config, logger)
@@ -513,6 +546,10 @@ def main():
             "Programmatically set 'frame_properties_parquet_path' for property balancing "
             f"to: {local_path}"
         )
+
+    # Final merge: Ensure the main config has the fully updated data_config
+    # including all overrides from the wandb run.
+    config.update(data_config)
 
     logger.info("------- Configuration & Data Loading -------")
     # MODIFIED: Unpack the three data splits (train, val_in_dist, val_holdout)
@@ -696,7 +733,7 @@ def main():
     wandb.run.summary["run_overview"] = overview_text.strip()
 
     # --- Log detailed dataset balance statistics ---
-    real_source_names = data_config['methods']['use_real_sources']
+    real_source_names = data_config.get('dataset_methods', {}).get('use_real_sources', [])
     is_property_balancing = data_config.get('property_balancing', {}).get('enabled', False)
 
     # conditionally handle list of dicts vs. list of objects
@@ -750,6 +787,7 @@ def main():
         metric_scoring=metric_scoring,
         wandb_run=wandb_run,
         ood_loader=ood_loader,
+        # ood_loader=None,
         use_group_dro=config.get('use_group_dro', False)
     )
 
@@ -757,7 +795,38 @@ def main():
         checkpoint_path = config.get('gcs_assets', {}).get('base_checkpoint', {}).get('local_path')
         if checkpoint_path and os.path.exists(checkpoint_path):
             logger.info(f"--- Loading base checkpoint from {checkpoint_path} as requested by config. ---")
-            trainer.load_ckpt(checkpoint_path)
+            
+            # Load the checkpoint (trainer will handle ArcFace parameter validation/override based on train_arcface flag)
+            trainer.load_ckpt(checkpoint_path, validate=False)
+            
+            # Apply ArcFace parameter overrides for curriculum learning if enabled
+            if config.get('train_arcface', True) and config.get('use_arcface_head', False):
+                logger.info("--- Applying ArcFace curriculum learning parameters after checkpoint load ---")
+                
+                # Get the model instance (handle DDP wrapper if needed)
+                model_instance = trainer.model.module if hasattr(trainer.model, 'module') else trainer.model
+                
+                # Override ArcFace parameters with new config values
+                if hasattr(model_instance, 'head') and hasattr(model_instance.head, 's'):
+                    # Update the ArcFace head parameters
+                    device = model_instance.head.s.device
+                    model_instance.head.s = torch.tensor(config['arcface_s'], device=device, dtype=torch.float32)
+                    model_instance.head.m = config['arcface_m']
+                    
+                    # Update the model's configuration attributes for annealing
+                    model_instance.s_start = config.get('s_start', config['arcface_s'])
+                    model_instance.s_end = config.get('s_end', config['arcface_s'])
+                    model_instance.anneal_steps = config.get('anneal_steps', 0)
+                    
+                    logger.info(f"   ✅ Applied arcface_s: {config['arcface_s']}")
+                    logger.info(f"   ✅ Applied arcface_m: {config['arcface_m']}")
+                    logger.info(f"   ✅ Set s_start: {model_instance.s_start}")
+                    logger.info(f"   ✅ Set s_end: {model_instance.s_end}")
+                    logger.info(f"   ✅ Set anneal_steps: {model_instance.anneal_steps}")
+                else:
+                    logger.warning("ArcFace head not found in model - cannot override parameters!")
+            else:
+                logger.info("--- Using checkpoint ArcFace parameters (train_arcface=False or ArcFace disabled) ---")
         else:
             logger.warning(
                 f"Configuration 'load_base_checkpoint' is True, but no valid checkpoint was found at '{checkpoint_path}'. "
@@ -769,7 +838,6 @@ def main():
             "Skipping checkpoint load. The model will start from the base CLIP weights. ---"
         )
 
-    # start training
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):
         # If we’re in DDP with property balancing, rebuild a fresh, weighted per-epoch loader

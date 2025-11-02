@@ -47,7 +47,7 @@ log = logging.getLogger(__name__)
 # ==============================================================================
 # These sets contain STANDARDIZED method names (lowercase_snake_case)
 BASE_FF_METHODS: Set[str] = {
-    'deepfakes', 'face2face', 'faceshifter', 'faceswap', 'neuraltextures',
+    'deepfakes', 'face2face', 'faceshifter', 'faceswapff', 'neuraltextures',
     'deepfakedetection',
 }
 BASE_DF40_EFS_METHODS: Set[str] = {
@@ -57,7 +57,7 @@ BASE_DF40_REG_METHODS: Set[str] = {
     "simswap", "fsgan", "fomm", "facedancer", "inswap", "one_shot_free",
     "blendface", "lia", "mobileswap", "mcnet", "uniface", "mraa", "facevid2vid",
     "wav2lip", "sadtalker", "danet", "e4s", "pirender", "tpsm", "hyperreenact",
-    "youtube_real", "faceforensics++", "celeb_real",
+    "youtube_real", "faceforensics++", "celeb_real", "faceswap"
 }
 
 

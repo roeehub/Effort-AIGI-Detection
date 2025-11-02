@@ -1069,7 +1069,7 @@ class Trainer(object):
 
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
-                   generate_detailed_reports: bool = False):
+                   generate_detailed_reports: bool = False, run_name: str = None):
         """
         Performs a full evaluation on a given validation dataloader. This function is now
         general-purpose and can be used for any validation set.
@@ -1083,6 +1083,7 @@ class Trainer(object):
                                       checkpointing and early stopping decisions.
             generate_detailed_reports (bool): If True, collects detailed per-frame and
                                               per-video data and uploads CSV/TXT reports to GCS.
+            run_name (str): Optional custom name with generate_detailed_reports, used in reports to identify the run.
         """
         self.setEval()
 
@@ -1105,8 +1106,7 @@ class Trainer(object):
         if generate_detailed_reports:
             frame_report_data = []
             video_report_data = []
-            processed_video_ids = set()  # Track processed videos to avoid duplicates
-        
+
         # --- SANITY CHECK: Initialize data collection for model consistency verification ---
         sanity_check_data = []  # Will store first 2 frames per method for verification
 
@@ -1200,15 +1200,7 @@ class Trainer(object):
                     frame_level_probs = predictions['prob'].view(B, T)
                     for i in range(B):  # Iterate over each video in the batch
                         video_id = data_dict['video_id'][i]
-                        
-                        # Skip if we've already processed this video
-                        unique_video_key = f"{method}_{video_id}"
-                        if unique_video_key in processed_video_ids:
-                            if batch_count <= 5:  # Only log for first few batches to avoid spam
-                                self.logger.warning(f"Skipping duplicate video: {unique_video_key}")
-                            continue
-                        processed_video_ids.add(unique_video_key)
-                        
+
                         label = labels_np[i]
                         avg_prob = probs_np[i]
                         prediction = 1 if avg_prob >= 0.5 else 0
@@ -1224,9 +1216,8 @@ class Trainer(object):
                             frame_report_data.append([method, label, video_id, frame_path, frame_prob])
 
             if generate_detailed_reports:
-                unique_videos_for_method = len([vid for vid in processed_video_ids if vid.startswith(f"{method}_")])
                 self.logger.info(
-                    f"  Finished method '{method}'. Processed {batch_count} batches, {unique_videos_for_method} unique videos.")
+                    f"  Finished method '{method}'. Processed {batch_count} batches.")
             else:
                 self.logger.info(
                     f"  Finished method '{method}'. Total progress: {videos_processed}/{total_videos} videos.")
@@ -1274,7 +1265,8 @@ class Trainer(object):
                     all_labels,
                     method_preds,
                     method_labels,
-                    generate_detailed_reports
+                    generate_detailed_reports,
+                    run_name=run_name
                 )
                 self.logger.info("✅ Detailed reports generated and uploaded successfully.")
             except Exception as e:
@@ -1601,7 +1593,7 @@ class Trainer(object):
         self.logger.info("===> OOD Monitoring Done!")
 
     def _generate_and_upload_reports(self, log_prefix, frame_data, video_data, all_preds, all_labels, method_preds,
-                                     method_labels, generate_detailed_reports=False):
+                                     method_labels, generate_detailed_reports=False, run_name=""):
         """
         Generates and uploads detailed CSV and TXT reports to GCS.
         """
@@ -1641,6 +1633,7 @@ class Trainer(object):
                 summary_txt_path = os.path.join(local_temp_dir, 'summary_report.txt')
                 with open(summary_txt_path, 'w') as f:
                     f.write(f"Validation Summary Report for: {log_prefix}\n")
+                    f.write(f"Run Name: {run_name}\n")
                     f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write("=" * 40 + "\n")
                     f.write("Overall Performance\n")
@@ -1745,7 +1738,8 @@ class Trainer(object):
             self,
             validation_loader,
             log_prefix: str = "on_demand_validation",
-            generate_detailed_reports: bool = False
+            generate_detailed_reports: bool = False,
+            run_name: str = None
     ) -> dict:
         """
         Runs a full validation pass on a provided dataloader.
@@ -1764,6 +1758,8 @@ class Trainer(object):
             generate_detailed_reports (bool): If True, generates and uploads
                                               detailed frame, video, and summary
                                               reports to GCS for deep analysis.
+            run_name: Optional name for the report summary, useful for identifying
+                      different runs in GCS.
 
         Returns:
             A dictionary containing the calculated metrics for this validation run.
@@ -1785,7 +1781,8 @@ class Trainer(object):
                 validation_loader=validation_loader,
                 log_prefix=log_prefix,
                 is_primary_metric=False,
-                generate_detailed_reports=generate_detailed_reports  # Pass the new flag
+                generate_detailed_reports=generate_detailed_reports,  # Pass the new flag
+                run_name=run_name
             )
         except Exception as e:
             self.logger.error(f"Error during test_epoch: {e}")
