@@ -382,9 +382,10 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         self.config = {
             'video': {
                 'worker_count': int(os.getenv("VIDEO_WORKER_COUNT", "4")),
-                'batch_size': int(os.getenv("BATCH_SIZE", "32")),
-                'min_batch_size': int(os.getenv("MIN_BATCH_SIZE", "16")),
-                'queue_max_age': 3.2,  # batch_size / client_fps (32/10)
+                'batch_size': int(os.getenv("BATCH_SIZE", "24")),
+                'min_batch_size': int(os.getenv("MIN_BATCH_SIZE", "12")),
+                # 'queue_max_age': 3.2,  # batch_size / client_fps (32/10)
+                'queue_max_age': 4, 
             },
             'audio': {
                 'worker_count': int(os.getenv("AUDIO_WORKER_COUNT", "1")),  # Single worker, configurable for future scaling
@@ -1413,7 +1414,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         """
         Check if a participant ID is nonsensical based on the number of digits and special characters.
         
-        A participant ID is considered nonsensical if it contains more than one digit or
+        A participant ID is considered nonsensical if it contains more than two digits or
         special character (excluding parentheses), which usually indicates corrupted or malformed data.
         
         Args:
@@ -1434,8 +1435,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         special_chars = re.findall(r'[^a-zA-Z0-9_\-\.\s\(\)]', participant_id_raw)
         special_count = len(special_chars)
         
-        # Nonsensical if more than one digit OR more than one special character
-        is_nonsensical = digit_count > 1 or special_count > 1
+        # Nonsensical if more than two digits OR more than one special character
+        is_nonsensical = digit_count > 2 or special_count > 1
         
         if DEBUG_MODE and is_nonsensical:
             logging.info(f"[DEBUG] Nonsensical ID detected: '{participant_id_raw}' - "
