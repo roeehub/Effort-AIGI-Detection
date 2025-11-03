@@ -24,7 +24,8 @@ class VideoAPIPool:
     - Retry logic with exponential backoff
     """
     
-    def __init__(self, api_urls: List[str], timeout: float = 5.0):
+    def __init__(self, api_urls: List[str], timeout: float = 5.0, 
+                 threshold: float = 0.75, yolo_conf_threshold: float = 0.80):
         """
         Initialize API pool.
         
@@ -33,12 +34,16 @@ class VideoAPIPool:
                 ['http://server1:8999/check_frame_batch',
                  'http://server2:8999/check_frame_batch']
             timeout: Request timeout in seconds (default 5.0)
+            threshold: Inference threshold for the model (default 0.75)
+            yolo_conf_threshold: YOLO confidence threshold (default 0.80)
         """
         if not api_urls:
             raise ValueError("At least one API URL must be provided")
         
         self.api_urls = api_urls
         self.timeout = timeout
+        self.threshold = threshold
+        self.yolo_conf_threshold = yolo_conf_threshold
         self.current_index = 0
         self.lock = asyncio.Lock()
         
@@ -60,6 +65,10 @@ class VideoAPIPool:
         logging.info(
             f"[VideoAPIPool] Initialized with {len(api_urls)} API server(s): "
             f"{', '.join(api_urls)}"
+        )
+        logging.info(
+            f"[VideoAPIPool] API Parameters: model_type=custom, "
+            f"threshold={threshold}, yolo_conf_threshold={yolo_conf_threshold}"
         )
     
     async def initialize(self):
@@ -126,17 +135,26 @@ class VideoAPIPool:
         
         try:
             # Prepare multipart form data
+            # NOTE: API expects all frames under 'files' field name (not unique names)
             data = aiohttp.FormData()
             for idx, img_bytes in enumerate(image_bytes_list):
                 data.add_field(
-                    f'frame_{idx}',
+                    'files',  # API expects 'files' for all frames
                     img_bytes,
                     filename=f'frame_{idx}.jpg',
                     content_type='image/jpeg'
                 )
             
-            # Make request
-            async with self.session.post(api_url, data=data) as response:
+            # CRITICAL: API parameters for custom model
+            params = {
+                'model_type': 'custom',
+                'threshold': str(self.threshold),
+                'debug': 'false',
+                'yolo_conf_threshold': str(self.yolo_conf_threshold)
+            }
+            
+            # Make request with parameters
+            async with self.session.post(api_url, data=data, params=params) as response:
                 if response.status != 200:
                     error_text = await response.text()
                     raise Exception(

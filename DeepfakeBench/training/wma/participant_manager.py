@@ -24,6 +24,9 @@ DEFAULT_START_PROB = 0.2  # Assumed probability for a new, unseen participant
 MIN_RESPONSE_INTERVAL = 1  # Send a response every N batches even if verdict is stable
 RESET_AFTER_INACTIVE_MIN = 2.0  # Forget a participant after this many minutes of inactivity
 
+# Whitelist: participant names containing these strings will always get GREEN
+WHITELIST_NAMES = ["roee"]  # Add names here
+
 
 # --- Data Structure for Participant State ---
 # Add 'is_new' flag to ParticipantState
@@ -45,18 +48,22 @@ class ParticipantManager:
     Manages the state and verdict logic for all participants in a thread-safe manner.
     """
 
-    def __init__(self, threshold: float, margin: float):
+    def __init__(self, threshold: float, margin: float, whitelist: Optional[List[str]] = None):
         """
         Initializes the manager.
         Args:
             threshold: The base threshold for FAKE vs REAL decision.
             margin: The margin around the threshold to create the YELLOW band.
+            whitelist: Optional list of name patterns. If a participant_id contains any of these, 
+                      they always get GREEN banner. Defaults to WHITELIST_NAMES constant.
         """
         self.participants: Dict[str, ParticipantState] = {}
         self.lock = threading.Lock()
         self.threshold = threshold
         self.margin = margin
+        self.whitelist = whitelist if whitelist is not None else WHITELIST_NAMES
         logging.info(f"[ParticipantManager] Initialized with threshold={threshold:.2f}, margin={margin:.2f}")
+        logging.info(f"[ParticipantManager] Whitelist enabled for names containing: {self.whitelist}")
 
     def _calculate_band_level(self, mean_prob: float) -> int:
         """Maps a mean probability score to a GREEN, YELLOW, or RED verdict."""
@@ -66,6 +73,14 @@ class ParticipantManager:
             return pb2.YELLOW
         else:
             return pb2.GREEN
+
+    def _is_whitelisted(self, participant_id: str) -> bool:
+        """Check if participant_id contains any whitelisted name pattern."""
+        participant_lower = participant_id.lower()
+        for pattern in self.whitelist:
+            if pattern.lower() in participant_lower:
+                return True
+        return False
 
     def _cleanup_inactive_participants(self):
         """Removes participants who have not been seen for a configured duration."""
@@ -102,6 +117,12 @@ class ParticipantManager:
             return None
 
         with self.lock:
+            # Check whitelist first - whitelisted participants always get GREEN
+            if self._is_whitelisted(participant_id):
+                logging.info(f"[ParticipantManager] ID: {participant_id} is WHITELISTED - forcing GREEN banner")
+                # Return GREEN with low confidence (0.0) to indicate it's whitelisted
+                return pb2.GREEN, 0.0
+
             # 1. Periodically clean up old participants to prevent memory leaks
             self._cleanup_inactive_participants()
 

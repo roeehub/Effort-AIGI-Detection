@@ -110,14 +110,15 @@ class ParticipantFrameQueue:
         Returns:
             True if batch is ready (>= min_size frames), False if timeout
         """
+        async def _wait():
+            while len(self.frames) < min_size:
+                self.new_frame_event.clear()
+                await self.new_frame_event.wait()
+        
         try:
-            # Use asyncio.timeout for Python 3.11+, or asyncio.wait_for for older
-            async with asyncio.timeout(timeout):
-                while len(self.frames) < min_size:
-                    self.new_frame_event.clear()
-                    await self.new_frame_event.wait()
-                return True
-        except (asyncio.TimeoutError, TimeoutError):
+            await asyncio.wait_for(_wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
             # Timeout expired, check if we have any frames
             return len(self.frames) > 0
     
@@ -162,14 +163,15 @@ class AudioBatchQueue:
     Global queue for audio batches (audio processing is not per-participant).
     
     Maintains recent audio batches with automatic staleness eviction.
+    With 4-second chunks and max_size=2, maximum staleness is 8 seconds.
     """
     
-    def __init__(self, max_size: int = 50):
+    def __init__(self, max_size: int = 2):
         """
         Initialize audio batch queue.
         
         Args:
-            max_size: Maximum number of audio batches to keep
+            max_size: Maximum number of audio batches to keep (default 2 chunks = 8 seconds)
         """
         self.batches = deque(maxlen=max_size)
         self.lock = asyncio.Lock()
@@ -232,14 +234,37 @@ class AudioBatchQueue:
         Returns:
             True if batch is available, False if timeout
         """
+        async def _wait():
+            while len(self.batches) == 0:
+                self.new_batch_event.clear()
+                await self.new_batch_event.wait()
+        
         try:
-            async with asyncio.timeout(timeout):
-                while len(self.batches) == 0:
-                    self.new_batch_event.clear()
-                    await self.new_batch_event.wait()
-                return True
-        except (asyncio.TimeoutError, TimeoutError):
+            await asyncio.wait_for(_wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
             return len(self.batches) > 0
+    
+    async def get_next_batch(self, timeout: float = 0.5) -> Optional[Dict[str, Any]]:
+        """
+        Wait for and retrieve the next audio batch (convenience method for workers).
+        
+        Combines wait_for_batch() and get_batch() for cleaner worker code.
+        
+        Args:
+            timeout: Max seconds to wait for a batch
+        
+        Returns:
+            Audio batch dictionary or None if timeout
+        """
+        # Wait for batch with timeout
+        has_batch = await self.wait_for_batch(timeout)
+        
+        if not has_batch:
+            return None
+        
+        # Get the batch
+        return await self.get_batch()
     
     def get_size(self) -> int:
         """Get current number of batches in queue."""

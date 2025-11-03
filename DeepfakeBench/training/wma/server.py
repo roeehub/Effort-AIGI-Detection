@@ -15,7 +15,7 @@ import os
 import argparse
 import logging
 from concurrent import futures
-from typing import AsyncIterator, Dict, Any, List
+from typing import AsyncIterator, Dict, Any, List, Optional
 import threading
 from collections import deque
 import cv2
@@ -386,14 +386,11 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 'queue_max_age': 3.2,  # batch_size / client_fps (32/10)
             },
             'audio': {
-                'worker_count': int(os.getenv("AUDIO_WORKER_COUNT", "2")),
-                'queue_size': int(os.getenv("AUDIO_QUEUE_SIZE", "50")),
+                'worker_count': int(os.getenv("AUDIO_WORKER_COUNT", "1")),  # Single worker, configurable for future scaling
+                'queue_size': 2,  # Max 2 chunks (8 seconds with 4s chunks)
             },
             'api': {
-                'video_urls': os.getenv(
-                    "VIDEO_API_URLS", 
-                    "http://34.16.217.28:8999/check_frame_batch"
-                ).split(','),
+                'video_urls': ["http://34.16.217.28:8999/check_frame_batch", "http://34.27.75.125:8999/check_frame_batch"],
                 'audio_urls': os.getenv(
                     "AUDIO_API_URLS",
                     "http://34.125.106.206:8000/asv/predict"
@@ -417,7 +414,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # --- NEW: Video API pool for load balancing ---
         self.video_api_pool = VideoAPIPool(
             api_urls=self.config['api']['video_urls'],
-            timeout=self.config['api']['timeout']
+            timeout=self.config['api']['timeout'],
+            threshold=self.video_api.threshold,
+            yolo_conf_threshold=self.video_api.yolo_conf_threshold
         )
         
         # --- NEW: Worker management ---
@@ -504,27 +503,6 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             
             return self.participant_queues[participant_id]
 
-    def _sanitize_participant_id(self, raw_id: str) -> str:
-        """
-        Sanitize participant ID to handle problematic values.
-        
-        Args:
-            raw_id: Raw participant ID from client
-            
-        Returns:
-            Cleaned participant ID
-        """
-        if not raw_id or not raw_id.strip():
-            return "unknown"
-        
-        # Remove leading/trailing whitespace
-        clean_id = raw_id.strip()
-        
-        # Replace internal spaces with underscores
-        clean_id = clean_id.replace(' ', '_')
-        
-        return clean_id
-
     async def _route_frame_to_queue(self, participant_id: str, frame_data: bytes, metadata: Dict[str, Any]):
         """
         Route a frame to the appropriate participant queue.
@@ -534,8 +512,14 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             frame_data: JPEG-encoded frame bytes
             metadata: Frame metadata
         """
-        # Sanitize ID
+        # Sanitize ID (uses the full method with nonsensical ID detection)
         clean_id = self._sanitize_participant_id(participant_id)
+        
+        # CRITICAL: Discard UNKNOWN participants immediately to save resources
+        # Nonsensical IDs are aggregated under "UNKNOWN" but we don't want to process them
+        if clean_id == "UNKNOWN":
+            logging.debug(f"[QueueMgr] Discarding frame for UNKNOWN participant (original: '{participant_id}')")
+            return
         
         # Get or create queue
         queue = await self._get_or_create_participant_queue(clean_id)
@@ -620,16 +604,20 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         
                         # Get audio data (prefer WAV for processing)
                         audio_data = None
+                        audio_format = None
                         if hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
                             audio_data = audio_batch.wav_data
+                            audio_format = 'wav'
                         elif hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
                             audio_data = audio_batch.ogg_data
+                            audio_format = 'ogg'
                         
                         if audio_data:
                             audio_metadata = {
                                 **metadata,
                                 "chunk_id": audio_batch.chunk_id,
                                 "duration_ms": audio_batch.duration_ms,
+                                "audio_format": audio_format,  # Track the actual format
                             }
                             await self._route_audio_to_queue(audio_data, audio_metadata)
                     
@@ -849,6 +837,131 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         
         logging.info("[Backend] Video inference workers stopped")
 
+    # ──────────────────────────
+    # NEW: Audio Inference Workers
+    # ──────────────────────────
+
+    async def _audio_inference_worker(self, worker_id: int):
+        """
+        Audio inference worker that processes audio chunks from the global queue.
+        
+        This worker runs continuously:
+        1. Gets next audio chunk from global queue (with timeout)
+        2. Converts to MP3 format
+        3. Calls ASV API with single chunk
+        4. Processes result through AudioWindowManager
+        5. Queues GLOBAL banner if verdict changed
+        
+        Args:
+            worker_id: Unique worker identifier
+        """
+        logging.info(f"[AudioWorker-{worker_id}] Audio inference worker started")
+        
+        while self.running:
+            try:
+                # 1. Get next audio chunk from queue (with timeout)
+                audio_chunk = await self.audio_queue.get_next_batch(timeout=0.5)
+                
+                if audio_chunk is None:
+                    # No audio available, continue loop
+                    continue
+                
+                # Extract audio data and metadata
+                audio_data = audio_chunk['data']
+                metadata = audio_chunk['metadata']
+                chunk_age = time.time() - audio_chunk['timestamp']
+                
+                logging.info(
+                    f"[AudioWorker-{worker_id}] Processing audio chunk "
+                    f"(age: {chunk_age:.2f}s, size: {len(audio_data)} bytes)"
+                )
+                
+                # 2. Call API asynchronously
+                start_time = time.time()
+                
+                try:
+                    api_result = await self._call_asv_api_async(audio_data, metadata)
+                    
+                    if not api_result or 'prediction' not in api_result:
+                        logging.warning(
+                            f"[AudioWorker-{worker_id}] API returned no valid prediction"
+                        )
+                        continue
+                    
+                    elapsed = time.time() - start_time
+                    
+                    logging.info(
+                        f"[AudioWorker-{worker_id}] API call completed in {elapsed:.2f}s, "
+                        f"prediction: {api_result.get('prediction')}"
+                    )
+                    
+                    # 3. Process result through AudioWindowManager
+                    verdict_level = self.audio_window_manager.process_audio_result(api_result)
+                    
+                    # 4. If verdict changed, create and queue GLOBAL banner
+                    if verdict_level is not None:
+                        banner_response = self._create_audio_banner_from_verdict(verdict_level)
+                        
+                        # Queue the response for sending to client
+                        try:
+                            await self.response_queue.put(banner_response)
+                            logging.info(
+                                f"[AudioWorker-{worker_id}] ✓ Queued GLOBAL audio banner "
+                                f"({pb2.BannerLevel.Name(verdict_level)})"
+                            )
+                            logging.info(
+                                f"!******** AUDIO BANNER QUEUED FOR SENDING ********!"
+                            )
+                        except asyncio.QueueFull:
+                            logging.warning(
+                                f"[AudioWorker-{worker_id}] ⚠️ Response queue full, "
+                                f"dropping audio banner"
+                            )
+                    else:
+                        logging.info(
+                            f"[AudioWorker-{worker_id}] No verdict change, skipping banner"
+                        )
+                
+                except Exception as e:
+                    elapsed = time.time() - start_time
+                    logging.error(
+                        f"[AudioWorker-{worker_id}] API call failed after {elapsed:.2f}s: {e}"
+                    )
+            
+            except Exception as e:
+                logging.error(
+                    f"[AudioWorker-{worker_id}] Unexpected error: {e}",
+                    exc_info=True
+                )
+                await asyncio.sleep(1)  # Prevent tight error loop
+        
+        logging.info(f"[AudioWorker-{worker_id}] Audio inference worker stopped")
+
+    async def _start_audio_workers(self):
+        """Start audio inference worker pool."""
+        worker_count = self.config['audio']['worker_count']
+        
+        logging.info(f"[Backend] Starting {worker_count} audio inference worker(s)...")
+        
+        for i in range(worker_count):
+            task = asyncio.create_task(self._audio_inference_worker(i + 1))
+            self.audio_workers.append(task)
+            self.worker_tasks.append(task)
+        
+        logging.info(f"[Backend] {worker_count} audio worker(s) started")
+
+    async def _stop_audio_workers(self):
+        """Stop audio inference worker pool."""
+        logging.info("[Backend] Stopping audio inference workers...")
+        
+        # Wait for workers to finish current tasks
+        if self.audio_workers:
+            await asyncio.gather(*self.audio_workers, return_exceptions=True)
+        
+        self.audio_workers.clear()
+        
+        logging.info("[Backend] Audio inference workers stopped")
+
     async def _response_sender_loop(self) -> AsyncIterator[pb2.Downlink]:
         """
         Response sender loop - yields banners from response queue back to client.
@@ -872,10 +985,17 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         timeout=0.5
                     )
                     
+                    # Determine banner scope for logging
+                    banner = response.screen_banner
+                    if banner.scope_enum == pb2.SCOPE_GLOBAL:
+                        scope_info = "GLOBAL"
+                    else:
+                        scope_info = f"participant={banner.participant_id}"
+                    
                     logging.info(
                         f"[ResponseSender] Sending banner: "
-                        f"participant={response.screen_banner.participant_id}, "
-                        f"level={pb2.BannerLevel.Name(response.screen_banner.level)}, "
+                        f"{scope_info}, "
+                        f"level={pb2.BannerLevel.Name(banner.level)}, "
                         f"seq={response.sequence_number}"
                     )
                     
@@ -896,9 +1016,16 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             while not self.response_queue.empty():
                 try:
                     response = self.response_queue.get_nowait()
+                    
+                    # Determine scope for logging
+                    banner = response.screen_banner
+                    if banner.scope_enum == pb2.SCOPE_GLOBAL:
+                        scope_info = "GLOBAL"
+                    else:
+                        scope_info = banner.participant_id
+                    
                     logging.info(
-                        f"[ResponseSender] Draining remaining response for "
-                        f"{response.screen_banner.participant_id}"
+                        f"[ResponseSender] Draining remaining response for {scope_info}"
                     )
                     yield response
                     remaining += 1
@@ -1038,9 +1165,25 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         now_ms = int(time.time() * 1000)
         ttl_ms = self.ttl_map.get(verdict_level, 5000)
         
-        # Encode confidence in expiry timestamp (similar to existing logic)
-        confidence_code = {"High": 1, "Medium": 2, "Low": 3, "Uncertain": 4}.get(confidence_label, 0)
-        encoded_expiry_ms = now_ms + ttl_ms + confidence_code
+        # --- CONFIDENCE ENCODING LOGIC (BINARY) ---
+        # 1. Calculate the true expiry timestamp.
+        true_expiry_ms = now_ms + ttl_ms
+        
+        # 2. Map confidence label to binary code in last 3 digits
+        #    Low -> 100, Medium -> 101, High -> 110, Uncertain -> 111
+        confidence_code_map = {
+            "Low": 100,
+            "Medium": 101,
+            "High": 110,
+            "Uncertain": 111
+        }
+        confidence_code = confidence_code_map.get(confidence_label, 111)
+        
+        # 3. Create the encoded timestamp: zero out the last 3 digits of the
+        #    true expiry and add the binary confidence code.
+        #    This "hides" the confidence in a way that minimally affects the
+        #    absolute expiry time for old clients (max 7ms difference).
+        encoded_expiry_ms = (true_expiry_ms // 1000) * 1000 + confidence_code
         
         # Determine banner type
         banner_type = "alert" if verdict_level == pb2.RED else \
@@ -1278,6 +1421,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             # PHASE 2: Launch video inference workers
             await self._start_video_workers()
             
+            # PHASE 3: Launch audio inference workers
+            await self._start_audio_workers()
+            
             # PHASE 4: Yield responses from the response sender
             # This is the key to bidirectional streaming - we yield banners as they're generated
             async for response in self._response_sender_loop():
@@ -1292,8 +1438,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         except Exception as e:
             logging.error(f"[Backend] Stream {stream_id} error: {e}", exc_info=True)
         finally:
-            # Stop workers (sets self.running = False)
+            # Stop workers (sets self.running = False for video, then audio)
             await self._stop_video_workers()
+            await self._stop_audio_workers()
             
             # Cancel consumer task if still running
             if consumer_task and not consumer_task.done():
@@ -1317,14 +1464,24 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             # Log queue statistics
             logging.info(
                 f"[Backend] Stream {stream_id} final stats: "
-                f"{len(self.participant_queues)} participant queues"
+                f"{len(self.participant_queues)} participant queues, "
+                f"audio queue: {self.audio_queue.get_size()} chunks"
             )
+            
+            # Video queue stats
             for pid, queue in list(self.participant_queues.items())[:5]:  # Show first 5
                 stats = queue.get_stats()
                 logging.info(
-                    f"  - {pid}: {stats['current_size']}/{stats['max_size']} frames, "
+                    f"  - Video [{pid}]: {stats['current_size']}/{stats['max_size']} frames, "
                     f"{stats['total_received']} received, {stats['total_dropped']} dropped"
                 )
+            
+            # Audio queue stats
+            audio_stats = self.audio_queue.get_stats()
+            logging.info(
+                f"  - Audio: {audio_stats['current_size']}/{audio_stats['max_size']} chunks, "
+                f"{audio_stats['total_received']} received, {audio_stats['total_dropped']} dropped"
+            )
 
     async def _process_uplink_message(self, uplink_msg: pb2.Uplink,
                                       stream_id: str) -> pb2.Downlink:
@@ -1416,7 +1573,7 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                             img_bytes = getattr(crop, "image_data", b"")
                             if img_bytes:
                                 frame_metadata = {
-                   but first, I need your analysis on the                 "participant_id": getattr(pf, "participant_id", ""),
+                                "participant_id": getattr(pf, "participant_id", ""),
                                     "timestamp_ms": metadata.get("timestamp_ms", 0),
                                     "stream_id": metadata.get("stream_id", "")
                                 }
@@ -1545,6 +1702,131 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         except Exception as e:
             logging.error(f"[ processing audio for API call: {e}")
             return None
+
+    async def _call_asv_api_async(self, audio_data: bytes, metadata: Dict[str, Any]) -> Dict[str, Any] | None:
+        """
+        Async version of ASV API call for use in audio workers.
+        
+        Takes raw audio data (already extracted from queue) and calls the API.
+        
+        Args:
+            audio_data: Raw audio bytes (WAV or OGG)
+            metadata: Audio metadata including format information
+            
+        Returns:
+            API response dictionary or None on error
+        """
+        try:
+            # Extract audio format from metadata
+            mp3_data = None
+            original_format = metadata.get('audio_format', None)
+            
+            # Try conversion with known format first, then fallback if needed
+            if audio_data:
+                if original_format:
+                    # We know the format from metadata - use it directly
+                    try:
+                        mp3_data = self._convert_audio_to_mp3(audio_data, original_format)
+                        logging.debug(f"[ASV API Worker] Converted audio from {original_format} to MP3")
+                    except Exception as e:
+                        logging.warning(f"[ASV API Worker] Failed to convert from {original_format}: {e}, trying fallback")
+                        original_format = None  # Fall through to auto-detect
+                
+                # If no format in metadata or conversion failed, try auto-detection
+                if not mp3_data:
+                    # Try WAV first (most common)
+                    try:
+                        mp3_data = self._convert_audio_to_mp3(audio_data, 'wav')
+                        original_format = 'wav'
+                    except:
+                        # Try OGG if WAV fails
+                        try:
+                            mp3_data = self._convert_audio_to_mp3(audio_data, 'ogg')
+                            original_format = 'ogg'
+                        except:
+                            logging.error(f"[ASV API Worker] Failed to convert audio from both WAV and OGG")
+                            return None
+            
+            if not mp3_data:
+                logging.info(f"[ASV API Worker] No valid audio data for conversion")
+                return None
+            
+            # Prepare multipart/form-data payload (matches original requests implementation)
+            data = aiohttp.FormData()
+            
+            # Add form parameters FIRST (same order as original)
+            data.add_field('window_step', '500')
+            data.add_field('use_vad', 'true')
+            data.add_field('vol_norm', 'false')
+            data.add_field('threshold', '0.55')
+            
+            # Add audio file (same as original 'files' parameter)
+            data.add_field(
+                'audio',
+                mp3_data,
+                filename='audio.mp3',
+                content_type='audio/mpeg'
+            )
+            
+            # Use aiohttp for async HTTP request
+            timeout = aiohttp.ClientTimeout(total=self.asv_api_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                logging.info(
+                    f"[ASV API Worker] Sending {len(mp3_data)} bytes of MP3 audio "
+                    f"(from {original_format}) to {self.asv_api_url}..."
+                )
+                
+                # POST with FormData (no params - everything in form data)
+                async with session.post(self.asv_api_url, data=data) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logging.error(f"[ASV API Worker] API error {response.status}: {error_text}")
+                        return None
+                    
+                    result = await response.json()
+                    logging.info(f"[ASV API Worker] Received response: {result}")
+                    return result
+        
+        except asyncio.TimeoutError:
+            logging.error(f"[ASV API Worker] API timeout after {self.asv_api_timeout}s")
+            return None
+        except Exception as e:
+            logging.error(f"[ASV API Worker] Error calling API: {e}")
+            return None
+
+    def _create_audio_banner_from_verdict(self, verdict_level: int) -> pb2.Downlink:
+        """
+        Create a Downlink message with a GLOBAL audio banner.
+        
+        Args:
+            verdict_level: Banner level (GREEN, YELLOW, RED)
+            
+        Returns:
+            pb2.Downlink message with global audio banner
+        """
+        now_ms = int(time.time() * 1000)
+        ttl_ms = self.ttl_map.get(verdict_level, 3000)
+        
+        # Build GLOBAL ScreenBanner
+        banner = pb2.ScreenBanner()
+        banner.level = verdict_level
+        banner.ttl_ms = ttl_ms
+        banner.placement = "TopCenter"
+        banner.action_id = f"act-audio-{uuid.uuid4().hex[:8]}"
+        banner.scope = "global"
+        banner.scope_enum = pb2.SCOPE_GLOBAL
+        banner.banner_type = "audio_ok" if verdict_level == pb2.GREEN else "audio_alert"
+        banner.expiry_timestamp_ms = now_ms + ttl_ms
+        
+        # Wrap into Downlink
+        downlink = pb2.Downlink()
+        downlink.timestamp_ms = now_ms
+        downlink.server_id = self.server_id
+        downlink.sequence_number = self._next_sequence()
+        downlink.received = True
+        downlink.screen_banner.CopyFrom(banner)
+        
+        return downlink
 
     async def _generate_audio_inference_banner(self, uplink_msg: pb2.Uplink) -> pb2.Downlink | None:
         """
