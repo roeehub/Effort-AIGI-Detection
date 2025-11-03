@@ -104,6 +104,7 @@ GCP_AUDIO_BUCKET = None
 ENABLE_BUCKET_SAVE = False
 IO_WORKER_COUNT = 2
 DEBUG_MODE = True
+ENABLE_CHUNK_SAVE = False  # Flag to enable/disable saving chunks to disk
 
 # ──────────────────────────
 # Image utilities (keeping decode function for debugging)
@@ -591,6 +592,25 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                         frame_data=img_bytes,
                                         metadata=metadata
                                     )
+                        
+                        # Save video chunks to disk (if enabled) - offloaded to thread pool for non-blocking I/O
+                        if ENABLE_CHUNK_SAVE:
+                            try:
+                                # Create async wrapper with logging
+                                async def save_video_chunk():
+                                    try:
+                                        chunk_path = await asyncio.to_thread(
+                                            self.data_writer.write_video_chunk, 
+                                            uplink_msg.participants, 
+                                            metadata
+                                        )
+                                        logging.info(f"[ChunkSave] ✓ Saved video chunk to: {chunk_path}")
+                                    except Exception as e:
+                                        logging.error(f"[ChunkSave] ✗ Failed to save video chunk: {e}")
+                                
+                                asyncio.create_task(save_video_chunk())
+                            except Exception as e:
+                                logging.error(f"[FastConsumer] Error queueing video chunk save: {e}")
                     
                     # Route audio to global queue (fast, just queuing)
                     if uplink_msg.HasField('audio'):
@@ -620,6 +640,57 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                 "audio_format": audio_format,  # Track the actual format
                             }
                             await self._route_audio_to_queue(audio_data, audio_metadata)
+                        
+                        # Save audio chunks to disk (if enabled) - offloaded to thread pool for non-blocking I/O
+                        if ENABLE_CHUNK_SAVE:
+                            try:
+                                # Create a coroutine to handle async audio saving
+                                async def save_audio_chunk():
+                                    try:
+                                        mp3_data = None
+                                        original_format = None
+                                        
+                                        # Convert to MP3 in thread pool (blocking operation)
+                                        if hasattr(audio_batch, 'ogg_data') and audio_batch.ogg_data:
+                                            mp3_data = await asyncio.to_thread(
+                                                self._convert_audio_to_mp3, 
+                                                audio_batch.ogg_data, 
+                                                'ogg'
+                                            )
+                                            original_format = 'ogg'
+                                        elif hasattr(audio_batch, 'wav_data') and audio_batch.wav_data:
+                                            mp3_data = await asyncio.to_thread(
+                                                self._convert_audio_to_mp3, 
+                                                audio_batch.wav_data, 
+                                                'wav'
+                                            )
+                                            original_format = 'wav'
+                                        
+                                        if mp3_data:
+                                            audio_save_metadata = {
+                                                **metadata,
+                                                'converted_format': 'mp3',
+                                                'original_format': original_format,
+                                                'mp3_size': len(mp3_data)
+                                            }
+                                            # Write to disk in thread pool (blocking operation)
+                                            audio_path = await asyncio.to_thread(
+                                                self.data_writer.write_audio_chunk_mp3, 
+                                                mp3_data, 
+                                                audio_batch, 
+                                                audio_save_metadata
+                                            )
+                                            logging.info(f"[ChunkSave] ✓ Saved audio chunk to: {audio_path}")
+                                        else:
+                                            logging.warning(f"[ChunkSave] ✗ No audio data to save")
+                                    except Exception as e:
+                                        logging.error(f"[ChunkSave] ✗ Failed to save audio chunk: {e}")
+                                
+                                # Fire and forget - don't await
+                                asyncio.create_task(save_audio_chunk())
+                                
+                            except Exception as e:
+                                logging.error(f"[FastConsumer] Error queueing audio chunk save: {e}")
                     
                     # Update stats (fast, just increment)
                     self.stats["uplink_messages"] += 1
@@ -2189,6 +2260,9 @@ def parse_args():
 
     parser.add_argument('--debug', action='store_true',
                         help='Enable verbose debug logging')
+    
+    parser.add_argument('--enable-chunk-save', action='store_true',
+                        help='Enable saving all chunks to disk for debugging (default: disabled)')
 
     return parser.parse_args()
 
@@ -2199,15 +2273,26 @@ async def serve():
     args = parse_args()
 
     # Set global variables
-    global GCP_VIDEO_BUCKET, GCP_AUDIO_BUCKET, ENABLE_BUCKET_SAVE, IO_WORKER_COUNT, DEBUG_MODE
+    global GCP_VIDEO_BUCKET, GCP_AUDIO_BUCKET, ENABLE_BUCKET_SAVE, IO_WORKER_COUNT, DEBUG_MODE, ENABLE_CHUNK_SAVE
     GCP_VIDEO_BUCKET = args.video_bucket
     GCP_AUDIO_BUCKET = args.audio_bucket
     ENABLE_BUCKET_SAVE = args.enable_bucket_save
     IO_WORKER_COUNT = args.io_workers
     DEBUG_MODE = args.debug
+    ENABLE_CHUNK_SAVE = args.enable_chunk_save
+    
+    # Define data directory path for logging
+    data_dir_path = "/home/roee/repos/Effort-AIGI-Detection-Fork/DeepfakeBench/training/wma/data"
 
     logging.info("[Backend] Configuration:")
     logging.info(f"  - Debug mode: {'Enabled' if DEBUG_MODE else 'Disabled'}")
+    logging.info(f"  - Chunk saving: {'Enabled' if ENABLE_CHUNK_SAVE else 'Disabled'}")
+    if ENABLE_CHUNK_SAVE:
+        logging.info(f"  - Chunk save directory: {data_dir_path}")
+        logging.info(f"  - Video chunks → {data_dir_path}/video/")
+        logging.info(f"  - Audio chunks → {data_dir_path}/audio/")
+    else:
+        logging.warning("  ⚠️  Chunk saving is DISABLED. To enable: add --enable-chunk-save flag")
     logging.info(f"  - Video bucket: {GCP_VIDEO_BUCKET or 'None'}")
     logging.info(f"  - Audio bucket: {GCP_AUDIO_BUCKET or 'None'}")
     logging.info(f"  - Bucket saving: {'Enabled' if ENABLE_BUCKET_SAVE else 'Disabled'}")

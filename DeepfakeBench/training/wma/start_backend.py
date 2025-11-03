@@ -64,8 +64,15 @@ try:
     logging.info("[BackendStartup] Starting WMA Backend gRPC Server")
     logging.info(f"[BackendStartup] Backend directory: {backend_dir}")
     logging.info(f"[BackendStartup] Python version: {sys.version}")
+    
+    # Log command-line arguments if any
+    if len(sys.argv) > 1:
+        logging.info(f"[BackendStartup] Command-line arguments: {' '.join(sys.argv[1:])}")
+        if '--enable-chunk-save' in sys.argv:
+            logging.info("[BackendStartup] ✓ Chunk saving is ENABLED")
+            logging.info("[BackendStartup] Chunks will be saved to data/video/ and data/audio/")
 
-    # Run the server
+    # Run the server (sys.argv is automatically passed to parse_args() in serve())
     asyncio.run(serve())
 
 except KeyboardInterrupt:
