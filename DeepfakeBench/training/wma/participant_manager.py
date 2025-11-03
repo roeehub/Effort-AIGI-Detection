@@ -27,9 +27,24 @@ RESET_AFTER_INACTIVE_MIN = 2.0  # Forget a participant after this many minutes o
 # Whitelist: participant names containing these strings will always get GREEN
 WHITELIST_NAMES = ["roee"]  # Add names here
 
+# --- Hysteresis / Flagged Mode Configuration ---
+# When a participant's mean probability exceeds FLAGGED_TRIGGER, they enter "flagged mode"
+# with stricter thresholds for recovery (prevents rapid oscillation after high suspicion)
+FLAGGED_TRIGGER = 0.92  # Peak probability that triggers stricter recovery thresholds
+
+# Normal mode thresholds (controlled by ParticipantManager threshold + margin)
+# GREEN: < (threshold - margin)
+# YELLOW: (threshold - margin) to (threshold + margin)
+# RED: >= (threshold + margin)
+
+# Flagged mode thresholds (fixed, stricter recovery requirements)
+FLAGGED_GREEN_UPPER = 0.50    # Must drop below 0.50 to reach GREEN
+FLAGGED_YELLOW_LOWER = 0.50   # YELLOW band starts at 0.50
+FLAGGED_YELLOW_UPPER = 0.70   # YELLOW band ends at 0.70
+FLAGGED_RED_LOWER = 0.70      # RED if >= 0.70 (much lower than normal)
+
 
 # --- Data Structure for Participant State ---
-# Add 'is_new' flag to ParticipantState
 @dataclass
 class ParticipantState:
     """Holds the state for a single participant."""
@@ -40,6 +55,10 @@ class ParticipantState:
     batch_counter: int = 0
     last_seen_ts: float = field(default_factory=time.time)
     is_new: bool = True  # Flag to track if this participant is new
+    
+    # Hysteresis / flagged mode fields
+    peak_prob: float = DEFAULT_START_PROB  # Highest mean probability ever seen
+    is_flagged: bool = False  # True when peak_prob >= FLAGGED_TRIGGER
 
 
 # --- The Main Manager Class ---
@@ -65,14 +84,33 @@ class ParticipantManager:
         logging.info(f"[ParticipantManager] Initialized with threshold={threshold:.2f}, margin={margin:.2f}")
         logging.info(f"[ParticipantManager] Whitelist enabled for names containing: {self.whitelist}")
 
-    def _calculate_band_level(self, mean_prob: float) -> int:
-        """Maps a mean probability score to a GREEN, YELLOW, or RED verdict."""
-        if mean_prob >= self.threshold + self.margin:
-            return pb2.RED
-        elif mean_prob >= self.threshold - self.margin:
-            return pb2.YELLOW
+    def _calculate_band_level(self, mean_prob: float, is_flagged: bool = False) -> int:
+        """
+        Maps a mean probability score to a GREEN, YELLOW, or RED verdict.
+        
+        Args:
+            mean_prob: The mean probability score from the active window
+            is_flagged: If True, use stricter flagged mode thresholds for recovery
+        
+        Returns:
+            pb2.GREEN, pb2.YELLOW, or pb2.RED
+        """
+        if is_flagged:
+            # Flagged mode: Use stricter thresholds to prevent premature recovery
+            if mean_prob >= FLAGGED_RED_LOWER:
+                return pb2.RED
+            elif mean_prob >= FLAGGED_YELLOW_LOWER:
+                return pb2.YELLOW
+            else:
+                return pb2.GREEN
         else:
-            return pb2.GREEN
+            # Normal mode: Use standard thresholds
+            if mean_prob >= self.threshold + self.margin:
+                return pb2.RED
+            elif mean_prob >= self.threshold - self.margin:
+                return pb2.YELLOW
+            else:
+                return pb2.GREEN
 
     def _is_whitelisted(self, participant_id: str) -> bool:
         """Check if participant_id contains any whitelisted name pattern."""
@@ -136,7 +174,26 @@ class ParticipantManager:
             # 4. Calculate a new verdict based on the active window
             active_window_probs = [state.history[i] for i in range(min(len(state.history), ACTIVE_TEST_WINDOW))]
             mean_prob = float(np.mean(active_window_probs)) if active_window_probs else DEFAULT_START_PROB
-            new_verdict = self._calculate_band_level(mean_prob)
+            
+            # 4a. Track peak probability and check for flagged mode activation
+            previous_peak = state.peak_prob
+            was_flagged = state.is_flagged
+            
+            if mean_prob > state.peak_prob:
+                state.peak_prob = mean_prob
+                
+                # Check if we just crossed the flagged threshold
+                if not state.is_flagged and state.peak_prob >= FLAGGED_TRIGGER:
+                    state.is_flagged = True
+                    logging.warning(
+                        f"[ParticipantManager] ⚠️  FLAGGED MODE ACTIVATED for {participant_id}! "
+                        f"Peak probability {state.peak_prob:.3f} >= {FLAGGED_TRIGGER:.3f}. "
+                        f"Now using strict recovery thresholds: GREEN<{FLAGGED_GREEN_UPPER:.2f}, "
+                        f"YELLOW={FLAGGED_YELLOW_LOWER:.2f}-{FLAGGED_YELLOW_UPPER:.2f}, RED>={FLAGGED_RED_LOWER:.2f}"
+                    )
+            
+            # 4b. Calculate verdict using appropriate thresholds
+            new_verdict = self._calculate_band_level(mean_prob, is_flagged=state.is_flagged)
 
             # 5. Update state counters
             state.batch_counter += 1
@@ -146,16 +203,35 @@ class ParticipantManager:
             verdict_changed = new_verdict != state.current_verdict
             interval_reached = state.batch_counter >= MIN_RESPONSE_INTERVAL
 
+            # Log detailed state information
+            mode_indicator = "FLAGGED" if state.is_flagged else "NORMAL"
             logging.info(
-                f"[ParticipantManager] ID: {participant_id}, MeanProb: {mean_prob:.3f}, NewVerdict: {pb2.BannerLevel.Name(new_verdict)}, "
+                f"[ParticipantManager] ID: {participant_id}, MeanProb: {mean_prob:.3f}, "
+                f"Peak: {state.peak_prob:.3f}, Mode: {mode_indicator}, "
+                f"NewVerdict: {pb2.BannerLevel.Name(new_verdict)}, "
                 f"OldVerdict: {pb2.BannerLevel.Name(state.current_verdict)}, Changed: {verdict_changed}, "
                 f"Counter: {state.batch_counter}/{MIN_RESPONSE_INTERVAL}, IsNew: {is_new_participant}")
 
+            # 6a. Check for flagged mode reset (GREEN reached while in flagged mode)
+            if state.is_flagged and new_verdict == pb2.GREEN:
+                logging.warning(
+                    f"[ParticipantManager] ✓ FLAGGED MODE RESET for {participant_id}! "
+                    f"Reached GREEN (mean_prob={mean_prob:.3f} < {FLAGGED_GREEN_UPPER:.2f}). "
+                    f"Peak was {state.peak_prob:.3f}. Returning to normal thresholds."
+                )
+                state.is_flagged = False
+                state.peak_prob = mean_prob  # Reset peak to current level
+            
             # Always send a banner for new participants
             if is_new_participant or verdict_changed or interval_reached:
                 reason = "New" if is_new_participant else "Change" if verdict_changed else "Interval"
+                
+                # Add mode indicator to log message
+                mode_str = " [FLAGGED MODE]" if state.is_flagged else ""
                 logging.info(
-                    f"[ParticipantManager] TRIGGER! Sending verdict for {participant_id}. Reason: {reason}.")
+                    f"[ParticipantManager] TRIGGER! Sending verdict for {participant_id}. "
+                    f"Reason: {reason}.{mode_str}")
+                
                 state.current_verdict = new_verdict
                 state.batch_counter = 0
                 state.is_new = False  # Mark participant as no longer new
