@@ -109,24 +109,53 @@ def calculate_sharpness(image_bytes: bytes) -> float:
 
 
 # *** NEW UTILITY FUNCTION ***
-def get_method_from_path(path_str: str) -> Optional[str]:
+def get_method_from_path(path_str: str, default_method_real: Optional[str] = None, default_method_fake: Optional[str] = None) -> Optional[str]:
     """
     Quickly extracts and standardizes the method name from a path string.
-    Assumes path structure: .../{label}/{method}/{video_id}/{frame_name}.png
+    
+    Supports two structures:
+    - Standard: .../{label}/{method}/{video_id}/{frame_name}.png
+    - Simplified (when default_method_real/fake is provided): .../{label}/{video_id}/{frame_name}.png
     """
     try:
-        # parts[-1] is filename, parts[-2] is video_id, parts[-3] is method
-        method_raw = Path(path_str).parts[-3]
-        return standardize_method_name(method_raw)
+        using_simplified = default_method_real is not None or default_method_fake is not None
+        
+        if using_simplified:
+            # For simplified structure, extract label and use appropriate default method
+            parts = Path(path_str).parts
+            if len(parts) < 3:
+                log.warning(f"Could not extract method from malformed path: {path_str}")
+                return None
+            
+            label = parts[-3]
+            if label == "real":
+                if default_method_real is None:
+                    log.warning(f"Path has 'real' label but --default-method-real not provided: {path_str}")
+                    return None
+                return standardize_method_name(default_method_real)
+            elif label == "fake":
+                if default_method_fake is None:
+                    log.warning(f"Path has 'fake' label but --default-method-fake not provided: {path_str}")
+                    return None
+                return standardize_method_name(default_method_fake)
+            else:
+                log.warning(f"Unknown label '{label}' in path: {path_str}")
+                return None
+        else:
+            # For standard structure: parts[-1] is filename, parts[-2] is video_id, parts[-3] is method
+            method_raw = Path(path_str).parts[-3]
+            return standardize_method_name(method_raw)
     except IndexError:
         log.warning(f"Could not extract method from malformed path: {path_str}")
         return None
 
 
-def process_path(path_str: str) -> Optional[Dict]:
+def process_path(path_str: str, default_method_real: Optional[str] = None, default_method_fake: Optional[str] = None) -> Optional[Dict]:
     """
     Processes a single path (local or GCS) to extract metadata and compute properties.
-    NOTE: Assumes the path structure is '.../{label}/{method}/{video_id}/{frame_name}.png'
+    NOTE: Supports two path structures:
+    - Standard: '.../{label}/{method}/{video_id}/{frame_name}.png'
+    - Simplified (when default_method_real/fake is provided): '.../{label}/{video_id}/{frame_name}.png'
     """
     try:
         # Use fsspec to open the file, which handles local and GCS paths transparently
@@ -138,12 +167,39 @@ def process_path(path_str: str) -> Optional[Dict]:
             image_bytes = f.read()
 
         parts = Path(path_str).parts
-        if len(parts) < 4:
-            log.warning(f"Skipping malformed path (too short): {path_str}")
-            return None
-
-        label, method_raw, video_id_raw = parts[-4], parts[-3], parts[-2]
-        method = standardize_method_name(method_raw)
+        
+        # Determine which path structure we're dealing with
+        # Check if we're using simplified structure (either default method is provided)
+        using_simplified = default_method_real is not None or default_method_fake is not None
+        
+        if using_simplified:
+            # Simplified structure: .../{label}/{video_id}/{frame_name}.png
+            if len(parts) < 3:
+                log.warning(f"Skipping malformed path (too short for simplified structure): {path_str}")
+                return None
+            label, video_id_raw = parts[-3], parts[-2]
+            
+            # Select the appropriate default method based on label
+            if label == "real":
+                if default_method_real is None:
+                    log.error(f"Path has 'real' label but --default-method-real not provided: {path_str}")
+                    return None
+                method = standardize_method_name(default_method_real)
+            elif label == "fake":
+                if default_method_fake is None:
+                    log.error(f"Path has 'fake' label but --default-method-fake not provided: {path_str}")
+                    return None
+                method = standardize_method_name(default_method_fake)
+            else:
+                log.warning(f"Unknown label '{label}' in path (expected 'real' or 'fake'): {path_str}")
+                return None
+        else:
+            # Standard structure: .../{label}/{method}/{video_id}/{frame_name}.png
+            if len(parts) < 4:
+                log.warning(f"Skipping malformed path (too short): {path_str}")
+                return None
+            label, method_raw, video_id_raw = parts[-4], parts[-3], parts[-2]
+            method = standardize_method_name(method_raw)
 
         unified_id = get_video_identity(label, method, video_id_raw)
         clip_id = get_clip_id(method, video_id_raw)
@@ -256,6 +312,10 @@ def main():
                         help="List of GCS bucket names to scan (e.g., df40-frames...).")
     parser.add_argument("--local-dirs", type=str, nargs='+', default=[],
                         help="List of local directories to scan. IMPORTANT: Must follow the .../{label}/{method}/{video_id}/ structure.")
+    parser.add_argument("--default-method-real", type=str, default=None,
+                        help="Default method name to use for 'real' frames when the path structure is simplified (missing a 'method' directory).")
+    parser.add_argument("--default-method-fake", type=str, default=None,
+                        help="Default method name to use for 'fake' frames when the path structure is simplified (missing a 'method' directory).")
     # --- Input/Output Arguments ---
     parser.add_argument("--output-manifest", type=str, required=True,
                         help="Path to the final output Parquet manifest (e.g., ./frame_properties.parquet).")
@@ -319,7 +379,7 @@ def main():
         log.info("Filtering mode: --add-new-methods. Will only process frames from newly discovered methods.")
         newly_discovered_methods = set()
         for path in tqdm(all_new_source_paths, desc="Discovering new methods"):
-            method = get_method_from_path(path)
+            method = get_method_from_path(path, default_method_real=args.default_method_real, default_method_fake=args.default_method_fake)
             if method and method not in existing_methods:
                 paths_to_process.append(path)
                 newly_discovered_methods.add(method)
@@ -348,8 +408,12 @@ def main():
     # --- 4. Process New Paths in Parallel ---
     log.info(f"Starting property calculation for {len(paths_to_process):,} new frames with {args.workers} workers...")
     new_results, error_count = [], 0
+    
+    # Create a partial function with default methods pre-filled
+    process_func = partial(process_path, default_method_real=args.default_method_real, default_method_fake=args.default_method_fake)
+    
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(process_path, path) for path in paths_to_process}
+        futures = {executor.submit(process_func, path) for path in paths_to_process}
         progress = tqdm(as_completed(futures), total=len(paths_to_process), desc="Processing New Frames")
         for future in progress:
             result = future.result()

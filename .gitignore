@@ -30,9 +30,28 @@ my_data/
 .idea/
 
 frame_manifest.json
+yolov8s-face.pt
+status.jsonl
 
 
 wandb/
 
 weights/models--openai--clip-vit-large-patch14/
 ../../effortvenv/
+
+# ----------------------------------
+# IGNORE DATA AND IMAGE FILES
+# ----------------------------------
+# Ignore all files with these extensions, no matter where they are.
+*.csv
+*.png
+*.jpeg
+*.jpg
+*.parquet
+
+# ----------------------------------
+# IGNORE SPECIFIC FOLDERS
+# ----------------------------------
+# Ignore any folder named 'experiments_configs' and all of its contents,
+# no matter where it is in the project directory.
+experiments_configs/

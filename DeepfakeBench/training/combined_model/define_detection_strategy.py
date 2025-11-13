@@ -175,7 +175,6 @@ def phase_2_identify_bottlenecks(baseline_df: pd.DataFrame, baseline_recall: flo
             f"[yellow]Note:[/yellow] The following methods were identified as top bottlenecks but are protected and will [bold]not[/bold] be excluded: [bold magenta]{list(protected_found)}[/bold magenta]\n")
 
     return bottleneck_methods
-    return bottleneck_methods
 
 
 def phase_3_define_strategy(baseline_df: pd.DataFrame, bottleneck_methods: list, console: Console) -> tuple:
@@ -291,7 +290,7 @@ def phase_4_validate_and_report(df: pd.DataFrame, T_low: float, T_high: float, u
     )
     console.print(exec_table)
 
-    # --- Per-Method Breakdown Table ---
+    # --- Per-Method Breakdown Table (Fakes) ---
     per_method_table = Table(title="[bold]Per-Method Breakdown (All Fake Methods)[/bold]", style="cyan",
                              title_justify="left")
     per_method_table.add_column("Method", style="bold magenta")
@@ -341,6 +340,37 @@ def phase_4_validate_and_report(df: pd.DataFrame, T_low: float, T_high: float, u
             pass
 
     console.print(per_method_table)
+
+    # --- Per-Method Breakdown for REAL Methods ---
+    per_real_method_table = Table(title="[bold]Per-Method Breakdown (All Real Methods)[/bold]", style="cyan",
+                                  title_justify="left")
+    per_real_method_table.add_column("Method", style="bold magenta")
+    per_real_method_table.add_column("% Correct (is REAL)", justify="right")
+    per_real_method_table.add_column("% Uncertain", justify="right")
+    per_real_method_table.add_column("FPR (is FAKE)", justify="right")
+    per_real_method_table.add_column("Count", justify="right", style="dim")
+
+    real_method_grouped = reals_df.groupby('method')['classification'].value_counts(
+        normalize=True).unstack(fill_value=0)
+    real_method_counts = reals_df['method'].value_counts()
+
+    sorted_real_methods = sorted(real_method_counts.index)
+
+    for method in sorted_real_methods:
+        try:
+            data = real_method_grouped.loc[method]
+            per_real_method_table.add_row(
+                method,
+                f"[green]{data.get('REAL (Miss)', 0):.1%}[/green]",
+                f"[yellow]{data.get('UNCERTAIN', 0):.1%}[/yellow]",
+                f"[red]{data.get('FAKE (Caught)', 0):.1%}[/red]",
+                f"{real_method_counts[method]:,}"
+            )
+        except KeyError:
+            # Should not happen for reals, but good practice
+            pass
+
+    console.print(per_real_method_table)
 
 
 def main():

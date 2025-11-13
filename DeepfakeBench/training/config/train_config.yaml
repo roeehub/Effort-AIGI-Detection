@@ -28,7 +28,7 @@ gcs_assets:
     gcs_path: 'gs://df40-frames/manifests/frame_manifest_v3.json'
     local_path: './frame_manifest.json'
   property_manifest_parquet:
-    gcs_path: 'gs://df40-frames/manifests/frame_properties_v8.parquet'
+    gcs_path: 'gs://df40-frames/manifests/frame_properties_v9.parquet'
     local_path: './frame_properties.parquet'
 
 

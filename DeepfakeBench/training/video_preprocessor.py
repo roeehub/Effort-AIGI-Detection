@@ -34,8 +34,8 @@ MODEL_IMG_SIZE = 224
 DLIB_LANDMARK_MODEL_PATH = "shape_predictor_81_face_landmarks.dat"
 
 # --- YOLO Settings ---
-YOLO_MODEL_PATH = "yolov8s-face.pt"
-# YOLO_MODEL_PATH = "/Users/roeedar/Library/Application Support/JetBrains/PyCharmCE2024.2/scratches/yolov8s-face.pt"
+# YOLO_MODEL_PATH = "yolov8s-face.pt"
+YOLO_MODEL_PATH = "/Users/roeedar/Library/Application Support/JetBrains/PyCharmCE2024.2/scratches/yolov8s-face.pt"
 YOLO_BBOX_MARGIN = 20
 YOLO_CONF_THRESHOLD = 0.20
 
@@ -86,7 +86,24 @@ def initialize_yolo_model():
             except Exception as e:
                 raise IOError(f"Failed to download YOLO model. Details: {e}")
         print("[*] Initializing YOLO model...")
-        _yolo_cache["model"] = YOLO(str(model_path))
+        
+        # Fix for PyTorch 2.6+ weights_only security change
+        # Monkey-patch torch.load temporarily to allow loading trusted YOLO weights
+        original_torch_load = torch.load
+        
+        def patched_torch_load(f, *args, **kwargs):
+            # Force weights_only=False for YOLO model loading (trusted source)
+            kwargs['weights_only'] = False
+            return original_torch_load(f, *args, **kwargs)
+        
+        # Temporarily replace torch.load
+        torch.load = patched_torch_load
+        try:
+            _yolo_cache["model"] = YOLO(str(model_path))
+        finally:
+            # Always restore original torch.load
+            torch.load = original_torch_load
+    
     return _yolo_cache["model"]
 
 

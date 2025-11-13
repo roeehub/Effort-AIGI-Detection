@@ -26,53 +26,53 @@ from dataset.dataloaders import create_pure_validation_loader, LazyDataLoaderMan
 
 # Define the methods you want to re-evaluate here.
 # This list will be used to filter the data from the properties file.
-METHODS_TO_VALIDATE = list({
-    "vcd",
-    "external_youtube_avspeech",
-    "celeb_real",
-    "youtube_real",
-    "faceforensics++",
-    "dfdc_real",
-    "deepfakedetection",
-    "deepfakes",
-    "faceshifter",
-    "faceswapff",
-    "faceswap",
-    "fsgan",
-    "simswap",
-    "mobileswap",
-    "inswap",
-    "facedancer",
-    "blendface",
-    "uniface",
-    "face2face",
-    "neuraltextures",
-    "fomm",
-    "facevid2vid",
-    "danet",
-    "lia",
-    "mcnet",
-    "one_shot_free",
-    "pirender",
-    "sadtalker",
-    "tpsm",
-    "wav2lip",
-    "mraa",
-    "stylegan2",
-    "stylegan3",
-    "styleganxl",
-    "vqgan",
-    "ddim",
-    "dit",
-    "rddm",
-    "sit",
-    "faceswap",
-    "hey_gen",
-    "veo3_creations",
-    "deep_live_cam_fake",
-    "celeb_synthesis",
-    "dfdc_fake",
-})
+# METHODS_TO_VALIDATE = list
+#     "vcd",
+#     "external_youtube_avspeech",
+#     "celeb_real",
+#     "youtube_real",
+#     "faceforensics++",
+#     "dfdc_real",
+#     "deepfakedetection",
+#     "deepfakes",
+#     "faceshifter",
+#     "faceswapff",
+#     "faceswap",
+#     "fsgan",
+#     "simswap",
+#     "mobileswap",
+#     "inswap",
+#     "facedancer",
+#     "blendface",
+#     "uniface",
+#     "face2face",
+#     "neuraltextures",
+#     "fomm",
+#     "facevid2vid",
+#     "danet",
+#     "lia",
+#     "mcnet",
+#     "one_shot_free",
+#     "pirender",
+#     "sadtalker",
+#     "tpsm",
+#     "wav2lip",
+#     "mraa",
+#     "stylegan2",
+#     "stylegan3",
+#     "styleganxl",
+#     "vqgan",
+#     "ddim",
+#     "dit",
+#     "rddm",
+#     "sit",
+#     "faceswap",
+#     "hey_gen",
+#     "veo3_creations",
+#     "deep_live_cam_fake",
+#     "celeb_synthesis",
+#     "dfdc_fake",
+#
 
 # METHODS_TO_VALIDATE = list({
 #     "celeb_synthesis",
@@ -80,14 +80,19 @@ METHODS_TO_VALIDATE = list({
 #     "dfdc_fake",
 # })
 
+METHODS_TO_VALIDATE = list({
+    "phase1_real",
+    "phase1_fake",
+})
+
 # Specify the GCS path of the checkpoint you want to load and test.
 # This will be downloaded automatically.
 # CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/o08s5u94/top_n_effort_20250927_ep1_auc0.9672_eer0.0905.pth"  # old one
 
 # CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/dfsesrgu/top_n_effort_20251016_step9000_auc0.8621_eer0.2274.pth"  # DFDC
 # CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/9rfa62j1/top_n_effort_20251009_step9000_auc0.8664_eer0.1765.pth"
-CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/4vtny88m/top_n_effort_20251008_step6300_auc0.8694_eer0.2048.pth"
-# CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/1mjgo9w1/top_n_effort_20251008_step9000_auc0.9422_eer0.1255.pth" # possibly EFS
+# CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/4vtny88m/top_n_effort_20251008_step6300_auc0.8694_eer0.2048.pth"
+CHECKPOINT_GCS_PATH = "gs://training-job-outputs/best_checkpoints/1mjgo9w1/top_n_effort_20251008_step9000_auc0.9422_eer0.1255.pth" # possibly EFS
 LOCAL_CHECKPOINT_PATH = "./weights/rerun_checkpoint.pth"
 
 # ==============================================================================
