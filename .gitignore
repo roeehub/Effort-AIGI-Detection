@@ -33,9 +33,12 @@ frame_manifest.json
 yolov8s-face.pt
 status.jsonl
 
+# logs
+*.log
+
 
 wandb/
-
+.gcs_cache/
 weights/models--openai--clip-vit-large-patch14/
 ../../effortvenv/
 
@@ -55,3 +58,6 @@ weights/models--openai--clip-vit-large-patch14/
 # Ignore any folder named 'experiments_configs' and all of its contents,
 # no matter where it is in the project directory.
 experiments_configs/
+out_full/
+out_full_v2/
+out_full_v3/
