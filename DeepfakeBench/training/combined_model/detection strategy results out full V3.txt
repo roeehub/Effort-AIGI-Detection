@@ -1,0 +1,98 @@
+
+░▒▓    ~/Doc/r/Effort-AIGI-Detection/D/t/combined_model  on   add-proper-monitoring *2 !7 ?55                                            ✔  took 59s   scratches   base  ▓▒░
+❯ python define_detection_strategy.py
+────────────────────────────────────────────────────────────────────────── Deepfake Detection Strategy Optimizer ──────────────────────────────────────────────────────────────────────────
+✔ Loaded data from ./out_full_v3/fusion_oof_scores.parquet
+────────────────────────────────────────────────────────────────────── Phase 1: Foundation & Baseline Establishment ───────────────────────────────────────────────────────────────────────
+Original dataset size: 44,505 videos
+Using fusion scores from column: 'noisy_or'
+Excluding methods ['faceforensics++', 'hey_gen', 'veo3_creations', 'fake_social_12_09', 'real_social_12_09']. Baseline dataset size: 42,982 videos.
+
+Baseline Performance Metrics:
+  - Threshold for <1% FPR: 0.999805
+  - Overall Recall at <1% FPR: 78.94%
+  - Threshold for Youden (balanced): 0.997474
+  - Overall Recall at Youden: 91.83%
+
+───────────────────────────────────────────────────────────────────── Phase 2: Data-Driven Bottleneck Identification ──────────────────────────────────────────────────────────────────────
+      Top 3 Performance Bottlenecks (Ranked by Impact on Recall)
+┏━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Rank ┃ Method Removed ┃ Recall Gain ┃ Individual TPR ┃ Video Count ┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ #1   │ dfdc_fake      │      +1.13% │         74.50% │       2,031 │
+│ #2   │ sadtalker      │      +0.51% │         66.04% │         642 │
+│ #3   │ neuraltextures │      +0.44% │         77.50% │       1,000 │
+└──────┴────────────────┴─────────────┴────────────────┴─────────────┘
+Interpretation: Removing 'dfdc_fake' would increase the overall fake recall by 1.13%.
+
+Note: The following methods were identified as top bottlenecks but are protected and will not be excluded: ['dfdc_fake']
+
+───────────────────────────────────────────────────────────────── Phase 3: Defining the 'Supported & Uncertain' Strategy ──────────────────────────────────────────────────────────────────
+Identified 2 bottlenecks to treat as 'Unsupported': ['sadtalker', 'neuraltextures']
+Final 'Supported Methods' dataset size: 41,340 videos.
+
+Center of uncertain band (Youden on supported set): 0.997474
+╭─ Final Decision Thresholds ─╮
+│       T_low: 0.996700       │
+│      T_high: 0.998248       │
+╰─────────────────────────────╯
+These thresholds classify 2.00% of 'Supported' videos as UNCERTAIN (target was 2.00%).
+
+─────────────────────────────────────────────────────────────────── Phase 4: Final Validation & Comprehensive Reporting ───────────────────────────────────────────────────────────────────
+Executive Performance Summary
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Category                                    ┃     TPR (Caught as FAKE) ┃ % UNCERTAIN ┃ % Miss (Classified as REAL) ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Performance on Supported Fakes              │                   91.58% │       2.03% │                       6.40% │
+├─────────────────────────────────────────────┼──────────────────────────┼─────────────┼─────────────────────────────┤
+│ Incidental Performance on Unsupported Fakes │                   70.10% │       5.18% │                      24.73% │
+├─────────────────────────────────────────────┼──────────────────────────┼─────────────┼─────────────────────────────┤
+│ Overall Performance (All Fakes Combined)    │                   90.52% │       2.18% │                       7.30% │
+├─────────────────────────────────────────────┼──────────────────────────┼─────────────┼─────────────────────────────┤
+│ Performance on Real Videos                  │ FPR (on certain): 4.352% │       1.92% │            93.81% (Correct) │
+└─────────────────────────────────────────────┴──────────────────────────┴─────────────┴─────────────────────────────┘
+Per-Method Breakdown (All Fake Methods)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━┓
+┃ Method             ┃ Category    ┃ TPR (Caught) ┃ % Uncertain ┃ % Missed ┃ Count ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━┩
+│ blendface          │ Supported   │        94.4% │        1.6% │     4.1% │   708 │
+│ celeb_synthesis    │ Supported   │        88.7% │        3.5% │     7.8% │ 5,639 │
+│ danet              │ Supported   │        78.8% │        4.2% │    17.0% │   643 │
+│ ddim               │ Supported   │       100.0% │        0.0% │     0.0% │   510 │
+│ deep_live_cam_fake │ Supported   │        92.1% │        3.7% │     4.2% │   403 │
+│ deepfakedetection  │ Supported   │        83.3% │        2.1% │    14.6% │   993 │
+│ deepfakes          │ Supported   │        99.8% │        0.0% │     0.2% │ 1,000 │
+│ dfdc_fake          │ Supported   │        71.2% │        5.5% │    23.2% │ 2,031 │
+│ dit                │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ face2face          │ Supported   │        94.3% │        1.1% │     4.6% │ 1,000 │
+│ facedancer         │ Supported   │        98.2% │        0.8% │     1.0% │   712 │
+│ faceshifter        │ Supported   │        98.5% │        0.3% │     1.2% │ 1,000 │
+│ faceswap           │ Supported   │        98.9% │        0.6% │     0.6% │   715 │
+│ faceswapff         │ Supported   │        99.8% │        0.0% │     0.2% │ 1,000 │
+│ facevid2vid        │ Supported   │        82.7% │        3.5% │    13.8% │   715 │
+│ fomm               │ Supported   │        88.3% │        2.8% │     8.9% │   717 │
+│ fsgan              │ Supported   │        99.4% │        0.0% │     0.6% │   684 │
+│ inswap             │ Supported   │        95.0% │        1.6% │     3.4% │   706 │
+│ lia                │ Supported   │        84.5% │        3.5% │    12.0% │   717 │
+│ mcnet              │ Supported   │        80.3% │        5.6% │    14.1% │   717 │
+│ mobileswap         │ Supported   │        97.9% │        0.3% │     1.8% │   716 │
+│ mraa               │ Supported   │        89.7% │        2.0% │     8.4% │   715 │
+│ one_shot_free      │ Supported   │        88.7% │        2.4% │     8.9% │   718 │
+│ phase1_fake        │ Supported   │        95.2% │        1.5% │     3.3% │ 1,373 │
+│ pirender           │ Supported   │        92.5% │        2.1% │     5.4% │   717 │
+│ rddm               │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ simswap            │ Supported   │        97.3% │        1.2% │     1.4% │   980 │
+│ sit                │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ stylegan2          │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ stylegan3          │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ styleganxl         │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ tpsm               │ Supported   │        85.7% │       14.3% │     0.0% │     7 │
+│ uniface            │ Supported   │        98.1% │        0.5% │     1.4% │   370 │
+│ vqgan              │ Supported   │       100.0% │        0.0% │     0.0% │   675 │
+│ wav2lip            │ Supported   │        78.6% │        4.2% │    17.2% │   710 │
+├────────────────────┼─────────────┼──────────────┼─────────────┼──────────┼───────┤
+│ neuraltextures     │ Unsupported │        75.6% │        4.4% │    20.0% │ 1,000 │
+│ sadtalker          │ Unsupported │        61.5% │        6.4% │    32.1% │   642 │
+└────────────────────┴─────────────┴──────────────┴─────────────┴──────────┴───────┘
+────────────────────────────────────────────────────────────────────────────── Strategy Definition Complete ───────────────────────────────────────────────────────────────────────────────
+░▒▓    ~/Doc/r/Effort-AIGI-Detection/D/t/combined_model  on   add-proper-monitoring *2 !7 ?55 
