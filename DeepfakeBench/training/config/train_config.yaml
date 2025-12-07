@@ -24,6 +24,9 @@ gcs_assets:
   clip_backbone:
     gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
     local_path: "./weights/models--openai--clip-vit-large-patch14/"
+    files:
+      - config.json
+      - pytorch_model.bin
   frame_manifest_json:
     gcs_path: 'gs://df40-frames/manifests/frame_manifest_v3.json'
     local_path: './frame_manifest.json'

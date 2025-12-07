@@ -128,7 +128,12 @@ def choose_metric(config):
     return metric_scoring
 
 
-def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -> bool:
+def download_gcs_asset(
+    bucket: Bucket,
+    gcs_path: str,
+    local_path: str,
+    logger,
+    allowed_files: Optional[List[str]] = None) -> bool:
     """
     Downloads a single blob or a directory of blobs from GCS.
 
@@ -143,6 +148,29 @@ def download_gcs_asset(bucket: Bucket, gcs_path: str, local_path: str, logger) -
     """
     if gcs_path.endswith('/'):  # It's a directory
         prefix = gcs_path.split(bucket.name + '/', 1)[1]
+        os.makedirs(local_path, exist_ok=True)
+
+        if allowed_files:
+            normalized_paths = [p.lstrip('/') for p in allowed_files]
+            for rel_path in normalized_paths:
+                blob_name = f"{prefix}{rel_path}" if prefix else rel_path
+                blob = bucket.blob(blob_name)
+                if not blob.exists():
+                    logger.error(f"File not found at gs://{bucket.name}/{blob_name}")
+                    return False
+
+                destination_file_name = os.path.join(local_path, rel_path)
+                os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
+                try:
+                    blob.download_to_filename(destination_file_name)
+                except Exception as e:
+                    logger.error(f"Failed to download {blob.name}: {e}")
+                    return False
+
+            logger.debug(
+                "Downloaded %d specific file(s) from %s", len(normalized_paths), gcs_path)
+            return True
+
         blobs = bucket.list_blobs(prefix=prefix)
         downloaded = False
         for blob in blobs:
@@ -237,7 +265,8 @@ def download_assets_from_gcs(config, logger):
             bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
             bucket = storage_client.bucket(bucket_name)
 
-            if not download_gcs_asset(bucket, gcs_path, local_path, logger):
+            allowed_files = asset_info.get('files')
+            if not download_gcs_asset(bucket, gcs_path, local_path, logger, allowed_files=allowed_files):
                 raise RuntimeError(f"Failed to download asset '{key}'.")
 
             local_paths[key] = local_path
