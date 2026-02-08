@@ -111,27 +111,32 @@ class ParticipantNameMatcher:
                 logging.info(f"[ParticipantNameMatcher] Exact normalized match: '{raw_name}' -> '{canonical_name}'")
             return canonical_name
         
-        # Find best match among known participants
-        best_match = None
-        best_distance = float('inf')
-        
-        for known_normalized, known_canonical in self.known_participants.items():
-            distance = self._calculate_similarity(normalized_input, known_normalized)
-            
-            if distance < best_distance:
-                best_distance = distance
-                best_match = known_canonical
-        
-        # Check if best match is within threshold
-        if best_match and best_distance <= self.similarity_threshold:
-            similarity_pct = (1.0 - best_distance) * 100
-            logging.info(f"[ParticipantNameMatcher] ✅ SIMILARITY MATCH FOUND!")
-            logging.info(f"[ParticipantNameMatcher]   Input: '{raw_name}'")
-            logging.info(f"[ParticipantNameMatcher]   Matched to: '{best_match}'")
-            logging.info(f"[ParticipantNameMatcher]   Similarity: {similarity_pct:.1f}% (distance: {best_distance:.3f})")
-            logging.info(f"[ParticipantNameMatcher]   Normalized input: '{normalized_input}'")
-            logging.info(f"[ParticipantNameMatcher]   Normalized match: '{self._get_normalized_for_canonical(best_match)}'")
-            return best_match
+        # [DISABLED] Fuzzy similarity matching — was merging distinct participants with
+        # similar names (e.g. "124 (Guest)" matched to "123 (Guest)" at 88.9%).
+        # All participant names are now expected to be sensible, so fuzzy matching
+        # is no longer needed. Re-enable if OCR-based names return.
+        #
+        # # Find best match among known participants
+        # best_match = None
+        # best_distance = float('inf')
+        # 
+        # for known_normalized, known_canonical in self.known_participants.items():
+        #     distance = self._calculate_similarity(normalized_input, known_normalized)
+        #     
+        #     if distance < best_distance:
+        #         best_distance = distance
+        #         best_match = known_canonical
+        # 
+        # # Check if best match is within threshold
+        # if best_match and best_distance <= self.similarity_threshold:
+        #     similarity_pct = (1.0 - best_distance) * 100
+        #     logging.info(f"[ParticipantNameMatcher] ✅ SIMILARITY MATCH FOUND!")
+        #     logging.info(f"[ParticipantNameMatcher]   Input: '{raw_name}'")
+        #     logging.info(f"[ParticipantNameMatcher]   Matched to: '{best_match}'")
+        #     logging.info(f"[ParticipantNameMatcher]   Similarity: {similarity_pct:.1f}% (distance: {best_distance:.3f})")
+        #     logging.info(f"[ParticipantNameMatcher]   Normalized input: '{normalized_input}'")
+        #     logging.info(f"[ParticipantNameMatcher]   Normalized match: '{self._get_normalized_for_canonical(best_match)}'")
+        #     return best_match
         
         return None
     
