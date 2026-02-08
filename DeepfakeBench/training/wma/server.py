@@ -1461,17 +1461,21 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             participant_id_raw: Raw participant_id from gRPC message
 
         Returns:
-            Clean participant ID safe for use, or 'UNKNOWN' if the ID is nonsensical
+            Clean participant ID safe for use
+            
+        Note: Nonsensical ID detection was disabled — it was overly aggressive and
+        rejected legitimate participant names. Can be re-enabled if needed.
         """
 
         if DEBUG_MODE:
             logging.info(f"[DEBUG] Sanitizing participant ID: '{participant_id_raw}'")
 
-        # Check for nonsensical IDs and aggregate them under 'UNKNOWN'
-        if self._is_nonsensical_id(participant_id_raw):
-            logging.warning(f"⚠️ [AGGREGATING] NONSENSICAL PARTICIPANT ID: '{participant_id_raw}' - "
-                  f"Aggregating under 'UNKNOWN' participant")
-            return "UNKNOWN"
+        # [DISABLED] Nonsensical ID detection commented out — was overly aggressive and
+        # rejected legitimate participant names. Can be re-enabled if needed.
+        # if self._is_nonsensical_id(participant_id_raw):
+        #     logging.warning(f"⚠️ [AGGREGATING] NONSENSICAL PARTICIPANT ID: '{participant_id_raw}' - "
+        #           f"Aggregating under 'UNKNOWN' participant")
+        #     return "UNKNOWN"
 
         try:
             # If it looks like a clean participant ID already, use it
@@ -1543,39 +1547,41 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             import hashlib
             return f"participant_{hashlib.md5(participant_id_raw.encode()).hexdigest()[:8]}"
 
-    def _is_nonsensical_id(self, participant_id_raw: str) -> bool:
-        """
-        Check if a participant ID is nonsensical based on the number of digits and special characters.
-        
-        A participant ID is considered nonsensical if it contains more than two digits or
-        special character (excluding parentheses), which usually indicates corrupted or malformed data.
-        
-        Args:
-            participant_id_raw: Raw participant ID to check
-            
-        Returns:
-            True if the ID appears nonsensical, False otherwise
-        """
-        if not participant_id_raw or len(participant_id_raw.strip()) == 0:
-            return True
-            
-        import re
-        
-        # Count digits
-        digit_count = len(re.findall(r'\d', participant_id_raw))
-        
-        # Count special characters (excluding alphanumeric, underscore, hyphen, dot, space, and parentheses)
-        special_chars = re.findall(r'[^a-zA-Z0-9_\-\.\s\(\)]', participant_id_raw)
-        special_count = len(special_chars)
-        
-        # Nonsensical if more than two digits OR more than one special character
-        is_nonsensical = digit_count > 2 or special_count > 1
-        
-        if DEBUG_MODE and is_nonsensical:
-            logging.info(f"[DEBUG] Nonsensical ID detected: '{participant_id_raw}' - "
-                  f"Digits: {digit_count}, SpecialChars: {special_count} (excluding parentheses)")
-        
-        return is_nonsensical
+    # [DISABLED] _is_nonsensical_id — was overly aggressive (>2 digits OR >1 special char
+    # rejected legitimate names). Commented out; re-enable if needed.
+    # def _is_nonsensical_id(self, participant_id_raw: str) -> bool:
+    #     """
+    #     Check if a participant ID is nonsensical based on the number of digits and special characters.
+    #     
+    #     A participant ID is considered nonsensical if it contains more than two digits or
+    #     special character (excluding parentheses), which usually indicates corrupted or malformed data.
+    #     
+    #     Args:
+    #         participant_id_raw: Raw participant ID to check
+    #         
+    #     Returns:
+    #         True if the ID appears nonsensical, False otherwise
+    #     """
+    #     if not participant_id_raw or len(participant_id_raw.strip()) == 0:
+    #         return True
+    #         
+    #     import re
+    #     
+    #     # Count digits
+    #     digit_count = len(re.findall(r'\d', participant_id_raw))
+    #     
+    #     # Count special characters (excluding alphanumeric, underscore, hyphen, dot, space, and parentheses)
+    #     special_chars = re.findall(r'[^a-zA-Z0-9_\-\.\s\(\)]', participant_id_raw)
+    #     special_count = len(special_chars)
+    #     
+    #     # Nonsensical if more than two digits OR more than one special character
+    #     is_nonsensical = digit_count > 2 or special_count > 1
+    #     
+    #     if DEBUG_MODE and is_nonsensical:
+    #         logging.info(f"[DEBUG] Nonsensical ID detected: '{participant_id_raw}' - "
+    #               f"Digits: {digit_count}, SpecialChars: {special_count} (excluding parentheses)")
+    #     
+    #     return is_nonsensical
 
     async def StreamData(self, request_iterator: AsyncIterator[pb2.Uplink],
                          context: grpc.aio.ServicerContext) -> AsyncIterator[pb2.Downlink]:
