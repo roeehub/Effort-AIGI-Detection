@@ -4,6 +4,14 @@ package wma.streaming;
 
 option py_generic_services = true;
 
+// Speaker detection event (start/stop speaking)
+message SpeakerEvent {
+    string participant_name = 1;        // Short name from UIA (e.g., "John Smith")
+    bool is_speaking = 2;               // true=started speaking, false=stopped speaking
+    uint64 timestamp_ms = 3;            // Exact detection timestamp (epoch ms)
+    uint32 chunk_sequence = 4;          // Associated audio batch sequence number
+}
+
 // Audio batch containing complete 4-second OGG/Opus file
 message AudioBatch {
     bytes ogg_data = 1;                 // Complete 4-second OGG/Opus file
@@ -18,6 +26,7 @@ message AudioBatch {
     string codec = 11;                  // Codec name ("opus")
     string container = 12;              // Container format ("ogg")
     uint32 frame_count = 13;            // Number of 20ms frames in the OGG file (~200)
+    repeated SpeakerEvent speaker_events = 14;  // Speaker events during this batch
 }
 
 // Single participant crop data from video frame
@@ -31,6 +40,7 @@ message ParticipantCrop {
     float confidence = 7;               // Detection confidence score
     uint64 timestamp_ms = 8;            // Frame timestamp (epoch ms)
     uint64 sequence_number = 9;         // Frame sequence number
+    bool has_video = 10;                // True if camera is ON (from UIA), false if camera OFF
 }
 
 // Collection of participant frames for batched sending (2s worth)
@@ -91,6 +101,7 @@ message Downlink {
     uint64 sequence_number = 4;                     // Response sequence number
     bool received = 5;                              // Confirmation of receipt
     string error_message = 6;                       // Error message if any
+    repeated SpeakerEvent speaker_events = 7;       // Real-time speaker events
 }
 
 // Streaming service definition

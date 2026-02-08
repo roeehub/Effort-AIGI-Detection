@@ -510,7 +510,14 @@ class BackendDataWriter:
         timestamp = metadata.get("timestamp_ms", int(time.time() * 1000))
         chunk_id = audio_batch.chunk_id
 
-        filename = f"audio_{timestamp}_{chunk_id}.mp3"
+        # Include dominant speaker in filename if available
+        dominant_speaker = metadata.get('dominant_speaker')
+        if dominant_speaker:
+            safe_speaker = self._sanitize_filename(dominant_speaker)
+            filename = f"audio_{timestamp}_{chunk_id}_{safe_speaker}.mp3"
+        else:
+            filename = f"audio_{timestamp}_{chunk_id}.mp3"
+
         filepath = os.path.join(self.audio_dir, filename)
 
         with open(filepath, 'wb') as f:

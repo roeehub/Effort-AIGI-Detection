@@ -50,6 +50,9 @@ from participant_manager import ParticipantManager, AudioWindowManager
 # Participant name matcher
 from participant_name_matcher import ParticipantNameMatcher
 
+# Speaker tracker for audio-participant attribution
+from wma.utils.speaker_tracker import SpeakerTracker, SpeakerTrackerConfig
+
 # for audio processing (keep for audio endpoint)
 
 
@@ -359,6 +362,21 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         # --- Audio sliding window manager ---
         self.audio_window_manager = AudioWindowManager()
 
+        # --- Speaker tracker for audio-participant attribution ---
+        self.speaker_tracker_config = SpeakerTrackerConfig(
+            enabled=True,
+            threshold_proportion=0.80,
+            include_in_filename=True,
+            include_in_metadata=True
+        )
+        self.speaker_tracker = SpeakerTracker(self.speaker_tracker_config)
+        logging.info(f"[Backend] Speaker tracking: enabled={self.speaker_tracker_config.enabled}, "
+                     f"threshold={self.speaker_tracker_config.threshold_proportion:.0%}")
+
+        # --- Video state tracking for no-face/video-off banners ---
+        self._participant_video_state: Dict[str, str] = {}
+        self._video_state_last_banner_time: Dict[str, float] = {}
+
         # --- ASV API config ---
         self.asv_api_url = os.getenv("ASV_API_URL", "http://34.125.106.206:8000/asv/predict")
         self.asv_api_timeout = int(os.getenv("ASV_API_TIMEOUT", "20"))
@@ -539,6 +557,49 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         """
         await self.audio_queue.add_batch(audio_data, metadata)
 
+    async def _send_video_state_banner(self, participant_id: str, state: str):
+        """
+        Send a 'no-face' or 'video-off' banner for a participant.
+        Throttled to at most once per 5 seconds per participant+state.
+
+        Args:
+            participant_id: Clean participant ID
+            state: 'no-face' or 'video-off'
+        """
+        now = time.time()
+        key = f"{participant_id}:{state}"
+        last_time = self._video_state_last_banner_time.get(key, 0)
+        if now - last_time < 5.0:
+            return
+
+        self._video_state_last_banner_time[key] = now
+        now_ms = int(now * 1000)
+        ttl_ms = 30000  # 30 second TTL
+
+        banner = pb2.ScreenBanner()
+        banner.level = pb2.GREEN
+        banner.ttl_ms = ttl_ms
+        banner.placement = "TopRight"
+        banner.action_id = f"{state}-{participant_id}"
+        banner.scope = "participant"
+        banner.scope_enum = pb2.SCOPE_PARTICIPANT
+        banner.participant_id = participant_id
+        banner.banner_type = state
+        banner.expiry_timestamp_ms = now_ms + ttl_ms
+
+        downlink = pb2.Downlink()
+        downlink.timestamp_ms = now_ms
+        downlink.server_id = self.server_id
+        downlink.sequence_number = self._next_sequence()
+        downlink.received = True
+        downlink.screen_banner.CopyFrom(banner)
+
+        try:
+            await self.response_queue.put(downlink)
+            logging.info(f"[VideoState] Sent {state} banner for {participant_id}")
+        except asyncio.QueueFull:
+            logging.warning(f"[VideoState] Response queue full, dropping {state} banner")
+
     # ──────────────────────────
     # NEW: Fast Consumer Loop
     # ──────────────────────────
@@ -582,17 +643,38 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                 logging.info("[FastConsumer] RESTART signal detected, resetting state")
                                 self.participant_manager.reset_all()
                                 self.name_matcher.reset()
+                                self.speaker_tracker.reset()
                                 continue
                             
-                            # Route each crop to the participant's queue
+                            # Determine participant video state from crops
+                            has_video_flag = True  # Default: assume video on
+                            has_face = False
+                            
                             for crop in participant_frame.crops:
+                                has_video_flag = crop.has_video
                                 img_bytes = getattr(crop, "image_data", b"")
-                                if img_bytes:
-                                    await self._route_frame_to_queue(
-                                        participant_id=participant_id,
-                                        frame_data=img_bytes,
-                                        metadata=metadata
-                                    )
+                                has_bbox = crop.bbox_width > 0 and crop.bbox_height > 0
+                                if img_bytes and has_bbox:
+                                    has_face = True
+                            
+                            if has_face:
+                                # Camera ON + face detected → route to inference queue
+                                for crop in participant_frame.crops:
+                                    img_bytes = getattr(crop, "image_data", b"")
+                                    if img_bytes:
+                                        await self._route_frame_to_queue(
+                                            participant_id=participant_id,
+                                            frame_data=img_bytes,
+                                            metadata=metadata
+                                        )
+                            else:
+                                # No face — determine reason and send state banner
+                                clean_id = self._sanitize_participant_id(participant_id)
+                                if clean_id != "UNKNOWN" and participant_frame.crops:
+                                    if not has_video_flag:
+                                        await self._send_video_state_banner(clean_id, "video-off")
+                                    else:
+                                        await self._send_video_state_banner(clean_id, "no-face")
                         
                         # Save video chunks to disk (if enabled) - offloaded to thread pool for non-blocking I/O
                         if ENABLE_CHUNK_SAVE:
@@ -621,7 +703,53 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                         if hasattr(audio_batch, 'session_id') and audio_batch.session_id == "[RESTART]":
                             logging.info("[FastConsumer] Audio RESTART signal detected")
                             self.audio_window_manager.reset()
+                            self.speaker_tracker.reset()
                             continue
+                        
+                        # --- Process speaker events ---
+                        speaker_events = list(audio_batch.speaker_events) if audio_batch.speaker_events else []
+                        dominant_speaker = None
+                        speaker_proportions = {}
+                        
+                        if speaker_events:
+                            events_for_tracker = []
+                            for event in speaker_events:
+                                events_for_tracker.append({
+                                    'participant_name': event.participant_name,
+                                    'is_speaking': event.is_speaking,
+                                    'timestamp_ms': event.timestamp_ms,
+                                    'chunk_sequence': event.chunk_sequence
+                                })
+                            
+                            self.speaker_tracker.process_speaker_events(events_for_tracker)
+                            
+                            # Forward speaker events to client
+                            fwd_response = pb2.Downlink()
+                            fwd_response.timestamp_ms = int(time.time() * 1000)
+                            fwd_response.server_id = self.server_id
+                            fwd_response.sequence_number = self._next_sequence()
+                            fwd_response.received = True
+                            for event in speaker_events:
+                                fwd_event = fwd_response.speaker_events.add()
+                                fwd_event.CopyFrom(event)
+                            
+                            try:
+                                await self.response_queue.put(fwd_response)
+                                logging.info(f"[FastConsumer] Forwarded {len(speaker_events)} speaker events to client")
+                            except asyncio.QueueFull:
+                                logging.warning("[FastConsumer] Response queue full, dropping speaker events")
+                        
+                        # Calculate dominant speaker for this chunk
+                        if self.speaker_tracker_config.enabled:
+                            dominant_speaker, speaker_proportions = self.speaker_tracker.calculate_dominant_speaker(
+                                chunk_start_ms=audio_batch.start_ts_ms,
+                                chunk_duration_ms=audio_batch.duration_ms
+                            )
+                            if speaker_proportions:
+                                proportions_str = ', '.join([f"{name}: {prop:.1%}" for name, prop in speaker_proportions.items()])
+                                logging.info(f"[FastConsumer] Speaker proportions: {proportions_str}")
+                                if dominant_speaker:
+                                    logging.info(f"[FastConsumer] Dominant speaker: {dominant_speaker}")
                         
                         # Get audio data (prefer WAV for processing)
                         audio_data = None
@@ -639,6 +767,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                 "chunk_id": audio_batch.chunk_id,
                                 "duration_ms": audio_batch.duration_ms,
                                 "audio_format": audio_format,  # Track the actual format
+                                "dominant_speaker": dominant_speaker,
+                                "speaker_proportions": speaker_proportions,
                             }
                             await self._route_audio_to_queue(audio_data, audio_metadata)
                         
@@ -672,7 +802,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                                                 **metadata,
                                                 'converted_format': 'mp3',
                                                 'original_format': original_format,
-                                                'mp3_size': len(mp3_data)
+                                                'mp3_size': len(mp3_data),
+                                                'dominant_speaker': dominant_speaker,
+                                                'speaker_proportions': speaker_proportions,
                                             }
                                             # Write to disk in thread pool (blocking operation)
                                             audio_path = await asyncio.to_thread(
@@ -972,7 +1104,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                     
                     # 4. If verdict changed, create and queue GLOBAL banner
                     if verdict_level is not None:
-                        banner_response = self._create_audio_banner_from_verdict(verdict_level)
+                        dominant_speaker = metadata.get('dominant_speaker')
+                        banner_response = self._create_audio_banner_from_verdict(verdict_level, participant_id=dominant_speaker)
                         
                         # Queue the response for sending to client
                         try:
@@ -1514,6 +1647,9 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             await self._stop_video_workers()
             await self._stop_audio_workers()
             
+            # Reset speaker tracker state
+            self.speaker_tracker.reset()
+            
             # Cancel consumer task if still running
             if consumer_task and not consumer_task.done():
                 consumer_task.cancel()
@@ -1866,12 +2002,13 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             logging.error(f"[ASV API Worker] Error calling API: {e}")
             return None
 
-    def _create_audio_banner_from_verdict(self, verdict_level: int) -> pb2.Downlink:
+    def _create_audio_banner_from_verdict(self, verdict_level: int, participant_id: str = None) -> pb2.Downlink:
         """
         Create a Downlink message with a GLOBAL audio banner.
         
         Args:
             verdict_level: Banner level (GREEN, YELLOW, RED)
+            participant_id: Optional dominant speaker participant ID
             
         Returns:
             pb2.Downlink message with global audio banner
@@ -1889,6 +2026,8 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         banner.scope_enum = pb2.SCOPE_GLOBAL
         banner.banner_type = "audio_ok" if verdict_level == pb2.GREEN else "audio_alert"
         banner.expiry_timestamp_ms = now_ms + ttl_ms
+        if participant_id:
+            banner.participant_id = participant_id
         
         # Wrap into Downlink
         downlink = pb2.Downlink()
@@ -2239,9 +2378,10 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
         for worker in self.video_io_workers + self.audio_io_workers:
             worker.stop()
         
-        # Reset audio window manager
+        # Reset audio window manager and speaker tracker
         self.audio_window_manager.reset()
-        logging.info("[Backend] Audio window manager reset")
+        self.speaker_tracker.reset()
+        logging.info("[Backend] Audio window manager and speaker tracker reset")
 
 
 def parse_args():
