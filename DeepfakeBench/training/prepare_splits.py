@@ -262,7 +262,7 @@ def _balance_df_by_label(
     return balanced_df.sample(frac=1, random_state=seed).reset_index(drop=True)
 
 
-def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
+def prepare_video_splits_v2(data_cfg: dict, use_refactored: bool = False) -> Tuple[List, List, List, Dict]:
     """
     [MODIFIED]
     Prepares video splits. This function now adheres to a new return signature to support
@@ -272,8 +272,33 @@ def prepare_video_splits_v2(data_cfg: dict) -> Tuple[List, List, List, Dict]:
       which implements the full dual-validation logic.
     - Otherwise, it runs the legacy splitting logic and returns its single validation set
       as `val_holdout`, with an empty list for `val_in_dist`, ensuring compatibility.
+    
+    Args:
+        data_cfg: Data configuration dictionary
+        use_refactored: If True, use the new refactored splitters from data/splitting module.
+                        This provides a migration path to the new modular code.
     """
-
+    # ==============================================================================
+    # NEW: Refactored splitter path (opt-in via flag or config)
+    # ==============================================================================
+    use_refactored = use_refactored or data_cfg.get('splitting', {}).get('use_refactored', False)
+    
+    if use_refactored:
+        log.info("Using refactored splitters from data/splitting module")
+        from data.splitting import get_splitter
+        
+        # Determine strategy based on property_balancing flag
+        is_property_balancing = data_cfg.get('property_balancing', {}).get('enabled', False)
+        strategy = 'property_based' if is_property_balancing else 'legacy'
+        
+        splitter = get_splitter(strategy, data_cfg)
+        result = splitter.split()
+        
+        return result.train_data, result.val_in_dist, result.val_holdout, result.stats
+    
+    # ==============================================================================
+    # LEGACY: Original inline implementation (default for backward compatibility)
+    # ==============================================================================
     if data_cfg.get('property_balancing', {}).get('enabled', False):
         # This function is expected to return the 4-tuple: (train_data, val_in_dist, val_holdout, stats)
         # This call assumes that change has been made in prepare_splits_property_based.py
@@ -412,9 +437,28 @@ def prepare_splits_property_based(data_cfg: dict) -> Tuple[List[Dict], List[Vide
     log.info(f"Loading frame properties from: {PROPERTIES_FILE}")
 
     # --- 1. Define method sets from config ---
-    real_methods = set(cfg['dataset_methods']['use_real_sources'])
-    train_fake_methods = set(cfg['dataset_methods']['use_fake_methods_for_training'])
-    val_fake_methods = set(cfg['dataset_methods']['use_fake_methods_for_validation'])
+    # SAFETY: Check for required keys with clear error messages
+    if 'dataset_methods' not in cfg:
+        available_keys = list(cfg.keys())
+        raise KeyError(
+            f"'dataset_methods' key not found in config! "
+            f"Available top-level keys: {available_keys}. "
+            f"Make sure your experiment YAML includes 'dataset_methods' with "
+            f"'use_real_sources', 'use_fake_methods_for_training', and 'use_fake_methods_for_validation'."
+        )
+    
+    dataset_methods = cfg['dataset_methods']
+    required_keys = ['use_real_sources', 'use_fake_methods_for_training', 'use_fake_methods_for_validation']
+    missing_keys = [k for k in required_keys if k not in dataset_methods]
+    if missing_keys:
+        raise KeyError(
+            f"Missing required keys in 'dataset_methods': {missing_keys}. "
+            f"Available keys: {list(dataset_methods.keys())}"
+        )
+    
+    real_methods = set(dataset_methods['use_real_sources'])
+    train_fake_methods = set(dataset_methods['use_fake_methods_for_training'])
+    val_fake_methods = set(dataset_methods['use_fake_methods_for_validation'])
     all_allowed_methods = real_methods | train_fake_methods | val_fake_methods
     stats = {}
 

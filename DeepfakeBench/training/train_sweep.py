@@ -1,5 +1,11 @@
 from venv import logger
 
+# =============================================================================
+# CODE VERSION STAMP - Update this when making changes to verify deployment
+# =============================================================================
+CODE_VERSION = "2026-01-01-UNIFIED-V1"  # Unified training with data source factory
+# =============================================================================
+
 import yaml  # noqa
 from tqdm import tqdm  # noqa
 import torch  # noqa
@@ -20,6 +26,30 @@ from detectors import DETECTOR  # noqa
 from PIL.ImageFilter import RankFilter  # noqa
 from dataset.dataloaders import create_dataloaders, collate_fn  # noqa
 from transformers import get_cosine_schedule_with_warmup  # noqa
+
+# ==============================================================================
+# --- Utility Imports from Refactored Module ---
+# ==============================================================================
+from utils import (
+    # GCS utilities
+    download_gcs_asset,
+    download_assets_from_gcs,
+    # Setup utilities
+    init_seed,
+    choose_optimizer,
+    choose_scheduler,
+    choose_metric,
+    # Config helpers (Phase 5 refactoring)
+    load_base_configs,
+    apply_all_wandb_overrides,
+    generate_run_name,
+    create_curated_config_log,
+)
+
+# ==============================================================================
+# --- Data Source Factory (Unified Training) ---
+# ==============================================================================
+from data.sources import create_data_pipeline, DataPipelineResult
 
 import argparse
 import random
@@ -68,383 +98,166 @@ args, _ = parser.parse_known_args()
 torch.cuda.set_device(args.local_rank)
 
 
-def init_seed(config):
-    if config['manualSeed'] is None:
-        config['manualSeed'] = random.randint(1, 10000)
-    random.seed(config['manualSeed'])
-    if config['cuda']:
-        torch.manual_seed(config['manualSeed'])
-        torch.cuda.manual_seed_all(config['manualSeed'])
-
-
-def choose_optimizer(model, config):
-    opt_name = config['optimizer']['type']
-    if opt_name == 'adam':
-        optimizer = optim.Adam(
-            params=filter(lambda p: p.requires_grad, model.parameters()),
-            lr=config['optimizer'][opt_name]['lr'],
-            eps=config['optimizer'][opt_name]['eps'],  # Added eps
-            weight_decay=config['optimizer'][opt_name]['weight_decay'],
-        )
-        return optimizer
-    else:
-        raise NotImplementedError('Optimizer {} is not implemented'.format(config['optimizer']))
-    return optimizer
-
-
-def choose_scheduler(config, optimizer):
-    scheduler_type = config.get('lr_scheduler')  # Use .get for safety
-    if scheduler_type is None or scheduler_type.lower() == 'none' or scheduler_type.lower() == 'null':
-        return None
-
-    if scheduler_type == 'cosine':
-        # This branch remains for backward compatibility but is epoch-based
-        return optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=config['nEpochs'], eta_min=config['optimizer']['adam']['lr'] / 100
-        )
-    elif scheduler_type == 'cosine_with_warmup':
-        if not config.get('total_training_steps'):
-            raise ValueError("'total_training_steps' must be configured for the 'cosine_with_warmup' scheduler.")
-
-        warmup_steps = config.get('lr_scheduler_warmup_steps', 0)
-        total_steps = config['total_training_steps']
-
-        print(
-            f"INFO: Using cosine_with_warmup scheduler with {warmup_steps} warmup steps and {total_steps} total steps.")
-
-        return get_cosine_schedule_with_warmup(
-            optimizer,
-            num_warmup_steps=warmup_steps,
-            num_training_steps=total_steps
-        )
-
-    raise NotImplementedError(f"Scheduler '{scheduler_type}' is not implemented")
-
-
-def choose_metric(config):
-    metric_scoring = config['metric_scoring']
-    if metric_scoring not in ['eer', 'auc', 'acc', 'ap']:
-        raise NotImplementedError('metric {} is not implemented'.format(metric_scoring))
-    return metric_scoring
-
-
-def download_gcs_asset(
-    bucket: Bucket,
-    gcs_path: str,
-    local_path: str,
-    logger,
-    allowed_files: Optional[List[str]] = None) -> bool:
-    """
-    Downloads a single blob or a directory of blobs from GCS.
-
-    Args:
-        bucket (storage.Bucket): The GCS bucket object.
-        gcs_path (str): The path to the object or directory in GCS.
-        local_path (str): The local path to download to.
-        logger: The logger instance.
-
-    Returns:
-        bool: True if successful, False otherwise.
-    """
-    if gcs_path.endswith('/'):  # It's a directory
-        prefix = gcs_path.split(bucket.name + '/', 1)[1]
-        os.makedirs(local_path, exist_ok=True)
-
-        if allowed_files:
-            normalized_paths = [p.lstrip('/') for p in allowed_files]
-            for rel_path in normalized_paths:
-                blob_name = f"{prefix}{rel_path}" if prefix else rel_path
-                blob = bucket.blob(blob_name)
-                if not blob.exists():
-                    logger.error(f"File not found at gs://{bucket.name}/{blob_name}")
-                    return False
-
-                destination_file_name = os.path.join(local_path, rel_path)
-                os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
-                try:
-                    blob.download_to_filename(destination_file_name)
-                except Exception as e:
-                    logger.error(f"Failed to download {blob.name}: {e}")
-                    return False
-
-            logger.debug(
-                "Downloaded %d specific file(s) from %s", len(normalized_paths), gcs_path)
-            return True
-
-        blobs = bucket.list_blobs(prefix=prefix)
-        downloaded = False
-        for blob in blobs:
-            if blob.name.endswith('/'):  # Skip "directory" blobs
-                continue
-            destination_file_name = os.path.join(local_path, os.path.relpath(blob.name, prefix))
-            os.makedirs(os.path.dirname(destination_file_name), exist_ok=True)
-            try:
-                blob.download_to_filename(destination_file_name)
-                downloaded = True
-            except Exception as e:
-                logger.error(f"Failed to download {blob.name}: {e}")
-                return False
-        if not downloaded:
-            logger.error(f"Directory {gcs_path} is empty or does not exist.")
-            return False
-        return True
-    else:  # It's a single file
-        blob_name = gcs_path.split(bucket.name + '/', 1)[1]
-        blob = bucket.blob(blob_name)
-        if not blob.exists():
-            logger.error(f"File not found at {gcs_path}")
-            return False
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        blob.download_to_filename(local_path)
-        return True
-
-
-def download_assets_from_gcs(config, logger):
-    """
-    Downloads specified assets (checkpoints, models) from a GCS bucket.
-
-    This function reads a list of assets from the config, where each asset has
-    a GCS path and a desired local path. It handles both individual files and
-    entire directories.
-
-    Args:
-        config (dict): The main configuration dictionary.
-        logger: The logger instance for logging messages.
-
-    Returns:
-        dict: A dictionary mapping asset keys to their local paths if successful,
-              otherwise None.
-    """
-    assets_to_download = config.get('gcs_assets')
-    if not assets_to_download:
-        logger.info("No GCS assets configured for download. Skipping.")
-        return None
-
-    local_paths = {}
-
-    # First, check if all assets already exist locally
-    all_exist = True
-    for key, asset_info in assets_to_download.items():
-        local_path = asset_info.get('local_path')
-        if not local_path or not os.path.exists(local_path):
-            all_exist = False
-            break
-    if all_exist:
-        logger.info("All GCS assets already exist locally. Skipping downloads.")
-        for key, asset_info in assets_to_download.items():
-            local_paths[key] = asset_info.get('local_path')
-        return local_paths
-
-    logger.info("--- GCS Asset Download ---")
-    try:
-        storage_client = storage.Client()
-        start_time = time.time()
-
-        for key, asset_info in assets_to_download.items():
-            gcs_path = asset_info.get('gcs_path')
-            local_path = asset_info.get('local_path')
-
-            if not gcs_path or not local_path:
-                logger.error(f"Asset '{key}' is missing 'gcs_path' or 'local_path' in config.")
-                return None
-
-            if not gcs_path.startswith('gs://'):
-                logger.error(f"Invalid GCS path for asset '{key}': '{gcs_path}'. Must start with 'gs://'.")
-                return None
-
-            # Check if this specific asset already exists
-            if os.path.exists(local_path):
-                logger.info(f"Asset '{key}' already exists at {local_path}. Skipping.")
-                local_paths[key] = local_path
-                continue
-
-            logger.info(f"Downloading asset '{key}'...")
-            logger.info(f"  Source: {gcs_path}")
-            logger.info(f"  Destination: {local_path}")
-
-            bucket_name = gcs_path.split('gs://', 1)[1].split('/', 1)[0]
-            bucket = storage_client.bucket(bucket_name)
-
-            allowed_files = asset_info.get('files')
-            if not download_gcs_asset(bucket, gcs_path, local_path, logger, allowed_files=allowed_files):
-                raise RuntimeError(f"Failed to download asset '{key}'.")
-
-            local_paths[key] = local_path
-            logger.info(f"✅ SUCCESS: Downloaded '{key}'.")
-
-        elapsed_time = time.time() - start_time
-        logger.info(f"✅ SUCCESS: All GCS assets downloaded in {elapsed_time:.2f}s.")
-        return local_paths
-
-    except exceptions.Forbidden as e:
-        logger.error(
-            "FAILED: GCP Permissions error. Ensure the Vertex AI job's service "
-            "account has 'Storage Object Viewer' role on the relevant buckets.")
-        logger.error(f"  Details: {e}")
-        return None
-    except exceptions.NotFound as e:
-        logger.error("FAILED: GCS bucket or path not found. Check your config.")
-        logger.error(f"  Details: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"FAILED: An unexpected error occurred during download: {e}")
-        return None
+# ==============================================================================
+# --- UTILITY FUNCTIONS MOVED TO utils/ MODULE ---
+# ==============================================================================
+# 
+# The following functions have been refactored to:
+#   - utils/setup.py: init_seed, choose_optimizer, choose_scheduler, choose_metric
+#   - utils/gcs.py: download_gcs_asset, download_assets_from_gcs
+#
+# They are imported at the top of this file from the utils module.
+# ==============================================================================
 
 
 def main():
-    # parse options and load config
-    with open(args.detector_path, 'r') as f:
-        config = yaml.safe_load(f)
-    with open('./config/train_config.yaml', 'r') as f:
-        config.update(yaml.safe_load(f))
-
-    dataloader_config_path = args.dataloader_config
-    with open(dataloader_config_path, 'r') as f:
-        data_config = yaml.safe_load(f)
+    # ===========================================================================
+    # CODE VERSION VERIFICATION - This confirms which code is actually running
+    # ===========================================================================
+    print("=" * 70)
+    print(f"🚀 TRAIN_SWEEP.PY CODE VERSION: {CODE_VERSION}")
+    print(f"📋 args.param_config = {args.param_config}")
+    print(f"📋 All args: {args}")
+    print("=" * 70)
+    
+    # ===========================================================================
+    # --- 1. Load Base Configs ---
+    # ===========================================================================
+    config, data_config = load_base_configs(
+        detector_path=args.detector_path,
+        dataloader_config_path=args.dataloader_config,
+    )
 
     # --- W&B Initialization ---
-    # The agent provides the config for the run
     single_cfg = None
     if args.param_config:
         with open(args.param_config, "r") as f:
             single_cfg = yaml.safe_load(f) or {}
+        # Debug: Log what we loaded from the param config file
+        print(f"[DEBUG] Loaded single_cfg from {args.param_config}")
+        print(f"[DEBUG] single_cfg keys: {list(single_cfg.keys()) if single_cfg else 'None'}")
+        if single_cfg and 'dataset_methods' in single_cfg:
+            print(f"[DEBUG] dataset_methods found in single_cfg: {list(single_cfg['dataset_methods'].keys())}")
+        else:
+            print(f"[DEBUG] WARNING: 'dataset_methods' NOT in single_cfg!")
 
     wandb_run = wandb.init(
         mode="online",
         config=single_cfg  # None -> sweep agent supplies config; dict -> single run
     )
-
-    # --- 1. Optimizer params (Search Space) ---
-    config['load_base_checkpoint'] = wandb.config.load_base_checkpoint
-    config['optimizer']['adam']['lr'] = float(wandb.config.learning_rate)
-    config['optimizer']['adam']['eps'] = float(wandb.config.optimizer_eps)
-    config['optimizer']['adam']['weight_decay'] = float(wandb.config.weight_decay)
-    config['nEpochs'] = int(wandb.config.nEpochs)
-    config['lambda_reg'] = float(wandb.config.lambda_reg)
-    config['rank'] = int(wandb.config.rank)
-    config['lr_scheduler'] = wandb.config.get('lr_scheduler', None)
-    config['total_training_steps'] = int(wandb.config.get('total_training_steps', 35000))
-    config['lr_scheduler_warmup_steps'] = int(wandb.config.get('lr_scheduler_warmup_steps', 1000))
-    config['gradient_clip_val'] = float(wandb.config.get('gradient_clip_val', 0))
-
-    # --- Focal Loss params (from wandb.config) ---
-    config['use_focal_loss'] = wandb.config.get('use_focal_loss', False)
-    config['focal_loss_gamma'] = float(wandb.config.get('focal_loss_gamma', 2.0))
-    # This parameter can legitimately be None, so your original logic for it is already correct and robust.
-    focal_alpha = wandb.config.get('focal_loss_alpha', None)
-    if focal_alpha == 'null' or focal_alpha == 'None':
-        focal_alpha = None
-    config['focal_loss_alpha'] = focal_alpha
-
-    # --- Group DRO params (from wandb.config) ---
-    config['use_group_dro'] = wandb.config.get('use_group_dro', False)
-    if config['use_group_dro']:
-        config['group_dro_params'] = {
-            'beta': float(wandb.config.get('group_dro_beta', 3.0)),
-            'clip_min': float(wandb.config.get('group_dro_clip_min', 1.0)),
-            'clip_max': float(wandb.config.get('group_dro_clip_max', 4.0)),
-            'ema_alpha': float(wandb.config.get('group_dro_ema_alpha', 0.1))
-        }
-
-    # ArcFace margin loss params (from wandb.config)
-    config['use_arcface_head'] = wandb.config.get('use_arcface_head', False)
-    config['train_arcface'] = wandb.config.get('train_arcface', True)
-    if config['use_arcface_head']:
-        config['arcface_s'] = float(wandb.config.get('arcface_s', 30.0))
-        config['arcface_m'] = float(wandb.config.get('arcface_m', 0.35))
-        config['s_start'] = float(wandb.config.get('s_start', config['arcface_s']))
-        config['s_end'] = float(wandb.config.get('s_end', config['arcface_s']))
-        config['anneal_steps'] = int(wandb.config.get('anneal_steps', 0))
-        
-        # Log ArcFace configuration for curriculum learning
-        if config['train_arcface']:
-            print(f"--- ArcFace curriculum learning enabled with parameters: ---")
-            print(f"   - arcface_s: {config['arcface_s']}")
-            print(f"   - arcface_m: {config['arcface_m']}")
-            print(f"   - s_start: {config['s_start']}")
-            print(f"   - s_end: {config['s_end']}")
-            print(f"   - anneal_steps: {config['anneal_steps']}")
-        else:
-            print("--- ArcFace curriculum learning disabled: using checkpoint parameters. ---")
-
-    config['early_stopping'] = {
-        'enabled': wandb.config.get('early_stopping_enabled', False),
-        'patience': wandb.config.get('early_stopping_patience', 3),
-        'min_delta': wandb.config.get('early_stopping_min_delta', 0.0001)
-    }
-    config['metric_scoring'] = 'auc'
-
-    # --- Curriculum / Lesson Gate parameters (from wandb.config) ---
-    # These parameters control the duration and success criteria for a curriculum lesson.
-    config['max_train_steps'] = wandb.config.get('max_train_steps', None)
-    config['evaluate_every_steps'] = wandb.config.get('evaluate_every_steps', None)
-
-    # --- 2. Data and Dataloader params (Search Space) ---
-    data_config['dataloader_params']['strategy'] = wandb.config.dataloader_strategy
-    data_config['dataloader_params']['frames_per_batch'] = wandb.config.frames_per_batch
-    data_config['dataloader_params']['videos_per_batch'] = wandb.config.get('videos_per_batch', 8)
-    data_config['dataloader_params']['frames_per_video'] = wandb.config.get('frames_per_video', 8)
-    data_config['dataloader_params']['real_label_ratio'] = wandb.config.get('real_label_ratio', None)
-    data_config['data_params']['val_split_ratio'] = wandb.config.val_split_ratio
-    data_config['data_params']['evaluation_frequency'] = wandb.config.evaluation_frequency
-    data_config['property_balancing']['enabled'] = wandb.config.property_balancing_enabled
-
-    # --- 3. Data and Dataloader params (Fixed Context) ---
-    data_config['data_params']['seed'] = wandb.config.seed
-    data_config['data_params']['data_subset_percentage'] = wandb.config.data_subset_percentage
-    data_config['dataloader_params']['test_batch_size'] = wandb.config.test_batch_size
-    data_config['dataloader_params']['num_workers'] = wandb.config.num_workers
-    data_config['dataloader_params']['prefetch_factor'] = wandb.config.prefetch_factor
-
-    # Log a curated snapshot of the config for filtering in W&B
-    curated_config_log = {
-        'metric_scoring': config.get('metric_scoring'),
-        'nEpochs': config.get('nEpochs'),
-        'model_name': config.get('model_name'),
-        'data_params': data_config.get('data_params'),
-        'dataloader_params': data_config.get('dataloader_params'),
-        'gcs_base_checkpoint': config.get('gcs_assets', {}).get('base_checkpoint', {}).get('gcs_path', 'N/A'),
-    }
-    wandb.config.update(curated_config_log, allow_val_change=True)
-
-    # Construct and set an informative run name
-    if wandb.config.get("name"):
-        # take wandb.config.name and append timestamp to ensure uniqueness, md-HM
-        timestamp = time.strftime("%m%d-%H%M")
-        run_name = f"{wandb.config.name}_{timestamp}"
-        wandb.run.name = run_name
+    
+    # Debug: Log what wandb.config received
+    print(f"[DEBUG] wandb.config type: {type(wandb.config)}")
+    print(f"[DEBUG] wandb.config keys (first 30): {list(wandb.config.keys())[:30]}")
+    if 'dataset_methods' in wandb.config.keys():
+        print(f"[DEBUG] dataset_methods in wandb.config: {wandb.config['dataset_methods']}")
     else:
-        model_name = config.get('model_name', 'model')
-        strategy = wandb.config.dataloader_strategy
-        if strategy == 'frame_level':
-            batch_info = f"frames{wandb.config.frames_per_batch}"
-        else:  # video_level or per_method
-            batch_info = f"vids{wandb.config.videos_per_batch}x{wandb.config.frames_per_video}f"
-        lr = wandb.config.learning_rate
-        wd = wandb.config.weight_decay
-        eps = wandb.config.optimizer_eps
-        local_rank = wandb.config.rank
-        # num_frames = wandb.config.num_frames_per_video -- This was causing an error, seems it was renamed.
-        subset_pct = wandb.config.data_subset_percentage
-        run_name = (
-            f"{model_name}"
-            f"_{strategy}"
-            f"_{batch_info}"
-            f"_lr{lr:.0e}"
-            f"_wd{wd:.0e}"
-            f"_r{local_rank}"
-        ).replace("+", "")
-        wandb.run.name = run_name
+        print(f"[DEBUG] WARNING: 'dataset_methods' NOT in wandb.config!")
 
-    # Standard setup
-    config['local_rank'] = args.local_rank
-    if args.train_dataset: config['train_dataset'] = args.train_dataset
-    if args.test_dataset: config['test_dataset'] = args.test_dataset
-    config['save_ckpt'] = args.save_ckpt
+    # ===========================================================================
+    # --- 2. Apply All W&B Config Overrides (Refactored) ---
+    # ===========================================================================
+    # This replaces ~150 lines of manual W&B config mapping with a single call.
+    # Individual helper functions are available in utils/config_helpers.py for
+    # granular control if needed.
+    # ===========================================================================
+    
+    # Create logger early so we can pass it to config helpers
     logger_path = os.path.join(wandb_run.dir, 'logs')
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info(f'Save log to {logger_path}')
+    
+    # ===========================================================================
+    # CRITICAL FIX: Apply single_cfg directly to data_config BEFORE wandb overrides
+    # W&B flattens nested dicts, so wandb.config.get('dataset_methods') returns None
+    # even if single_cfg has it. We must apply these directly.
+    # ===========================================================================
+    if single_cfg:
+        print("=" * 70)
+        print("--- Applying single_cfg directly (bypassing W&B flattening) ---")
+        logger.info("--- Applying single_cfg directly (bypassing W&B flattening) ---")
+        
+        # Apply dataset_methods directly
+        if 'dataset_methods' in single_cfg:
+            data_config['dataset_methods'] = single_cfg['dataset_methods']
+            print(f"  ✅ Applied dataset_methods: {list(single_cfg['dataset_methods'].keys())}")
+            logger.info(f"  Applied dataset_methods: {list(single_cfg['dataset_methods'].keys())}")
+        else:
+            print(f"  ⚠️ 'dataset_methods' NOT in single_cfg! Keys: {list(single_cfg.keys())}")
+        
+        # Apply lesson_data_control directly  
+        if 'lesson_data_control' in single_cfg:
+            config['lesson_data_control'] = single_cfg['lesson_data_control']
+            print(f"  ✅ Applied lesson_data_control: enabled={single_cfg['lesson_data_control'].get('enabled')}")
+            logger.info(f"  Applied lesson_data_control: enabled={single_cfg['lesson_data_control'].get('enabled')}")
+        else:
+            print(f"  ⚠️ 'lesson_data_control' NOT in single_cfg! Keys: {list(single_cfg.keys())}")
+        
+        # Apply lesson_gate directly
+        if 'lesson_gate' in single_cfg:
+            config['lesson_gate'] = single_cfg['lesson_gate']
+            print(f"  ✅ Applied lesson_gate: enabled={single_cfg['lesson_gate'].get('enabled')}")
+            logger.info(f"  Applied lesson_gate: enabled={single_cfg['lesson_gate'].get('enabled')}")
+        else:
+            print(f"  ⚠️ 'lesson_gate' NOT in single_cfg! Keys: {list(single_cfg.keys())}")
+        
+        # Apply augmentation config directly (W&B flattens nested dicts)
+        # This is critical for DeepLive which uses config['augmentation'] for landmark occlusion
+        if 'augmentation' in single_cfg:
+            config['augmentation'] = single_cfg['augmentation']
+            data_config['augmentation'] = single_cfg['augmentation']  # Also in data_config for deeplive
+            aug_version = single_cfg['augmentation'].get('version', 'unknown')
+            print(f"  ✅ Applied augmentation: version={aug_version}")
+            logger.info(f"  Applied augmentation: version={aug_version}")
+        else:
+            print(f"  ⚠️ 'augmentation' NOT in single_cfg! Keys: {list(single_cfg.keys())}")
+        
+        # Apply deeplive config directly (for GCS bucket settings, etc.)
+        if 'deeplive' in single_cfg:
+            data_config['deeplive'] = single_cfg['deeplive']
+            print(f"  ✅ Applied deeplive config")
+            logger.info(f"  Applied deeplive config")
+        
+        # Apply backbone config directly
+        if 'backbone' in single_cfg:
+            config['backbone'] = single_cfg['backbone']
+            print(f"  ✅ Applied backbone: {single_cfg['backbone'].get('name', 'unknown')}")
+            logger.info(f"  Applied backbone: {single_cfg['backbone'].get('name', 'unknown')}")
+        
+        print("=" * 70)
+    else:
+        print("⚠️ single_cfg is None/empty - no direct config application!")
+    
+    # Apply all W&B overrides to config and data_config (handles flat keys)
+    apply_all_wandb_overrides(config, data_config, wandb.config, logger)
+    
+    # IMPORTANT: Apply gcs_assets AFTER wandb overrides, because apply_wandb_backbone_params
+    # constructs default GCS paths that we may need to override for OpenCLIP models
+    if single_cfg and 'gcs_assets' in single_cfg:
+        print("--- Applying gcs_assets override (post-wandb) ---")
+        logger.info("--- Applying gcs_assets override (post-wandb) ---")
+        if 'gcs_assets' not in config:
+            config['gcs_assets'] = {}
+        for asset_key, asset_config in single_cfg['gcs_assets'].items():
+            config['gcs_assets'][asset_key] = asset_config
+            print(f"  ✅ Override gcs_assets['{asset_key}']: {asset_config.get('gcs_path', 'no path')}")
+            logger.info(f"  Override gcs_assets['{asset_key}']: {asset_config.get('gcs_path', 'no path')}")
+
+    # Log curated config snapshot for W&B filtering
+    curated_config_log = create_curated_config_log(config, data_config)
+    wandb.config.update(curated_config_log, allow_val_change=True)
+
+    # Generate and set run name
+    wandb.run.name = generate_run_name(config, wandb.config)
+
+    # ===========================================================================
+    # --- 3. Standard Setup ---
+    # ===========================================================================
+    config['local_rank'] = args.local_rank
+    if args.train_dataset: config['train_dataset'] = args.train_dataset
+    if args.test_dataset: config['test_dataset'] = args.test_dataset
+    config['save_ckpt'] = args.save_ckpt
     config['ddp'] = args.ddp
     init_seed(config)
     if config['cudnn']: cudnn.benchmark = True
@@ -452,105 +265,9 @@ def main():
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
         logger.addFilter(RankFilter(0))
 
-    # --- 4. Augmentation params (from wandb.config) ---
-    # Check if augmentation_params are defined in the W&B config (from sweep or YAML)
-    if 'augmentation_params' in wandb.config and wandb.config.augmentation_params:
-        # Convert the W&B Config object to a standard Python dictionary
-        config['augmentation_params'] = dict(wandb.config.augmentation_params)
-        logger.info("Successfully loaded augmentation parameters from the run's configuration.")
-        logger.info(f"Augmentation settings: {config['augmentation_params']}")
-    else:
-        # Fallback to a default configuration if not provided, with a clear warning.
-        # logger.warning("`augmentation_params` not found in the run's configuration. Using a default set.")
-        config['augmentation_params'] = {
-            "use_geometric": True,
-            "use_advanced_noise": False,
-            "use_color_jitter": True,
-            "use_occlusion": True,
-            "sharpness_adjust_prob": 0.6,
-            "occlusion_prob": 0.4,
-        }
-
-    # NEW: Inject the top-level augmentation version into the params dict.
-    # This allows the dataloader to select the correct pipeline.
-    # Defaults to 'surgical' to maintain backward compatibility.
-    aug_version = wandb.config.get('augmentation_version')
-    if aug_version:
-        config['augmentation_params']['version'] = aug_version
-        logger.info(f"SET augmentation version to: {aug_version}")
-    else:
-        # Set a default if not specified in the sweep config
-        config['augmentation_params']['version'] = 'surgical'
-        logger.info("`augmentation_version` not in wandb config, defaulting to 'surgical'.")
-
-    # --- 5. Dataset Method Override (from wandb.config) ---
-    # This logic checks if the user has provided a method override in their
-    # run config (e.g., train_parameters.yaml) and applies it.
-    if 'dataset_methods' in wandb.config and wandb.config.dataset_methods:
-        logger.info("--- Overriding dataset methods from the run's configuration. ---")
-
-        # Ensure the parent dictionary exists before we try to add keys to it.
-        if 'dataset_methods' not in data_config:
-            data_config['dataset_methods'] = {}
-
-        # Create a reference to the override config for cleaner code
-        data_config['dataset_methods'] = dict(wandb.config.dataset_methods)
-        logger.info(f"Successfully overrode dataset methods. New settings: {data_config['dataset_methods']}")
-
-    else:
-        logger.info("--- Using default dataset methods from ./config/dataloader_config.yml ---")
-        # Log the defaults for clarity
-        logger.info(f"Default FAKE TRAINING methods: {data_config['dataset_methods']['use_fake_methods_for_training']}")
-        logger.info(
-            f"Default FAKE VALIDATION methods: {data_config['dataset_methods']['use_fake_methods_for_validation']}")
-
-    # The entire lesson_gate dictionary is pulled directly.
-    # We use .get() with a default empty dict for safety if it's not in the config.
-    lesson_gate_config = wandb.config.get('lesson_gate', {})
-    if lesson_gate_config and lesson_gate_config.get('enabled', False):
-        # Convert the W&B Config object to a standard Python dictionary
-        config['lesson_gate'] = dict(lesson_gate_config)
-        logger.info("✅ Loaded Lesson Gate configuration from wandb.config.")
-        logger.info(f"   - Gate settings: {config['lesson_gate']}")
-    else:
-        # Explicitly disable if not configured to avoid ambiguity
-        config['lesson_gate'] = {'enabled': False}
-
-    # --- 6. Property Balancing Weights (from wandb.config) ---
-    # This section transfers the hierarchical sampling weights from the W&B run config
-    # to the data_config, which is used by the dataloader. This is necessary for the
-    # 'property_balancing' strategy to work correctly.
-    if data_config.get('property_balancing', {}).get('enabled', False):
-        logger.info("--- Transferring property balancing weights from run configuration ---")
-        if 'real_category_weights' in wandb.config:
-            # --- CORRECTED PATH: Place weights in 'dataloader_params' ---
-            data_config['dataloader_params']['real_category_weights'] = dict(wandb.config.real_category_weights)
-            logger.info(
-                f"Loaded real_category_weights: {data_config['dataloader_params']['real_category_weights']}")
-        else:
-            logger.warning("`real_category_weights` not found in run config. Dataloader will likely fail.")
-            data_config['dataloader_params']['real_category_weights'] = {}
-
-        if 'fake_category_weights' in wandb.config:
-            # --- CORRECTED PATH: Place weights in 'dataloader_params' ---
-            data_config['dataloader_params']['fake_category_weights'] = dict(wandb.config.fake_category_weights)
-            logger.info(
-                f"Loaded fake_category_weights: {data_config['dataloader_params']['fake_category_weights']}")
-        else:
-            logger.warning("`fake_category_weights` not found in run config. Dataloader will likely fail.")
-            data_config['dataloader_params']['fake_category_weights'] = {}
-
-    # --- 7. Lesson Data Control (Dynamic Method Grouping) ---
-    # This section allows for dynamic grouping of training methods for curriculum learning.
-    # It overrides the default 'method_category' grouping when enabled.
-    lesson_data_control_config = wandb.config.get('lesson_data_control', {})
-    if lesson_data_control_config and lesson_data_control_config.get('enabled', False):
-        config['lesson_data_control'] = dict(lesson_data_control_config)
-        logger.info("✅ Loaded Lesson Data Control configuration for dynamic method grouping.")
-        logger.info(f"   - Group settings: {config['lesson_data_control']}")
-    else:
-        config['lesson_data_control'] = {'enabled': False}
-
+    # ===========================================================================
+    # --- 4. GCS Assets & Checkpoint Configuration ---
+    # ===========================================================================
     # Conditionally remove the base checkpoint from the download list if not needed
     if not config.get('load_base_checkpoint', False):
         if 'gcs_assets' in config and 'base_checkpoint' in config['gcs_assets']:
@@ -563,7 +280,10 @@ def main():
         logger.info(f"Overrode base checkpoint GCS path to: {config['gcs_assets']['base_checkpoint']['gcs_path']}")
 
     # Download assets from GCS
-    download_assets_from_gcs(config, logger)
+    downloaded_assets = download_assets_from_gcs(config, logger)
+    if downloaded_assets is None and config.get('gcs_assets'):
+        logger.error("Failed to download required GCS assets. Exiting.")
+        raise RuntimeError("GCS asset download failed. Check logs for details.")
 
     # Programmatically set the parquet path for property balancing ---
     # This ensures that the dataloader config uses the same local path defined in the gcs_assets.
@@ -580,150 +300,129 @@ def main():
     # including all overrides from the wandb run.
     config.update(data_config)
 
-    logger.info("------- Configuration & Data Loading -------")
-    # MODIFIED: Unpack the three data splits (train, val_in_dist, val_holdout)
-    train_data, val_in_dist_videos, val_holdout_videos, data_split_stats = prepare_video_splits_v2(data_config)
-
-    ## ++ Transfer method_mapping to config ++ ##
+    # ===========================================================================
+    # --- 5. UNIFIED DATA PIPELINE (Factory Pattern) ---
+    # ===========================================================================
+    # This replaces ~130 lines of manual data loading with a single factory call.
+    # The data source is determined by data_config['data_source']:
+    #   - 'manifest' (default): Traditional GCS manifest-based loading
+    #   - 'deeplive': DeepLive GCS bucket with paired real/fake frames
+    #   - Future: 'hf_dataset' for HuggingFace datasets
+    # ===========================================================================
+    
+    # Set default data source if not specified (backward compatibility)
+    if 'data_source' not in data_config:
+        data_config['data_source'] = 'manifest'
+        logger.info("No 'data_source' specified, defaulting to 'manifest'")
+    
+    # Create the unified data pipeline
+    pipeline_result: DataPipelineResult = create_data_pipeline(config, data_config, logger)
+    
+    # Extract results
+    train_loader = pipeline_result.train_loader
+    val_in_dist_loader = pipeline_result.val_in_dist_loader
+    val_holdout_loader = pipeline_result.val_holdout_loader
+    train_data = pipeline_result.train_samples
+    data_split_stats = pipeline_result.data_stats
+    ood_loader = pipeline_result.ood_loader
+    
+    # Handle Group DRO method mapping if it was set during pipeline creation
     if config.get('use_group_dro', False):
-        if 'method_mapping' in data_split_stats:
-            # The Trainer expects the mapping to be inside 'data_params'
+        if 'data_params' in config and 'method_mapping' in config.get('data_params', {}):
+            logger.info("Group-DRO method_mapping already set by data pipeline.")
+        elif 'method_mapping' in data_split_stats:
+            if 'data_params' not in config:
+                config['data_params'] = {}
             config['data_params']['method_mapping'] = data_split_stats['method_mapping']
-            logger.info("Successfully transferred method_mapping from data prep to main config for Group-DRO.")
-        else:
-            # Fail loudly if DRO is on but the mapping is missing. This prevents cryptic errors later.
-            raise ValueError("Group-DRO is enabled, but 'method_mapping' was not found in data_split_stats. "
-                             "Ensure prepare_splits.py is adding it.")
-
-    # MODIFIED: Pass the two validation sets and receive three dataloaders
-    train_loader, val_in_dist_loader, val_holdout_loader = create_dataloaders(
-        train_data, val_in_dist_videos, val_holdout_videos, config, data_config
-    )
-
-    # === Rebuild TRAIN loader with WeightedRandomSampler (TRAIN ONLY) ============
-    try:
-        if isinstance(train_loader.dataset, pd.DataFrame) and 'sample_weight' in train_loader.dataset.columns:
-            logger.info(f"Weight summary: mean={train_loader.dataset['sample_weight'].mean():.6f} "
-                        f"min={train_loader.dataset['sample_weight'].min():.6f} "
-                        f"max={train_loader.dataset['sample_weight'].max():.6f}")
-    except Exception:
-        pass
-
+            logger.info("Transferred method_mapping from data pipeline to config for Group-DRO.")
+    
+    # Get validation videos for statistics (backward compatibility)
+    val_in_dist_videos = data_split_stats.get('val_in_dist_videos', [])
+    val_holdout_videos = data_split_stats.get('val_holdout_videos', [])
+    all_val_videos = data_split_stats.get('all_val_videos', val_in_dist_videos + val_holdout_videos)
+    
+    # Update stats if not already present
+    if 'val_video_count' not in data_split_stats:
+        data_split_stats['val_video_count'] = len(all_val_videos)
+    if 'val_frame_count' not in data_split_stats and all_val_videos:
+        try:
+            data_split_stats['val_frame_count'] = sum(len(v.frame_paths) for v in all_val_videos)
+        except AttributeError:
+            # DeepLive samples don't have frame_paths attribute
+            data_split_stats['val_frame_count'] = data_split_stats.get('val_samples', 0) * 16
+    
     is_property_balancing = data_config.get('property_balancing', {}).get('enabled', False)
-
-    # IMPORTANT:
-    # - Property balancing already implements its own sampling
-    # - PB loader is an IterableDataset -> samplers are not supported by PyTorch
-    dataset_obj = getattr(train_loader, 'dataset', None)
-    if is_property_balancing:
-        logger.info(
-            "Property balancing enabled -> using its internal sampling. Skipping WeightedRandomSampler rebuild.")
-    elif (dataset_obj is not None) and (not isinstance(dataset_obj, IterableDataset)):
-        # ---- Map-style dataset: Weighted sampler is OK ----
-        if not train_data or 'sample_weight' not in train_data[0]:
-            logger.warning("No 'sample_weight' in train_data; leaving train_loader as-is (unweighted).")
-        else:
-            sample_weights = np.asarray([ex.get('sample_weight', 0.0) for ex in train_data], dtype=np.float64)
-            if sample_weights.sum() == 0:
-                logger.warning("All sample_weight are zero; leaving train_loader as-is (unweighted).")
-            else:
-                frames_per_batch = config['dataloader_params']['frames_per_batch']
-                num_workers = config['dataloader_params'].get('num_workers', 4)
-                prefetch_factor = config['dataloader_params'].get('prefetch_factor', 2)
-
-                if not config.get('ddp', False):
-                    weights_t = torch.as_tensor(sample_weights, dtype=torch.double)
-                    epoch_size = len(sample_weights)
-                    w_sampler = WeightedRandomSampler(weights=weights_t, num_samples=epoch_size, replacement=True)
-
-                    train_loader = DataLoader(
-                        dataset_obj,
-                        batch_size=frames_per_batch,
-                        sampler=w_sampler,
-                        shuffle=False,
-                        num_workers=num_workers,
-                        prefetch_factor=prefetch_factor,
-                        pin_memory=True,
-                    )
-                    logger.info("Rebuilt train_loader with WeightedRandomSampler (single-GPU).")
-                else:
-                    def _make_ddp_weighted_loader():
-                        p = sample_weights / sample_weights.sum()
-                        n = len(sample_weights)
-                        idx = np.random.choice(np.arange(n), size=n, replace=True, p=p).tolist()
-                        subset = Subset(dataset_obj, idx)
-                        dist_sampler = DistributedSampler(subset, shuffle=True, drop_last=False)
-                        return DataLoader(
-                            subset,
-                            batch_size=frames_per_batch,
-                            sampler=dist_sampler,
-                            num_workers=num_workers,
-                            prefetch_factor=prefetch_factor,
-                            pin_memory=True,
-                        )
-
-                    train_loader = _make_ddp_weighted_loader()
-                    config['_ddp_weight_helper'] = {'fn': _make_ddp_weighted_loader}
-                    logger.info("Rebuilt train_loader with DDP-weighted epoch materialization.")
-    else:
-        logger.info("Train dataset is an IterableDataset -> samplers are not supported. Leaving loader as-is.")
-
-    logger.info(
-        f"DEBUG: is property balancing enabled? {data_config.get('property_balancing', {}).get('enabled', False)}")
-
-    # --- Create OOD Loader ---
-    logger.info("------- OOD Data Loading -------")
-    ood_loader = None
-    if data_config.get('gcp', {}).get('ood_bucket_name'):
-        ood_videos = prepare_ood_videos(data_config)
-        if ood_videos:
-            ood_loader = create_ood_loader(ood_videos, config, data_config)
-    else:
-        logger.info("No 'ood_bucket_name' in config, skipping OOD loader creation.")
-
-    # NEW: Combine validation sets for accurate overall statistics
-    all_val_videos = val_in_dist_videos + val_holdout_videos
+    current_data_source = data_config.get('data_source', 'manifest')
+    logger.info(f"Data pipeline created successfully (data_source={current_data_source}, property_balancing={is_property_balancing})")
 
     # --- Create and log the comprehensive run overview ---
-    real_methods = data_config.get('methods', {}).get('use_real_sources', [])
-    # MODIFIED: We now have two sets of validation methods, so we combine them for logging
-    train_fake_methods = data_config.get('methods', {}).get('use_fake_methods_for_training', [])
-    val_fake_methods = data_config.get('methods', {}).get('use_fake_methods_for_validation', [])
-    all_fake_methods_used = sorted(list(set(train_fake_methods + val_fake_methods)))
+    # Handle different data sources - DeepLive uses 'strategies' instead of 'methods'
+    if current_data_source == 'deeplive':
+        # DeepLive: Get strategies from data_stats
+        strategies = data_split_stats.get('strategies', {})
+        real_methods = ['paired_real']  # DeepLive always has paired real frames
+        all_fake_methods_used = sorted(list(strategies.keys()))
+    elif current_data_source == 'df40_paired':
+        # DF40 Paired: Get methods from data_stats
+        methods = data_split_stats.get('methods', {})
+        real_methods = ['paired_real']  # DF40 paired always has paired real frames
+        all_fake_methods_used = sorted(list(methods.keys()))
+    elif current_data_source == 'combined_paired':
+        # Combined Paired: Get methods from data_stats
+        methods = data_split_stats.get('methods', [])
+        real_methods = ['paired_real']  # Combined paired always has paired real frames
+        all_fake_methods_used = sorted(list(methods)) if isinstance(methods, (list, set)) else sorted(list(methods.keys()))
+    else:
+        # Manifest-based: Get methods from config
+        real_methods = data_config.get('methods', {}).get('use_real_sources', [])
+        train_fake_methods = data_config.get('methods', {}).get('use_fake_methods_for_training', [])
+        val_fake_methods = data_config.get('methods', {}).get('use_fake_methods_for_validation', [])
+        all_fake_methods_used = sorted(list(set(train_fake_methods + val_fake_methods)))
+
 
     # --- Validate and gather data for the overview ---
-    # MODIFIED: Update validation counts to use the combined list
-    data_split_stats['val_video_count'] = len(all_val_videos)
-    data_split_stats['val_frame_count'] = sum(len(v.frame_paths) for v in all_val_videos)
+    # Only update counts if not already set by the data source (e.g., DeepLive sets its own)
+    if 'val_video_count' not in data_split_stats or data_split_stats['val_video_count'] is None:
+        data_split_stats['val_video_count'] = len(all_val_videos) if all_val_videos else 0
+    if 'val_frame_count' not in data_split_stats or data_split_stats['val_frame_count'] is None:
+        try:
+            data_split_stats['val_frame_count'] = sum(len(v.frame_paths) for v in all_val_videos) if all_val_videos else 0
+        except (AttributeError, TypeError):
+            # DeepLive samples don't have frame_paths attribute
+            data_split_stats['val_frame_count'] = data_split_stats.get('val_samples', 0) * 16
 
     # --- Validate and gather data for the overview ---
+    # Determine data source for conditional defaults
+    current_data_source = data_config.get('data_source', 'manifest')
+    
     overview_data = {
         "Model": config.get('model_name'),
         # "Base Checkpoint": wandb.config.get('gcs_base_checkpoint'),
         "Run ID": wandb.run.id,
         "Discovered Videos": data_split_stats.get('discovered_videos'),
         "Discovered Methods": data_split_stats.get('discovered_methods'),
-        "Data Subset Percentage": wandb.config.get('data_subset_percentage'),
+        # For DeepLive, use train_split as the "subset" equivalent; for manifest, use data_subset_percentage
+        "Data Subset Percentage": wandb.config.get('data_subset_percentage') or data_split_stats.get('train_split', 1.0),
         "Unbalanced Train Frames": data_split_stats.get('unbalanced_train_count'),
         "Unbalanced Val Videos": data_split_stats.get('unbalanced_val_count'),
         "Final Train Videos": data_split_stats.get('train_video_count'),
         "Final Train Frames": data_split_stats.get('train_frame_count'),
         "Final Val Videos": data_split_stats.get('val_video_count'),
         "Final Val Frames": data_split_stats.get('val_frame_count'),
-        "Dataloader Strategy": wandb.config.get('dataloader_strategy'),
+        "Dataloader Strategy": wandb.config.get('dataloader_strategy') or current_data_source,
 
-        # [FIXED] Add default 'N/A' for optional parameters. This prevents the
+        # [FIXED] Add default values for optional parameters. This prevents the
         # script from crashing when a strategy that doesn't use these
-        # parameters (e.g., 'property_balancing') is selected.
+        # parameters (e.g., 'property_balancing', 'deeplive') is selected.
         "Frames per Video": wandb.config.get('frames_per_video', 8),
         "Videos per Batch": wandb.config.get('videos_per_batch', 8),
 
-        "Frames per Batch": wandb.config.get('frames_per_batch'),
-        "Learning Rate": wandb.config.get('learning_rate'),
-        "Weight Decay": wandb.config.get('weight_decay'),
-        "Epsilon": wandb.config.get('optimizer_eps'),
+        "Frames per Batch": wandb.config.get('frames_per_batch') or config.get('frames_per_batch', 32),
+        "Learning Rate": wandb.config.get('learning_rate') or config.get('learning_rate', 1e-4),
+        "Weight Decay": wandb.config.get('weight_decay') or config.get('weight_decay', 0.05),
+        "Epsilon": wandb.config.get('optimizer_eps') or config.get('optimizer_eps', 1e-8),
         "Total Epochs": config.get('nEpochs'),
-        "Eval Frequency": wandb.config.get('evaluation_frequency'),
+        "Eval Frequency": wandb.config.get('evaluation_frequency') or config.get('evaluation_frequency', 1),
     }
 
     # Check for any None values that would cause formatting errors
@@ -765,33 +464,101 @@ def main():
     real_source_names = data_config.get('dataset_methods', {}).get('use_real_sources', [])
     is_property_balancing = data_config.get('property_balancing', {}).get('enabled', False)
 
-    # conditionally handle list of dicts vs. list of objects
-    # Calculate per-method counts for the balanced training set
-    if is_property_balancing:
-        # train_data is a list of frame dictionaries; count frames per method
-        train_counts = Counter(frame['method'] for frame in train_data)  # Use train_data
+    # Handle different data sources for train_data structure
+    if current_data_source == 'deeplive':
+        # DeepLive: Each sample contains BOTH real and fake frames (it's a pair)
+        # So num_real = num_fake = num_samples
+        num_samples = len(train_data)
+        train_counts = Counter(getattr(s, 'strategy', 'unknown') for s in train_data)
+        # For DeepLive, we report paired counts
+        train_real_count = num_samples  # Each sample has real frames
+        train_fake_count = num_samples  # Each sample has fake frames
+        real_source_names = []  # Not used for DeepLive counting
+    elif current_data_source == 'df40_paired':
+        # DF40 Paired: Each sample is a DF40PairedSample object with .method attribute
+        # Similar to DeepLive - each sample contains BOTH real and fake frames
+        num_samples = len(train_data)
+        train_counts = Counter(getattr(s, 'method', 'unknown') for s in train_data)
+        # For DF40 paired, we report paired counts
+        train_real_count = num_samples  # Each sample has real frames
+        train_fake_count = num_samples  # Each sample has fake frames
+        real_source_names = []  # Not used for DF40 paired counting
+    elif current_data_source == 'combined_paired':
+        # Combined Paired: Each sample is a UnifiedPairedSample object with .method attribute
+        # Similar to DeepLive/DF40 - each sample contains BOTH real and fake frames
+        num_samples = len(train_data)
+        train_counts = Counter(getattr(s, 'method', 'unknown') for s in train_data)
+        # For combined paired, we report paired counts
+        train_real_count = num_samples  # Each sample has real frames
+        train_fake_count = num_samples  # Each sample has fake frames
+        real_source_names = []  # Not used for combined paired counting
+    elif is_property_balancing:
+        # Property-balancing: train_data is a list of frame dictionaries; count frames per method
+        train_counts = Counter(frame['method'] for frame in train_data)
+        # Calculate per-method counts for the balanced training set
+        train_real_count = sum(count for method, count in train_counts.items() if method in real_source_names)
+        train_fake_count = sum(count for method, count in train_counts.items() if method not in real_source_names)
     else:
-        # train_data is a list of VideoInfo objects; count videos per method
-        train_counts = Counter(v.method for v in train_data)  # Use train_data
-
-    # Calculate per-method counts for the balanced training set
-    train_real_count = sum(count for method, count in train_counts.items() if method in real_source_names)
-    train_fake_count = sum(count for method, count in train_counts.items() if method not in real_source_names)
+        # Manifest-based: train_data is a list of VideoInfo objects; count videos per method
+        train_counts = Counter(v.method for v in train_data)
+        # Calculate per-method counts for the balanced training set
+        train_real_count = sum(count for method, count in train_counts.items() if method in real_source_names)
+        train_fake_count = sum(count for method, count in train_counts.items() if method not in real_source_names)
 
     # Create a W&B Table for detailed counts
     data_table = wandb.Table(columns=["Set", "Type", "Method", "Count"])
-    for method, count in train_counts.items():
-        data_type = "real" if method in real_source_names else "fake"
-        data_table.add_data("train", data_type, method, count)
+    
+    if current_data_source == 'deeplive':
+        # DeepLive: Each sample is a PAIR (real + fake), so log both types per strategy
+        for method, count in train_counts.items():
+            data_table.add_data("train", "real", method, count)
+            data_table.add_data("train", "fake", method, count)
+    elif current_data_source == 'df40_paired':
+        # DF40 Paired: Each sample is a PAIR (real + fake), log by method
+        for method, count in train_counts.items():
+            data_table.add_data("train", "real", method, count)
+            data_table.add_data("train", "fake", method, count)
+    elif current_data_source == 'combined_paired':
+        # Combined Paired: Each sample is a PAIR (real + fake), log by method
+        for method, count in train_counts.items():
+            data_table.add_data("train", "real", method, count)
+            data_table.add_data("train", "fake", method, count)
+    else:
+        for method, count in train_counts.items():
+            data_type = "real" if method in real_source_names else "fake"
+            data_table.add_data("train", data_type, method, count)
 
     # Also get validation counts and add them to the table
-    # MODIFIED: Use the combined 'all_val_videos' list for validation counts
-    val_counts = Counter(v.method for v in all_val_videos)
-    val_real_count = sum(count for method, count in val_counts.items() if method in real_source_names)
-    val_fake_count = sum(count for method, count in val_counts.items() if method not in real_source_names)
-    for method, count in val_counts.items():
-        data_type = "real" if method in real_source_names else "fake"
-        data_table.add_data("val", data_type, method, count)
+    # Handle different data sources for all_val_videos structure
+    if current_data_source == 'deeplive':
+        # DeepLive: Each validation sample also contains both real and fake
+        val_sample_count = data_split_stats.get('val_samples', 0) + data_split_stats.get('test_samples', 0)
+        val_real_count = val_sample_count  # Each sample has real frames
+        val_fake_count = val_sample_count  # Each sample has fake frames
+        val_counts = Counter()  # Strategy counts not needed for simple logging
+    elif current_data_source == 'df40_paired':
+        # DF40 Paired: Each validation sample also contains both real and fake
+        val_sample_count = data_split_stats.get('val_samples', 0) + data_split_stats.get('test_samples', 0)
+        val_real_count = val_sample_count  # Each sample has real frames
+        val_fake_count = val_sample_count  # Each sample has fake frames
+        val_counts = Counter()  # Method counts not needed for simple logging
+    elif current_data_source == 'combined_paired':
+        # Combined Paired: Each validation sample also contains both real and fake
+        val_sample_count = data_split_stats.get('val_samples', 0) + data_split_stats.get('test_samples', 0)
+        val_real_count = val_sample_count  # Each sample has real frames
+        val_fake_count = val_sample_count  # Each sample has fake frames
+        val_counts = Counter()  # Method counts not needed for simple logging
+    elif all_val_videos:
+        val_counts = Counter(v.method for v in all_val_videos)
+        val_real_count = sum(count for method, count in val_counts.items() if method in real_source_names)
+        val_fake_count = sum(count for method, count in val_counts.items() if method not in real_source_names)
+        for method, count in val_counts.items():
+            data_type = "real" if method in real_source_names else "fake"
+            data_table.add_data("val", data_type, method, count)
+    else:
+        val_counts = Counter()
+        val_real_count = 0
+        val_fake_count = 0
 
     # Log the table and scalar metrics
     wandb.log({
@@ -866,6 +633,64 @@ def main():
             "--- Configuration 'load_base_checkpoint' is False. "
             "Skipping checkpoint load. The model will start from the base CLIP weights. ---"
         )
+
+    # ===========================================================================
+    # --- TRAINING SUMMARY: Key metrics for visibility ---
+    # ===========================================================================
+    logger.info("=" * 70)
+    logger.info("📊 TRAINING CONFIGURATION SUMMARY")
+    logger.info("=" * 70)
+    
+    # Data summary
+    logger.info(f"📁 DATA:")
+    logger.info(f"   - Data source: {config.get('data_source', 'standard')}")
+    logger.info(f"   - Train samples: {train_real_count} real, {train_fake_count} fake")
+    logger.info(f"   - Val samples: {val_real_count} real, {val_fake_count} fake")
+    
+    # Training schedule
+    total_steps = config.get('total_training_steps', config.get('nEpochs', 50) * 100)
+    warmup_steps = config.get('lr_scheduler_warmup_steps', 0)
+    logger.info(f"📅 SCHEDULE:")
+    logger.info(f"   - Epochs: {config.get('nEpochs', 'N/A')}")
+    logger.info(f"   - Total steps: {total_steps}")
+    logger.info(f"   - Warmup steps: {warmup_steps}")
+    logger.info(f"   - Evaluate every: {config.get('evaluate_every_steps', 'N/A')} steps")
+    
+    # Model & Head
+    logger.info(f"🧠 MODEL:")
+    logger.info(f"   - Backbone: {config.get('backbone', {}).get('variant', 'N/A')} ({config.get('backbone', {}).get('source', 'N/A')})")
+    logger.info(f"   - Hidden size: {config.get('backbone', {}).get('hidden_size', 'auto')}")
+    logger.info(f"   - SVD rank: {config.get('rank', 'N/A')}")
+    
+    # ArcFace
+    if config.get('use_arcface_head', False):
+        logger.info(f"🎯 ARCFACE:")
+        logger.info(f"   - s_start: {config.get('s_start', config.get('arcface_s', 30))}")
+        logger.info(f"   - s_end: {config.get('s_end', config.get('arcface_s', 30))}")
+        logger.info(f"   - anneal_steps: {config.get('anneal_steps', 0)}")
+        logger.info(f"   - margin (m): {config.get('arcface_m', 0.35)}")
+    
+    # Augmentation
+    aug_config = config.get('augmentation', {})
+    logger.info(f"🎨 AUGMENTATION:")
+    logger.info(f"   - Version: {aug_config.get('version', 'none')}")
+    logger.info(f"   - Occlusion prob: {aug_config.get('occlusion_prob', 'N/A')}")
+    
+    # Optimizer
+    logger.info(f"⚙️ OPTIMIZER:")
+    logger.info(f"   - LR: {config.get('optimizer', {}).get('adam', {}).get('lr', config.get('learning_rate', 'N/A'))}")
+    logger.info(f"   - Weight decay: {config.get('optimizer', {}).get('adam', {}).get('weight_decay', config.get('weight_decay', 'N/A'))}")
+    logger.info(f"   - Scheduler: {config.get('lr_scheduler', 'none')}")
+    
+    # Early stopping
+    logger.info(f"🛑 EARLY STOPPING:")
+    logger.info(f"   - Enabled: {config.get('early_stopping_enabled', False)}")
+    logger.info(f"   - Patience: {config.get('early_stopping_patience', 'N/A')}")
+    logger.info(f"   - Min delta: {config.get('early_stopping_min_delta', 'N/A')}")
+    
+    logger.info("=" * 70)
+    logger.info("🚀 Starting training...")
+    logger.info("=" * 70)
 
     # start training
     for epoch in range(config['start_epoch'], config['nEpochs']):

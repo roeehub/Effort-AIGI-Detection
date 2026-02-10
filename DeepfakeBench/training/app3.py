@@ -411,18 +411,19 @@ def startup_event() -> None:
     if not download_assets_from_gcs(config, logger):
         raise RuntimeError("Failed to prepare one or more model assets from GCS.")
 
-    # 6) Load Base Model
+    # 6) Load Base Model (optional – skip if weights are missing)
     logger.info("--- Loading Base Model ---")
     if not base_weights_path.exists():
-        raise RuntimeError(f"Base model weights file not found: {base_weights_path}")
-    try:
-        # The base model always uses the default config
-        app.state.models['base'] = load_detector(config, str(base_weights_path))
-        app.state.loaded_weights_paths['base'] = str(base_weights_path)
-        logger.info(f"✅ SUCCESS: Base detector model loaded from: {base_weights_path}")
-    except Exception as e:
-        logger.exception("Failed to load BASE detector model")
-        raise e
+        logger.warning(f"⚠️  Base model weights not found at {base_weights_path}. Skipping base model.")
+    else:
+        try:
+            # The base model always uses the default config
+            app.state.models['base'] = load_detector(config, str(base_weights_path))
+            app.state.loaded_weights_paths['base'] = str(base_weights_path)
+            logger.info(f"✅ SUCCESS: Base detector model loaded from: {base_weights_path}")
+        except Exception as e:
+            logger.exception("Failed to load BASE detector model")
+            raise e
 
     # 7) Load Custom Model (if configured)
     if custom_checkpoint_gcs_path and custom_weights_path:
@@ -470,18 +471,27 @@ def startup_event() -> None:
 # --- Utility function to get model for endpoints ---
 def get_model_for_request(request: Request, model_type: str) -> nn.Module:
     """Gets the requested model from app state and handles errors."""
+    available = request.app.state.models
+
     if model_type not in ["base", "custom"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid 'model_type'. Choose 'base' or 'custom'."
         )
-    if model_type == "custom" and "custom" not in request.app.state.models:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Custom model is not available. It must be configured via CHECKPOINT_GCS_PATH at startup."
-        )
 
-    model = request.app.state.models.get(model_type)
+    # Auto-fallback: if requested model isn't loaded, try the other one
+    if model_type not in available:
+        fallback = "custom" if model_type == "base" else "base"
+        if fallback in available:
+            logger.warning(f"'{model_type}' model not loaded. Falling back to '{fallback}'.")
+            model_type = fallback
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"No models are available. Requested '{model_type}' is not loaded."
+            )
+
+    model = available[model_type]
     weights_path = request.app.state.loaded_weights_paths.get(model_type)
     logger.info(f"Using '{model_type}' model for inference: {weights_path}")
     return model

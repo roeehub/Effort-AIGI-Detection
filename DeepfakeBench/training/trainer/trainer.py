@@ -16,6 +16,7 @@ from collections import OrderedDict
 import numpy as np  # noqa
 from tqdm import tqdm  # noqa
 import torch  # noqa
+import torch.nn.functional as F  # noqa - Added Jan 10, 2026 for ArcFace diagnostics
 from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
 from metrics.utils import get_test_metrics  # noqa
 from torch.cuda.amp import autocast, GradScaler  # noqa
@@ -32,12 +33,43 @@ import shutil
 from datetime import datetime
 from sklearn.metrics import confusion_matrix
 
+# Import trainer mixins for modular functionality
+from trainer.mixins import (
+    CheckpointingMixin,
+    EarlyStoppingMixin,
+    GroupDROMixin,
+    CurriculumMixin,
+    ArcFaceMixin,
+    ValidationMixin,
+    ReportingMixin,
+)
+
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Trainer Is Using device: {device}")
 
 
-class Trainer(object):
+class Trainer(
+    CheckpointingMixin,
+    EarlyStoppingMixin,
+    GroupDROMixin,
+    CurriculumMixin,
+    ArcFaceMixin,
+    ValidationMixin,
+    ReportingMixin,
+):
+    """
+    Main trainer class for DeepfakeBench training.
+    
+    Composes functionality from multiple mixins:
+    - CheckpointingMixin: Model saving, top-N checkpoints, GCS upload
+    - EarlyStoppingMixin: Patience-based early stopping
+    - GroupDROMixin: Distributionally Robust Optimization
+    - CurriculumMixin: Lesson gates and curriculum learning
+    - ArcFaceMixin: ArcFace head parameter annealing
+    - ValidationMixin: Validation state management
+    - ReportingMixin: Report generation and GCS upload
+    """
     def __init__(
             self,
             config,
@@ -67,34 +99,12 @@ class Trainer(object):
         self.ood_loader = ood_loader  # Optional OOD loader
         self.unified_val_loader = None  # To cache the efficient loader
 
-        # --- Comprehensive checkpoint tracking ---
-        # List of dicts: [{'metric': float, 'epoch': int, 'gcs_path': str, ...}, ...]
-        self.top_n_checkpoints = []
-        # self.top_n_size = self.config.get('checkpointing', {}).get('top_n_size', 3)
-        self.top_n_size = 6  # Save top 6 by default
-        self.first_best_gcs_path = None
-        self.top_n_saved_count = 0
-
-        self.best_val_metric = -1.0
-        self.best_val_epoch = -1
-
-        self.early_stopping_config = self.config.get('early_stopping', {})
-        self.early_stopping_enabled = self.early_stopping_config.get('enabled', False)
-
-        # This prevents an AttributeError when early stopping is disabled but the primary
-        self.early_stopping_patience = self.early_stopping_config.get('patience', 3)
-        self.early_stopping_min_delta = self.early_stopping_config.get('min_delta', 0.0001)
-        self.epochs_without_improvement = 0
-
-        if self.early_stopping_enabled:
-            self.logger.info(
-                f"✅ Early stopping enabled: patience={self.early_stopping_patience}, min_delta={self.early_stopping_min_delta}")
-        else:
-            # Optional: Log that it's disabled for clarity, but the attributes are still safely initialized.
-            self.logger.info(
-                "Early stopping is disabled. Checkpointing will still occur based on primary metric improvement.")
-
-        self.early_stop_triggered = False  # Flag to signal the main loop
+        # --- Initialize mixins ---
+        # Checkpointing: manages model checkpoints and GCS uploads
+        self.init_checkpointing()
+        
+        # Early stopping: patience-based training termination
+        self.init_early_stopping()
 
         # --- Step-based training control ---
         self.max_train_steps = self.config.get('max_train_steps', None)
@@ -117,84 +127,19 @@ class Trainer(object):
         self.real_method_iters = {}
         self.fake_method_iters = {}
 
+        # Group-DRO: distributionally robust optimization
         self.use_group_dro = use_group_dro
         if self.use_group_dro:
-            self._init_group_dro(config)
+            self.init_group_dro()
 
-        # --- Lesson Gate for curriculum learning ---
-        self.gate_config = self.config.get('lesson_gate', {})
-        self.gate_enabled = self.gate_config.get('enabled', False)
-        if self.gate_enabled:
-            self.gate_checks = self.gate_config.get('checks', [])
-            self.gate_plateau_config = self.gate_config.get('plateau_check', {})
-            self.gate_guardrail_config = self.gate_config.get('guardrail_check', {})
+        # Curriculum learning: lesson gate functionality
+        self.init_curriculum()
+        
+        # ArcFace: parameter annealing (if using ArcFace head)
+        self.init_arcface()
 
-            # State tracking
-            self.gate_primary_metric_history = []
-            self.gate_guardrail_start_value = None
-
-            self.logger.info("✅ Lesson Gate enabled with the following configuration:")
-            self.logger.info(f"   - Checks: {len(self.gate_checks)} conditions")
-            self.logger.info(f"   - Plateau Check: {self.gate_plateau_config}")
-            self.logger.info(f"   - Guardrail Check: {self.gate_guardrail_config}")
-
-    def _init_group_dro(self, config):
-        """Initializes parameters and state for Group-DRO loss."""
-        self.logger.info("Initializing Group-DRO loss strategy.")
-        dro_params = config.get('group_dro_params', {})
-        self.group_dro_beta = dro_params.get('beta', 3.0)
-        self.group_dro_clip_min = dro_params.get('clip_min', 1.0)
-        self.group_dro_clip_max = dro_params.get('clip_max', 4.0)
-        ema_alpha = dro_params.get('ema_alpha', 0.1)
-
-        # PREREQUISITE: Your config must contain the method_mapping generated in Step 1.
-        method_mapping = config.get('data_params', {}).get('method_mapping')
-        if not method_mapping:
-            raise ValueError("Group-DRO requires 'data_params.method_mapping' in the config.")
-        self.num_methods = len(method_mapping)
-
-        self.group_losses_ema = torch.zeros(self.num_methods, device=self.model.device)
-        self.ema_alpha = ema_alpha
-
-    def _calculate_group_dro_loss(self, data_dict, per_sample_loss):
-        """Computes the Group-DRO loss for a given batch."""
-        # The dataloader now provides the 'method_id' tensor.
-        method_ids = data_dict['method_id']
-        device = per_sample_loss.device
-
-        # Step 1: Compute per-group average loss for the current batch
-        batch_group_losses = torch.zeros(self.num_methods, device=device)
-        batch_group_counts = torch.zeros(self.num_methods, device=device)
-
-        # This scatter_add operation is efficient for calculating group means
-        batch_group_counts.index_add_(0, method_ids, torch.ones_like(per_sample_loss))
-        batch_group_losses.index_add_(0, method_ids, per_sample_loss.detach())
-
-        valid_groups_mask = batch_group_counts > 0
-        batch_group_losses[valid_groups_mask] /= batch_group_counts[valid_groups_mask]
-
-        # Step 2: Update the EMA of group losses
-        current_ema = self.group_losses_ema[valid_groups_mask]
-        current_batch_loss = batch_group_losses[valid_groups_mask]
-        updated_ema = (1 - self.ema_alpha) * current_ema + self.ema_alpha * current_batch_loss
-        self.group_losses_ema[valid_groups_mask] = updated_ema
-
-        # Step 3: Compute group weights `w_g` based on the EMA
-        # Use only the EMA of groups present in the current batch for the average to be stable
-        valid_ema_losses = self.group_losses_ema[self.group_losses_ema > 0]
-        avg_ema_loss = valid_ema_losses.mean() if len(valid_ema_losses) > 0 else 0
-
-        relative_losses = self.group_losses_ema - avg_ema_loss
-
-        weights = torch.exp(self.group_dro_beta * relative_losses)
-        weights = weights * (self.num_methods / torch.sum(weights))  # Normalize
-        clipped_weights = torch.clip(weights, self.group_dro_clip_min, self.group_dro_clip_max)
-
-        # Step 4: Calculate the final weighted loss for the batch
-        sample_weights = clipped_weights[method_ids].detach()
-        weighted_loss = (per_sample_loss * sample_weights).mean()
-
-        return {'overall': weighted_loss, 'group_weights': clipped_weights}
+    # --- Group-DRO methods are now provided by GroupDROMixin ---
+    # The mixin provides: init_group_dro(), calculate_group_dro_loss(), get_group_dro_stats()
 
     def _update_arcface_s(self, step_cnt):
         """Anneals the 's' parameter of the ArcFace head if configured."""
@@ -233,6 +178,204 @@ class Trainer(object):
         if self.wandb_run and step_cnt <= anneal_steps and (
                 step_cnt % log_progress_steps == 0 or step_cnt == anneal_steps):
             self.wandb_run.log({'train/arcface_s': model_instance.head.s, 'train/step': step_cnt})
+
+    def _update_lambda_reg(self, step_cnt):
+        """Anneals lambda_reg (orthogonal constraint) if configured."""
+        model_instance = self.model.module if isinstance(self.model, DDP) else self.model
+        
+        # Check if the model supports lambda_reg annealing
+        if not hasattr(model_instance, 'update_lambda_reg'):
+            return
+        if not hasattr(model_instance, 'lambda_reg_anneal_steps') or model_instance.lambda_reg_anneal_steps <= 0:
+            return
+        
+        # Update lambda_reg via model method
+        current_lambda = model_instance.update_lambda_reg(step_cnt)
+        
+        # Log the change periodically during the annealing phase
+        log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
+        anneal_steps = model_instance.lambda_reg_anneal_steps
+        if self.wandb_run and step_cnt <= anneal_steps and (
+                step_cnt % log_progress_steps == 0 or step_cnt == anneal_steps):
+            self.wandb_run.log({'train/lambda_reg': current_lambda, 'train/step': step_cnt})
+
+    def _check_collapse_warning(self, predictions, data_dict, step_cnt):
+        """
+        Early warning system for model collapse.
+        
+        Added: Jan 10, 2026 - Critical diagnostic for ArcFace + SVD training
+        
+        Detects when model is outputting near-constant predictions, which indicates
+        collapse into a degenerate solution (predicting all real or all fake).
+        
+        Returns:
+            dict: Warning indicators and detailed collapse metrics
+        """
+        collapse_metrics = {}
+        
+        if 'raw_logits' not in predictions:
+            return collapse_metrics
+            
+        raw_logits = predictions['raw_logits'].detach()
+        probs = predictions['prob'].detach()
+        labels = data_dict['label']
+        
+        # Handle expanded labels for video batches
+        if raw_logits.shape[0] > labels.shape[0]:
+            B = labels.shape[0]
+            T = raw_logits.shape[0] // B
+            labels = labels.repeat_interleave(T)
+        
+        # 1. Logit separation between classes
+        logit_diff = raw_logits[:, 1] - raw_logits[:, 0]  # fake - real
+        logit_std = logit_diff.std().item()
+        logit_range = (logit_diff.max() - logit_diff.min()).item()
+        
+        # 2. Per-class logit statistics
+        real_mask = (labels == 0)
+        fake_mask = (labels == 1)
+        
+        if real_mask.any() and fake_mask.any():
+            real_logit_mean = logit_diff[real_mask].mean().item()
+            fake_logit_mean = logit_diff[fake_mask].mean().item()
+            class_separation = fake_logit_mean - real_logit_mean  # Should be positive
+            
+            collapse_metrics['train/collapse/real_logit_diff_mean'] = real_logit_mean
+            collapse_metrics['train/collapse/fake_logit_diff_mean'] = fake_logit_mean
+            collapse_metrics['train/collapse/class_separation'] = class_separation
+        
+        # 3. Probability spread (should NOT be near 0)
+        prob_spread = probs.std().item()
+        prob_entropy = -((probs * (probs + 1e-8).log()) + ((1 - probs) * (1 - probs + 1e-8).log())).mean().item()
+        
+        collapse_metrics['train/collapse/logit_std'] = logit_std
+        collapse_metrics['train/collapse/logit_range'] = logit_range
+        collapse_metrics['train/collapse/prob_spread'] = prob_spread
+        collapse_metrics['train/collapse/prob_entropy'] = prob_entropy
+        
+        # 4. Check for constant output (CRITICAL WARNING)
+        is_constant_output = logit_std < 0.01
+        collapse_metrics['train/collapse/is_constant_output'] = float(is_constant_output)
+        
+        if is_constant_output and step_cnt > 100:  # Only warn after warmup
+            self.logger.warning(
+                f"⚠️ COLLAPSE WARNING at step {step_cnt}: "
+                f"Logit std={logit_std:.6f}, range={logit_range:.6f}. "
+                f"Model may be outputting near-constant predictions!"
+            )
+            
+            # Store collapse detection for potential intervention
+            if not hasattr(self, '_collapse_warning_count'):
+                self._collapse_warning_count = 0
+            self._collapse_warning_count += 1
+            collapse_metrics['train/collapse/warning_count'] = self._collapse_warning_count
+        
+        return collapse_metrics
+    
+    def _collect_arcface_diagnostics(self, step_cnt):
+        """
+        Collect ArcFace head diagnostics including gradient flow.
+        
+        Added: Jan 10, 2026 - For debugging ArcFace-induced collapse
+        
+        Returns:
+            dict: ArcFace weight norms, gradient norms, and scale parameter
+        """
+        arcface_metrics = {}
+        model_ref = self.model.module if isinstance(self.model, DDP) else self.model
+        
+        if not hasattr(model_ref, 'head') or not hasattr(model_ref.head, 's'):
+            return arcface_metrics
+        
+        head = model_ref.head
+        
+        # Current scale
+        current_s = head.s.item() if hasattr(head.s, 'item') else float(head.s)
+        arcface_metrics['train/arcface/scale'] = current_s
+        
+        # Weight statistics
+        if hasattr(head, 'weight'):
+            weight = head.weight.detach()
+            arcface_metrics['train/arcface/weight_norm'] = weight.norm().item()
+            
+            # Class center separation (cosine distance between real and fake centers)
+            if weight.shape[0] == 2:  # Binary classification
+                real_center = F.normalize(weight[0:1], dim=1)
+                fake_center = F.normalize(weight[1:2], dim=1)
+                center_cosine = (real_center @ fake_center.T).item()
+                arcface_metrics['train/arcface/center_cosine_sim'] = center_cosine
+                # Ideally should be negative (opposite directions)
+            
+            # Gradient statistics (if available)
+            if head.weight.grad is not None:
+                grad = head.weight.grad
+                arcface_metrics['train/arcface/weight_grad_norm'] = grad.norm().item()
+                arcface_metrics['train/arcface/weight_grad_max'] = grad.abs().max().item()
+        
+        return arcface_metrics
+    
+    def _collect_svd_residual_stats(self):
+        """
+        Collects statistics from SVDResidualLinear layers for diagnostic logging.
+        
+        Added: Jan 4, 2026 (Task D3)
+        Updated: Jan 10, 2026 - Added gradient flow diagnostics
+        
+        This helps diagnose the 'params_with_grad' drop observed in LAION B16 training,
+        by tracking whether S_residual values are approaching zero (dying gradients).
+        
+        Returns:
+            dict: Statistics including min/max/mean of S_residual across all layers,
+                  and count of layers with very small S_residual values.
+        """
+        model_ref = self.model.module if isinstance(self.model, DDP) else self.model
+        
+        s_residual_values = []
+        s_residual_mins = []
+        s_residual_maxs = []
+        layer_count = 0
+        near_zero_count = 0
+        
+        # Threshold for considering S_residual as "near zero"
+        near_zero_threshold = 1e-6
+        
+        for name, module in model_ref.named_modules():
+            # Check for SVDResidualLinear (works for both HuggingFace and OpenCLIP)
+            if hasattr(module, 'S_residual') and module.S_residual is not None:
+                s_vals = module.S_residual.detach()
+                layer_count += 1
+                
+                s_min = s_vals.min().item()
+                s_max = s_vals.max().item()
+                s_mean = s_vals.mean().item()
+                
+                s_residual_mins.append(s_min)
+                s_residual_maxs.append(s_max)
+                s_residual_values.append(s_mean)
+                
+                # Count layers where S_residual is very small (potential dying gradient)
+                if s_vals.abs().max().item() < near_zero_threshold:
+                    near_zero_count += 1
+        
+        if layer_count == 0:
+            return {}
+        
+        stats = {
+            'svd/S_residual_min': min(s_residual_mins),
+            'svd/S_residual_max': max(s_residual_maxs),
+            'svd/S_residual_mean': sum(s_residual_values) / len(s_residual_values),
+            'svd/layer_count': layer_count,
+            'svd/near_zero_layers': near_zero_count,
+        }
+        
+        # Add per-layer detailed stats if requested (expensive, so optional)
+        # This can be enabled via config if needed for deep debugging
+        if self.config.get('log_svd_per_layer', False):
+            for i, (s_min, s_max, s_mean) in enumerate(zip(s_residual_mins, s_residual_maxs, s_residual_values)):
+                stats[f'svd/layer_{i}/S_min'] = s_min
+                stats[f'svd/layer_{i}/S_max'] = s_max
+        
+        return stats
 
     def _check_lesson_gate(self, all_val_metrics: dict):
         """Checks if the curriculum lesson's gate conditions have been met."""
@@ -575,6 +718,21 @@ class Trainer(object):
             'eer': eer,
             'training_step': getattr(self, 'current_step', None),
         }
+
+        gcs_assets = self.config.get('gcs_assets') or {}
+        checkpoint['model_config'].update({
+            'backbone': self.config.get('backbone', {}),
+            'backbone_path': self.config.get('backbone_path'),
+            'backbone_name': self.config.get('backbone_name'),
+            'backbone_config': self.config.get('backbone_config'),
+            'gcs_assets': {
+                'clip_backbone': gcs_assets.get('clip_backbone'),
+            },
+            'mean': self.config.get('mean'),
+            'std': self.config.get('std'),
+            'metadata_version': 2,
+            'metadata_updated_at_utc': time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
         
         # If using ArcFace with annealing, save current s value
         if self.config.get('use_arcface_head', False):
@@ -715,6 +873,64 @@ class Trainer(object):
             total_frames = sum(len(v.frame_paths) for v in train_videos)
             epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
             accumulation_steps = 1  # No accumulation for this strategy
+        elif strategy == 'deeplive':
+            # DeepLive uses IterableDataset with paired real/fake frames
+            # train_videos is a list of DeepLiveSample objects
+            dl_params = self.config.get('dataloader_params', {})
+            gpu_batch_size = dl_params.get('frames_per_batch', 32)
+            frames_per_sample = dl_params.get('frames_per_video', 8)
+            # Each sample produces frames_per_sample * 2 (real + fake) frames
+            total_frames = len(train_videos) * frames_per_sample * 2
+            epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
+            accumulation_steps = 1  # No accumulation for this strategy
+        elif strategy == 'df40_paired':
+            # DF40 Paired uses IterableDataset with paired real/fake frames (similar to deeplive)
+            # train_videos is a list of DF40PairedSample objects
+            dl_params = self.config.get('dataloader_params', {})
+            df40_config = self.config.get('df40_paired', {})
+            gpu_batch_size = dl_params.get('frames_per_batch', 32)
+            frames_per_sample = dl_params.get('frames_per_video', 8)
+            
+            # Check if identity-balanced sampling is enabled
+            identity_balanced = df40_config.get('identity_balanced_sampling', True)
+            
+            if identity_balanced:
+                # With identity-balanced sampling, we sample ONE method per identity per epoch
+                # So epoch length is based on unique identities, not total pairs
+                unique_identities = set(s.target_identity for s in train_videos)
+                num_samples_per_epoch = len(unique_identities)
+                self.logger.info(f"DF40 identity-balanced sampling: {num_samples_per_epoch} unique identities (from {len(train_videos)} pairs)")
+            else:
+                # Legacy: iterate over all pairs
+                num_samples_per_epoch = len(train_videos)
+            
+            # Each sample produces frames_per_sample * 2 (real + fake) frames
+            total_frames = num_samples_per_epoch * frames_per_sample * 2
+            epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
+            accumulation_steps = 1  # No accumulation for this strategy
+        elif strategy == 'combined_paired':
+            # Combined Paired uses IterableDataset with both DF40 and DeepLive samples
+            # train_videos is a list of UnifiedPairedSample objects
+            dl_params = self.config.get('dataloader_params', {})
+            combined_config = self.config.get('combined_paired', {})
+            gpu_batch_size = dl_params.get('frames_per_batch', 32)
+            frames_per_sample = dl_params.get('frames_per_video', 8)
+            
+            # Check if identity-balanced sampling is enabled
+            identity_balanced = combined_config.get('identity_balanced_sampling', True)
+            
+            if identity_balanced:
+                # With identity-balanced sampling, we sample ONE method per identity per epoch
+                unique_identities = set(s.identity for s in train_videos)
+                num_samples_per_epoch = len(unique_identities)
+                self.logger.info(f"Combined identity-balanced sampling: {num_samples_per_epoch} unique identities (from {len(train_videos)} samples)")
+            else:
+                num_samples_per_epoch = len(train_videos)
+            
+            # Each sample produces frames_per_sample * 2 (real + fake) frames
+            total_frames = num_samples_per_epoch * frames_per_sample * 2
+            epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
+            accumulation_steps = 1
         else:  # Handles 'per_method' and 'video_level'
             effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
             total_train_videos = len(train_videos)
@@ -798,14 +1014,24 @@ class Trainer(object):
                 if self.early_stop_triggered:
                     break
 
-        elif strategy in ['video_level', 'frame_level', 'property_balancing']:
+        elif strategy in ['video_level', 'frame_level', 'property_balancing', 'deeplive', 'df40_paired', 'combined_paired']:
+            # Set epoch on the dataset for identity-balanced sampling (if supported)
+            # This allows the dataset to vary random method selection per epoch
+            if hasattr(train_loader, 'dataset') and hasattr(train_loader.dataset, 'set_epoch'):
+                train_loader.dataset.set_epoch(epoch)
+                self.logger.info(f"Set epoch {epoch} on train_loader.dataset for identity-balanced sampling")
+            
             pbar = tqdm(train_loader, desc=f"EPOCH ({strategy}): {epoch + 1}/{self.config['nEpochs']}", total=epoch_len)
             self.optimizer.zero_grad()  # Zero gradients at the start of the epoch
+            
+            # Flag for first-batch gradient diagnostics
+            _first_backward_logged = False
 
             for i, data_dict in enumerate(pbar):
                 if i >= epoch_len: break
 
                 self._update_arcface_s(step_cnt)
+                self._update_lambda_reg(step_cnt)
 
                 is_final_accumulation_step = (i + 1) % accumulation_steps == 0
                 is_ddp = type(self.model) is DDP
@@ -830,8 +1056,9 @@ class Trainer(object):
                             )
                             per_sample_loss = per_sample_losses_dict['overall']
 
-                            # PREREQUISITE #2: The data_dict must contain 'method_id' (fixed in Step 2)
-                            losses = self._calculate_group_dro_loss(data_dict, per_sample_loss)
+                            # PREREQUISITE #2: The data_dict must contain 'method_id'
+                            # Uses GroupDROMixin.calculate_group_dro_loss()
+                            losses = self.calculate_group_dro_loss(data_dict, per_sample_loss)
                         else:
                             # Original behavior
                             losses = loss_fn_owner.get_losses(data_dict, predictions)
@@ -845,9 +1072,81 @@ class Trainer(object):
 
                 # --- OPTIMIZER STEP (conditional) ---
                 if is_final_accumulation_step or accumulation_steps == 1:
+                    # Unscale gradients first (required for clipping and gradient logging)
+                    self.scaler.unscale_(self.optimizer)
+                    
+                    # === FIRST STEP DIAGNOSTIC: Show gradient health on first optimizer step ===
+                    if not _first_backward_logged and epoch == self.config.get('start_epoch', 0):
+                        _first_backward_logged = True
+                        model_ref = self.model.module if is_ddp else self.model
+                        
+                        total_grad_norm = 0.0
+                        num_params_with_grad = 0
+                        params_without_grad = []
+                        params_with_tiny_grad = []
+                        params_with_big_grad = []
+                        
+                        for name, param in model_ref.named_parameters():
+                            if param.requires_grad:
+                                if param.grad is not None:
+                                    grad_norm = param.grad.data.norm(2).item()
+                                    total_grad_norm += grad_norm ** 2
+                                    num_params_with_grad += 1
+                                    if grad_norm < 1e-8:
+                                        params_with_tiny_grad.append((name, grad_norm))
+                                    elif grad_norm > 10:
+                                        params_with_big_grad.append((name, grad_norm))
+                                else:
+                                    params_without_grad.append(name)
+                        
+                        total_grad_norm = total_grad_norm ** 0.5
+                        
+                        self.logger.info("=" * 70)
+                        self.logger.info("🔍 FIRST OPTIMIZER STEP GRADIENT DIAGNOSTIC")
+                        self.logger.info("=" * 70)
+                        self.logger.info(f"   Total gradient norm: {total_grad_norm:.6e}")
+                        self.logger.info(f"   Parameters with gradients: {num_params_with_grad}")
+                        self.logger.info(f"   Parameters WITHOUT gradients (requires_grad=True but grad=None):")
+                        for pname in params_without_grad[:10]:
+                            self.logger.info(f"      ❌ {pname}")
+                        if len(params_without_grad) > 10:
+                            self.logger.info(f"      ... and {len(params_without_grad) - 10} more")
+                        
+                        if params_with_tiny_grad:
+                            self.logger.info(f"   Parameters with TINY gradients (<1e-8):")
+                            for pname, gnorm in params_with_tiny_grad[:10]:
+                                self.logger.info(f"      ⚠️ {pname}: {gnorm:.2e}")
+                        
+                        if params_with_big_grad:
+                            self.logger.info(f"   Parameters with LARGE gradients (>10):")
+                            for pname, gnorm in params_with_big_grad[:10]:
+                                self.logger.info(f"      🔥 {pname}: {gnorm:.2e}")
+                        
+                        # Also log loss and prediction stats
+                        probs = predictions['prob'].detach()
+                        labels = data_dict['label']
+                        self.logger.info(f"   First batch stats:")
+                        self.logger.info(f"      Loss: {unscaled_loss.item():.4f}")
+                        self.logger.info(f"      Prob mean: {probs.mean().item():.4f}, std: {probs.std().item():.4f}")
+                        self.logger.info(f"      Label dist: {(labels==0).sum().item()} real, {(labels==1).sum().item()} fake")
+                        self.logger.info("=" * 70)
+                    
                     if hasattr(self, 'gradient_clip_val') and self.gradient_clip_val:
-                        self.scaler.unscale_(self.optimizer)
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+                    
+                    # Compute gradient health metrics before they're cleared
+                    model_ref = self.model.module if is_ddp else self.model
+                    _grad_norm = 0.0
+                    _num_params_with_grad = 0
+                    for p in model_ref.parameters():
+                        if p.grad is not None:
+                            _grad_norm += p.grad.data.norm(2).item() ** 2
+                            _num_params_with_grad += 1
+                    if _num_params_with_grad > 0:
+                        _grad_norm = _grad_norm ** 0.5
+                    # Store for later logging
+                    self._last_grad_norm = _grad_norm
+                    self._last_params_with_grad = _num_params_with_grad
 
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
@@ -877,6 +1176,59 @@ class Trainer(object):
                                                                         predictions) if is_ddp else self.model.get_train_metrics(
                         data_dict, predictions)
                     for name, value in batch_metrics.items(): log_dict[f'train/metric/{name}'] = value
+                    
+                    # === LEARNING VISIBILITY: Key metrics for tracking actual learning ===
+                    model_ref = self.model.module if is_ddp else self.model
+                    
+                    # 1. ArcFace scale parameter (s) - tracks annealing progress
+                    if hasattr(model_ref, 'head') and hasattr(model_ref.head, 's'):
+                        current_s = model_ref.head.s.item() if hasattr(model_ref.head.s, 'item') else float(model_ref.head.s)
+                        log_dict['train/arcface/s'] = current_s
+                    
+                    # 2. Learning rate tracking
+                    if self.optimizer and len(self.optimizer.param_groups) > 0:
+                        log_dict['train/lr'] = self.optimizer.param_groups[0]['lr']
+                    
+                    # 3. Prediction confidence (how decisive is the model?)
+                    probs = predictions['prob'].detach()
+                    log_dict['train/confidence/mean'] = probs.mean().item()
+                    log_dict['train/confidence/std'] = probs.std().item()
+                    # Fraction of confident predictions (>0.7 or <0.3)
+                    confident_mask = (probs > 0.7) | (probs < 0.3)
+                    log_dict['train/confidence/fraction_confident'] = confident_mask.float().mean().item()
+                    
+                    # 4. Class balance in predictions (should be ~0.5 for balanced data)
+                    pred_fake_ratio = (probs > 0.5).float().mean().item()
+                    log_dict['train/pred_balance/fake_ratio'] = pred_fake_ratio
+                    
+                    # 5. Raw logit statistics (key for ArcFace debugging)
+                    if 'raw_logits' in predictions:
+                        raw_logits = predictions['raw_logits'].detach()
+                        logit_diff = raw_logits[:, 1] - raw_logits[:, 0]  # fake - real
+                        log_dict['train/logits/diff_mean'] = logit_diff.mean().item()
+                        log_dict['train/logits/diff_std'] = logit_diff.std().item()
+                        
+                        # 5b. Per-class logit statistics (Added Jan 10, 2026)
+                        labels = data_dict['label']
+                        if raw_logits.shape[0] > labels.shape[0]:
+                            B = labels.shape[0]
+                            T = raw_logits.shape[0] // B
+                            labels = labels.repeat_interleave(T)
+                        
+                        real_mask = (labels == 0)
+                        fake_mask = (labels == 1)
+                        if real_mask.any():
+                            log_dict['train/logits/real_mean'] = logit_diff[real_mask].mean().item()
+                        if fake_mask.any():
+                            log_dict['train/logits/fake_mean'] = logit_diff[fake_mask].mean().item()
+                    
+                    # 6. Collapse early warning system (Added Jan 10, 2026)
+                    collapse_metrics = self._check_collapse_warning(predictions, data_dict, step_cnt)
+                    log_dict.update(collapse_metrics)
+                    
+                    # 7. ArcFace detailed diagnostics (Added Jan 10, 2026)
+                    arcface_metrics = self._collect_arcface_diagnostics(step_cnt)
+                    log_dict.update(arcface_metrics)
 
                     log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
                     if (i % log_progress_steps == 0) or (i == epoch_len - 1):
@@ -890,6 +1242,23 @@ class Trainer(object):
                             if steps_per_sec > 0:
                                 time_remaining_sec = (epoch_len - (i + 1)) / steps_per_sec
                                 log_dict['train/epoch_eta_min'] = time_remaining_sec / 60
+                        
+                        # 6. Gradient health - use cached values from before optimizer.zero_grad()
+                        if hasattr(self, '_last_grad_norm') and hasattr(self, '_last_params_with_grad'):
+                            if self._last_params_with_grad > 0:
+                                log_dict['train/grad_norm'] = self._last_grad_norm
+                                log_dict['train/params_with_grad'] = self._last_params_with_grad
+                            else:
+                                # Log zero to indicate NO gradients flowing - critical warning sign!
+                                log_dict['train/grad_norm'] = 0.0
+                                log_dict['train/params_with_grad'] = 0
+                        
+                        # 7. SVD Residual diagnostics (added Jan 4, 2026 - Task D3)
+                        # Track S_residual values to diagnose params_with_grad drops
+                        svd_stats = self._collect_svd_residual_stats()
+                        if svd_stats:
+                            log_dict.update(svd_stats)
+                        
                         self.wandb_run.log(log_dict)
                         self.logger.info(
                             f"Epoch {epoch + 1}/{self.config['nEpochs']} | Step {i + 1}/{epoch_len} ({progress_pct:.1f}%) | Loss: {unscaled_loss.item():.4f} | Speed: {steps_per_sec:.2f} it/s")
@@ -972,6 +1341,7 @@ class Trainer(object):
     def _run_train_step(self, data_dict, step_cnt, epoch, epoch_len, epoch_start_time):  # Add new args
         """Helper to avoid code duplication in the training loop."""
         self._update_arcface_s(step_cnt)
+        self._update_lambda_reg(step_cnt)
         self.setTrain()
         for key in data_dict.keys():
             if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(self.model.device)
@@ -990,6 +1360,22 @@ class Trainer(object):
 
             for name, value in batch_metrics.items():
                 log_dict[f'train/metric/{name}'] = value
+
+            # === ENHANCED DIAGNOSTICS (Added Jan 10, 2026) ===
+            # 1. Collapse early warning
+            collapse_metrics = self._check_collapse_warning(predictions, data_dict, step_cnt)
+            log_dict.update(collapse_metrics)
+            
+            # 2. ArcFace diagnostics
+            arcface_metrics = self._collect_arcface_diagnostics(step_cnt)
+            log_dict.update(arcface_metrics)
+            
+            # 3. Per-class logit statistics
+            if 'raw_logits' in predictions:
+                raw_logits = predictions['raw_logits'].detach()
+                logit_diff = raw_logits[:, 1] - raw_logits[:, 0]
+                log_dict['train/logits/diff_mean'] = logit_diff.mean().item()
+                log_dict['train/logits/diff_std'] = logit_diff.std().item()
 
             # --- DETAILED PROGRESS LOGGING (REPLACES PBAR) ---
             log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
@@ -1069,7 +1455,8 @@ class Trainer(object):
 
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
-                   generate_detailed_reports: bool = False, run_name: str = None):
+                   generate_detailed_reports: bool = False, run_name: str = None,
+                   output_gcs_folder: str = None, output_filename_prefix: str = None):
         """
         Performs a full evaluation on a given validation dataloader. This function is now
         general-purpose and can be used for any validation set.
@@ -1084,6 +1471,9 @@ class Trainer(object):
             generate_detailed_reports (bool): If True, collects detailed per-frame and
                                               per-video data and uploads CSV/TXT reports to GCS.
             run_name (str): Optional custom name with generate_detailed_reports, used in reports to identify the run.
+            output_gcs_folder (str): Optional GCS folder to write reports to (e.g., 'gs://bucket/path/folder').
+                                     If specified, appends to existing folder instead of creating new timestamped one.
+            output_filename_prefix (str): Optional prefix for report filenames (e.g., 'target_source_').
         """
         self.setEval()
 
@@ -1266,7 +1656,9 @@ class Trainer(object):
                     method_preds,
                     method_labels,
                     generate_detailed_reports,
-                    run_name=run_name
+                    run_name=run_name,
+                    output_gcs_folder=output_gcs_folder,
+                    output_filename_prefix=output_filename_prefix,
                 )
                 self.logger.info("✅ Detailed reports generated and uploaded successfully.")
             except Exception as e:
@@ -1593,12 +1985,21 @@ class Trainer(object):
         self.logger.info("===> OOD Monitoring Done!")
 
     def _generate_and_upload_reports(self, log_prefix, frame_data, video_data, all_preds, all_labels, method_preds,
-                                     method_labels, generate_detailed_reports=False, run_name=""):
+                                     method_labels, generate_detailed_reports=False, run_name="",
+                                     output_gcs_folder: str = None, output_filename_prefix: str = None):
         """
         Generates and uploads detailed CSV and TXT reports to GCS.
+        
+        Args:
+            output_gcs_folder: Optional GCS folder to write reports to (e.g., 'gs://bucket/path/folder').
+                              If specified, appends to existing folder instead of creating new timestamped one.
+            output_filename_prefix: Optional prefix for report filenames (e.g., 'target_source_').
         """
         self.logger.info("Generating detailed validation reports...")
         local_temp_dir = tempfile.mkdtemp()
+        
+        # Determine filename prefix
+        prefix = output_filename_prefix or ""
         
         # Track what we successfully generated
         files_generated = []
@@ -1606,31 +2007,34 @@ class Trainer(object):
         try:
             # 1. --- Create Frame-level CSV ---
             try:
-                frame_csv_path = os.path.join(local_temp_dir, 'frames_report.csv')
+                frame_filename = f'{prefix}frames_report.csv'
+                frame_csv_path = os.path.join(local_temp_dir, frame_filename)
                 with open(frame_csv_path, 'w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(['method', 'label', 'video_id', 'frame_path', 'frame_prob'])
                     writer.writerows(frame_data)
                 self.logger.info(f"Frame report generated with {len(frame_data)} entries.")
-                files_generated.append(('frames_report.csv', frame_csv_path))
+                files_generated.append((frame_filename, frame_csv_path))
             except Exception as e:
                 self.logger.error(f"Failed to generate frame report: {e}")
 
             # 2. --- Create Video-level CSV ---
             try:
-                video_csv_path = os.path.join(local_temp_dir, 'videos_report.csv')
+                video_filename = f'{prefix}videos_report.csv'
+                video_csv_path = os.path.join(local_temp_dir, video_filename)
                 with open(video_csv_path, 'w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(['method', 'label', 'video_id', 'avg_video_prob', 'prediction', 'is_correct'])
                     writer.writerows(video_data)
                 self.logger.info(f"Video report generated with {len(video_data)} entries.")
-                files_generated.append(('videos_report.csv', video_csv_path))
+                files_generated.append((video_filename, video_csv_path))
             except Exception as e:
                 self.logger.error(f"Failed to generate video report: {e}")
 
             # 3. --- Create Summary TXT file ---
             try:
-                summary_txt_path = os.path.join(local_temp_dir, 'summary_report.txt')
+                summary_filename = f'{prefix}summary_report.txt'
+                summary_txt_path = os.path.join(local_temp_dir, summary_filename)
                 with open(summary_txt_path, 'w') as f:
                     f.write(f"Validation Summary Report for: {log_prefix}\n")
                     f.write(f"Run Name: {run_name}\n")
@@ -1705,19 +2109,27 @@ class Trainer(object):
                             m_acc = (m_tp + m_tn) / m_total if m_total > 0 else 0
                             f.write(f"Accuracy: {m_acc:.4f}\n")
                             f.write(f"  TN: {m_tn}, FP: {m_fp}, FN: {m_fn}, TP: {m_tp}\n\n")
-                files_generated.append(('summary_report.txt', summary_txt_path))
+                files_generated.append((summary_filename, summary_txt_path))
             except Exception as e:
                 self.logger.error(f"Failed to generate summary report: {e}")
 
             # 4. --- Upload files to GCS ---
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            gcs_folder = f"{timestamp}_{log_prefix}"
-            gcs_base_path = "gs://training-job-outputs/test_results"
+            # Use custom folder if provided, otherwise create timestamped folder
+            if output_gcs_folder:
+                # Use provided folder path (e.g., 'gs://bucket/path/folder')
+                gcs_base = output_gcs_folder.rstrip('/')
+                self.logger.info(f"Appending reports to existing folder: {gcs_base}")
+            else:
+                # Create new timestamped folder
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                gcs_folder = f"{timestamp}_{log_prefix}"
+                gcs_base = f"gs://training-job-outputs/test_results/{gcs_folder}"
+                self.logger.info(f"Creating new results folder: {gcs_base}")
 
             # Only upload files that were successfully generated
             for filename, local_path in files_generated:
                 try:
-                    gcs_path = f"{gcs_base_path}/{gcs_folder}/{filename}"
+                    gcs_path = f"{gcs_base}/{filename}"
                     self._upload_to_gcs(local_path, gcs_path)
                 except Exception as e:
                     self.logger.error(f"Failed to upload {filename} to GCS: {e}")
@@ -1739,7 +2151,9 @@ class Trainer(object):
             validation_loader,
             log_prefix: str = "on_demand_validation",
             generate_detailed_reports: bool = False,
-            run_name: str = None
+            run_name: str = None,
+            output_gcs_folder: str = None,
+            output_filename_prefix: str = None,
     ) -> dict:
         """
         Runs a full validation pass on a provided dataloader.
@@ -1760,6 +2174,9 @@ class Trainer(object):
                                               reports to GCS for deep analysis.
             run_name: Optional name for the report summary, useful for identifying
                       different runs in GCS.
+            output_gcs_folder (str): Optional GCS folder to write reports to (e.g., 'gs://bucket/path/folder').
+                                     If specified, appends to existing folder instead of creating new timestamped one.
+            output_filename_prefix (str): Optional prefix for report filenames (e.g., 'target_source_').
 
         Returns:
             A dictionary containing the calculated metrics for this validation run.
@@ -1767,6 +2184,10 @@ class Trainer(object):
         self.logger.info(f"--- Starting on-demand validation for '{log_prefix}' ---")
         if generate_detailed_reports:
             self.logger.info("Detailed report generation is ENABLED.")
+            if output_gcs_folder:
+                self.logger.info(f"Output folder: {output_gcs_folder}")
+            if output_filename_prefix:
+                self.logger.info(f"Filename prefix: {output_filename_prefix}")
 
         # Reuse the existing test_epoch logic completely.
         # We pass dummy values for epoch/step and critically set
@@ -1781,8 +2202,10 @@ class Trainer(object):
                 validation_loader=validation_loader,
                 log_prefix=log_prefix,
                 is_primary_metric=False,
-                generate_detailed_reports=generate_detailed_reports,  # Pass the new flag
-                run_name=run_name
+                generate_detailed_reports=generate_detailed_reports,
+                run_name=run_name,
+                output_gcs_folder=output_gcs_folder,
+                output_filename_prefix=output_filename_prefix,
             )
         except Exception as e:
             self.logger.error(f"Error during test_epoch: {e}")
