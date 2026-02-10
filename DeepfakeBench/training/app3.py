@@ -460,15 +460,29 @@ def startup_event() -> None:
             raise e
         # ───> END OF CHANGES <───
 
-    # 8) Load Face Preprocessor Models (YOLO only)
+    # 8) Load Face Preprocessor Models (YOLO only) – optional
     try:
         video_preprocessor.initialize_yolo_model()
+        app.state.yolo_available = True
         logger.info("✅ SUCCESS: YOLO face detector loaded successfully.")
     except Exception as e:
-        logger.exception("Failed to load YOLO model")
-        raise RuntimeError("Failed to load YOLO model") from e
+        app.state.yolo_available = False
+        logger.warning("⚠️  YOLO model not available: %s. Endpoints requiring face detection will be disabled.", e)
 
-    logger.info("Startup complete. Available models: %s", list(app.state.models.keys()))
+    logger.info("Startup complete. Available models: %s, YOLO: %s",
+                list(app.state.models.keys()), app.state.yolo_available)
+
+
+# --- Utility: assert YOLO is loaded ---
+def require_yolo(request: Request) -> None:
+    """Raises 503 if YOLO face detector was not loaded at startup."""
+    if not getattr(request.app.state, 'yolo_available', False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Face detection (YOLO) is not available. "
+                   "Use /check_frame_batch with recrop=false for pre-cropped images, "
+                   "or restart the server with the YOLO model accessible."
+        )
 
 
 # --- Utility function to get model for endpoints ---
@@ -518,10 +532,14 @@ async def check_frame(
         model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
+        recrop: bool = Query(False, description="Whether to perform face detection and cropping. If False, assumes image is already cropped"),
         debug: bool = False
 ) -> InferResponse:
     if file.content_type not in {"image/jpeg", "image/png"}:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only JPEG or PNG images are accepted")
+
+    if recrop:
+        require_yolo(request)
 
     try:
         model = get_model_for_request(request, model_type)
@@ -530,16 +548,19 @@ async def check_frame(
         if img_bgr is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot decode image")
 
-        processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
-
-        if processed_face_bgr is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                                f"Could not find a face in the image using the 'yolo' method")
+        if recrop:
+            processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
+            if processed_face_bgr is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                    "Could not find a face in the image using the 'yolo' method")
+        else:
+            processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_AREA)
 
         if debug:
             os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
             timestamp = int(time.time() * 1000)
-            save_path = os.path.join(DEBUG_FRAME_DIR, f"frame_{timestamp}.jpg")
+            crop_status = "cropped" if recrop else "precropped"
+            save_path = os.path.join(DEBUG_FRAME_DIR, f"frame_{crop_status}_{timestamp}.jpg")
             cv2.imwrite(save_path, processed_face_bgr)
             logger.info(f"Debug frame saved to: {save_path}")
 
@@ -584,6 +605,9 @@ async def check_frame_batch(
     """
     if not files:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files were uploaded.")
+
+    if recrop:
+        require_yolo(request)
 
     # Validate content-types early
     for f in files:
@@ -686,6 +710,8 @@ async def check_video(
     if ext not in {".mp4", ".mov", ".mkv", ".avi", ".webm"}:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, f"Unsupported video format {ext!r}")
 
+    require_yolo(request)
+
     tmp_dir = tempfile.mkdtemp(prefix="effort-aigi-")
     try:
         model = get_model_for_request(request, model_type)
@@ -732,6 +758,8 @@ async def check_video_from_gcp(
 ) -> VideoAnalysisResponse:
     gcs_full_path = request_body.gcs_path
     logger.info(f"Received request to process video from GCS: {gcs_full_path}")
+
+    require_yolo(request)
 
     try:
         bucket_name, blob_name = gcs_full_path.split('/', 1)
