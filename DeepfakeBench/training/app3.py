@@ -176,8 +176,11 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
     """Loads the EffortDetector model from config and weights with configuration validation."""
     logger.info(f"Loading detector from: {weights}")
     
-    # Load checkpoint
-    ckpt = torch.load(weights, map_location=device, weights_only=False)
+    # Load checkpoint (weights_only requires PyTorch ≥ 1.13)
+    try:
+        ckpt = torch.load(weights, map_location=device, weights_only=False)
+    except TypeError:
+        ckpt = torch.load(weights, map_location=device)
     
     # Handle both old and new checkpoint formats
     if isinstance(ckpt, dict) and 'state_dict' in ckpt:
