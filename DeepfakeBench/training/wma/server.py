@@ -1897,7 +1897,6 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
                 'window_step': '500',
                 'use_vad': 'true',
                 'vol_norm': 'false',
-                'threshold': '0.55'
             }
 
             # Make the HTTP POST request with multipart/form-data
@@ -1972,7 +1971,6 @@ class StreamingServiceImpl(pb2_grpc.StreamingServiceServicer):
             data.add_field('window_step', '500')
             data.add_field('use_vad', 'true')
             data.add_field('vol_norm', 'false')
-            data.add_field('threshold', '0.55')
             
             # Add audio file (same as original 'files' parameter)
             data.add_field(
