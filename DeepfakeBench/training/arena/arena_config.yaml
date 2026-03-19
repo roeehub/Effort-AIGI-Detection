@@ -1,0 +1,147 @@
+# =============================================================================
+# Model Arena Configuration
+# =============================================================================
+# Edit this file to add/remove checkpoints and data sources.
+#
+# Usage:
+#   python model_arena.py --config arena_config.yaml
+#   python model_arena.py --config arena_config.yaml --phase inference
+#   python model_arena.py --config arena_config.yaml --phase analysis
+#   python model_arena.py --config arena_config.yaml --phase strategy
+#   python model_arena.py --config arena_config.yaml --dry-run
+# =============================================================================
+
+# ── Output ──
+output_dir: "./arena_results"          # local output directory
+output_gcs_folder: "gs://training-job-outputs/arena_results"  # GCS upload destination
+
+# ── Checkpoints to evaluate ──
+# name: human label for reports & filenames (no spaces — use underscores)
+# path: GCS checkpoint URI
+# backbone: "B16" or "L14" — affects model config
+# notes: free-text for your reference (ignored by script)
+checkpoints:
+  R13_FT1:
+    path: "gs://training-job-outputs/phase2r13_experiments/p0kbskzl/ood_composite_effort_20260314_step1500_auc0.9933_eer0.0192.pth"
+    backbone: B16
+    notes: "R13_FT1 — FT from R12_G, conservative enhanced (3.5), LR 3e-5, EER 0.0192"
+
+  R13_FT2:
+    path: "gs://training-job-outputs/phase2r13_experiments/cdg741xx/ood_composite_effort_20260314_step1500_auc0.9933_eer0.0268.pth"
+    backbone: B16
+    notes: "R13_FT2 — FT from R12_G, heavy enhanced (6.0), LR 5e-5, EER 0.0268"
+
+  R13_FT3:
+    path: "gs://training-job-outputs/phase2r13_experiments/lz5al5qv/ood_composite_effort_20260314_step1500_auc0.9933_eer0.0192.pth"
+    backbone: B16
+    notes: "R13_FT3 — FT from R12_G, enhanced (5.0) + boosted Teams (7.0/5.5), LR 3e-5, EER 0.0192"
+
+  R12_G:
+    path: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"
+    backbone: B16
+    notes: "R12_G — scratch, AUC 0.9930 (updated checkpoint)"
+
+  R12_A:
+    path: "gs://training-job-outputs/phase2r12_experiments/4v8av986/ood_composite_effort_20260309_step7500_auc0.9705_eer0.0744.pth"
+    backbone: B16
+    notes: "R12_A — scratch, OOD composite, AUC 0.9705"
+
+  R11_F:
+    path: "gs://training-job-outputs/phase2r11_experiments/wc3jv0ls/top_n_effort_20260308_step3000_auc0.9828_eer0.0569.pth"
+    backbone: B16
+    notes: "R11 winner — best B-16 with Teams (88.7% Teams HO), FT from R9_D"
+
+  R9_D:
+    path: "gs://training-job-outputs/phase2r9_experiments/m7etxxnp/top_n_effort_20260228_step4000_auc0.9942_eer0.0325.pth"
+    backbone: B16
+    notes: "R9 winner — best B-16 AUC ever (0.9942), no Teams data"
+
+  R8_E:
+    path: "gs://training-job-outputs/phase2r8_experiments/hu7cen3m/top_n_effort_20260224_step8000_auc0.9925_eer0.0207.pth"
+    backbone: B16
+    notes: "R8 winner — scratch, target-heavy, no Teams data"
+
+# ── Data sources ──
+# name: human label (becomes filename prefix)
+# bucket: GCS bucket name
+# layout: "poc" | "teams_flat" | "teams_paired" | "auto"
+#   - poc:          {fake,real}/{Method_videoId}/NNNN.png
+#   - teams_flat:   {fake,real}/flat_image_files.jpg
+#   - teams_paired: samples/{strategy}/frames/{fake,real}/frame_NNNN.jpg
+#   - auto:         let discovery heuristic decide
+# chronological: true if frames are in rough chronological order (for stability analysis)
+data_sources:
+  teams_test:
+    bucket: "teams-faces-data-test-2914-fake-4420-real-feb-28"
+    layout: teams_flat
+    chronological: true
+    notes: "Teams target domain — ~3,464 fake (incl 550 visomaster_enhanced) + 5,982 real (updated Mar 15)"
+
+  poc_phase1:
+    bucket: "poc-phase-1-test"
+    layout: poc
+    chronological: true
+    notes: "PoC test set with natural video grouping"
+
+  teams_v2:
+    bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    layout: teams_paired
+    chronological: true
+    notes: "Teams v2 paired samples — 4.7x larger than v1"
+
+# ── Inference settings ──
+inference:
+  batch_size: 256
+  num_workers: 12
+  save_embeddings: true      # save backbone features for T-SNE / UMAP
+  detector_config: "./config/detector/effort.yaml"
+  train_config: "./config/defaults.yaml"
+
+# ── Analysis settings ──
+analysis:
+  # Stability analysis (frame-to-frame consistency)
+  stability:
+    enabled: true
+    # Only run on chronological data sources
+    thresholds: [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]  # thresholds to compute flip rates at
+
+  # Probability health metrics
+  prob_health:
+    enabled: true
+    # Threshold healthiness: flag if optimal threshold is outside this range
+    healthy_threshold_range: [0.25, 0.75]
+
+  # Embedding visualization
+  embeddings:
+    enabled: true
+    method: "tsne"           # "tsne" or "umap"
+    perplexity: 30           # T-SNE perplexity
+    max_samples: 5000        # subsample for speed
+    save_plots: true
+
+  # Per-method breakdown
+  per_method:
+    enabled: true
+    # Target methods of special interest (face swaps in production)
+    target_methods:
+      - FaceSwap
+      - inswap
+      - mobileswap
+      - simswap
+
+# ── Strategy search settings ──
+strategy:
+  enabled: true
+  window_sizes: [16, 24, 32]
+  # Threshold search range
+  threshold_range: [0.20, 0.95]
+  threshold_step: 0.01
+  # K/W ratio range
+  k_ratio_range: [0.30, 0.80]
+  k_ratio_step: 0.02
+  # Constraints
+  max_teams_fpr: 0.0         # hard constraint: 0 Teams false positives
+  # Health check: flag strategies with threshold outside this range
+  healthy_threshold_range: [0.15, 0.85]
+  # Uncertain zone
+  uncertain_margins: [0, 1, 2, 3]

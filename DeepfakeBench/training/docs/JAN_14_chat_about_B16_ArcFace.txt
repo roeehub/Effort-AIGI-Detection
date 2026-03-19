@@ -1,0 +1,1402 @@
+Skip to content
+Chat history
+
+
+
+
+You said:
+Summarized conversation history# Investigation Report: ArcFace Incompatibility with B16_LAION Backbone
+
+## Executive Summary
+
+We've observed a puzzling phenomenon: **ArcFace loss works excellently with ViT-L-14 (OpenAI) but consistently fails with ViT-B-16-DataComp-XL (LAION)**, despite both being CLIP-based vision transformers. This document traces the history of experiments that led to this discovery and poses research questions to determine the root cause.
+
+---
+
+## Part 1: Historical Context
+
+### 1.1 The Original Effort Method
+
+The **Effort method** (ICML 2025 Oral) uses SVD-based orthogonal subspace decomposition for AI-generated image detection. The core idea:
+- Decompose attention layer weights via SVD
+- Freeze top-r singular components (preserving pretrained knowledge)
+- Train only the residual k singular directions (typically k=1)
+- This achieves strong generalization with minimal parameters (~0.04% trainable)
+
+The original paper uses **CrossEntropyLoss** (standard BCE). **ArcFace is our extension** to improve angular margin separation between real/fake classes.
+
+### 1.2 Initial Success with L14 + ArcFace (Early January 2026)
+
+We first implemented Effort with the **ViT-L-14 OpenAI backbone**:
+
+| Configuration | val_holdout AUC | Status |
+|---------------|-----------------|--------|
+| L14 + BCE (baseline) | ~0.85 | Good |
+| L14 + ArcFace (s=18, LR=2e-4) | **0.9881** | Excellent |
+
+Key hyperparameters that worked for L14:
+- learning_rate: 2.0e-4
+- warmup_steps: 1000
+- arcface_s: 18.0 (annealed from 10→18 over 1000 steps)
+- arcface_m: 0.28
+- rank: 1023 (giving k=1 trainable direction per layer)
+
+**L14 Architecture:**
+- 24 transformer layers
+- 1024 hidden dimension
+- HuggingFace transformers library
+- SVD applied to all 4 attention projections (q, k, v, out) = 96 layers
+- ~198,752 trainable parameters
+
+### 1.3 The B16_LAION Problem Emerges (Jan 11-12, 2026)
+
+We attempted to transfer the successful L14 configuration to **ViT-B-16-DataComp-XL** (LAION/OpenCLIP backbone) for a smaller, faster model:
+
+| Configuration | Peak AUC | Final AUC | Trend |
+|---------------|----------|-----------|-------|
+| B16_LAION + ArcFace (s=18) | 0.69 | 0.62 | ↘️ Declining |
+| B16_LAION + ArcFace (s=12,15,20) | 0.65-0.70 | 0.62-0.65 | ↘️ All declined |
+| B16_LAION + no ArcFace | 0.81 | **0.81** | ✅ Stable |
+
+**Critical observation:** All ArcFace runs peaked around step 1000-1500, then **declined** - a signature of training instability. The no_arcface run was stable but plateaued.
+
+### 1.4 First Hypothesis: SVD Coverage Gap (Jan 13, 2026)
+
+We investigated why B16_LAION underperformed and discovered an **implementation asymmetry**:
+
+**L14 (HuggingFace):** SVD applied to all 4 projections per layer
+q_proj, k_proj, v_proj, out_proj × 24 layers = 96 SVD layers
+Trainable params: ~198,752
+
+
+**B16_LAION (OpenCLIP):** SVD applied only to out_proj
+out_proj × 12 layers = 12 SVD layers
+Trainable params: ~19,468
+
+
+**Root cause:** OpenCLIP uses nn.MultiheadAttention which fuses q, k, v into a single in_proj_weight tensor. Our code only replaced out_proj, missing 75% of the attention projections.
+
+### 1.5 The Fix: SVDInProjLinear (Jan 13, 2026)
+
+We implemented SVDInProjLinear to handle the fused q/k/v weights:
+- Splits in_proj_weight [3*d, d] into q, k, v components
+- Applies SVD to each independently
+- Uses forward pre-hook to update weights before attention computation
+
+**After fix:**
+B16_LAION: out_proj (12) + in_proj q/k/v (36) = 48 SVD layers
+Trainable params: ~73,776 (4× increase)
+
+
+### 1.6 Current Experiment Results (Jan 13, 2026 - 3k steps)
+
+| Experiment | SVD Layers | Trainable Params | AUC @ 3k | Trend |
+|------------|------------|------------------|----------|-------|
+| B16_LAION + ArcFace + full SVD | 48 | 73,776 | 0.65-0.70 | Flat/unstable |
+| B16_LAION + no ArcFace + full SVD | 48 | 73,776 | **0.79** | ↗️ Improving |
+| B16_LAION + ArcFace + out_proj only | 12 | 19,468 | 0.62 | ↘️ Declined |
+| B16_LAION + no ArcFace + out_proj only | 12 | 19,468 | 0.81 | Flat |
+
+**Key finding:** Full SVD coverage did NOT fix ArcFace instability. The no_arcface runs are stable regardless of SVD coverage.
+
+---
+
+## Part 2: Detailed Architecture Comparison
+
+### 2.1 ViT-L-14 (OpenAI) - The Working Configuration
+
+| Property | Value |
+|----------|-------|
+| **Source** | OpenAI (via HuggingFace transformers) |
+| **Pretraining Data** | WebImageText (400M image-text pairs) |
+| **Architecture** | ViT-L/14 |
+| **Transformer Layers** | 24 |
+| **Hidden Dimension** | 1024 |
+| **Attention Heads** | 16 |
+| **Patch Size** | 14×14 |
+| **Output Dimension** | 1024 (no projection) |
+| **Total Parameters** | 504M |
+| **SVD Layers (with full coverage)** | 96 (4 proj × 24 layers) |
+| **Trainable Parameters** | ~198,752 |
+| **Trainable Ratio** | 0.04% |
+
+**Attention Implementation:** Separate nn.Linear for q, k, v, out_proj - easy to replace individually.
+
+### 2.2 ViT-B-16-DataComp-XL (LAION) - The Failing Configuration
+
+| Property | Value |
+|----------|-------|
+| **Source** | LAION (via open_clip library) |
+| **Pretraining Data** | DataComp-1B (12.8B samples, filtered) |
+| **Architecture** | ViT-B/16 |
+| **Transformer Layers** | 12 |
+| **Hidden Dimension** | 768 (internal) |
+| **Attention Heads** | 12 |
+| **Patch Size** | 16×16 |
+| **Output Dimension** | 512 (projected from 768) |
+| **Total Parameters** | 100M |
+| **SVD Layers (with full coverage)** | 48 (4 proj × 12 layers) |
+| **Trainable Parameters** | ~73,776 |
+| **Trainable Ratio** | 0.07% |
+
+**Attention Implementation:** nn.MultiheadAttention with fused in_proj_weight - requires special handling.
+
+### 2.3 Key Differences Summary
+
+| Aspect | L14 (OpenAI) | B16_LAION |
+|--------|--------------|-----------|
+| Feature dimension to head | 1024 | 512 |
+| Pretraining dataset | 400M (WebImageText) | 12.8B (DataComp filtered) |
+| Pretraining objective | CLIP contrastive | CLIP contrastive |
+| Library | HuggingFace | OpenCLIP |
+| Model capacity | 504M params | 100M params |
+| Trainable params (Effort) | 198k | 73k |
+
+---
+
+## Part 3: The ArcFace Analysis
+
+### 3.1 How ArcFace Works
+
+ArcFace modifies the classification logits to enforce angular margin:
+
+python
+# Standard softmax
+logits = W @ features  # [batch, num_classes]
+
+# ArcFace modification (for correct class)
+cos_theta = logits[label] / (||W|| * ||features||)
+theta = arccos(cos_theta)
+logits[label] = cos(theta + m) * s  # Add margin m, scale by s
+
+
+Key parameters:
+- s (scale): Amplifies logit differences (we use 10→18 annealing)
+- m (margin): Angular penalty for correct class (we use 0.28)
+
+### 3.2 Training Dynamics Observed
+
+**L14 + ArcFace (working):**
+Step 500:  AUC 0.65, probabilities stable around 0.5
+Step 1000: AUC 0.79, probabilities 0.4-0.6 (ArcFace annealing complete)
+Step 2000: AUC 0.94, probabilities 0.3-0.7
+Step 4500: AUC 0.98, clear separation
+
+
+**B16_LAION + ArcFace (failing):**
+Step 500:  AUC 0.58, probabilities 0.3-0.8 (high variance)
+Step 1000: AUC 0.69 (PEAK), probabilities 0.2-0.9 (wild oscillation)
+Step 2000: AUC 0.65, declining
+Step 3000: AUC 0.62-0.65, stuck
+
+
+### 3.3 The Instability Signature
+
+The train/probabilities plots tell the story:
+
+**L14:** Variance decreases over time, probabilities converge toward 0 (real) and 1 (fake)
+
+**B16_LAION:** Variance stays high or increases, probabilities oscillate wildly (0.2-0.9 range), never converges
+
+This suggests the model is **oscillating between decision boundaries** rather than learning a stable separator.
+
+---
+
+## Part 4: Research Questions
+
+### Primary Research Question
+
+> **Why does ArcFace loss successfully train with ViT-L-14 (OpenAI) but cause training instability with ViT-B-16-DataComp-XL (LAION), despite both being CLIP-based vision transformers using the same Effort method?**
+
+### Specific Hypotheses to Investigate
+
+#### Hypothesis 1: Feature Space Geometry Mismatch
+
+**Theory:** The angular distribution of features from LAION pretraining may be incompatible with ArcFace's angular margin assumption.
+
+**Investigation:**
+1. Extract features from both backbones on the same dataset (before any Effort training)
+2. Compute angular statistics:
+   - Mean pairwise cosine similarity within class
+   - Mean pairwise cosine similarity between classes
+   - Distribution of feature norms
+3. Visualize with t-SNE/UMAP colored by real/fake
+
+**Expected finding if true:** B16_LAION features are more "spread out" angularly or have different norm distributions than L14.
+
+#### Hypothesis 2: Feature Norm Instability
+
+**Theory:** ArcFace requires normalized features. If B16_LAION's 512-dim projection produces unstable norms during training, the angular margin becomes meaningless.
+
+**Investigation:**
+1. Log ||features|| mean/std during training for both backbones
+2. Check if L14 has more stable feature norms than B16_LAION
+3. Try explicit L2 normalization before the ArcFace head
+
+**Expected finding if true:** B16_LAION feature norms vary wildly during training.
+
+#### Hypothesis 3: Output Dimension Effect
+
+**Theory:** 512-dim features (B16_LAION) provide less "room" for angular separation than 1024-dim features (L14). The ArcFace margin may be too aggressive for lower dimensions.
+
+**Investigation:**
+1. Try B16_LAION with smaller margin (m=0.1, 0.15, 0.2 instead of 0.28)
+2. Try B16_LAION with smaller scale (s_end=12, 14 instead of 18)
+3. Compare to B16 OpenAI (also 768→768, no projection) with ArcFace
+
+**Expected finding if true:** Lower margin/scale stabilizes B16_LAION training.
+
+#### Hypothesis 4: Pretraining Data Distribution
+
+**Theory:** DataComp's aggressive filtering (12.8B→1B) may have created a feature space with different properties than WebImageText.
+
+**Investigation:**
+1. Test **B16 OpenAI** (HuggingFace, openai/clip-vit-base-patch16) with ArcFace
+2. If B16 OpenAI + ArcFace works → Problem is LAION pretraining, not model size
+3. If B16 OpenAI + ArcFace fails → Problem is model capacity/dimension
+
+**Expected finding if true:** B16 OpenAI works with ArcFace, confirming pretraining is the issue.
+
+#### Hypothesis 5: Gradient Flow Differences
+
+**Theory:** The fused in_proj_weight in OpenCLIP may have different gradient dynamics than separate q/k/v projections, causing optimizer instability with ArcFace.
+
+**Investigation:**
+1. Log gradient norms for SVD parameters during training
+2. Compare gradient statistics between L14 and B16_LAION
+3. Check if SVDInProjLinear gradients are unstable compared to SVDResidualLinear
+
+**Expected finding if true:** B16_LAION shows gradient spikes or instability.
+
+#### Hypothesis 6: Learning Rate / Capacity Mismatch
+
+**Theory:** With 73k trainable params (vs 198k for L14), the effective learning rate may be wrong for the ArcFace loss landscape.
+
+**Investigation:**
+1. Try much lower LR for B16_LAION + ArcFace (5e-5, 1e-5)
+2. Try longer warmup (2000, 4000 steps)
+3. Try slower ArcFace annealing (2000, 3000 steps)
+
+**Expected finding if true:** Lower LR stabilizes ArcFace training.
+
+---
+
+## Part 5: Recommended Investigation Plan
+
+### Phase 1: Quick Experiments (1-2 hours each)
+
+1. **B16 OpenAI + ArcFace** (Critical control)
+   - Same hyperparameters as B16_LAION
+   - Isolates: Is it LAION pretraining or B16 architecture?
+
+2. **B16_LAION + ArcFace + lower margin/scale**
+   - Try m=0.15, s_end=12
+   - Isolates: Is margin too aggressive for 512-dim?
+
+3. **B16_LAION + ArcFace + very low LR**
+   - Try lr=5e-5, warmup=2000
+   - Isolates: Is optimization unstable?
+
+### Phase 2: Analysis (requires code changes)
+
+4. **Feature analysis script**
+   - Extract features from both backbones
+   - Compute angular/norm statistics
+   - Visualize distributions
+
+5. **Gradient monitoring**
+   - Add detailed gradient logging
+   - Compare L14 vs B16_LAION gradient dynamics
+
+### Phase 3: Deep Dive (if Phase 1-2 inconclusive)
+
+6. **Pretraining ablation**
+   - Test other LAION checkpoints (different filtering)
+   - Test different OpenCLIP models
+
+7. **Architecture modifications**
+   - Add explicit feature normalization layer
+   - Try different head architectures
+
+---
+
+## Part 6: Current Working Recommendations
+
+While investigation proceeds, the current evidence supports:
+
+| Use Case | Recommendation | Expected AUC |
+|----------|----------------|--------------|
+| Maximum accuracy | L14 + ArcFace | 0.98+ |
+| Fast/small model | B16_LAION + no ArcFace | 0.80-0.85 |
+| B16 + ArcFace | Use B16 OpenAI (not LAION) | TBD |
+
+---
+
+## Appendix: File References
+
+### Experiment Configs
+- L14 success: experiments/L14_ablation/vit_L14_openai_s18_all_improvements.yaml
+- B16_LAION ArcFace (failing): vit_B16_laion_s18_full_svd.yaml
+- B16_LAION no_arcface (working): experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_no_arcface_full_svd.yaml
+
+### Code References
+- SVDResidualLinear: detectors/effort_detector.py:804
+- SVDInProjLinear (new): detectors/effort_detector.py:1134
+- ArcFace head: effort_detector.py (ArcFaceHead class)
+
+### Log Files
+- L14 best run: debug/L14_OpenAI_s18_all_improvements_0112-0804.log
+- B16_LAION ArcFace: B16_LAION_s18_full_svd_0113-1058.log
+- B16_LAION no_arcface: debug/B16_LAION_no_arcface_full_svd_0113-1058.log
+
+---
+
+For deeper reference, we did the experiments based on this paper and repositories:
+https://arxiv.org/pdf/2411.15633
+https://github.com/YZY-stack/Effort-AIGI-Detection?tab=readme-ov-file
+https://huggingface.co/laion/CLIP-ViT-B-16-laion2B-s34B-b88K
+https://arxiv.org/pdf/2212.07143 (not a direct paper, but can be relevant)
+ChatGPT said:
+This is an excellent investigation summary. To assist you further, could you clarify what you’d like me to do next? For example:
+
+Do you want help conducting one or more of the proposed experiments?
+
+Would you like literature review support for any of the hypotheses (e.g., ArcFace sensitivity to low-dimensional embeddings)?
+
+Do you want implementation help with feature or gradient analysis?
+
+Are you looking for alternative loss functions compatible with B16_LAION?
+
+Let me know where you'd like to focus next.
+
+You said:
+1. I don't necessarily trust the proposed experiments, we need to first go and do some deep research to refine and understand our knowledge. This can perhaps eliminate the need for experiments or adjust the actual experiments that we do want to perform.
+2, 3 - as you see fit
+4. Perhaps yes, but I've had great success with ArcFace on the CLIP L14 model, since my target data is human faces
+ChatGPT said:
+Got it. I’ll dive into deep research to clarify why ArcFace is unstable on the B16_LAION backbone but works well on L14, focusing on theoretical compatibility between ArcFace and CLIP-derived features from different architectures and pretraining regimes. I’ll also explore loss functions optimized for angular separation in low-dimensional spaces and any insights from studies on feature distribution, norm behavior, or training stability across CLIP variants.
+
+I’ll let you know as soon as I have a comprehensive analysis. Feel free to continue working or ask about any specific angle while I investigate.
+
+Research completed in 10m · 12 sources · 87 searches
+ChatGPT said:
+
+Investigating ArcFace Instability on ViT-B/16 (LAION) vs ViT-L/14 (OpenAI)
+Background and Observations
+We observed that using ArcFace loss (additive angular margin) dramatically improved performance on a CLIP ViT-L/14 backbone, but caused training instability on a CLIP ViT-B/16 (LAION DataComp) backbone. In particular, for a binary real vs fake image detection task (with human face data):
+ViT-L/14 (OpenAI) + ArcFace: Achieved AUC ≈ 0.99, with stable training and clear separation between classes.
+ViT-B/16 (LAION) + ArcFace: Peaked around AUC 0.69 then declined to ~0.62, indicating divergence or oscillation in training. In contrast, ViT-B/16 with standard cross-entropy stayed stable around AUC 0.80+.
+This discrepancy is puzzling, since both models are CLIP-based vision transformers. We aim to understand why ArcFace works on the larger L/14 model but fails on the B/16 model, and refine our approach accordingly.
+Key Differences Between ViT-L/14 and ViT-B/16 (LAION)
+Before analyzing ArcFace specifically, it's important to note the fundamental differences in the two backbones:
+Model Capacity: ViT-L/14 has 24 layers and a wider hidden size (≈1024), vs ViT-B/16 with 12 layers and hidden size 768. The large model naturally outperforms the base model on vision tasks
+arxiv.org
+. In our context, the ViT-L/14 backbone showed significantly better generalization in detection tasks than ViT-B/16
+arxiv.org
+.
+Embedding Dimension: The OpenAI L/14 model produces a ~1024-D image embedding (no additional projection needed), whereas the LAION B/16 model outputs a 512-D embedding (projected from 768). A smaller embedding might provide less room for angular separation.
+Pretraining Data: OpenAI’s CLIP L/14 was trained on 400M WebImageText pairs (likely rich in diverse content including human faces). The OpenCLIP B/16 was trained on the LAION DataComp-1B subset (filtered from LAION-5B). Differences in these datasets could lead to different feature distributions. For example, OpenAI CLIP models were trained on a private WIT dataset, while LAION models trained on filtered web data with potentially different biases
+arxiv.org
+.
+Attention Implementation: The OpenAI model uses separate Q, K, V projection layers, while the OpenCLIP model uses a fused in_proj weight for QKV. Our SVD-based adaptation initially missed the QKV for B/16 (limiting trainable parameters), though we later fixed this. After the fix, B/16 had ~73k trainable params (vs ~198k in L/14) under the Effort method.
+Normalized Features: Both models use CLIP's training objective which involves normalizing embeddings for contrastive loss. ArcFace operates on L2-normalized features and weights, effectively placing features on a unit hypersphere
+pmc.ncbi.nlm.nih.gov
+. Any difference in how the backbones handle feature norms or the final LayerNorm could impact training when using ArcFace.
+In summary, ViT-B/16 is a smaller, lower-dimensional model, and its pretraining/architecture details differ from the ViT-L/14. These differences set the stage for why ArcFace might behave differently.
+Why ArcFace May Be Unstable on B/16 (Analysis of Hypotheses)
+ArcFace loss introduces an angular margin m between a feature and its correct class center, and a scaling factor s to amplify logits. This is known to greatly enhance class separability, especially for face recognition tasks
+openaccess.thecvf.com
+openaccess.thecvf.com
+. However, ArcFace (and similar margin losses) must be used with care – margin and scale hyperparameters play a crucial role in training stability
+pmc.ncbi.nlm.nih.gov
+. We examine several possible reasons why ArcFace destabilized the B/16 model:
+1. Margin and Scale Too High for a Smaller Model:
+Larger margins make the classification task stricter – the model must separate classes by a fixed angular gap. If the margin is too large relative to the model's capacity or the feature dimensionality, training can become unstable
+pmc.ncbi.nlm.nih.gov
+. In our case, we used margin $m=0.28$ (≈16°) and final scale $s≈18$ for both models. This worked for L/14, but B/16 might require a gentler setting. Research on ArcFace notes that “an excessively large [margin] may destabilize training”
+pmc.ncbi.nlm.nih.gov
+, especially on smaller or imbalanced datasets. The 512-D embedding of B/16 might not accommodate a 16° margin as easily as L/14’s ~1024-D space. In practice, margin-based losses often need to be tuned lower for lower-dimensional embeddings or smaller networks. Our experiments already hinted that lowering $s$ (12–15) didn’t solve the issue by itself, so the margin $m$ might need to be reduced (or introduced more gradually) for B/16.
+2. Broad Intra-Class Variance (Multi-modal Classes):
+Unlike face recognition where each class (person) is relatively compact in feature space, here the binary classes “real” vs “fake” encompass high diversity. The “fake” class in particular may include multiple generation methods and visual styles, effectively forming multiple sub-clusters. ArcFace assumes each class can be represented by a single weight vector (class center) with samples tightly clustered around it
+pmc.ncbi.nlm.nih.gov
+pmc.ncbi.nlm.nih.gov
+. If a class is multi-modal, forcing a single angular margin for all its samples can be problematic. Some fake samples might lie close to the real class direction or far from the fake class center; imposing the margin on all will yield conflicting gradients. Essentially, ArcFace provides a “local” angular constraint (feature vs its class center) but no guarantee of optimal global separation if the class itself isn’t cohesive
+pmc.ncbi.nlm.nih.gov
+. This could lead to the model oscillating as it tries to swing the class center to accommodate different subsets of fake images. The larger L/14 model, with more representational power, might implicitly cluster the “fake” variations better (or had learned more universal features for faces, given its stronger performance). The smaller B/16 might lack this flexibility, so the margin magnifies the issue. In literature, solutions like sub-center ArcFace allow multiple centers per class to address multi-modal data and stabilize training
+pmc.ncbi.nlm.nih.gov
+, but we did not use such a mechanism here.
+3. Feature Norm and Gradient Dynamics:
+ArcFace normalizes features and weights, meaning the loss depends purely on angles. However, during training the gradient through the normalization operation can be sensitive to feature norm distributions. If the B/16 model outputs vary more in norm (since the final embedding is a learned projection to 512D), the backpropagated gradients might be uneven. The L/14 model (which outputs 1024D directly from transformer + LN) might produce more stable unit-length features suitable for ArcFace. We suspect B/16’s features may have required additional normalization or a smaller learning rate. Notably, ArcFace effectively amplifies gradient magnitudes by scaling logits with $s$ (we used up to 18). A smaller model might not cope with these larger gradient updates without a lower base learning rate. The fact that B/16 + ArcFace began to diverge after the warmup (when $s$ reached its max) suggests gradients became too large for stable convergence. In contrast, the no-ArcFace run (standard softmax) had much smoother gradients at the same learning rate.
+4. Pretraining Representation Differences:
+OpenAI’s CLIP L/14 and LAION’s CLIP B/16, despite similar objectives, could encode images differently. It’s possible that L/14’s embedding space is more linearly separable for real vs fake out-of-the-box (perhaps picking up on subtle artifacts in faces), whereas B/16’s embedding might align less with the real/fake distinction initially. If L/14 already separates the classes to some extent, ArcFace fine-tuning can quickly exploit that and add a margin. If B/16’s initial separation is poor, ArcFace might struggle, as the model must first discover the class separation and enforce the margin simultaneously with limited trainable parameters. The Effort method freezes most pre-trained weights, so any inherent advantage in the pretrained features matters a lot. The superior generalization of CLIP-L/14 over CLIP-B/16 on various tasks is well-documented
+arxiv.org
+. We intend to verify this by testing OpenAI’s ViT-B/16 model under ArcFace – if it trains more stably than the LAION B/16, it would implicate the pretraining differences (data or training recipe) rather than just model size.
+5. Limited Adaptation Capacity:
+Under the Effort approach, we only fine-tune ~0.04–0.07% of parameters (via low-rank SVD adapters). For the large model, ~198k parameters spread across 96 attention layers might have been sufficient to learn the margin-based separation. For the base model, ~74k parameters across 48 layers might be too few degrees of freedom to both capture forgery cues and satisfy the margin constraint. In other words, the B/16 might need a bit more flexibility (e.g. rank-2 adapters or tuning the final projection layer) to handle ArcFace, otherwise it gets stuck in a suboptimal regime. This is a more speculative point, but it aligns with the intuition that smaller models sometimes need proportionally more fine-tuning to achieve the same effect.
+Refining the Plan (Next Steps)
+Given the above analysis, we are adjusting our approach to diagnose and address the instability:
+A. Isolate Architecture vs Data: We will run the Effort+ArcFace training on OpenAI’s ViT-B/16 CLIP model. If this model (which shares architecture with LAION B/16 but was trained on OpenAI’s data) converges successfully with ArcFace, it implies the issue was likely related to the LAION model’s learned feature space. If it also fails, the culprit is more about architecture/capacity and loss settings.
+B. Tune ArcFace Hyperparameters: We will experiment with a smaller angular margin (e.g. $m=0.15$) for the B/16 model. Literature indicates that choosing an appropriate margin is crucial – too large margin can destabilize training
+pmc.ncbi.nlm.nih.gov
+. We’ll also try reducing the end scaling factor (e.g. $s_{end}=12$ or 14 instead of 18) and/or gradually annealing the margin from 0 to target over the first few epochs (similar to how we annealed $s$). The goal is to ease the model into the high separation regime.
+C. Lower Learning Rate: Since ArcFace effectively increases the difficulty of the task, a lower base LR might prevent divergence. We plan to test LR in the range $5\times10^{-5}$ to $1\times10^{-4}$ (with longer warmup) for B/16 + ArcFace. A smaller learning rate could accommodate the sharper loss landscape induced by the margin
+pmc.ncbi.nlm.nih.gov
+.
+D. Feature Space Analysis: We will deepen our research by extracting features from both models on a sample of real and fake images without fine-tuning. By comparing their cosine similarity distributions and norm statistics, we can see if B/16’s features are inherently less separable or more varied than L/14’s. For example, we’ll compute the mean intra-class vs inter-class cosine similarity for each model. This might reveal that L/14 starts with a better angle between real and fake clusters than B/16, explaining the ease of ArcFace training.
+E. Investigate Multi-Modal Fake Handling: If hypothesis (2) holds true (fake class being multi-modal), one workaround could be to explicitly account for different fake types. In the interim, we might try training with per-fake-type classification (if labels for different fake techniques are available) or using a Sub-Center ArcFace approach (where the “fake” class is allowed multiple centers)
+pmc.ncbi.nlm.nih.gov
+. This is an advanced idea and may be beyond our initial scope, but it’s a potential future direction if simply tuning hyperparameters doesn’t yield stability.
+F. Monitor Gradients and Norms: We will add logging to monitor the feature norms, weight norms, and gradient norms during training. If we see, for instance, B/16’s feature norms oscillating or gradient spikes coinciding with ArcFace margin enforcement, it will give concrete evidence of what’s going wrong internally (e.g., are certain layers saturating or is the classification weight vector oscillating?).
+By conducting the above steps, we aim to pinpoint the root cause of ArcFace’s incompatibility with the ViT-B/16 LAION backbone and find a remedy. Our expectation is that scaling down the difficulty of ArcFace (margin/scale) and/or improving B/16’s effective capacity will stabilize training. ArcFace has shown great success on the L/14 model (and is historically proven on face recognition tasks), so we are confident the concept is sound – we likely just need to adapt it properly to the smaller model.
+Conclusion
+The preliminary conclusion is that the ArcFace loss introduced a tougher optimization challenge than the ViT-B/16 (LAION) model could handle under our initial settings. The ViT-L/14’s higher capacity and perhaps more face-relevant feature space allowed ArcFace to shine (consistent with ArcFace’s intended use on high-quality face features). The B/16, on the other hand, struggled due to a combination of lower dimensional embeddings, possibly less separable initial features, and the strict angular margin exacerbating its limitations. This resulted in training instability manifesting as peaking and then declining performance – a clear sign of divergence. Moving forward, we will leverage the above research insights to adjust our training strategy. By doing so, we aim to either get ArcFace to work with ViT-B/16 (making it a faster lightweight alternative to L/14) or conclude that this backbone is fundamentally unsuited for margin-based fine-tuning in our scenario. Either outcome will be valuable for guiding our project’s next steps. Sources:
+Zhiyuan Yan et al., Efficient Orthogonal Modeling for Generalizable AIGI Detection (Effort) – Appendix D.3, noting ViT-L/14 vs ViT-B/16 performance
+arxiv.org
+.
+Jiankang Deng et al., ArcFace: Additive Angular Margin Loss for Deep Face Recognition – margin formulation and effects
+openaccess.thecvf.com
+openaccess.thecvf.com
+.
+Xiang An et al., Fixed-Weight ArcFace Loss for FER – on margin selection: “an excessively large [margin] may destabilize training”
+pmc.ncbi.nlm.nih.gov
+; on ArcFace focusing only on local sample-center angle (class center collapse issue)
+pmc.ncbi.nlm.nih.gov
+.
+Shiming Ge et al., Combining Margin Losses – importance of feature normalization on a hypersphere for ArcFace
+pmc.ncbi.nlm.nih.gov
+.
+
+
+
+
+Sources
+You said:
+My developer suggested:
+Priority Experiments to Run
+🔴 HIGH: Low ArcFace scale (s_start=5, s_end=10)
+🔴 HIGH: Feature normalization before ArcFace
+🟡 MED: Low margin (m=0.15)
+🟡 MED: Hybrid loss (start BCE, transition to ArcFace)
+Pragmatic Recommendation
+If the low-scale experiments don't work, B16_LAION achieves 0.78 AUC without ArcFace - which is solid. Focus ArcFace efforts on L14_OpenAI where it's proven to work.
+
+What do you think? Is this sensible? Would you do something else for a start?
+ChatGPT said:
+
+Thought for 15s
+Yeah — your developer’s list is sensible, and I’d run almost exactly that as the first pass. It’s aligned with what the margin-loss literature says: scale s and margin m strongly shape optimization, and bad settings can make training brittle. AdaCos was literally proposed because tuning s/m is painful and affects stability. 
+CVF Open Access
++1
+
+Here’s how I’d prioritize and what I’d add.
+
+I agree with your dev’s priorities (with one tweak)
+🔴 High: Lower ArcFace scale (s_start=5 → s_end=10)
+Yes. In ArcFace-style losses, s basically amplifies gradients by scaling logits. If B16 is already “on the edge” with your tiny trainable subspace, lowering s is the quickest way to reduce oscillations.
+
+One note: in classic face ID training people often use much higher s (e.g., 64). 
+download.arxiv.org
++1
+
+But your setup is not classic face ID (binary + multi-modal “fake” class + extremely low-rank tuning), so smaller s is a totally reasonable stabilization move.
+
+🔴 High: Explicit feature normalization before ArcFace
+Also yes. ArcFace is defined on L2-normalized features and weights (angles on the hypersphere). If you’re already normalizing inside the ArcFace head, this won’t change math — but it’s still worth doing once explicitly to eliminate implementation ambiguity (e.g., projection output, fp16 scaling, accidental missing norm in some path).
+
+🟡 Med: Lower margin (m=0.15)
+Yes, and I’d treat this as “high” if low-s doesn’t help quickly. Too-aggressive margins can destabilize training. 
+CVF Open Access
+
+🟡 Med: Hybrid loss (BCE → ArcFace)
+Yes. This is basically “curriculum,” and curriculum-style margin losses are a known stabilization theme (start easy, then emphasize hard/margin). 
+CVF Open Access
++1
+
+In your case, the hybrid trick is especially logical because your binary classes are likely not compact early on.
+
+What I’d add before running lots of sweeps
+1) Add gradient clipping + log gradient norms (super cheap, often fixes “peaks then collapse”)
+If ArcFace is causing gradient spikes around the time s finishes annealing, clipping can stop the runaway and preserve the early gains.
+
+Try clip_grad_norm_ = 1.0 (or even 0.5).
+
+2) Try AdaCos instead of hand-tuning s
+This is exactly the problem AdaCos targets: scale sensitivity and training tricks. 
+CVF Open Access
++1
+
+If you can swap it in easily, it can save you from guessing s schedules.
+
+3) Consider Sub-center ArcFace conceptually (maybe later)
+Your “fake” class is plausibly multi-modal (different generators/artifacts), so a single class center can be a bad fit. Sub-center ArcFace was proposed to relax the single-center constraint. 
+ECVA
++1
+
+You probably don’t want to implement this first, but it’s a strong explanation for “oscillating decision boundary” behavior.
+
+My “start set” (minimal, high-signal)
+If I were you, I’d run these 3 runs first (in this order), with identical seeds/data:
+
+ArcFace + explicit L2 norm + low scale
+
+s: 5 → 10 over 2k–4k steps
+
+keep m=0.28 for now
+
+add grad clipping
+
+ArcFace + explicit L2 norm + low margin
+
+m=0.15
+
+s: 5 → 10
+
+grad clipping
+
+Hybrid
+
+BCE for ~1–2k steps, then switch to ArcFace with s: 5 → 10, m=0.15
+
+grad clipping
+
+If none of these beat the BCE baseline meaningfully or still show the same “peak then decay” pattern, your dev’s pragmatic recommendation is right: ship B16_LAION with BCE (0.78 AUC is solid), and keep ArcFace for L14 where it’s already proven.
+
+One last “sanity” check I’d do once
+Run OpenAI ViT-B/16 + ArcFace as a control (same setup). If it works, that implicates the LAION checkpoint’s embedding geometry / projection behavior more than B16 size alone.
+
+If you want, paste your ArcFace head code (just that class) and I’ll quickly scan for the 2–3 implementation pitfalls that most often cause exactly the “peak then collapse” signature.
+
+You said:
+results:
+# B16-LAION + ArcFace Investigation Report
+
+**Date:** January 14, 2026  
+**Project:** B16-arcface-investigation  
+**Entity:** dtect-vision  
+**Investigator:** Automated Analysis + Human Review
+
+---
+
+## Executive Summary
+
+This investigation explored why the ViT-B-16-DataComp-XL (B16-LAION) backbone with ArcFace loss consistently fails to train effectively, while the larger ViT-L-14 backbone achieves 0.98+ AUC with the same loss configuration.
+
+**Key Finding:** The B16 backbone's limited SVD residual capacity (~74K trainable parameters vs L14's ~150K) cannot support the angular margin requirements of ArcFace loss. All configurations with positive margin (m > 0) eventually collapsed or plateaued at 0.65-0.73 AUC. Removing the margin entirely (m=0) achieved 0.83 AUC but this defeats the purpose of margin-based losses.
+
+**Conclusion:** B16+ArcFace with standard margins is not viable. Alternative approaches are needed for B16-based deployments.
+
+---
+
+## Table of Contents
+
+1. [Background & Motivation](#1-background--motivation)
+2. [Technical Context](#2-technical-context)
+3. [Experimental Design](#3-experimental-design)
+4. [Results Summary](#4-results-summary)
+5. [Detailed Analysis](#5-detailed-analysis)
+6. [Collapse Mechanism Analysis](#6-collapse-mechanism-analysis)
+7. [Key Insights](#7-key-insights)
+8. [Failed Hypotheses](#8-failed-hypotheses)
+9. [Future Directions](#9-future-directions)
+10. [Appendix: Raw Data](#appendix-raw-data)
+
+---
+
+## 1. Background & Motivation
+
+### 1.1 Problem Statement
+
+We need to deploy deepfake detection models with constrained compute resources. The L14 backbone (ViT-L-14) achieves excellent results (0.98+ AUC) but has:
+- ~428M parameters
+- Higher inference latency
+- Greater memory requirements
+
+The B16 backbone (ViT-B-16-DataComp-XL) would be preferable for deployment:
+- ~150M parameters (3x smaller)
+- Faster inference
+- Lower memory footprint
+
+However, B16 + ArcFace training consistently fails, collapsing to random-chance performance (~0.5 AUC) mid-training.
+
+### 1.2 Prior Observations
+
+Initial experiments showed:
+- **B16 without ArcFace:** Achieves ~0.78 AUC (stable training)
+- **B16 with ArcFace (s=18, m=0.28):** Peaks at ~0.65 AUC, then collapses at epoch ~46
+- **L14 with ArcFace (s=30, m=0.5):** Achieves 0.98+ AUC (stable training)
+
+The collapse signature:
+- Logit standard deviation drops from ~0.3 to ~0.004
+- All predictions converge to the same value
+- Loss stabilizes at ~0.693 (binary cross-entropy at 50% confidence)
+- Both class centers become identical (cosine similarity → 1.0)
+
+---
+
+## 2. Technical Context
+
+### 2.1 Effort Method Overview
+
+The Effort method fine-tunes CLIP backbones using SVD-based residual learning:
+
+W_adapted = W_frozen + U_residual @ diag(S_residual) @ V_residual.T
+
+
+Where:
+- W_frozen: Top-k singular components (frozen)
+- U_residual, S_residual, V_residual: Trainable residual components
+- rank = 767 means k=1 (only top singular value frozen, 767 trainable)
+
+### 2.2 Backbone Specifications
+
+| Specification | B16-LAION | L14 |
+|--------------|-----------|-----|
+| Model | ViT-B-16-DataComp-XL | ViT-L-14 |
+| Source | LAION (open_clip) | OpenAI |
+| Hidden Size (output) | 512 | 1024 |
+| Embed Dim (internal) | 768 | 1024 |
+| Attention Heads | 12 | 16 |
+| Transformer Layers | 12 | 24 |
+| Total Parameters | ~150M | ~428M |
+| SVD Trainable Params | ~74K | ~150K |
+
+### 2.3 ArcFace Loss Formulation
+
+Standard ArcFace loss:
+L = -log(exp(s · cos(θ_y + m)) / (exp(s · cos(θ_y + m)) + Σ exp(s · cos(θ_j))))
+
+
+Where:
+- s: Scale factor (controls gradient magnitude)
+- m: Angular margin (pushes features away from decision boundary)
+- θ_y: Angle between feature and correct class center
+- θ_j: Angle between feature and other class centers
+
+For binary classification (real/fake):
+- 2 class centers (learnable weight vectors)
+- Angular margin creates a "gap" between classes in angular space
+
+### 2.4 CosFace vs ArcFace
+
+**ArcFace:** Adds margin to the angle: cos(θ + m)  
+**CosFace:** Subtracts margin from cosine: cos(θ) - m
+
+When m = 0, both reduce to **scaled cosine softmax**: s · cos(θ)
+
+---
+
+## 3. Experimental Design
+
+### 3.1 Baseline Configuration
+
+All experiments shared these settings:
+- **Backbone:** ViT-B-16-DataComp-XL (LAION)
+- **SVD Rank:** 767 (k=1 frozen)
+- **Learning Rate:** 2e-4
+- **Weight Decay:** 0.05 (0.0 for SVD params)
+- **Warmup Steps:** 1000
+- **Total Steps:** 12000
+- **Scheduler:** Cosine with warmup
+- **Early Stopping:** Patience=15 epochs
+- **Data:** Combined DeepLive + DF40 paired dataset
+
+### 3.2 Hypotheses Tested
+
+| Hypothesis | Experiment | Configuration |
+|------------|------------|---------------|
+| H1: Scale too high | s10, s6 | Reduce s_end to 10 or 6 |
+| H2: Margin too aggressive | m15, cosface_style | Reduce m to 0.15 or 0 |
+| H3: Combined scale+margin | s10_m15 | Both reduced |
+| H4: Feature norm instability | feat_norm | Normalize features before head |
+| H5: Annealing too fast | slow_anneal | Increase anneal_steps to 3000 |
+| H6: Regularization too strong | low_lambda | Reduce lambda_reg to 0.1 |
+
+### 3.3 Experiments Run
+
+| Run Name | s_start | s_end | m | lambda_reg | Special |
+|----------|---------|-------|---|------------|---------|
+| s10 | 5 | 10 | 0.28 | 1.0 | - |
+| s6 | 3 | 6 | 0.28 | 1.0 | - |
+| m15 | 10 | 18 | 0.15 | 1.0 | - |
+| cosface_style | 10 | 18 | **0** | 1.0 | No angular margin |
+| s10_m15 | 5 | 10 | 0.15 | 1.0 | Combined reduction |
+| feat_norm | 10 | 18 | 0.28 | 1.0 | normalize_features_before_head=True |
+| slow_anneal | 5 | 18 | 0.28 | 1.0 | anneal_steps=3000 |
+| low_lambda | 10 | 18 | 0.28 | **0.1** | 10x lower SVD regularization |
+
+---
+
+## 4. Results Summary
+
+### 4.1 Performance Ranking
+
+| Rank | Experiment | Best AUC | Best Acc | Best EER | Best Epoch | Status |
+|------|------------|----------|----------|----------|------------|--------|
+| 1 | **cosface_style** | **0.8295** | 0.747 | 0.262 | 84 | Running |
+| 2 | s10_m15 | 0.7280 | 0.668 | 0.328 | 24 | Running |
+| 3 | low_lambda | 0.7268 | 0.500 | 0.314 | 108 | Running |
+| 4 | m15 | 0.7173 | 0.668 | 0.332 | 24 | Running |
+| 5 | s10 | 0.6603 | 0.609 | 0.384 | 18 | Early Stopped |
+| 6 | slow_anneal | 0.6570 | 0.611 | 0.380 | 18 | Early Stopped |
+| 7 | s6 | 0.6553 | 0.583 | 0.402 | 12 | Early Stopped |
+| 8 | feat_norm | 0.6503 | 0.600 | 0.410 | 18 | Early Stopped |
+
+### 4.2 Reference Baselines
+
+| Configuration | AUC | Notes |
+|--------------|-----|-------|
+| B16 without ArcFace | ~0.78 | Stable training |
+| L14 + ArcFace (s=30, m=0.5) | 0.98+ | Production target |
+
+### 4.3 Key Observations
+
+1. **cosface_style (m=0) achieved highest AUC** but with significant AUC-Accuracy gap (0.83 vs 0.75)
+2. **All runs with m > 0 capped at ≤0.73 AUC**
+3. **Reducing scale alone (s=10, s=6) did not prevent collapse**
+4. **Feature normalization made things worse**
+5. **Slow annealing did not help**
+
+---
+
+## 5. Detailed Analysis
+
+### 5.1 Margin is the Primary Culprit
+
+Clear pattern emerges when sorting by margin:
+
+| Margin | Experiments | Best AUC Range |
+|--------|-------------|----------------|
+| m = 0 | cosface_style | 0.83 |
+| m = 0.15 | m15, s10_m15 | 0.72-0.73 |
+| m = 0.28 | s10, s6, slow_anneal, feat_norm, low_lambda | 0.65-0.73 |
+
+**Conclusion:** Margin has the strongest impact on final performance. Scale adjustments provide marginal improvements but cannot overcome high-margin instability.
+
+### 5.2 Scale Effects
+
+Comparing runs with same margin (m=0.28):
+
+| Scale (s_end) | Experiment | Best AUC |
+|---------------|------------|----------|
+| 18 | slow_anneal | 0.657 |
+| 18 | low_lambda | 0.727 (late peak) |
+| 10 | s10 | 0.660 |
+| 6 | s6 | 0.655 |
+
+Lower scale did NOT improve results. The low_lambda variant achieved better AUC but only very late in training (epoch 108) and subsequently collapsed.
+
+### 5.3 AUC vs Accuracy Discrepancy
+
+| Experiment | AUC | Accuracy | Gap |
+|------------|-----|----------|-----|
+| cosface_style | 0.830 | 0.747 | 0.083 |
+| s10_m15 | 0.728 | 0.668 | 0.060 |
+| m15 | 0.717 | 0.668 | 0.049 |
+| low_lambda | 0.727 | 0.500 | 0.227 |
+
+The cosface_style has an 8.3-point gap between AUC and accuracy, indicating:
+- Good ranking ability (AUC measures this)
+- Poor calibration/threshold selection (accuracy measures this)
+- The model isn't highly confident in predictions
+
+The low_lambda experiment shows a catastrophic gap (0.227), indicating it's effectively collapsed to constant output despite high AUC at one point.
+
+### 5.4 Training Dynamics
+
+**Healthy training (cosface_style at epoch 118):**
+logit_std: 0.64
+class_separation: 0.69
+is_constant_output: 0
+center_cosine_sim: -0.77  (class centers opposite directions!)
+
+
+**Collapsed training (slow_anneal at epoch 108):**
+logit_std: 0.004
+class_separation: 0.0
+is_constant_output: 1
+center_cosine_sim: 0.9999  (class centers identical!)
+
+
+---
+
+## 6. Collapse Mechanism Analysis
+
+### 6.1 The Collapse Sequence
+
+Based on log analysis, collapse follows this pattern:
+
+1. **Phase 1 (Epochs 1-20):** Normal training, AUC improves to 0.65-0.70
+2. **Phase 2 (Epochs 20-40):** Training continues but improvements slow
+3. **Phase 3 (Epochs 40-50):** Gradients become unstable
+4. **Phase 4 (Epoch 46+):** Sudden collapse
+   - Logit variance drops precipitously
+   - Class centers converge
+   - All predictions become identical
+5. **Phase 5 (Post-collapse):** Loss stabilizes at 0.693, model outputs constant
+
+### 6.2 Root Cause Hypothesis
+
+**The Angular Margin Capacity Problem:**
+
+ArcFace with margin m requires features to be pushed into angular cones of width (π/2 - m) radians around each class center. For m=0.28 (~16°), this means features must be within ~74° of their class center.
+
+The SVD residual space has limited capacity to reshape the feature manifold:
+- B16 has 512-dimensional output space
+- With only ~74K trainable parameters across 48 SVD layers
+- Each layer can make small adjustments to feature geometry
+
+**What happens:**
+1. Early training: Easy samples are correctly classified
+2. Mid training: Model tries to push hard samples into tighter cones
+3. The SVD residual capacity is exhausted
+4. Gradient updates cause oscillations as the model can't satisfy margin requirements
+5. The system finds a degenerate minimum: both class centers collapse to the same point
+
+**Why L14 works:**
+- 2x larger representation space (1024 vs 512)
+- 2x more SVD trainable parameters (~150K vs ~74K)
+- More "geometric room" to separate features while satisfying margin constraints
+
+### 6.3 Evidence Supporting This Hypothesis
+
+1. **Margin reduction helps:** Lower m → better results
+2. **m=0 prevents collapse:** No angular constraint → no capacity problem
+3. **Scale reduction alone doesn't help:** Scale affects gradient magnitude, not geometric constraints
+4. **Feature normalization hurts:** Removes magnitude information that could help discrimination
+5. **L14 success:** More capacity → can satisfy margin requirements
+
+---
+
+## 7. Key Insights
+
+### 7.1 Confirmed Findings
+
+1. **B16 + ArcFace (m > 0) is fundamentally unstable** due to capacity constraints
+2. **Margin is more impactful than scale** for preventing collapse
+3. **m=0 (no margin) allows stable training** but loses margin benefits
+4. **Weight decay=0 for SVD params** is correctly implemented and not the issue
+5. **The collapse is reproducible** across different hyperparameter configurations
+
+### 7.2 Quantitative Thresholds
+
+From the experiments, approximate boundaries:
+
+| Margin | Expected Outcome |
+|--------|------------------|
+| m = 0 | Stable, AUC ~0.83 |
+| m = 0.15 | Marginal, AUC ~0.72, may plateau |
+| m ≥ 0.28 | Likely collapse, AUC ≤ 0.66 |
+
+### 7.3 What Margin=0 Actually Does
+
+With m=0, the ArcFace loss becomes:
+L = -log(exp(s · cos(θ_y)) / Σ exp(s · cos(θ_j)))
+
+
+This is **scaled cosine softmax** - equivalent to:
+- Regular cross-entropy with normalized weights and features
+- No inter-class angular gap enforcement
+- Learnable class centers (the ArcFace weight vectors)
+
+**Benefits retained:**
+- Learned class prototypes
+- Normalized feature space
+- Scale factor for gradient control
+
+**Benefits lost:**
+- Angular margin separation
+- Forced feature compactness
+- Improved generalization from harder training
+
+---
+
+## 8. Failed Hypotheses
+
+### 8.1 ❌ "Scale is too high"
+**Experiments:** s10, s6  
+**Result:** AUC 0.655-0.660, still collapsed/plateaued  
+**Conclusion:** Scale reduction alone is insufficient
+
+### 8.2 ❌ "Annealing is too fast"
+**Experiment:** slow_anneal (3000 steps vs 1000)  
+**Result:** AUC 0.657, collapsed at epoch 18  
+**Conclusion:** Annealing speed is not the issue
+
+### 8.3 ❌ "Feature norm instability"
+**Experiment:** feat_norm (normalize before head)  
+**Result:** AUC 0.650, worst performer  
+**Conclusion:** Feature normalization removes useful information
+
+### 8.4 ⚠️ Partial: "SVD regularization too strong"
+**Experiment:** low_lambda (λ=0.1)  
+**Result:** AUC 0.727 (good!) but collapsed late (epoch 108+)  
+**Conclusion:** Helps initially but doesn't prevent eventual collapse
+
+### 8.5 ⚠️ Partial: "Margin is too aggressive"
+**Experiments:** m15, s10_m15  
+**Result:** AUC 0.717-0.728, better than m=0.28 but still limited  
+**Conclusion:** Lower margin helps but doesn't reach target performance
+
+---
+
+## 9. Future Directions
+
+### 9.1 Approaches NOT Recommended
+
+| Approach | Reason |
+|----------|--------|
+| Further scale reduction | Already tested, minimal impact |
+| Slower annealing | Already tested, no benefit |
+| Feature normalization | Made things worse |
+| Standard ArcFace margins | Fundamental capacity issue |
+
+### 9.2 Promising Directions to Explore
+
+#### 9.2.1 Hybrid Loss Approaches
+
+**Idea:** Combine margin-free loss with auxiliary objectives
+
+python
+L_total = L_cosine_softmax + α * L_center_loss + β * L_contrastive
+
+
+- L_cosine_softmax: Main classification (m=0)
+- L_center_loss: Pull features toward class centers
+- L_contrastive: Push apart hard positive/negative pairs
+
+This could achieve margin-like effects without the angular constraint.
+
+#### 9.2.2 Curriculum Margin
+
+**Idea:** Start with m=0, gradually introduce margin only if training is stable
+
+python
+m_current = min(m_target, m_rate * epoch) if not collapse_detected else 0
+
+
+With collapse detection based on logit_std threshold.
+
+#### 9.2.3 Adaptive Margin Per Sample
+
+**Idea:** Use smaller margins for hard samples, larger for easy samples
+
+python
+m_sample = m_base * confidence_score
+
+
+This prevents hard samples from destabilizing training.
+
+#### 9.2.4 Increased SVD Capacity
+
+**Idea:** Use lower rank (freeze fewer components) to increase trainable capacity
+
+rank=700 → k=68 frozen, more trainable params
+rank=600 → k=168 frozen, even more capacity
+
+
+**Risk:** May hurt generalization by overfitting to training data.
+
+#### 9.2.5 SubCenter ArcFace
+
+**Idea:** Multiple sub-centers per class to handle intra-class variation
+
+python
+# Instead of 2 class centers (real, fake)
+# Use 2*K sub-centers (K per class)
+# Assign each sample to nearest sub-center
+
+
+This relaxes the constraint that all samples of a class must cluster tightly.
+
+#### 9.2.6 Different Loss Functions Entirely
+
+**Options to explore:**
+- **Focal Loss:** Down-weight easy samples
+- **Label Smoothing:** Softer targets
+- **Knowledge Distillation:** Learn from L14 teacher model
+- **Supervised Contrastive Loss:** Alternative to softmax-based losses
+
+#### 9.2.7 Architecture Modifications
+
+**Ideas:**
+- Add learnable projection head between backbone and ArcFace
+- Use multiple SVD ranks for different layers
+- Apply SVD only to later layers (where features are more abstract)
+
+### 9.3 Recommended Next Experiments
+
+**Priority 1: Hybrid Loss (Low risk, potentially high reward)**
+yaml
+loss:
+  type: hybrid
+  cosine_weight: 1.0
+  center_loss_weight: 0.1
+  arcface_m: 0  # No angular margin
+
+
+**Priority 2: Curriculum Margin (Medium risk)**
+yaml
+arcface:
+  m_start: 0
+  m_end: 0.15
+  m_anneal_start_epoch: 30  # Only after stable baseline
+  collapse_threshold_logit_std: 0.1
+
+
+**Priority 3: Lower SVD Rank (Higher risk)**
+yaml
+rank: 600  # Instead of 767
+# Provides more trainable capacity but risk of overfitting
+
+
+**Priority 4: SubCenter ArcFace (Requires implementation)**
+yaml
+arcface:
+  num_subcenters: 4  # 4 sub-centers per class
+  m: 0.15
+  s: 18
+
+
+---
+
+## Appendix: Raw Data
+
+### A.1 Full Experiment Configurations
+
+<details>
+<summary>Click to expand configurations</summary>
+
+#### cosface_style (BEST)
+yaml
+name: B16_LAION_cosface_style_full_svd
+arcface_s: 18
+arcface_m: 0
+s_start: 10
+s_end: 18
+lambda_reg: 1
+anneal_steps: 1000
+
+
+#### s10_m15
+yaml
+name: B16_LAION_s10_m15_full_svd
+arcface_s: 10
+arcface_m: 0.15
+s_start: 5
+s_end: 10
+lambda_reg: 1
+anneal_steps: 1000
+
+
+#### low_lambda
+yaml
+name: B16_LAION_low_lambda_full_svd
+arcface_s: 18
+arcface_m: 0.28
+s_start: 10
+s_end: 18
+lambda_reg: 0.1
+anneal_steps: 1000
+
+
+#### m15
+yaml
+name: B16_LAION_m15_full_svd
+arcface_s: 18
+arcface_m: 0.15
+s_start: 10
+s_end: 18
+lambda_reg: 1
+anneal_steps: 1000
+
+
+#### s10
+yaml
+name: B16_LAION_s10_full_svd
+arcface_s: 10
+arcface_m: 0.28
+s_start: 5
+s_end: 10
+lambda_reg: 1
+anneal_steps: 1000
+
+
+#### slow_anneal
+yaml
+name: B16_LAION_slow_anneal_full_svd
+arcface_s: 18
+arcface_m: 0.28
+s_start: 5
+s_end: 18
+lambda_reg: 1
+anneal_steps: 3000
+
+
+#### s6
+yaml
+name: B16_LAION_s6_full_svd
+arcface_s: 6
+arcface_m: 0.28
+s_start: 3
+s_end: 6
+lambda_reg: 1
+anneal_steps: 1000
+
+
+#### feat_norm
+yaml
+name: B16_LAION_feat_norm_full_svd
+arcface_s: 18
+arcface_m: 0.28
+s_start: 10
+s_end: 18
+lambda_reg: 1
+anneal_steps: 1000
+normalize_features_before_head: true
+
+
+</details>
+
+### A.2 Final Metrics Snapshot
+
+| Experiment | best/auc | best/acc | best/eer | best/epoch | train/collapse/logit_std | train/collapse/is_constant_output | train/arcface/center_cosine_sim |
+|------------|----------|----------|----------|------------|--------------------------|-----------------------------------|--------------------------------|
+| cosface_style | 0.8295 | 0.7467 | 0.2620 | 84 | 0.6445 | 0 | -0.7774 |
+| s10_m15 | 0.7280 | 0.6681 | 0.3275 | 24 | 0.1816 | 0 | 0.9466 |
+| low_lambda | 0.7268 | 0.5000 | 0.3144 | 108 | 0.0079 | 1 | 0.9999 |
+| m15 | 0.7173 | 0.6681 | 0.3319 | 24 | 0.1637 | 0 | 0.9499 |
+| s10 | 0.6603 | 0.6092 | 0.3843 | 18 | 0.0956 | 0 | 0.9856 |
+| slow_anneal | 0.6570 | 0.6114 | 0.3799 | 18 | 0.0038 | 1 | 0.9999 |
+| s6 | 0.6553 | 0.5830 | 0.4017 | 12 | 0.0387 | 0 | 0.9849 |
+| feat_norm | 0.6503 | 0.6004 | 0.4105 | 18 | 0.0052 | 1 | 0.9999 |
+
+### A.3 W&B Project Links
+
+- **Project:** dtect-vision/B16-arcface-investigation
+- **Best Run:** 0ox4mrss (cosface_style)
+- **GCS Checkpoint:** gs://training-job-outputs/best_checkpoints/0ox4mrss/top_n_effort_20260114_step7000_auc0.8295_eer0.2620.pth
+
+---
+
+## Document History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | 2026-01-14 | Automated Analysis | Initial comprehensive report |
+
+---
+
+## References
+
+1. Deng et al., "ArcFace: Additive Angular Margin Loss for Deep Face Recognition", CVPR 2019
+2. Wang et al., "CosFace: Large Margin Cosine Loss for Deep Face Recognition", CVPR 2018
+3. Effort Method (ICML 2025 Oral): SVD-based orthogonal subspace decomposition
+4. CLIP: Radford et al., "Learning Transferable Visual Models From Natural Language Supervision"
+
+
+
+---
+
+Do you think we still have a chance to utilize B16?
+ChatGPT said:
+
+Thought for 13s
+Yes — you still have a very viable B16 path, just probably not “classic ArcFace with m>0 on a 2-class head” under your current Effort (k=1) capacity.
+
+Your report actually gives you a strong hint: m=0 (scaled cosine softmax) is already the best B16 result (AUC ~0.83) and it’s stable with centers nicely separated (center_cosine_sim ~ -0.77). That means B16 can learn a good ordering signal; the margin is what breaks it.
+
+What I think is happening (based on your metrics)
+For m>0, you repeatedly see centers converging (center_cosine_sim → ~0.95…1.0) and sometimes full collapse (logit_std ~0.004, constant output).
+
+That’s not just “too small model.” It’s a very specific failure mode: the head learns that the easiest stable solution is to make the two class prototypes identical, and the residual capacity can’t “fight it back” once it starts.
+
+This is very consistent with the “binary, multi-modal class + margin constraint + low-rank adaptation” mismatch you suspected.
+
+So: do we still have a chance to utilize B16?
+Absolutely — but shift the goal:
+
+Use B16 as your fast deployment model with margin-free cosine head (m=0), and then add margin-like benefits via other mechanisms that don’t force the tight angular cone constraint.
+
+You already proved B16 can reach 0.83 AUC with m=0. That’s a real signal.
+
+What I’d do next (pragmatic, high ROI)
+1) Keep m=0, and fix the AUC↔accuracy gap via calibration + thresholding
+Your cosface_style gap (AUC 0.83 vs Acc 0.75) screams threshold/calibration, not ranking.
+
+Choose threshold on a validation ROC to maximize your target metric (Acc / F1 / TPR@FPR).
+
+Add post-hoc calibration (temperature scaling / Platt scaling) on a heldout set.
+This often turns “good AUC but meh accuracy” into a much better deployable classifier without touching training.
+
+2) Distill from L14 → B16 (this is the best “margin replacement”)
+If L14+ArcFace is your gold teacher, distillation lets B16 inherit the teacher’s separation without you imposing m>0 directly.
+Two easy variants:
+
+Logit distillation: L = CE(y, p_student) + α * KL(p_teacher || p_student)
+
+Feature distillation: align student embedding with teacher embedding (cosine / MSE after a small projection).
+This is the single most likely way to push B16 from ~0.83 toward your L14 behavior while staying stable.
+
+3) Replace ArcFace margin with “softer” separation losses
+If you want extra separation pressure without the hard margin:
+
+Supervised contrastive (batch-based positives/negatives) on top of the cosine-softmax head.
+
+Center loss (small weight) to reduce intra-class variance without forcing a fixed angular gap.
+
+These often behave better in binary + multi-modal settings than ArcFace.
+
+4) If you insist on margin: try “multi-prototype fake” before giving up
+Your results strongly suggest “fake” is multi-modal. ArcFace with 1 prototype per class is a bad fit.
+A minimal hack without implementing full SubCenterArcFace:
+
+Use K prototypes for fake (e.g., 4), 1 for real
+
+Logits for fake = max_k cos(x, w_fake_k) (or log-sum-exp)
+
+Train with standard CE (still can keep m=0)
+This often recovers “prototype collapse” issues.
+
+Two quick sanity checks (worth doing once)
+These are not big sweeps, just confirm assumptions:
+
+Is weight decay applied to ArcFace class weights?
+If yes, it can encourage weird prototype behavior under normalization. Make sure class weights and SVD params have wd=0.
+
+Try OpenAI ViT-B/16 + ArcFace
+If OpenAI B16 behaves better, then it’s less about “B16 is too small” and more about the LAION/DataComp embedding geometry + your residual constraint.
+
+Bottom line
+B16 is absolutely usable.
+
+Your own data suggests “B16 + cosine-softmax (m=0) + calibration” is already a strong deployable baseline.
+
+If you want “ArcFace-like gains” on B16, the most promising path is distillation from your L14+ArcFace teacher, not forcing m>0 directly.
+
+I would personally stop spending cycles on pure ArcFace margin tuning for B16 unless you also change the head structure (multi-prototype) or increase adaptation capacity.
+
+If you paste the ArcFace head + how you compute logits for binary (2-class softmax vs 1-logit sigmoid), I can tell you a couple of very specific head designs for the binary case that avoid the “centers collapse” trap while keeping the cosine geometry benefits.
+
+You said:
+Interesting, especially your distillation proposal, but also the other ones. I'm aiming for AUC that is above 0.95. Do you think that's feasible? What would be the next steps in your mind?
+ChatGPT said:
+Getting B16 → AUC > 0.95 is possible in some setups, but it’s not something I’d assume is guaranteed from where you are today.
+
+What your results say right now:
+
+B16 is learning a real signal (AUC ~0.83 with m=0 cosine-softmax).
+
+ArcFace margin is killing optimization (prototype collapse).
+
+To jump from 0.83 → 0.95, you need either:
+
+a much better inductive bias / supervision signal (distillation is the cleanest), and/or
+
+more adaptation capacity than “k=1 residual per projection” gives B16.
+
+If you want a realistic path to 0.95+, here’s what I’d do next (ordered by ROI).
+
+1) Treat L14+ArcFace as a teacher and distill into B16 (highest probability)
+This is the most pragmatic way to “import” the separation you already know is achievable.
+
+Distillation recipe (start simple, then tighten)
+Student: B16-LAION with your stable head (m=0, cosine-softmax)
+Teacher: L14-OpenAI with ArcFace (frozen)
+
+Loss:
+
+L = CE(y, p_student) + α * KL(soft_teacher || soft_student) (logit distill)
+
+Optionally add feature distill:
+
++ β * (1 - cosine(z_student_proj, z_teacher))
+
+Key tricks:
+
+Use temperature T=2–4 for the KL term (soft targets contain “dark knowledge”).
+
+Start with α ~ 0.5–2.0, β ~ 0.1–0.5.
+
+Why this helps: your current training signal (binary labels) doesn’t tell B16 how to shape the boundary; the teacher provides a much richer gradient field.
+
+Expected impact: this is the one technique that can plausibly jump you by 10–15 AUC points if the teacher is strong and the student has enough capacity to mimic.
+
+2) Give B16 a bit more capacity, in the safest possible way
+If B16 is bottlenecked (your report’s “capacity” hypothesis), distillation alone might plateau <0.95 unless you loosen the adaptation.
+
+I’d do one of these (low risk, easy to justify):
+
+Option A: Unfreeze the final projection (768→512) + LN (or add a small MLP head)
+Keep Effort everywhere else, but allow the last projection to move (or insert 512→512 MLP with small hidden size).
+This often fixes “geometry mismatch” problems because ArcFace/cos-softmax live and die by embedding geometry.
+
+Option B: Increase residual DOF slightly (e.g., rank-2 residual per layer, or unfreeze only last N transformer blocks)
+Don’t go from 0.07% → “full finetune.” Just add a little.
+Your collapse and the margin sensitivity are consistent with “not enough degrees of freedom to satisfy constraints.”
+
+3) If you still want a “margin-like” effect on B16, avoid hard ArcFace
+Your experiments strongly suggest any fixed positive margin causes collapse. So instead of insisting on ArcFace:
+
+Use “soft separation” losses on top of m=0
+Supervised contrastive (or InfoNCE) on embeddings (works well with multi-modal classes).
+
+Center loss with a very small coefficient (encourages compactness without a strict angular cone).
+
+Hard-negative mining (make the model focus on confusing pairs).
+
+These are much less likely to produce prototype collapse.
+
+4) Don’t ignore the “ceiling check”
+Before committing to weeks of work, do one control that tells you if 0.95 is even plausible for B16:
+
+Control: Train B16 with more adaptation (temporarily) and see the ceiling
+Example: unfreeze last 2 blocks + projection + head, keep everything else frozen. Use BCE or m=0 cos-softmax.
+
+If this still can’t cross, say, 0.90–0.92, then B16’s representational ceiling on this dataset might be below 0.95.
+
+If it does reach 0.95, then you know the target is feasible and it’s “just” about finding a stable efficient tuning scheme.
+
+This single experiment saves a ton of time.
+
+Concrete next steps (what I’d run next week)
+Step 1 — Teacher inference dump (one-time)
+Run L14+ArcFace on your training set and store:
+
+teacher logits (or probabilities)
+
+optionally teacher embeddings
+
+Step 2 — Distill into your best stable B16 setting (m=0)
+Run 2–3 variants:
+
+Logit distill only (α sweep: 0.5, 1.0, 2.0; T=2 or 4)
+
+Logit + feature distill (small β)
+
+Same as (2) + unfreeze projection layer (or add tiny MLP)
+
+Step 3 — Evaluate properly
+AUC on holdout + cross-domain (your “released in the wild” equivalent)
+
+Also track calibration (ECE / reliability) so accuracy doesn’t mislead you.
+
+My honest take on feasibility
+If your teacher truly generalizes (not just memorizing), and B16 isn’t fundamentally too small for the artifact signals you need, 0.95+ can be feasible with distillation + a small capacity bump.
+
+If the task requires subtle cues that only L14 captures, B16 may top out lower even with distillation.
+
+If you want, tell me which path you prefer for Step 2:
+
+logit distill only (fastest, minimal code), or
+
+logit + feature distill (slightly more code, higher upside), or
+
+distill + unfreeze projection (most likely to hit 0.95 if it’s possible).
+
+And if you paste your current head forward (how you produce logits from embeddings), I’ll give you a drop-in distillation loss block that matches your binary setup exactly.
+
+
+
+
+No file chosenNo file chosen
+ChatGPT can make mistakes. Check important info. See Cookie Preferences.
