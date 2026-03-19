@@ -5,3 +5,12 @@ partial_manifest.json
 requirements_effort.txt
 debug/
 data_analysis_plots/
+.DS_Store
+.vscode/
+tmp_wandb/
+*.log
+*.jsonl
+arena/arena_results/
+*.npz
+*.gstmp
+*.zip

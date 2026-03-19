@@ -79,12 +79,13 @@ stringzilla==3.12.5
 sympy==1.14.0
 threadpoolctl==3.6.0
 tifffile==2025.5.10
-tokenizers==0.21.4
+tokenizers==0.19.1  # Pinned: compatible with transformers 4.44.2
 torchdata==0.7.0
 tqdm==4.67.1
-transformers==4.54.1
+transformers==4.44.2  # Pinned: 4.54+ requires PyTorch 2.6+ due to CVE-2025-32434
 typing-inspection==0.4.1
 typing_extensions==4.14.1
 urllib3==2.5.0
 wandb==0.21.0
 yarl==1.20.1
+open_clip_torch>=2.20.0  # new
