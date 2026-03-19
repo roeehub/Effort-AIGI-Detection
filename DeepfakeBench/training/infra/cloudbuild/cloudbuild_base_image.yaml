@@ -1,0 +1,65 @@
+# Cloud Build configuration for building the BASE image
+# ────────────────────────────────────────────────────────────────
+# Run this ONCE when you update requirements.txt or system dependencies.
+# This builds the slow stuff. Subsequent training/test builds will be FAST.
+#
+# Usage:
+#   gcloud builds submit --config cloudbuild_base_image.yaml --project train-cvit2
+#
+# After this completes (~10 min first time), your training builds will be ~30 seconds!
+# ────────────────────────────────────────────────────────────────
+
+substitutions:
+  _BASE_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-base'
+  _CACHE_REPO: 'us-docker.pkg.dev/train-cvit2/effort-detector/cache'
+
+steps:
+# Build base image using Kaniko with aggressive caching
+- name: 'gcr.io/kaniko-project/executor:latest'
+  id: 'build-base'
+  args:
+    - '--dockerfile=Dockerfile.base'
+    - '--context=dir:///workspace'
+    - '--destination=${_BASE_IMAGE}:latest'
+    - '--destination=${_BASE_IMAGE}:${BUILD_ID}'
+    # Semantic versioning tag for tracking
+    - '--destination=${_BASE_IMAGE}:v1'
+    - '--cache=true'
+    - '--cache-repo=${_CACHE_REPO}'
+    - '--cache-ttl=2160h'  # Cache for 90 days (base image is stable)
+    - '--compressed-caching=false'
+    - '--use-new-run'
+    - '--log-timestamp'
+  timeout: 2400s  # 40 min (first build with PyTorch is slow)
+
+# Verify the base image works
+- name: '${_BASE_IMAGE}:latest'
+  id: 'verify'
+  entrypoint: 'bash'
+  waitFor: ['build-base']
+  args:
+    - '-c'
+    - |
+      echo "=== Base Image Verification ==="
+      echo "Python version:"
+      python --version
+      echo ""
+      echo "PyTorch version:"
+      python -c "import torch; print(f'PyTorch {torch.__version__}')"
+      python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+      echo ""
+      echo "Key packages:"
+      python -c "import torchvision; print(f'torchvision {torchvision.__version__}')"
+      python -c "import PIL; print(f'Pillow {PIL.__version__}')"
+      python -c "import albumentations; print(f'albumentations {albumentations.__version__}')"
+      python -c "import wandb; print(f'wandb {wandb.__version__}')"
+      echo ""
+      echo "=== Base image ready! ==="
+      echo "Training builds will now be FAST (~30 seconds)"
+  timeout: 120s
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3000s  # 50 min total

@@ -1,8 +1,13 @@
 # .dockerignore
+# ────────────────────────────────────────────────────────────────
+# Exclude files that change frequently but aren't needed in the container.
+# This makes Docker builds faster and more cache-friendly.
+# ────────────────────────────────────────────────────────────────
 
 # Git
 .git
 .gitignore
+.gcloudignore
 
 # Python
 __pycache__/
@@ -15,11 +20,18 @@ env/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.ipynb_checkpoints/
+.ipynb_checkpoints/
 
 # IDE / Editor specific
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 
 # OS-specific
 .DS_Store
@@ -28,14 +40,46 @@ Thumbs.db
 # Cloud / Local Config
 .gcloud/
 credentials.json
+*.pem
+*.key
 
-# Logs & Outputs
+# Logs & Outputs (generated at runtime)
 *.log
 wandb/
 vertex-output/
+outputs/
+checkpoints/
+runs/
 
+# Data files (too large, loaded at runtime from GCS)
 data_analysis_results.csv
 frame_manifest.json
 frame_properties.parquet
 data_analysis_plots/
 debug/
+*.parquet
+*.csv
+*.json
+
+# Test artifacts
+test_data/
+test_output/
+htmlcov/
+.coverage
+
+# Documentation (not needed in container)
+docs/
+*.md
+!requirements.txt
+
+# Large model weights (loaded from GCS/HuggingFace at runtime)
+weights/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Cloud Build configs (not needed inside container)
+cloudbuild*.yaml
+Dockerfile*
+docker-compose.yml

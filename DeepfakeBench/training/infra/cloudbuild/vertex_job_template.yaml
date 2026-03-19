@@ -1,0 +1,52 @@
+# vertex_job_template.yaml  (jobSpec root)
+
+baseOutputDirectory:
+  outputUriPrefix: gs://training-job-outputs/vertex-output/{{JOB_NAME}}
+
+scheduling:
+  timeout: 259200s   # 72h — scratch runs need 30K+ steps (~83h for L-14, ~40h for B-16)
+  restartJobOnWorkerRestart: true
+
+workerPoolSpecs:
+  - machineSpec:
+      machineType: a2-highgpu-1g
+      acceleratorType: "{{GPU_TYPE}}"      # e.g. NVIDIA_TESLA_A100
+      acceleratorCount: {{GPU_COUNT}}      # e.g. 1
+    replicaCount: 1
+    diskSpec:
+      bootDiskType: pd-ssd
+      bootDiskSizeGb: 200
+    containerSpec:
+      imageUri: "{{IMAGE_URI}}"
+      command: ["/bin/bash", "/workspace/entrypoint.sh"]
+      # If you want to drive via flags, launcher can inject a YAML list here.
+      # Examples:
+      # args: ["--mode","sweep","--sweep-id","{{SWEEP_ID}}","--count","{{SWEEP_COUNT}}"]
+      # args: ["--mode","train","--main-script","{{MAIN_SCRIPT}}","--","--epochs","5"]
+      args: []
+      env:
+        # W&B auth & project
+        - name: WANDB_API_KEY
+          value: "{{WANDB_API_KEY}}"
+        - name: WANDB_ENTITY
+          value: "{{WANDB_ENTITY}}"
+        - name: WANDB_PROJECT
+          value: "{{WANDB_PROJECT}}"
+
+        # Execution mode (env fallback if args not used)
+        - name: JOB_MODE               # train | sweep | vertex_hpt
+          value: "{{JOB_MODE}}"
+        - name: SWEEP_ID               # required for sweep mode
+          value: "{{SWEEP_ID}}"
+        - name: SWEEP_COUNT            # trials per agent (entrypoint default=5)
+          value: "{{SWEEP_COUNT}}"
+        - name: MAIN_SCRIPT            # entrypoint default=train_sweep.py
+          value: "{{MAIN_SCRIPT}}"
+
+        # Quality-of-life
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+
+serviceAccount: "{{SERVICE_ACCOUNT}}"

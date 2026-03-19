@@ -1,0 +1,105 @@
+# Cloud Build configuration for running DeepLive training WITHOUT rebuilding
+# Uses the pre-built cached image from the registry
+# 
+# Submit with:
+#   gcloud builds submit --config cloudbuild_train_deeplive_fast.yaml \
+#     --substitutions=_EXPERIMENT=deeplive_vit_B16 \
+#     --project train-cvit2
+#
+# This skips the Docker build and goes straight to training!
+
+substitutions:
+  _EXPERIMENT: 'deeplive_vit_B16'  # Default experiment
+  _TRAINING_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-training:latest'
+  _MAX_STEPS: ''  # Empty = full training, set to number for testing
+
+steps:
+# Step 1: Pull the pre-built training image
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'pull-image'
+  args: ['pull', '${_TRAINING_IMAGE}']
+  timeout: 300s
+
+# Step 2: Verify configuration and run dry-run
+- name: '${_TRAINING_IMAGE}'
+  id: 'verify-config'
+  entrypoint: 'bash'
+  waitFor: ['pull-image']
+  args:
+    - '-c'
+    - |
+      echo "=== DeepLive Training Configuration ==="
+      echo "Experiment: ${_EXPERIMENT}"
+      echo ""
+      echo "--- Experiment Config ---"
+      cat experiments/${_EXPERIMENT}.yaml
+      echo ""
+      echo "--- Running dry-run ---"
+      python train_deeplive.py \
+        --config experiments/${_EXPERIMENT}.yaml \
+        --dry-run
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+
+# Step 3: Run actual training
+- name: '${_TRAINING_IMAGE}'
+  id: 'train'
+  entrypoint: 'bash'
+  waitFor: ['verify-config']
+  args:
+    - '-c'
+    - |
+      echo "=== Starting DeepLive Training ==="
+      echo "Experiment: ${_EXPERIMENT}"
+      echo "Max steps: ${_MAX_STEPS:-'full training'}"
+      
+      # Build the training command
+      TRAIN_CMD="python train_deeplive.py --config experiments/${_EXPERIMENT}.yaml"
+      
+      # Add max-steps if specified
+      if [ -n "${_MAX_STEPS}" ]; then
+        TRAIN_CMD="$$TRAIN_CMD --max-steps ${_MAX_STEPS}"
+      fi
+      
+      # Add W&B logging
+      TRAIN_CMD="$$TRAIN_CMD --wandb --wandb-project deeplive-experiments"
+      
+      # Output directory (will be copied to GCS)
+      TRAIN_CMD="$$TRAIN_CMD --output-dir /workspace/outputs/${_EXPERIMENT}"
+      
+      echo "Running: $$TRAIN_CMD"
+      eval $$TRAIN_CMD
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  secretEnv: ['WANDB_API_KEY']
+  timeout: 14400s  # 4 hours
+
+# Step 4: Upload outputs to GCS
+- name: 'gcr.io/cloud-builders/gsutil'
+  id: 'upload-outputs'
+  entrypoint: 'bash'
+  waitFor: ['train']
+  args:
+    - '-c'
+    - |
+      if [ -d "/workspace/outputs/${_EXPERIMENT}" ]; then
+        echo "=== Uploading outputs to GCS ==="
+        gsutil -m cp -r /workspace/outputs/${_EXPERIMENT} \
+          gs://training-job-outputs/deeplive_experiments/${_EXPERIMENT}/
+        echo "Outputs uploaded to gs://training-job-outputs/deeplive_experiments/${_EXPERIMENT}/"
+      else
+        echo "No outputs directory found"
+      fi
+  timeout: 300s
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/train-cvit2/secrets/WANDB_API_KEY/versions/latest
+    env: 'WANDB_API_KEY'
+
+options:
+  machineType: 'N1_HIGHCPU_32'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 18000s  # 5 hours total

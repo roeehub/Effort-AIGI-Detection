@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1
+# ────────────────────────────────────────────────────────────────
+# Dockerfile.base - Pre-built base image with ALL dependencies
+# 
+# This image is built ONCE and cached. It includes:
+#   - CUDA runtime + cuDNN
+#   - Python 3.10
+#   - All pip dependencies (torch, requirements.txt)
+#
+# Build manually or via cloudbuild_base_image.yaml when dependencies change.
+# Subsequent training/test builds just add code on top = FAST (~30 seconds)
+#
+# Base image: us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-base:latest
+# ────────────────────────────────────────────────────────────────
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+# --- Environment ---
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_PROGRESS_BAR=off \
+    WANDB__SERVICE_WAIT=300
+
+# --- System packages, Python 3.10, and Build Tools ---
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-dev \
+        python3.10-distutils \
+        python3-pip \
+        build-essential \
+        cmake \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        git \
+        curl \
+        ca-certificates \
+        libjpeg-dev \
+        zlib1g-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# --- Create a symlink for `python` command ---
+RUN ln -s /usr/bin/python3.10 /usr/bin/python
+
+WORKDIR /workspace
+
+# --- Install Python Dependencies ---
+# Copy ONLY requirements file - this rarely changes
+COPY requirements.txt .
+
+# Install PyTorch with CUDA support
+RUN python -m pip install --no-cache-dir --upgrade pip && \
+    python -m pip install --no-cache-dir \
+        torch==2.1.1 torchvision==0.16.1 \
+        --index-url https://download.pytorch.org/whl/cu121 && \
+    python -m pip install --no-cache-dir -r requirements.txt
+
+# Install additional packages
+RUN python -m pip install --no-cache-dir --force-reinstall pillow-simd && \
+    python -m pip install --no-cache-dir pandas pyarrow gsutil
+
+# Install dev tools (useful for both dev and prod)
+RUN python -m pip install --no-cache-dir \
+    pytest \
+    pytest-cov \
+    debugpy \
+    ipython
+
+# Verify installation
+RUN python -c "import torch; print(f'PyTorch {torch.__version__} CUDA: {torch.cuda.is_available()}')"
+
+# Default command (will be overridden by child images)
+CMD ["bash"]

@@ -1,0 +1,59 @@
+# .gcloudignore - Files to exclude from Cloud Build uploads
+# This speeds up build times by reducing upload size
+
+# Git
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing/Development
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Local data files (should not be in container)
+# NOTE: Do NOT exclude data/ - it contains Python modules!
+*.pth
+*.pt
+weights/
+checkpoints/
+datasets/
+
+# Logs
+*.log
+logs/
+wandb/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large unnecessary files
+*.zip
+*.tar
+*.tar.gz

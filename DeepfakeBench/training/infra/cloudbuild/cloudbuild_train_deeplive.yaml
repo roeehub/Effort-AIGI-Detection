@@ -1,0 +1,110 @@
+# Cloud Build configuration for DeepLive training experiments
+# ────────────────────────────────────────────────────────────────
+# UPDATED: Jan 1, 2026 - Now uses unified train_sweep.py
+# FAST BUILD: Uses pre-built base image, builds in ~30 seconds!
+#
+# Prerequisites: Build base image first (one-time, or when requirements change):
+#   gcloud builds submit --config cloudbuild_base_image.yaml --project train-cvit2
+#
+# Submit for individual backbone:
+#   gcloud builds submit --config cloudbuild_train_deeplive.yaml \
+#     --substitutions=_EXPERIMENT=deeplive_vit_B16 \
+#     --project train-cvit2
+#
+# Or submit all 4 experiments in sequence:
+#   for exp in deeplive_vit_L14 deeplive_vit_B16 deeplive_vit_B32 deeplive_vit_B16_laion; do
+#     gcloud builds submit --config cloudbuild_train_deeplive.yaml \
+#       --substitutions=_EXPERIMENT=$exp \
+#       --project train-cvit2
+#   done
+# ────────────────────────────────────────────────────────────────
+
+substitutions:
+  _EXPERIMENT: 'deeplive_vit_B16'  # Default experiment
+  _BASE_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-base:latest'
+  _TRAINING_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-training'
+  _MAX_STEPS: ''  # Empty = full training, set to number for testing
+
+steps:
+# Step 1: Build training image (FAST - just copies code on top of base)
+- name: 'gcr.io/kaniko-project/executor:latest'
+  id: 'build'
+  args:
+    - '--dockerfile=Dockerfile'
+    - '--context=dir:///workspace'
+    - '--destination=${_TRAINING_IMAGE}:latest'
+    - '--destination=${_TRAINING_IMAGE}:${BUILD_ID}'
+    - '--build-arg=BASE_IMAGE=${_BASE_IMAGE}'
+    # Minimal caching needed - build is already fast
+    - '--cache=true'
+    - '--cache-repo=us-docker.pkg.dev/train-cvit2/effort-detector/cache'
+    - '--cache-ttl=168h'
+    - '--log-timestamp'
+  timeout: 300s  # 5 min max (should be ~30 seconds)
+
+# Step 2: Verify configuration and run dry-run
+- name: '${_TRAINING_IMAGE}:latest'
+  id: 'verify-config'
+  entrypoint: 'bash'
+  waitFor: ['build']
+  args:
+    - '-c'
+    - |
+      echo "=== DeepLive Training Configuration ==="
+      echo "Experiment: ${_EXPERIMENT}"
+      echo ""
+      echo "--- Experiment Config ---"
+      cat experiments/${_EXPERIMENT}.yaml
+      echo ""
+      echo "--- Checking data_source field ---"
+      grep -q "data_source:" experiments/${_EXPERIMENT}.yaml && echo "✓ data_source found" || echo "⚠ data_source not found (will use default)"
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+
+# Step 3: Run actual training (using unified train_sweep.py)
+- name: '${_TRAINING_IMAGE}:latest'
+  id: 'train'
+  entrypoint: 'bash'
+  waitFor: ['verify-config']
+  args:
+    - '-c'
+    - |
+      echo "=== Starting DeepLive Training (Unified Script) ==="
+      echo "Experiment: ${_EXPERIMENT}"
+      echo "Max steps: ${_MAX_STEPS:-'full training'}"
+      
+      # Build the training command - NOW USES train_sweep.py!
+      TRAIN_CMD="python train_sweep.py --param-config experiments/${_EXPERIMENT}.yaml"
+      
+      echo "Running: $$TRAIN_CMD"
+      eval $$TRAIN_CMD
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+    - 'WANDB_API_KEY=bb5a8ea4a27ebe45917587df8c46674d26e43966'
+    - 'WANDB_ENTITY=dtect-vision'
+  timeout: 14400s  # 4 hours
+
+# Step 4: Upload outputs to GCS
+- name: 'gcr.io/cloud-builders/gsutil'
+  id: 'upload-outputs'
+  entrypoint: 'bash'
+  waitFor: ['train']
+  args:
+    - '-c'
+    - |
+      if [ -d "/workspace/outputs/${_EXPERIMENT}" ]; then
+        echo "=== Uploading outputs to GCS ==="
+        gsutil -m cp -r /workspace/outputs/${_EXPERIMENT} \
+          gs://training-job-outputs/deeplive_experiments/${_EXPERIMENT}/
+        echo "Outputs uploaded to gs://training-job-outputs/deeplive_experiments/${_EXPERIMENT}/"
+      else
+        echo "No outputs directory found"
+      fi
+  timeout: 300s
+
+options:
+  machineType: 'N1_HIGHCPU_32'  # More CPUs for data loading
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 18000s  # 5 hours total build timeout

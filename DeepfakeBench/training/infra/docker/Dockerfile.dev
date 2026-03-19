@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 # ────────────────────────────────────────────────────────────────
-# Effort-AIGI-Detection | Training container for Vertex AI Custom Jobs
+# Dockerfile.dev - Development/Testing container
 # 
-# FAST BUILD: Extends pre-built base image with all dependencies.
-# This Dockerfile only copies code = builds in ~30 seconds!
+# FAST BUILD: Extends the same base image as production!
+# Builds in ~30 seconds instead of 10+ minutes.
 #
 # If requirements.txt changes, rebuild the base image first:
 #   gcloud builds submit --config cloudbuild_base_image.yaml --project train-cvit2
@@ -11,10 +11,11 @@
 ARG BASE_IMAGE=us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-base:latest
 FROM ${BASE_IMAGE}
 
-# --- Copy Application Code ---
-# This is the ONLY slow step, but it's fast because it's just copying files
+# --- Development Environment Overrides ---
+ENV DEBUG_MODE=1
+
+# --- Copy code (will be overridden by volume mount in dev) ---
 COPY . .
 
-# --- Container Entrypoint ---
-RUN chmod +x /workspace/entrypoint.sh
-ENTRYPOINT ["/bin/bash", "/workspace/entrypoint.sh"]
+# --- Default command ---
+CMD ["bash"]

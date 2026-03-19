@@ -1,0 +1,71 @@
+# Cloud Build configuration for running E2E tests on GCP
+# ────────────────────────────────────────────────────────────────
+# FAST BUILD: Uses pre-built base image, builds in ~30 seconds!
+#
+# Prerequisites: Build base image first (one-time):
+#   gcloud builds submit --config cloudbuild_base_image.yaml --project train-cvit2
+#
+# Submit tests:
+#   gcloud builds submit --config cloudbuild_test.yaml --project train-cvit2
+# ────────────────────────────────────────────────────────────────
+
+substitutions:
+  _BASE_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-base:latest'
+  _TEST_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-test'
+
+steps:
+# Step 1: Build test image (FAST - just copies code on top of base)
+- name: 'gcr.io/kaniko-project/executor:latest'
+  id: 'build'
+  args:
+    - '--dockerfile=Dockerfile.dev'
+    - '--context=dir:///workspace'
+    - '--destination=${_TEST_IMAGE}:latest'
+    - '--destination=${_TEST_IMAGE}:${BUILD_ID}'
+    - '--build-arg=BASE_IMAGE=${_BASE_IMAGE}'
+    # Minimal caching needed - build is already fast
+    - '--cache=true'
+    - '--cache-repo=us-docker.pkg.dev/train-cvit2/effort-detector/cache'
+    - '--cache-ttl=168h'
+    - '--log-timestamp'
+  timeout: 300s  # 5 min max (should be ~30 seconds)
+
+# Step 2: Verify container structure (debug)
+- name: '${_TEST_IMAGE}:latest'
+  id: 'debug'
+  entrypoint: 'bash'
+  waitFor: ['build']
+  args:
+    - '-c'
+    - |
+      echo "=== Container Structure Debug ==="
+      echo "--- Working directory ---"
+      pwd
+      echo "--- Tests directory ---"
+      ls -la tests/ || echo "tests/ not found"
+      echo "--- Python version ---"
+      python --version
+
+# Step 3: Run the DeepLive E2E pipeline tests with debug artifacts
+- name: '${_TEST_IMAGE}:latest'
+  id: 'e2e-tests'
+  entrypoint: 'python'
+  args: ['-m', 'tests.test_deeplive_pipeline', '--num-samples', '5', '--save-debug-artifacts', '--debug-bucket', 'training-job-outputs/debug']
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+  waitFor: ['debug']
+
+# Step 4: Run import tests (parallel with e2e-tests)
+- name: '${_TEST_IMAGE}:latest'
+  id: 'import-tests'
+  entrypoint: 'python'
+  args: ['test_imports.py']
+  timeout: 300s
+  waitFor: ['debug']
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

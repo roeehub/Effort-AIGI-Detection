@@ -1,0 +1,149 @@
+# Cloud Build configuration for testing DeepLive training setup
+# This runs a quick dry-run to verify all components work together
+# Uses Kaniko for FAST layer caching (avoids 10+ min rebuilds!)
+# 
+# Submit with: gcloud builds submit --config cloudbuild_test_train.yaml --project train-cvit2
+
+substitutions:
+  _TEST_IMAGE: 'us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector-test'
+  _CACHE_REPO: 'us-docker.pkg.dev/train-cvit2/effort-detector/cache'
+
+steps:
+# Step 1: Build test image using Kaniko (with proper layer caching)
+- name: 'gcr.io/kaniko-project/executor:latest'
+  id: 'build'
+  args:
+    - '--dockerfile=Dockerfile.dev'
+    - '--context=dir:///workspace'
+    - '--destination=${_TEST_IMAGE}:latest'
+    - '--destination=${_TEST_IMAGE}:${BUILD_ID}'
+    - '--cache=true'
+    - '--cache-repo=${_CACHE_REPO}'
+    - '--cache-ttl=720h'  # Cache layers for 30 days
+    - '--compressed-caching=false'  # Faster cache retrieval
+    - '--use-new-run'  # Better RUN instruction caching
+    - '--snapshot-mode=redo'  # More reliable layer detection
+    - '--log-timestamp'
+  timeout: 1200s
+
+# Step 2: List experiment configs
+- name: '${_TEST_IMAGE}:latest'
+  id: 'list-configs'
+  entrypoint: 'bash'
+  waitFor: ['build']
+  args:
+    - '-c'
+    - |
+      echo "=== Available DeepLive Experiment Configs ==="
+      ls -la experiments/deeplive_*.yaml
+      echo ""
+      for f in experiments/deeplive_*.yaml; do
+        echo "--- $f ---"
+        head -10 "$f"
+        echo ""
+      done
+
+# Step 3: Test ViT-B-16 dry-run
+- name: '${_TEST_IMAGE}:latest'
+  id: 'test-vit-b16'
+  entrypoint: 'python'
+  args:
+    - 'train_deeplive.py'
+    - '--config'
+    - 'experiments/deeplive_vit_B16.yaml'
+    - '--dry-run'
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+  waitFor: ['build']
+
+# Step 4: Test ViT-L-14 dry-run (parallel)
+- name: '${_TEST_IMAGE}:latest'
+  id: 'test-vit-l14'
+  entrypoint: 'python'
+  args:
+    - 'train_deeplive.py'
+    - '--config'
+    - 'experiments/deeplive_vit_L14.yaml'
+    - '--dry-run'
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+  waitFor: ['build']
+
+# Step 5: Test ViT-B-32 dry-run (parallel)
+- name: '${_TEST_IMAGE}:latest'
+  id: 'test-vit-b32'
+  entrypoint: 'python'
+  args:
+    - 'train_deeplive.py'
+    - '--config'
+    - 'experiments/deeplive_vit_B32.yaml'
+    - '--dry-run'
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+  waitFor: ['build']
+
+# Step 6: Test LAION DataComp dry-run (parallel)
+- name: '${_TEST_IMAGE}:latest'
+  id: 'test-laion'
+  entrypoint: 'python'
+  args:
+    - 'train_deeplive.py'
+    - '--config'
+    - 'experiments/deeplive_vit_B16_laion.yaml'
+    - '--dry-run'
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 600s
+  waitFor: ['build']
+
+# Step 7: Short training test (10 steps) with one backbone
+- name: '${_TEST_IMAGE}:latest'
+  id: 'test-short-train'
+  entrypoint: 'python'
+  args:
+    - 'train_deeplive.py'
+    - '--config'
+    - 'experiments/deeplive_vit_B16.yaml'
+    - '--max-steps'
+    - '10'
+    - '--output-dir'
+    - '/workspace/outputs/test_training'
+  env:
+    - 'GOOGLE_CLOUD_PROJECT=train-cvit2'
+  timeout: 900s
+  waitFor: ['test-vit-b16', 'test-vit-l14', 'test-vit-b32', 'test-laion']
+
+# Step 8: Summary
+- name: '${_TEST_IMAGE}:latest'
+  id: 'summary'
+  entrypoint: 'bash'
+  waitFor: ['test-short-train']
+  args:
+    - '-c'
+    - |
+      echo ""
+      echo "========================================"
+      echo "🎉 All DeepLive Training Tests Passed!"
+      echo "========================================"
+      echo ""
+      echo "✅ ViT-B-16 (OpenAI) - dry-run passed"
+      echo "✅ ViT-L-14 (OpenAI) - dry-run passed"
+      echo "✅ ViT-B-32 (OpenAI) - dry-run passed"
+      echo "✅ ViT-B-16 (LAION DataComp) - dry-run passed"
+      echo "✅ Short training test (10 steps) - passed"
+      echo ""
+      echo "Ready for full training experiments!"
+      echo ""
+      echo "To run training:"
+      echo "  gcloud builds submit --config cloudbuild_train_deeplive.yaml \\"
+      echo "    --substitutions=_EXPERIMENT=deeplive_vit_B16 \\"
+      echo "    --project train-cvit2"
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 2400s  # 40 minutes
