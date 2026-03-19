@@ -7,7 +7,7 @@ entry point while maintaining backward compatibility with the existing config st
 # =============================================================================
 # CODE VERSION STAMP - Update this when making changes to verify deployment
 # =============================================================================
-CONFIG_HELPERS_VERSION = "2026-01-01-DATA-SOURCE-FIX-V2"  # Handle data_source as string or dict
+CONFIG_HELPERS_VERSION = "2026-02-19-QUALITY-HEAD-PROPAGATION-FIX-V1"  # Ensure GRL/quality-head params propagate from run config
 print(f"📦 CONFIG_HELPERS.PY VERSION: {CONFIG_HELPERS_VERSION}")
 # =============================================================================
 
@@ -92,6 +92,15 @@ def load_base_configs(
     return config, data_config
 
 
+def _coerce_bool(value: Any) -> bool:
+    """Best-effort conversion for bool-like config values."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
 def apply_wandb_optimizer_params(config: Dict, wandb_config: Any) -> None:
     """
     Apply W&B optimizer parameters to config (in-place).
@@ -123,12 +132,42 @@ def apply_wandb_loss_params(config: Dict, wandb_config: Any) -> None:
         wandb_config: W&B config object
     """
     # Focal Loss
-    config['use_focal_loss'] = wandb_config.get('use_focal_loss', False)
-    config['focal_loss_gamma'] = float(wandb_config.get('focal_loss_gamma', 2.0))
-    focal_alpha = wandb_config.get('focal_loss_alpha', None)
+    config['use_focal_loss'] = _coerce_bool(
+        wandb_config.get('use_focal_loss', config.get('use_focal_loss', False))
+    )
+    config['focal_loss_gamma'] = float(
+        wandb_config.get('focal_loss_gamma', config.get('focal_loss_gamma', 2.0))
+    )
+    focal_alpha = wandb_config.get('focal_loss_alpha', config.get('focal_loss_alpha', None))
     if focal_alpha in ('null', 'None'):
         focal_alpha = None
     config['focal_loss_alpha'] = focal_alpha
+
+    # Label smoothing (used by EffortDetector's CrossEntropyLoss)
+    config['label_smoothing'] = float(
+        wandb_config.get('label_smoothing', config.get('label_smoothing', 0.0))
+    )
+
+
+def apply_wandb_stability_params(config: Dict, wandb_config: Any) -> None:
+    """
+    Apply W&B stability regularisation parameters to config (in-place).
+
+    These are consumed by ``StabilityRegMixin.init_stability_reg()``.
+
+    Args:
+        config: Main config dict to update
+        wandb_config: W&B config object
+    """
+    config['stability_lambda'] = float(
+        wandb_config.get('stability_lambda', config.get('stability_lambda', 0.0))
+    )
+    config['stability_noise_std'] = float(
+        wandb_config.get('stability_noise_std', config.get('stability_noise_std', 0.02))
+    )
+    config['stability_crop_jitter'] = float(
+        wandb_config.get('stability_crop_jitter', config.get('stability_crop_jitter', 0.03))
+    )
 
 
 def apply_wandb_group_dro_params(config: Dict, wandb_config: Any) -> None:
@@ -139,7 +178,9 @@ def apply_wandb_group_dro_params(config: Dict, wandb_config: Any) -> None:
         config: Main config dict to update
         wandb_config: W&B config object
     """
-    config['use_group_dro'] = wandb_config.get('use_group_dro', False)
+    config['use_group_dro'] = _coerce_bool(
+        wandb_config.get('use_group_dro', config.get('use_group_dro', False))
+    )
     if config['use_group_dro']:
         config['group_dro_params'] = {
             'beta': float(wandb_config.get('group_dro_beta', 3.0)),
@@ -158,8 +199,12 @@ def apply_wandb_arcface_params(config: Dict, wandb_config: Any, logger: Any = No
         wandb_config: W&B config object
         logger: Optional logger for debug output
     """
-    config['use_arcface_head'] = wandb_config.get('use_arcface_head', False)
-    config['train_arcface'] = wandb_config.get('train_arcface', True)
+    config['use_arcface_head'] = _coerce_bool(
+        wandb_config.get('use_arcface_head', config.get('use_arcface_head', False))
+    )
+    config['train_arcface'] = _coerce_bool(
+        wandb_config.get('train_arcface', config.get('train_arcface', True))
+    )
     
     if config['use_arcface_head']:
         config['arcface_s'] = float(wandb_config.get('arcface_s', 30.0))
@@ -175,6 +220,66 @@ def apply_wandb_arcface_params(config: Dict, wandb_config: Any, logger: Any = No
             logger.info(f"   - s_start: {config['s_start']}")
             logger.info(f"   - s_end: {config['s_end']}")
             logger.info(f"   - anneal_steps: {config['anneal_steps']}")
+
+
+def apply_wandb_quality_domain_params(
+    config: Dict,
+    wandb_config: Any,
+    logger: Any = None,
+) -> None:
+    """
+    Apply quality-domain adversarial head params to config (in-place).
+
+    This wiring is critical for Round 6+ experiments that enable the GRL head.
+    """
+    use_quality_head = _coerce_bool(
+        wandb_config.get(
+            'use_quality_domain_head',
+            config.get('use_quality_domain_head', False),
+        )
+    )
+    config['use_quality_domain_head'] = use_quality_head
+
+    # Keep this explicit so missing supervision fails fast instead of silently
+    # training with a zero quality-domain loss.
+    config['quality_domain_require_labels'] = _coerce_bool(
+        wandb_config.get(
+            'quality_domain_require_labels',
+            config.get('quality_domain_require_labels', True),
+        )
+    )
+
+    if not use_quality_head:
+        return
+
+    config['quality_domain_count'] = int(
+        wandb_config.get(
+            'quality_domain_count',
+            config.get('quality_domain_count', 4),
+        )
+    )
+    config['quality_head_hidden_dim'] = int(
+        wandb_config.get(
+            'quality_head_hidden_dim',
+            config.get('quality_head_hidden_dim', 128),
+        )
+    )
+    config['quality_domain_loss_weight'] = float(
+        wandb_config.get(
+            'quality_domain_loss_weight',
+            config.get('quality_domain_loss_weight', 0.1),
+        )
+    )
+
+    if logger:
+        logger.info(
+            "Applied quality-domain head config: enabled=%s domains=%d hidden_dim=%d loss_weight=%.4f require_labels=%s",
+            config['use_quality_domain_head'],
+            config['quality_domain_count'],
+            config['quality_head_hidden_dim'],
+            config['quality_domain_loss_weight'],
+            config['quality_domain_require_labels'],
+        )
 
 
 def apply_wandb_early_stopping_params(config: Dict, wandb_config: Any) -> None:
@@ -200,8 +305,25 @@ def apply_wandb_curriculum_params(config: Dict, wandb_config: Any) -> None:
         config: Main config dict to update
         wandb_config: W&B config object
     """
-    config['max_train_steps'] = wandb_config.get('max_train_steps', None)
-    config['evaluate_every_steps'] = wandb_config.get('evaluate_every_steps', None)
+    config['max_train_steps'] = wandb_config.get('max_train_steps', config.get('max_train_steps', None))
+    config['evaluate_every_steps'] = wandb_config.get(
+        'evaluate_every_steps',
+        config.get('evaluate_every_steps', None),
+    )
+    config['ood_monitoring_enabled'] = wandb_config.get(
+        'ood_monitoring_enabled',
+        config.get('ood_monitoring_enabled', True),
+    )
+    config['ood_monitoring_start_step'] = wandb_config.get(
+        'ood_monitoring_start_step',
+        config.get('ood_monitoring_start_step', 0),
+    )
+    config['ood_monitoring_every_steps'] = wandb_config.get(
+        'ood_monitoring_every_steps',
+        config.get('ood_monitoring_every_steps', None),
+    )
+    # Keep top-level seed wired so canonical seed resolution in train_sweep reflects param-config.
+    config['seed'] = wandb_config.get('seed', config.get('seed', None))
 
 
 def apply_wandb_dataloader_params(data_config: Dict, wandb_config: Any) -> None:
@@ -695,8 +817,10 @@ def apply_all_wandb_overrides(
     # Main config overrides
     apply_wandb_optimizer_params(config, wandb_config)
     apply_wandb_loss_params(config, wandb_config)
+    apply_wandb_stability_params(config, wandb_config)
     apply_wandb_group_dro_params(config, wandb_config)
     apply_wandb_arcface_params(config, wandb_config, logger)
+    apply_wandb_quality_domain_params(config, wandb_config, logger)
     apply_wandb_early_stopping_params(config, wandb_config)
     apply_wandb_curriculum_params(config, wandb_config)
     apply_wandb_augmentation_params(config, wandb_config, logger)
@@ -769,6 +893,11 @@ def create_curated_config_log(config: Dict, data_config: Dict) -> Dict:
         'metric_scoring': config.get('metric_scoring'),
         'nEpochs': config.get('nEpochs'),
         'model_name': config.get('model_name'),
+        'use_quality_domain_head': config.get('use_quality_domain_head'),
+        'quality_domain_count': config.get('quality_domain_count'),
+        'quality_head_hidden_dim': config.get('quality_head_hidden_dim'),
+        'quality_domain_loss_weight': config.get('quality_domain_loss_weight'),
+        'quality_domain_require_labels': config.get('quality_domain_require_labels'),
         'data_params': data_config.get('data_params'),
         'dataloader_params': data_config.get('dataloader_params'),
         'gcs_base_checkpoint': config.get('gcs_assets', {}).get('base_checkpoint', {}).get('gcs_path', 'N/A'),

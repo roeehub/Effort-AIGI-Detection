@@ -32,6 +32,61 @@ import cv2  # noqa
 from albumentations.core.transforms_interface import ImageOnlyTransform  # noqa
 from albumentations.core.transforms_interface import BasicTransform  # noqa
 
+# ==============================================================================
+# --- Augmentation Imports from Refactored Module ---
+# ==============================================================================
+# All augmentation pipelines are now defined in data/augmentations/
+# Import them from there to maintain backward compatibility
+from data.augmentations import (
+    # Custom transforms
+    CustomUnsharpMask,
+    NoOp,
+    # Registry function
+    get_pipeline,
+)
+from data.augmentations.pipelines import (
+    # Pre-instantiated pipelines (for backward compatibility)
+    revised_augmentation_pipeline_legacy,
+    augmentation_pipeline_v4,
+    augmentation_pipeline_v5,
+    AUG_PIPELINE_V6_SIMULATOR,
+    AUG_PIPELINE_V4_GENERALIST,
+    AUG_PIPELINE_PURIST,
+    AUG_PIPELINE_V3_MILD,
+    degrade_quality_pipeline,
+    enhance_quality_pipeline,
+    social_media_pipeline,
+    # Callable functions
+    apply_augmentation_v6,
+    apply_augmentation_v7,
+    # Factory functions
+    create_surgical_augmentation_pipeline,
+    create_general_augmentation_pipeline,
+)
+
+# ==============================================================================
+# --- Batching Module Imports for Backward Compatibility ---
+# ==============================================================================
+# The batching strategies, DataPipes, and loader functions have been refactored
+# into data/batching/ module. Import them here for backward compatibility.
+#
+# New modular structure:
+#   - data/batching/base.py           - BatchingStrategy interface
+#   - data/batching/datapipes.py      - CustomRoundRobinDataPipe, CustomSampleMultiplexerDataPipe, MateFinderDataPipe
+#   - data/batching/loaders.py        - load_and_process_*, collate_fn functions
+#   - data/batching/per_method.py     - PerMethodStrategy, LazyDataLoaderManager
+#   - data/batching/video_level.py    - VideoLevelStrategy
+#   - data/batching/frame_level.py    - FrameLevelStrategy
+#   - data/batching/property_balanced.py - PropertyBalancedStrategy
+#   - data/batching/factory.py        - get_batching_strategy(), create_dataloaders()
+#
+# To use the new system:
+#   from data.batching import get_batching_strategy, create_dataloaders
+#   strategy = get_batching_strategy('property_balancing', config, data_config)
+#   train_loader = strategy.create_train_loader(train_data)
+#
+# The original code in this file is preserved for backward compatibility.
+# ==============================================================================
 
 def _map_video(video_info, config, mode):
     return load_and_process_video(video_info, config, mode)
@@ -51,387 +106,32 @@ def _flatmap_frame_batch(batch_of_paths, config, mode):
 
 
 # ==============================================================================
-# --- NEW: Augmentation Pipeline V3 (Static/Fixed) ---
+# --- AUGMENTATION CODE MOVED TO data/augmentations/ MODULE ---
 # ==============================================================================
-
-# --- Custom Transform to Replicate UnsharpMask for Albumentations v0.4.6 ---
-# This class must be defined before it is used in the pipeline below.
-class CustomUnsharpMask(ImageOnlyTransform):
-    """
-    A custom implementation of UnsharpMask compatible with Albumentations 0.4.6.
-    This replicates the core logic of the modern UnsharpMask transform by creating
-    a blurred version of the image and subtracting it to create a sharpening mask.
-    """
-
-    def __init__(self, blur_limit=(3, 9), alpha=(0.5, 1.0), threshold=10, always_apply=False, p=0.5):
-        super(CustomUnsharpMask, self).__init__(always_apply, p)
-        if blur_limit[0] % 2 == 0 or blur_limit[1] % 2 == 0:
-            raise ValueError("blur_limit values must be odd integers.")
-        self.blur_limit = blur_limit
-        self.alpha = alpha
-        self.threshold = threshold
-
-    def apply(self, image, **params):
-        # Select random parameters for this specific application
-        ksize = random.randrange(self.blur_limit[0], self.blur_limit[1] + 2, 2)
-        current_alpha = random.uniform(self.alpha[0], self.alpha[1])
-
-        # Create the blurred version of the image using OpenCV's GaussianBlur
-        blurred = cv2.GaussianBlur(image, (ksize, ksize), 0)
-
-        # Calculate the high-pass mask (the difference)
-        # Convert to float to prevent clipping during subtraction
-        image_float = image.astype(np.float32)
-        blurred_float = blurred.astype(np.float32)
-        mask = image_float - blurred_float
-
-        # Apply the sharpening mask, respecting the threshold to avoid amplifying noise
-        if self.threshold > 0:
-            apply_condition = np.abs(mask) >= self.threshold
-            sharpened_mask = mask * current_alpha
-            image_float[apply_condition] += sharpened_mask[apply_condition]
-        else:
-            image_float += mask * current_alpha
-
-        # Clip values to the valid [0, 255] range and convert back to uint8
-        return np.clip(image_float, 0, 255).astype(np.uint8)
-
-
-class NoOp(BasicTransform):
-    """A transform that does nothing."""
-
-    def __init__(self, always_apply=False, p=0.5):
-        super(NoOp, self).__init__(always_apply, p)
-
-    @property
-    def targets(self):
-        # This defines what data types (e.g., 'image', 'mask') this transform can handle.
-        return {"image": self.apply}
-
-    def apply(self, img, **params):
-        # The core function: just return the image unmodified.
-        return img
-
-    def get_transform_init_args_names(self):
-        # Required for serialization, just return an empty tuple.
-        return ()
-
-
-# --- Final, Verified Augmentation Pipeline for Albumentations v0.4.6 ---
+# 
+# All augmentation pipelines (V3-V7, surgical, etc.) have been refactored to:
+#   - data/augmentations/transforms.py   (CustomUnsharpMask, NoOp)
+#   - data/augmentations/pipelines.py    (all pipeline definitions)
+#   - data/augmentations/registry.py     (get_pipeline factory)
+#
+# The following are now imported at the top of this file:
+#   - CustomUnsharpMask, NoOp (custom transforms)
+#   - revised_augmentation_pipeline_legacy (V3)
+#   - augmentation_pipeline_v4 (V4)  
+#   - augmentation_pipeline_v5 (V5)
+#   - AUG_PIPELINE_V6_SIMULATOR, AUG_PIPELINE_V4_GENERALIST, etc. (V6 components)
+#   - apply_augmentation_v6, apply_augmentation_v7 (callable functions)
+#   - degrade_quality_pipeline, enhance_quality_pipeline, social_media_pipeline
+#   - create_surgical_augmentation_pipeline, create_general_augmentation_pipeline
+#
+# To use the new registry pattern:
+#   pipeline = get_pipeline(version=3)  # or 4, 5, 6, 7, 'surgical', 'general'
+#
 # ==============================================================================
-# --- Augmentation Pipeline V3 (Legacy, Compatible with albumentations==0.4.6) ---
-# ==============================================================================
-revised_augmentation_pipeline_legacy = A.Compose([
-    A.HorizontalFlip(p=0.5),
-
-    # Step 1: CALIBRATED Quality Transformation
-    # We use our custom transform with p=0.7 to replicate the behavior of the
-    # modern OneOf([UnsharpMask(p=0.7), NoOp(p=0.3)]) block.
-    CustomUnsharpMask(
-        blur_limit=(3, 9),
-        alpha=(0.5, 1.0),
-        threshold=10,
-        p=0.7
-    ),
-
-    # Step 2: Realistic Compression & Noise (Compatible with v0.4.6)
-    A.OneOf([
-        A.ImageCompression(quality_lower=50, quality_upper=90, p=0.5),
-        A.GaussNoise(var_limit=(10.0, 60.0), p=0.3),
-        A.GaussianBlur(blur_limit=(3, 7), p=0.2),
-    ], p=0.6),
-
-    # Step 3: GENTLE Color Augmentation (Compatible with v0.4.6)
-    A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.5),
-    A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=15, val_shift_limit=10, p=0.4),
-])
-
-# ==============================================================================
-# --- Augmentation Pipeline V4 (Moderately Aggressive) ---
-# ==============================================================================
-
-# This version is a calibrated step-up from V3. It slightly increases the
-# intensity and probability of transforms to create more varied and challenging
-# training examples without being overly destructive.
-augmentation_pipeline_v4 = A.Compose([
-    A.HorizontalFlip(p=0.5),
-
-    # Step 1: CALIBRATED Quality Transformation
-    # Slightly higher probability and a moderately stronger sharpening effect.
-    CustomUnsharpMask(
-        blur_limit=(3, 9),
-        alpha=(0.6, 1.2),  # A modest increase in sharpening strength
-        threshold=10,
-        p=0.75  # Increased from 0.7
-    ),
-
-    # Step 2: CALIBRATED Compression & Noise
-    # Increased overall probability and slightly stronger effects.
-    A.OneOf([
-        # Slightly lower quality floor for more noticeable artifacts.
-        A.ImageCompression(quality_lower=45, quality_upper=90, p=0.5),
-        # Slightly higher noise ceiling.
-        A.GaussNoise(var_limit=(10.0, 65.0), p=0.3),
-        A.GaussianBlur(blur_limit=(3, 7), p=0.2),
-    ], p=0.7),  # Increased from 0.6
-
-    # Step 3: CALIBRATED Color Augmentation
-    # Slightly wider range for color shifts, applied a bit more often.
-    A.RandomBrightnessContrast(
-        brightness_limit=0.12, contrast_limit=0.12, p=0.5
-    ),
-    A.HueSaturationValue(
-        hue_shift_limit=12, sat_shift_limit=20, val_shift_limit=12, p=0.45  # Increased from 0.4
-    ),
-])
-
-# ==============================================================================
-# --- Augmentation Pipeline V5 (Hybrid: Moderate + Heavy Degradation) ---
-# ==============================================================================
-degradation_block = A.Compose([
-    # This OneOf block replaces: A.Sequential([...], p=0.7)
-    # It will always execute (p=1.0) and pick one of its children based on their weights.
-    A.OneOf([
-        # The first child is the sequential operation block.
-        # Its 'p' value of 0.7 acts as its selection weight.
-        A.Compose([
-            A.Downscale(scale_min=0.3, scale_max=0.6, interpolation=cv2.INTER_AREA, p=0.8),
-            A.Resize(height=224, width=224, interpolation=cv2.INTER_LINEAR, always_apply=True)
-        ], p=0.7),
-
-        # The second child is our custom NoOp transform.
-        # Its 'p' value of 0.3 acts as its weight.
-        NoOp(p=0.3)
-    ], p=1.0),  # p=1.0 ensures one is always chosen (0.7+0.3=1.0 normalized)
-
-    # These transforms are fine as they were, their individual 'p' works within a Compose.
-    A.ImageCompression(quality_lower=25, quality_upper=70, p=0.7),
-    A.GaussianBlur(blur_limit=(3, 11), p=0.4),
-])
-
-# 3. Create the final hybrid pipeline
-# We apply the same A.OneOf logic to run degradation_block 50% of the time.
-augmentation_pipeline_v5 = A.Compose([
-    # First, apply the moderate augmentations to every image
-    augmentation_pipeline_v4,
-
-    # THEN, apply the additional heavy degradation block with a 50% probability
-    A.OneOf([
-        # The degradation_block itself is a Compose transform. Its default 'p' is 1.0.
-        # To give it a 50% weight, we must wrap it in another Compose with p=0.5.
-        A.Compose([degradation_block], p=0.5),
-
-        # The other 50% of the time, we do nothing.
-        NoOp(p=0.5)
-    ], p=1.0)
-])
-
-# ==============================================================================
-# --- NEW: Augmentation Strategy V6 (Source-Dependent Portfolio) ---
-# ==============================================================================
-
-# --- PATH A: The Social Media Simulator (for Train-Primary) ---
-AUG_PIPELINE_V6_SIMULATOR = A.Compose([
-    A.HorizontalFlip(p=0.5),
-    CustomUnsharpMask(blur_limit=(3, 9), alpha=(0.7, 1.5), threshold=10, p=0.9),
-    A.ImageCompression(quality_lower=40, quality_upper=85, p=0.9),
-    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.7),
-])
-
-# --- PATH B: The Generalist "Kitchen Sink" (for Train-Primary) ---
-# ALERT: This pipeline is different from the existing augmentation_pipeline_v4.
-# It is implemented as specified in the new V6 strategy.
-AUG_PIPELINE_V4_GENERALIST = A.Compose([
-    A.HorizontalFlip(p=0.5),
-    CustomUnsharpMask(blur_limit=(3, 9), alpha=(0.6, 1.2), threshold=10, p=0.75),
-    A.OneOf([
-        A.ImageCompression(quality_lower=45, quality_upper=90, p=0.5),
-        A.GaussNoise(var_limit=(10.0, 65.0), p=0.3),
-    ], p=0.7),
-    A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.6),
-])
-
-# --- PATH C: The Purist (Minimal, for Train-Primary) ---
-AUG_PIPELINE_PURIST = A.Compose([
-    A.HorizontalFlip(p=0.5),
-    A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.5),
-])
-
-# --- PIPELINE FOR 'Train-Effort' DATA (Mild) ---
-# ALERT: This pipeline is different from the existing revised_augmentation_pipeline_legacy (V3).
-# It is implemented as specified in the new V6 strategy.
-AUG_PIPELINE_V3_MILD = A.Compose([
-    A.HorizontalFlip(p=0.5),
-    CustomUnsharpMask(blur_limit=(3, 7), alpha=(0.2, 0.7), threshold=10, p=0.5),
-    A.OneOf(
-        [A.ImageCompression(quality_lower=60, quality_upper=95, p=0.5), A.GaussNoise(var_limit=(10.0, 30.0), p=0.5)],
-        p=0.5),
-    A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.5),
-])
-
-
-def apply_augmentation_v6(img_np: np.ndarray, frame_dict: dict) -> np.ndarray:
-    """
-    Applies the source-dependent, probabilistic augmentation strategy (V6).
-    This function determines the data source from the frame path and applies
-    the corresponding augmentation portfolio.
-    """
-    frame_path = frame_dict.get('path', '')
-
-    # 1. Check if the source is "Train-Primary"
-    if "df40-frames-recropped-rfa85" in frame_path:
-        # Apply the "Portfolio" Augmentation for Train-Primary data
-        pipelines = [AUG_PIPELINE_V6_SIMULATOR, AUG_PIPELINE_V4_GENERALIST, AUG_PIPELINE_PURIST]
-        weights = [0.4, 0.3, 0.3]
-        chosen_pipeline = random.choices(pipelines, weights=weights, k=1)[0]
-        return chosen_pipeline(image=img_np)['image']
-    else:
-        # Apply the "Mild" Augmentation for "Train-Effort" data
-        if random.random() < 0.5:
-            # 50% chance to apply the mild pipeline
-            return AUG_PIPELINE_V3_MILD(image=img_np)['image']
-        else:
-            # 50% chance to apply no augmentation beyond a potential horizontal flip
-            return A.HorizontalFlip(p=0.5)(image=img_np)['image']
-
-
-def apply_augmentation_v7(img_np: np.ndarray) -> np.ndarray:
-    pipelines = [AUG_PIPELINE_V6_SIMULATOR, AUG_PIPELINE_V4_GENERALIST, AUG_PIPELINE_PURIST]
-    weights = [0.4, 0.45, 0.15]
-    chosen_pipeline = random.choices(pipelines, weights=weights, k=1)[0]
-    return chosen_pipeline(image=img_np)['image']
-
-
-# ==============================================================================
-# --- NEW: FLEXIBLE AUGMENTATION PIPELINES (albumentations==0.4.6 compatible) ---
-# ==============================================================================
-
-# --- Pipeline to aggressively degrade image quality ---
-degrade_quality_pipeline = A.Compose([
-    A.OneOf([
-        A.ImageCompression(quality_lower=40, quality_upper=70, p=0.8),
-        A.GaussianBlur(blur_limit=(5, 11), p=0.6),
-        A.GaussNoise(var_limit=(20.0, 80.0), p=0.4),
-    ], p=1.0)
-])
-
-# --- Pipeline to enhance image quality ---
-enhance_quality_pipeline = A.Compose([
-    A.IAASharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=0.9),
-])
-
-# --- Pipeline to simulate social media compression ---
-social_media_pipeline = A.Compose([
-    A.GaussianBlur(blur_limit=(3, 7), p=0.5),
-    A.Downscale(scale_min=0.5, scale_max=0.75, interpolation=cv2.INTER_AREA, p=0.8),
-    A.ImageCompression(quality_lower=30, quality_upper=60, p=1.0),
-], p=1.0)
-
-
-def create_surgical_augmentation_pipeline(
-        config: dict,
-        frame_properties: dict
-) -> A.Compose:
-    """
-    Dynamically constructs an Albumentations pipeline based on a configuration
-    and specific frame properties.
-    """
-    transforms_list = []
-
-    # 1. Base & Geometric
-    transforms_list.append(A.HorizontalFlip(p=0.5))
-    if config.get('use_geometric', False):
-        transforms_list.append(A.ShiftScaleRotate(
-            shift_limit=0.0625, scale_limit=0.12, rotate_limit=7,
-            interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, p=0.7
-        ))
-
-    # Added back to prevent the model from "forgetting" its robustness to color/lighting.
-    # We use mild parameters and moderate probability.
-    if config.get('use_color_jitter', False):
-        transforms_list.extend([
-            A.RandomBrightnessContrast(
-                brightness_limit=0.15, contrast_limit=0.15, p=0.5
-            ),
-            A.HueSaturationValue(
-                hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5
-            )
-        ])
-
-    # 2. Surgical Sharpness Adjustment
-    sharpness_bucket = frame_properties.get('sharpness_bucket')
-    chance_for_sharpness_adjustment = config.get('sharpness_adjust_prob', 0.5)
-    if random.random() < chance_for_sharpness_adjustment:
-        if sharpness_bucket == 'q4':
-            transforms_list.append(degrade_quality_pipeline)
-        elif sharpness_bucket == 'q1':
-            transforms_list.append(enhance_quality_pipeline)
-
-    # 3. Advanced Noise & Artifact Simulation
-    if config.get('use_advanced_noise', False):
-        transforms_list.append(A.OneOf([
-            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.5),
-            social_media_pipeline
-        ], p=config.get('advanced_noise_prob', 0.6)))
-
-    # 4. Occlusion
-    if config.get('use_occlusion', False):
-        transforms_list.append(A.Cutout(
-            num_holes=8, max_h_size=24, max_w_size=24, fill_value=0,
-            p=config.get('occlusion_prob', 0.5)
-        ))
-
-    return A.Compose(transforms_list)
-
-
-def create_general_augmentation_pipeline(config: dict) -> A.Compose:
-    """
-    Creates a robust, general-purpose augmentation pipeline for strategies
-    that do not have access to frame-level properties.
-    Now supports selecting different augmentation versions.
-    """
-    # Check for the augmentation version from the dedicated params dictionary
-    aug_params = config.get('augmentation_params', {})
-    aug_version = aug_params.get('version')
-    if aug_version == 3:
-        return revised_augmentation_pipeline_legacy
-    elif aug_version == 4:
-        return augmentation_pipeline_v4
-    elif aug_version == 5:
-        return augmentation_pipeline_v5
-
-    # --- Fallback to original "general" logic if version is not 3 ---
-    transforms_list = [
-        A.HorizontalFlip(p=0.5),
-    ]
-    if aug_params.get('use_geometric', False):
-        transforms_list.append(A.ShiftScaleRotate(
-            shift_limit=0.0625, scale_limit=0.12, rotate_limit=7,
-            interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_REFLECT_101, p=0.7
-        ))
-    if aug_params.get('use_color_jitter', False):
-        transforms_list.extend([
-            A.RandomBrightnessContrast(
-                brightness_limit=0.15, contrast_limit=0.15, p=0.5
-            ),
-            A.HueSaturationValue(
-                hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5
-            )
-        ])
-    transforms_list.append(A.OneOf([
-        A.ImageCompression(quality_lower=50, quality_upper=80, p=0.5),
-        A.GaussianBlur(blur_limit=(3, 7), p=0.3),
-        A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
-    ], p=0.8))
-    if aug_params.get('use_occlusion', False):
-        transforms_list.append(A.Cutout(
-            num_holes=8, max_h_size=24, max_w_size=24, fill_value=0,
-            p=aug_params.get('occlusion_prob', 0.5)
-        ))
-    return A.Compose(transforms_list)
 
 
 # ======================================================================================
+
 # === NEW DataPipes and helpers for the property-balanced strategy ===
 # ======================================================================================
 
@@ -948,8 +648,14 @@ class LazyDataLoaderManager:
             self.num_workers = dl_params.get('num_workers', 2)
             self.prefetch_factor = dl_params.get('prefetch_factor', 1)
         else:  # For 'test' or validation mode
-            self.num_workers = 6
-            self.prefetch_factor = 4
+            self.num_workers = dl_params.get(
+                'eval_num_workers',
+                dl_params.get('num_workers_eval', 6)
+            )
+            self.prefetch_factor = dl_params.get(
+                'eval_prefetch_factor',
+                dl_params.get('prefetch_factor_eval', 4)
+            )
 
     def _create_loader(self, method):
         """Creates a DataLoader for a specific method."""
@@ -966,14 +672,17 @@ class LazyDataLoaderManager:
         pipe = Mapper(pipe, map_function)
         pipe = Filter(pipe, _not_none)
 
-        loader = DataLoader(
-            pipe,
+        loader_kwargs = dict(
+            dataset=pipe,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             collate_fn=collate_fn,
             persistent_workers=is_train and self.num_workers > 0,  # Fix for num_workers=0 case
-            prefetch_factor=self.prefetch_factor
         )
+        if self.num_workers > 0:
+            loader_kwargs['prefetch_factor'] = self.prefetch_factor
+
+        loader = DataLoader(**loader_kwargs)
         return loader
 
     def __len__(self):
@@ -1118,6 +827,10 @@ def _create_property_balanced_loader(all_train_frames: list[dict], config: dict,
     # Check if using the new lesson data control system first
     lesson_data_control = config.get('lesson_data_control', {})
     use_lesson_control = lesson_data_control.get('enabled', False)
+    
+    # DEBUG: Print what we're receiving
+    print(f"[DATALOADER DEBUG] config.get('lesson_data_control') = {lesson_data_control}")
+    print(f"[DATALOADER DEBUG] use_lesson_control = {use_lesson_control}")
 
     # The data from the Parquet file has 'label' (str) but not 'label_id' (int).
     # This loop ensures 'label_id' is present before the main logic begins.
@@ -1543,14 +1256,17 @@ def create_pure_validation_loader(
             pipe = Mapper(pipe, map_fn)
             pipe = Filter(pipe, _not_none)
 
-            loader = DataLoader(
-                pipe,
+            loader_kwargs = dict(
+                dataset=pipe,
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
                 collate_fn=collate_function,
                 persistent_workers=is_train and self.num_workers > 0,
-                prefetch_factor=self.prefetch_factor
             )
+            if self.num_workers > 0:
+                loader_kwargs['prefetch_factor'] = self.prefetch_factor
+
+            loader = DataLoader(**loader_kwargs)
             return loader
 
     # 4. Instantiate the specialized LazyDataLoaderManager

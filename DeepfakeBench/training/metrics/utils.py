@@ -1,4 +1,5 @@
 from sklearn import metrics  # noqa
+from sklearn.metrics import f1_score  # noqa
 import numpy as np  # noqa
 from collections import defaultdict
 from pathlib import Path
@@ -103,17 +104,84 @@ def parse_metric_for_print(metric_dict):
 # In metrics/utils.py
 
 
+def _compute_roc_metrics(y_pred, y_true):
+    """
+    Core ROC computation shared by frame-level and video-level metrics.
+    
+    Returns:
+        dict with auc, eer, eer_threshold, ap, and FPR operating point metrics,
+        or None if metrics cannot be computed (single class / empty).
+    """
+    unique_labels = np.unique(y_true)
+    if len(y_true) == 0 or len(unique_labels) < 2:
+        return None
+
+    fpr, tpr, thresholds = metrics.roc_curve(y_true, y_pred, pos_label=1)
+    fnr = 1 - tpr
+    auc_val = metrics.auc(fpr, tpr)
+    ap_val = metrics.average_precision_score(y_true, y_pred)
+
+    # --- EER and its threshold ---
+    eer_idx = np.nanargmin(np.absolute(fnr - fpr))
+    eer_val = fpr[eer_idx]
+    eer_thresh = float(thresholds[eer_idx])
+
+    result = {
+        'auc': auc_val,
+        'eer': eer_val,
+        'eer_threshold': eer_thresh,
+        'ap': ap_val,
+    }
+
+    # --- F1 scores ---
+    # F1 at EER threshold (calibrated threshold)
+    preds_at_eer = (y_pred >= eer_thresh).astype(int)
+    result['f1_at_eer'] = float(f1_score(y_true, preds_at_eer, zero_division=0))
+
+    # F1 at naive 0.5 threshold (production default)
+    preds_at_half = (y_pred >= 0.5).astype(int)
+    result['f1'] = float(f1_score(y_true, preds_at_half, zero_division=0))
+
+    # --- FPR Operating Points ---
+    # At each target FPR, find the threshold and the corresponding TPR (recall).
+    # TPR = "how many fakes do we catch?" at a given false positive rate.
+    # This is critical for production: you pick an acceptable FPR (e.g., 1%)
+    # and read off the TPR (fake detection rate) at that operating point.
+    target_fprs = [0.001, 0.005, 0.01, 0.02, 0.05]  # 0.1%, 0.5%, 1%, 2%, 5%
+    target_fpr_names = ['0.1pct', '0.5pct', '1pct', '2pct', '5pct']
+
+    for target_fpr, name in zip(target_fprs, target_fpr_names):
+        # Find the largest threshold where FPR <= target_fpr
+        # fpr is sorted ascending, so we find the last index where fpr <= target
+        valid_indices = np.where(fpr <= target_fpr)[0]
+        if len(valid_indices) > 0:
+            idx = valid_indices[-1]
+            result[f'tpr_at_fpr{name}'] = float(tpr[idx])
+            result[f'thresh_at_fpr{name}'] = float(thresholds[idx])
+        else:
+            # Even the loosest threshold exceeds this FPR target
+            result[f'tpr_at_fpr{name}'] = 0.0
+            result[f'thresh_at_fpr{name}'] = 1.0
+
+    return result
+
+
 def get_test_metrics(y_pred, y_true, img_names=None):
     """
     Calculates frame-level and, optionally, video-level metrics.
     This version is robust to single-class inputs.
+
+    Metrics returned:
+        Frame-level: acc, auc, eer, eer_threshold, ap,
+                     tpr_at_fprX, thresh_at_fprX (for X in 0.1%, 0.5%, 1%, 2%, 5%)
+        Video-level (if img_names provided): video_acc, video_auc, video_eer,
+                     video_eer_threshold, video_ap, video_tpr_at_fprX, video_thresh_at_fprX
 
     Args:
         y_pred (np.ndarray): 1D array of frame-level prediction probabilities.
         y_true (np.ndarray): 1D array of frame-level ground truth labels.
         img_names (list, optional): List of frame paths. If provided, video-level
                                     metrics will be calculated by grouping frames.
-                                    Defaults to None.
 
     Returns:
         dict: A dictionary containing calculated metrics.
@@ -124,40 +192,24 @@ def get_test_metrics(y_pred, y_true, img_names=None):
 
     metrics_dict = {}
 
-    # --- 1. Frame-level Metrics (Always Calculated) ---
-    # --- START OF FRAME-LEVEL FIX ---
-    unique_frame_labels = np.unique(y_true)
-    if len(y_true) > 0 and len(unique_frame_labels) > 1:
-        # Both classes are present, calculate all metrics
-        fpr, tpr, _ = metrics.roc_curve(y_true, y_pred, pos_label=1)
-        fnr = 1 - tpr
-        frame_auc = metrics.auc(fpr, tpr)
-        frame_eer = fpr[np.nanargmin(np.absolute(fnr - fpr))]
-        frame_ap = metrics.average_precision_score(y_true, y_pred)
+    # --- 1. Frame-level Metrics ---
+    roc_metrics = _compute_roc_metrics(y_pred, y_true)
+    if roc_metrics is not None:
+        metrics_dict.update(roc_metrics)
     else:
-        # Single class or empty input, cannot calculate AUC/EER/AP
-        frame_auc = -1.0
-        frame_eer = -1.0
-        frame_ap = -1.0
+        metrics_dict.update({
+            'auc': -1.0, 'eer': -1.0, 'eer_threshold': -1.0, 'ap': -1.0,
+        })
 
-    # Accuracy can always be calculated
+    # Accuracy (always calculable, uses fixed 0.5 threshold)
     pred_class = (y_pred > 0.5).astype(int)
     correct = (pred_class == y_true).sum()
-    frame_acc = correct / len(y_true) if len(y_true) > 0 else 0.0
+    metrics_dict['acc'] = correct / len(y_true) if len(y_true) > 0 else 0.0
 
-    metrics_dict.update({
-        'acc': frame_acc,
-        'auc': frame_auc,
-        'eer': frame_eer,
-        'ap': frame_ap,
-    })
-    # --- END OF FRAME-LEVEL FIX ---
-
-    # --- 2. Video-level Metrics (Calculated if img_names is provided) ---
+    # --- 2. Video-level Metrics (if img_names provided) ---
     if img_names is not None and len(img_names) > 0:
         videos = defaultdict(lambda: {'preds': [], 'label': -1})
         for path, pred, label in zip(img_names, y_pred, y_true):
-            # Using Path object correctly
             video_id = Path(path).parent.name
             videos[video_id]['preds'].append(pred)
             if videos[video_id]['label'] == -1:
@@ -166,33 +218,72 @@ def get_test_metrics(y_pred, y_true, img_names=None):
         video_preds = []
         video_labels = []
         for video_id, data in videos.items():
-            if not data['preds']: continue
+            if not data['preds']:
+                continue
             video_preds.append(np.mean(data['preds']))
             video_labels.append(data['label'])
 
-        # --- START OF VIDEO-LEVEL FIX ---
         if len(video_labels) > 1:
             video_preds = np.array(video_preds)
             video_labels = np.array(video_labels)
 
-            unique_video_labels = np.unique(video_labels)
-            if len(unique_video_labels) > 1:
-                # Both classes are present at video level
-                v_fpr, v_tpr, _ = metrics.roc_curve(video_labels, video_preds, pos_label=1)
-                v_fnr = 1 - v_tpr
-                metrics_dict['video_auc'] = metrics.auc(v_fpr, v_tpr)
-                metrics_dict['video_eer'] = v_fpr[np.nanargmin(np.absolute(v_fnr - v_fpr))]
-                metrics_dict['video_ap'] = metrics.average_precision_score(video_labels, video_preds)
+            v_roc_metrics = _compute_roc_metrics(video_preds, video_labels)
+            if v_roc_metrics is not None:
+                # Prefix all video-level metrics with 'video_'
+                for k, v in v_roc_metrics.items():
+                    metrics_dict[f'video_{k}'] = v
             else:
-                # Single class at video level
-                metrics_dict['video_auc'] = -1.0
-                metrics_dict['video_eer'] = -1.0
-                metrics_dict['video_ap'] = -1.0
+                metrics_dict.update({
+                    'video_auc': -1.0, 'video_eer': -1.0,
+                    'video_eer_threshold': -1.0, 'video_ap': -1.0,
+                })
 
-            # Video accuracy can always be calculated
+            # Video accuracy
             v_pred_class = (video_preds > 0.5).astype(int)
             v_correct = (v_pred_class == video_labels).sum()
             metrics_dict['video_acc'] = v_correct / len(video_labels) if len(video_labels) > 0 else 0.0
-        # --- END OF VIDEO-LEVEL FIX ---
 
     return metrics_dict
+
+
+def metrics_at_threshold(y_pred, y_true, threshold: float) -> dict:
+    """
+    Compute classification metrics at a **fixed** decision threshold.
+
+    This is the complement of :func:`get_test_metrics` which finds an
+    *optimal* threshold per-split.  Here we apply a threshold chosen
+    elsewhere (e.g. the in-distribution EER threshold) to evaluate how
+    well the model generalises at that operating point.
+
+    Returns:
+        dict with keys: acc, f1, precision, recall, fpr, fnr, n_samples
+    """
+    y_pred = np.asarray(y_pred).ravel()
+    y_true = np.asarray(y_true).ravel()
+    if len(y_true) == 0:
+        return {}
+
+    pred_class = (y_pred >= threshold).astype(int)
+    n = len(y_true)
+    correct = int((pred_class == y_true).sum())
+
+    tp = int(((pred_class == 1) & (y_true == 1)).sum())
+    fp = int(((pred_class == 1) & (y_true == 0)).sum())
+    fn = int(((pred_class == 0) & (y_true == 1)).sum())
+    tn = int(((pred_class == 0) & (y_true == 0)).sum())
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0  # = TPR
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0.0
+
+    return {
+        'acc': correct / n,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall,   # TPR
+        'fpr': fpr,
+        'fnr': fnr,
+        'n_samples': n,
+    }

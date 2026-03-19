@@ -1,0 +1,122 @@
+# Backbone Registry Configuration
+# 
+# This file defines all supported vision backbones for the Effort detector.
+# Each backbone entry contains the information needed to load and configure it.
+#
+# Usage in experiment config:
+#   backbone:
+#     type: clip
+#     variant: ViT-B-16
+#     source: openai
+#
+# The system will look up the entry and set hidden_size, resolution, etc.
+
+# =============================================================================
+# OpenAI CLIP Backbones (via HuggingFace transformers)
+# =============================================================================
+openai:
+  # Currently in use - the baseline
+  ViT-L-14:
+    huggingface_id: "openai/clip-vit-large-patch14"
+    library: "transformers"
+    hidden_size: 1024
+    resolution: 224
+    patch_size: 14
+    num_layers: 24
+    num_heads: 16
+    recommended_rank: 1023  # hidden_size - 1
+    local_path: "./weights/models--openai--clip-vit-large-patch14/"
+    gcs_path: "gs://training-weights/backbones/openai/clip-vit-large-patch14/"
+    download_command: |
+      python -c "from transformers import CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-large-patch14')"
+    status: "available"
+    notes: "Default backbone. Largest OpenAI CLIP model."
+
+  # Smaller, faster alternative
+  ViT-B-16:
+    huggingface_id: "openai/clip-vit-base-patch16"
+    library: "transformers"
+    hidden_size: 768
+    resolution: 224
+    patch_size: 16
+    num_layers: 12
+    num_heads: 12
+    recommended_rank: 767
+    local_path: "./weights/clip-vit-base-patch16/"
+    gcs_path: "gs://base-checkpoints/effort-aigi/clip-vit-base-patch16/"
+    download_command: |
+      python -c "from transformers import CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch16')"
+    status: "available"
+    notes: "Smaller backbone. ~3.5x fewer parameters than ViT-L-14."
+
+  # Smallest, fastest
+  ViT-B-32:
+    huggingface_id: "openai/clip-vit-base-patch32"
+    library: "transformers"
+    hidden_size: 768  # NOTE: vision hidden_size is 768, NOT 512 (512 is projection_dim)
+    resolution: 224
+    patch_size: 32
+    num_layers: 12
+    num_heads: 12
+    recommended_rank: 767
+    local_path: "./weights/clip-vit-base-patch32/"
+    gcs_path: "gs://base-checkpoints/effort-aigi/clip-vit-base-patch32/"
+    download_command: |
+      python -c "from transformers import CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch32')"
+    status: "available"
+    notes: "Fastest backbone due to larger patches. Same hidden_size as ViT-B-16."
+
+# =============================================================================
+# LAION/OpenCLIP Backbones (via open_clip library)
+# =============================================================================
+laion:
+  # DataComp XL - trained on high-quality filtered data
+  ViT-B-16-DataComp-XL:
+    openclip_model: "ViT-B-16"
+    openclip_pretrained: "datacomp_xl_s13b_b90k"
+    library: "open_clip"
+    hidden_size: 512  # NOTE: OpenCLIP projects 768 embed_dim to 512 output_dim
+    embed_dim: 768    # Internal transformer dimension (for SVD rank)
+    resolution: 224
+    patch_size: 16
+    num_layers: 12
+    num_heads: 12
+    recommended_rank: 767  # embed_dim - 1 (SVD operates at internal dim, NOT output_dim)
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    # OpenCLIP models use different file naming than HuggingFace
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+    download_command: |
+      python -c "import open_clip; open_clip.create_model_and_transforms('ViT-B-16', pretrained='datacomp_xl_s13b_b90k')"
+    status: "available"
+    notes: |
+      LAION DataComp XL model. Trained on 12.8B samples from DataComp-1B.
+      Requires open_clip library: pip install open_clip_torch
+      Different attention module structure than HuggingFace CLIP.
+      Output dim is 512 (projected from 768 internal dim).
+
+# =============================================================================
+# Download Instructions
+# =============================================================================
+# 
+# To download all backbones locally:
+#
+# 1. OpenAI ViT-L-14 (if not already present):
+#    python -c "from transformers import CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-large-patch14')"
+#
+# 2. OpenAI ViT-B-16:
+#    python -c "from transformers import CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch16')"
+#
+# 3. OpenAI ViT-B-32:
+#    python -c "from transformers import CLIPModel; CLIPModel.from_pretrained('openai/clip-vit-base-patch32')"
+#
+# 4. LAION DataComp (requires open_clip):
+#    pip install open_clip_torch
+#    python -c "import open_clip; open_clip.create_model_and_transforms('ViT-B-16', pretrained='datacomp_xl_s13b_b90k')"
+#
+# After download, copy to GCS:
+#    gsutil -m cp -r ~/.cache/huggingface/hub/models--openai--clip-vit-base-patch16 gs://training-weights/backbones/openai/
+#
+# =============================================================================

@@ -18,7 +18,7 @@ from tqdm import tqdm  # noqa
 import torch  # noqa
 import torch.nn.functional as F  # noqa - Added Jan 10, 2026 for ArcFace diagnostics
 from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
-from metrics.utils import get_test_metrics  # noqa
+from metrics.utils import get_test_metrics, metrics_at_threshold  # noqa
 from torch.cuda.amp import autocast, GradScaler  # noqa
 import wandb  # noqa
 from collections import defaultdict
@@ -32,6 +32,7 @@ import tempfile
 import shutil
 from datetime import datetime
 from sklearn.metrics import confusion_matrix
+from utils.grouping import infer_group_and_family
 
 # Import trainer mixins for modular functionality
 from trainer.mixins import (
@@ -42,6 +43,7 @@ from trainer.mixins import (
     ArcFaceMixin,
     ValidationMixin,
     ReportingMixin,
+    StabilityRegMixin,
 )
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
@@ -57,6 +59,7 @@ class Trainer(
     ArcFaceMixin,
     ValidationMixin,
     ReportingMixin,
+    StabilityRegMixin,
 ):
     """
     Main trainer class for DeepfakeBench training.
@@ -115,6 +118,29 @@ class Trainer(
             self.logger.info(
                 f"✅ Evaluation will run every {self.evaluate_every_steps} steps, overriding epoch frequency.")
 
+        # --- OOD monitoring cadence controls ---
+        # Defaults preserve prior behavior: run on every validation call.
+        self.ood_monitoring_enabled = bool(self.config.get('ood_monitoring_enabled', True))
+        self.ood_monitoring_start_step = int(self.config.get('ood_monitoring_start_step', 0) or 0)
+        cfg_ood_every = self.config.get('ood_monitoring_every_steps')
+        if cfg_ood_every is None:
+            if self.evaluate_every_steps and self.evaluate_every_steps > 0:
+                self.ood_monitoring_every_steps = int(self.evaluate_every_steps)
+            else:
+                self.ood_monitoring_every_steps = 1
+        else:
+            self.ood_monitoring_every_steps = int(cfg_ood_every)
+            if self.ood_monitoring_every_steps <= 0:
+                self.ood_monitoring_every_steps = 1
+        self._last_ood_monitor_step = None
+        self._ood_warmup_logged = False
+        self.logger.info(
+            "OOD monitoring cadence: enabled=%s start_step=%d every_steps=%d",
+            self.ood_monitoring_enabled,
+            self.ood_monitoring_start_step,
+            self.ood_monitoring_every_steps,
+        )
+
         # Initialize AMP scaler for mixed precision training
         self.scaler = GradScaler()
         self.gradient_clip_val = self.config.get('gradient_clip_val')
@@ -137,6 +163,9 @@ class Trainer(
         
         # ArcFace: parameter annealing (if using ArcFace head)
         self.init_arcface()
+
+        # Stability regularisation: perturbation consistency loss
+        self.init_stability_reg()
 
     # --- Group-DRO methods are now provided by GroupDROMixin ---
     # The mixin provides: init_group_dro(), calculate_group_dro_loss(), get_group_dro_stats()
@@ -198,6 +227,25 @@ class Trainer(
         if self.wandb_run and step_cnt <= anneal_steps and (
                 step_cnt % log_progress_steps == 0 or step_cnt == anneal_steps):
             self.wandb_run.log({'train/lambda_reg': current_lambda, 'train/step': step_cnt})
+
+    def _update_quality_domain_lambda(self, step_cnt):
+        """Anneal gradient-reversal lambda for the quality-domain head (DANN sigmoid schedule)."""
+        model_instance = self.model.module if isinstance(self.model, DDP) else self.model
+        if not getattr(model_instance, 'use_quality_head', False):
+            return
+
+        total_steps = self.config.get('total_training_steps', 65000)
+        progress = min(step_cnt / max(total_steps, 1), 1.0)
+        # Sigmoid schedule: 0→~1 with inflection at 50% of training
+        lambda_val = 2.0 / (1.0 + math.exp(-10.0 * progress)) - 1.0
+        model_instance.quality_head.set_lambda(lambda_val)
+
+        log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
+        if self.wandb_run and step_cnt % log_progress_steps == 0:
+            self.wandb_run.log({
+                'train/quality_grl_lambda': lambda_val,
+                'train/step': step_cnt,
+            })
 
     def _check_collapse_warning(self, predictions, data_dict, step_cnt):
         """
@@ -556,6 +604,30 @@ class Trainer(
                 name = k[7:] if k.startswith('module.') else k
                 new_state_dict[name] = v
             
+            # Pre-flight check: detect size mismatches before load_state_dict
+            # This gives a clearer error message (e.g., wrong backbone checkpoint)
+            model_state = self.model.state_dict()
+            mismatches = []
+            for key in new_state_dict:
+                if key in model_state and new_state_dict[key].shape != model_state[key].shape:
+                    mismatches.append(
+                        f"  {key}: checkpoint={list(new_state_dict[key].shape)} "
+                        f"vs model={list(model_state[key].shape)}"
+                    )
+            if mismatches:
+                mismatch_str = "\n".join(mismatches)
+                self.logger.error(
+                    f"❌ CHECKPOINT SIZE MISMATCH loading {model_path}!\n"
+                    f"This usually means the checkpoint was trained with a different backbone "
+                    f"(e.g., ViT-L-14 vs ViT-B-16). Mismatched parameters:\n{mismatch_str}"
+                )
+                raise RuntimeError(
+                    f"Checkpoint size mismatch: the checkpoint at {model_path} is incompatible "
+                    f"with the current model architecture. {len(mismatches)} parameter(s) have "
+                    f"different shapes. Check that gcs_base_checkpoint points to the correct "
+                    f"backbone variant."
+                )
+            
             self.model.load_state_dict(new_state_dict, strict=False)
             
             # Validate model checksum if available (skip if curriculum learning might modify parameters)
@@ -771,6 +843,14 @@ class Trainer(
             else:
                 losses = self.model.get_losses(data_dict, predictions)
 
+        # Fast-fail: detect NaN/Inf loss before wasting GPU hours
+        if torch.isnan(losses['overall']) or torch.isinf(losses['overall']):
+            raise RuntimeError(
+                f"NaN/Inf loss detected in train_step "
+                f"(global_step={getattr(self, 'global_step', '?')}). "
+                "Aborting early. Check: learning rate, data pipeline, model init."
+            )
+
         self.optimizer.zero_grad()
         self.scaler.scale(losses['overall']).backward()
 
@@ -909,7 +989,7 @@ class Trainer(
             epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
             accumulation_steps = 1  # No accumulation for this strategy
         elif strategy == 'combined_paired':
-            # Combined Paired uses IterableDataset with both DF40 and DeepLive samples
+            # Combined Paired uses IterableDataset with DF40, DeepLive, and/or VisoMaster samples
             # train_videos is a list of UnifiedPairedSample objects
             dl_params = self.config.get('dataloader_params', {})
             combined_config = self.config.get('combined_paired', {})
@@ -927,10 +1007,44 @@ class Trainer(
             else:
                 num_samples_per_epoch = len(train_videos)
             
-            # Each sample produces frames_per_sample * 2 (real + fake) frames
+            # Each paired sample produces frames_per_sample * 2 (real + fake) frames.
+            # Unpaired real samples produce frames_per_sample * 1 (real only).
+            n_paired = sum(1 for s in train_videos if not getattr(s, 'is_unpaired_real', False))
+            n_unpaired = sum(1 for s in train_videos if getattr(s, 'is_unpaired_real', False))
+            if identity_balanced:
+                paired_ids = set(
+                    s.identity for s in train_videos if not getattr(s, 'is_unpaired_real', False)
+                )
+                unpaired_ids = set(
+                    s.identity for s in train_videos if getattr(s, 'is_unpaired_real', False)
+                )
+                n_paired = len(paired_ids)
+                n_unpaired = len(unpaired_ids)
+            total_frames = (n_paired * frames_per_sample * 2) + (n_unpaired * frames_per_sample)
+            epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
+            if n_unpaired > 0:
+                self.logger.info(
+                    f"Combined samples: {n_paired} paired + {n_unpaired} unpaired real -> {total_frames} total frames"
+                )
+            accumulation_steps = self.config.get('gradient_accumulation_steps', 1)
+        elif strategy == 'visomaster':
+            # Standalone VisoMaster uses IterableDataset (same pattern as combined_paired)
+            dl_params = self.config.get('dataloader_params', {})
+            viso_config = self.config.get('visomaster', {})
+            gpu_batch_size = dl_params.get('frames_per_batch', 32)
+            frames_per_sample = dl_params.get('frames_per_video', 8)
+            identity_balanced = viso_config.get('identity_balanced_sampling', True)
+            
+            if identity_balanced:
+                unique_identities = set(f"visomaster_{s.identity}" for s in train_videos)
+                num_samples_per_epoch = len(unique_identities)
+                self.logger.info(f"VisoMaster identity-balanced sampling: {num_samples_per_epoch} unique identities (from {len(train_videos)} samples)")
+            else:
+                num_samples_per_epoch = len(train_videos)
+            
             total_frames = num_samples_per_epoch * frames_per_sample * 2
             epoch_len = math.ceil(total_frames / gpu_batch_size) if total_frames > 0 else 0
-            accumulation_steps = 1
+            accumulation_steps = self.config.get('gradient_accumulation_steps', 1)
         else:  # Handles 'per_method' and 'video_level'
             effective_batch_size = self.config.get('dataloader_params', {}).get('videos_per_batch')
             total_train_videos = len(train_videos)
@@ -1032,6 +1146,7 @@ class Trainer(
 
                 self._update_arcface_s(step_cnt)
                 self._update_lambda_reg(step_cnt)
+                self._update_quality_domain_lambda(step_cnt)
 
                 is_final_accumulation_step = (i + 1) % accumulation_steps == 0
                 is_ddp = type(self.model) is DDP
@@ -1062,8 +1177,25 @@ class Trainer(
                         else:
                             # Original behavior
                             losses = loss_fn_owner.get_losses(data_dict, predictions)
+
+                    # --- Stability regularization loss ---
+                    stability_loss = self.compute_stability_loss(
+                        self.model, data_dict, predictions
+                    )
+                    losses['overall'] = losses['overall'] + stability_loss
+                    losses['stability'] = stability_loss.detach()
+
                     # Store unscaled loss for accurate logging
                     unscaled_loss = losses['overall'].clone().detach()
+
+                    # Fast-fail: detect NaN/Inf loss before wasting GPU hours
+                    if torch.isnan(unscaled_loss) or torch.isinf(unscaled_loss):
+                        raise RuntimeError(
+                            f"NaN/Inf loss detected at step {step_cnt} "
+                            f"(epoch {epoch}). "
+                            "Aborting early. Check: learning rate, data pipeline, model init."
+                        )
+
                     # Scale loss for accumulation
                     if accumulation_steps > 1:
                         losses['overall'] = losses['overall'] / accumulation_steps
@@ -1342,6 +1474,7 @@ class Trainer(
         """Helper to avoid code duplication in the training loop."""
         self._update_arcface_s(step_cnt)
         self._update_lambda_reg(step_cnt)
+        self._update_quality_domain_lambda(step_cnt)
         self.setTrain()
         for key in data_dict.keys():
             if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(self.model.device)
@@ -1446,12 +1579,158 @@ class Trainer(
             )
             all_val_metrics['val_holdout'] = holdout_metrics
 
-        # 3. Check Lesson Gate
+        # 3. Extract in-distribution EER threshold — this is the SINGLE
+        #    operating-point threshold that all other splits are measured against.
+        indist_threshold = None
+        indist_m = all_val_metrics.get('val_in_dist')
+        if indist_m and 'overall' in indist_m:
+            indist_threshold = indist_m['overall'].get('eer_threshold')
+            if indist_threshold is not None and indist_threshold > 0:
+                self.logger.info(
+                    f"In-dist EER threshold: {indist_threshold:.4f} — "
+                    "will apply to holdout & OOD for unified evaluation"
+                )
+
+        # 4. Compute at-indist-threshold metrics for val_holdout
+        holdout_m = all_val_metrics.get('val_holdout')
+        if (
+            indist_threshold is not None
+            and indist_threshold > 0
+            and holdout_m
+            and 'all_preds' in holdout_m
+            and len(holdout_m['all_preds']) > 0
+        ):
+            at_indist = metrics_at_threshold(
+                holdout_m['all_preds'], holdout_m['all_labels'], indist_threshold
+            )
+            if at_indist and self.wandb_run:
+                log_dict = {'train/step': step_cnt}
+                for k, v in at_indist.items():
+                    log_dict[f'val_holdout/at_indist/{k}'] = v
+                log_dict['val_holdout/at_indist/threshold'] = indist_threshold
+                self.wandb_run.log(log_dict)
+                self.logger.info(
+                    f"val_holdout @ indist threshold {indist_threshold:.4f}: "
+                    f"acc={at_indist['acc']:.4f}  f1={at_indist['f1']:.4f}  "
+                    f"fpr={at_indist['fpr']:.4f}  fnr={at_indist['fnr']:.4f}"
+                )
+
+        # 5. Compute unified threshold across all validation pools (legacy metric)
+        unified_preds_parts = []
+        unified_labels_parts = []
+        for key in ('val_in_dist', 'val_holdout'):
+            m = all_val_metrics.get(key)
+            if m and 'all_preds' in m and len(m['all_preds']) > 0:
+                unified_preds_parts.append(m['all_preds'])
+                unified_labels_parts.append(m['all_labels'])
+        if unified_preds_parts:
+            combined_preds = np.concatenate(unified_preds_parts)
+            combined_labels = np.concatenate(unified_labels_parts)
+            if len(np.unique(combined_labels)) > 1:
+                unified_metrics = get_test_metrics(combined_preds, combined_labels)
+                if unified_metrics and self.wandb_run:
+                    self.wandb_run.log({
+                        'unified/eer_threshold': unified_metrics.get('eer_threshold', 0),
+                        'unified/eer': unified_metrics.get('eer', 0),
+                        'unified/f1': unified_metrics.get('f1_at_eer', 0),
+                        'unified/auc': unified_metrics.get('auc', 0),
+                        'train/step': step_cnt,
+                    })
+                    self.logger.info(
+                        f"Unified threshold: {unified_metrics.get('eer_threshold', 0):.4f}, "
+                        f"EER: {unified_metrics.get('eer', 0):.4f}, "
+                        f"F1@EER: {unified_metrics.get('f1_at_eer', 0):.4f}"
+                    )
+
+        # Free raw predictions from returned metrics to save memory
+        for m in all_val_metrics.values():
+            m.pop('all_preds', None)
+            m.pop('all_labels', None)
+
+        # 6. Check Lesson Gate
         if self.gate_enabled:
             self._check_lesson_gate(all_val_metrics)
 
-        # 4. Run OOD monitoring (does not affect gating)
-        self._run_ood_monitoring(epoch, step_cnt)
+        # 7. Run OOD monitoring (does not affect gating)
+        ood_auc = self._run_ood_monitoring(epoch, step_cnt, indist_threshold=indist_threshold)
+
+        # 8. OOD-composite checkpointing (R12+)
+        # If enabled, save a separate checkpoint ranked by hmean(holdout_auc, ood_auc).
+        # This checkpoint list is independent of the holdout-only top-N list.
+        if (
+            self.ood_composite_enabled
+            and ood_auc is not None
+            and ood_auc > 0
+        ):
+            holdout_m = all_val_metrics.get('val_holdout')
+            holdout_auc = holdout_m['overall'].get('auc') if holdout_m and 'overall' in holdout_m else None
+            holdout_eer = holdout_m['overall'].get('eer') if holdout_m and 'overall' in holdout_m else None
+            if holdout_auc and holdout_auc > 0:
+                # Harmonic mean — penalizes large divergence between holdout and OOD
+                composite = 2.0 * holdout_auc * ood_auc / (holdout_auc + ood_auc)
+
+                # Log to W&B
+                if self.wandb_run:
+                    self.wandb_run.log({
+                        'val_primary/ood_composite': composite,
+                        'val_primary/ood_auc_for_composite': ood_auc,
+                        'val_primary/holdout_auc_for_composite': holdout_auc,
+                        'train/step': step_cnt,
+                    })
+
+                self.logger.info(
+                    f"OOD composite: {composite:.4f} "
+                    f"(holdout_auc={holdout_auc:.4f}, ood_auc={ood_auc:.4f})"
+                )
+
+                is_composite_improvement = composite > self.best_ood_composite
+                if is_composite_improvement:
+                    self.logger.info(
+                        f"🎯 OOD COMPOSITE IMPROVED! {composite:.4f} "
+                        f"(prev best: {self.best_ood_composite:.4f})"
+                    )
+                    self.best_ood_composite = composite
+                    self.best_ood_composite_step = step_cnt
+
+                    if self.wandb_run:
+                        self.wandb_run.summary['best_ood_composite/metric'] = composite
+                        self.wandb_run.summary['best_ood_composite/holdout_auc'] = holdout_auc
+                        self.wandb_run.summary['best_ood_composite/ood_auc'] = ood_auc
+                        self.wandb_run.summary['best_ood_composite/step'] = step_cnt
+
+                    if self.config.get('save_ckpt', True):
+                        is_top = (
+                            len(self.ood_composite_top_n) < self.ood_composite_top_n_size
+                            or composite > self.ood_composite_top_n[-1]['metric']
+                        )
+                        if is_top:
+                            gcs_path = self.save_ckpt(
+                                epoch=epoch + 1,
+                                auc=holdout_auc,
+                                eer=holdout_eer,
+                                ckpt_prefix='ood_composite',
+                                step=step_cnt,
+                            )
+                            if gcs_path:
+                                self.ood_composite_top_n.append({
+                                    'metric': composite,
+                                    'holdout_auc': holdout_auc,
+                                    'ood_auc': ood_auc,
+                                    'epoch': epoch + 1,
+                                    'step': step_cnt,
+                                    'gcs_path': gcs_path,
+                                })
+                                self.ood_composite_top_n.sort(
+                                    key=lambda x: x['metric'], reverse=True
+                                )
+                                if len(self.ood_composite_top_n) > self.ood_composite_top_n_size:
+                                    worst = self.ood_composite_top_n.pop()
+                                    self._delete_from_gcs(worst['gcs_path'])
+
+                                if self.wandb_run:
+                                    self.wandb_run.summary['best_ood_composite/gcs_path'] = (
+                                        self.ood_composite_top_n[0]['gcs_path']
+                                    )
 
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
@@ -1491,6 +1770,7 @@ class Trainer(
         method_preds = defaultdict(list)
         all_preds, all_labels = [], []
         all_losses = []
+        method_id_to_name = getattr(validation_loader, "method_id_to_name", {}) or {}
 
         # --- NEW: Initialize lists for detailed reporting if flag is enabled ---
         if generate_detailed_reports:
@@ -1518,6 +1798,18 @@ class Trainer(
                 if data_dict['image'].shape[0] == 0 or data_dict['image'].dim() != 5: continue
 
                 B, T = data_dict['image'].shape[:2]
+                batch_method_names = [method] * B
+                batch_method_ids = data_dict.get("method_id")
+                if (
+                    isinstance(batch_method_ids, torch.Tensor)
+                    and batch_method_ids.numel() == B
+                    and method_id_to_name
+                ):
+                    method_ids_list = batch_method_ids.detach().cpu().tolist()
+                    batch_method_names = [
+                        method_id_to_name.get(int(method_id), method)
+                        for method_id in method_ids_list
+                    ]
                 
                 # Debug logging to track potential duplicate processing
                 if generate_detailed_reports and batch_count % 10 == 0:
@@ -1557,7 +1849,7 @@ class Trainer(
                                     label = -1  # Unknown label
                                 
                                 sanity_check_data.append({
-                                    'method': method,
+                                    'method': batch_method_names[video_idx] if video_idx < len(batch_method_names) else method,
                                     'video_id': video_id,
                                     'frame_idx': frame_idx,
                                     'frame_path': frame_path,
@@ -1581,8 +1873,9 @@ class Trainer(
 
                 all_labels.extend(labels_np)
                 all_preds.extend(probs_np)
-                method_labels[method].extend(labels_np)
-                method_preds[method].extend(probs_np)
+                for idx, method_name in enumerate(batch_method_names):
+                    method_labels[method_name].append(labels_np[idx])
+                    method_preds[method_name].append(probs_np[idx])
                 videos_processed += data_dict['image'].shape[0]
 
                 # --- NEW: Collect detailed data for reports if flag is enabled ---
@@ -1590,20 +1883,30 @@ class Trainer(
                     frame_level_probs = predictions['prob'].view(B, T)
                     for i in range(B):  # Iterate over each video in the batch
                         video_id = data_dict['video_id'][i]
+                        method_name = batch_method_names[i] if i < len(batch_method_names) else method
 
                         label = labels_np[i]
                         avg_prob = probs_np[i]
                         prediction = 1 if avg_prob >= 0.5 else 0
                         is_correct = 1 if prediction == label else 0
+                        group_key, family_key = infer_group_and_family(
+                            label=label,
+                            method=method_name,
+                            source=None,
+                        )
 
                         # Append data for the video-level report
-                        video_report_data.append([method, label, video_id, avg_prob, prediction, is_correct])
+                        video_report_data.append([
+                            method_name, label, video_id, avg_prob, prediction, is_correct, group_key, family_key
+                        ])
 
                         # Append data for the frame-level report
                         for j in range(T):  # Iterate over each frame in the video
                             frame_path = data_dict['frame_paths'][i][j]
                             frame_prob = frame_level_probs[i, j].item()
-                            frame_report_data.append([method, label, video_id, frame_path, frame_prob])
+                            frame_report_data.append([
+                                method_name, label, video_id, frame_path, frame_prob, group_key, family_key
+                            ])
 
             if generate_detailed_reports:
                 self.logger.info(
@@ -1675,6 +1978,7 @@ class Trainer(
                 'acc': -1.0, 
                 'auc': -1.0,
                 'eer': -1.0,
+                'eer_threshold': -1.0,
                 'ap': -1.0,
                 'error': str(e)
             }
@@ -1716,7 +2020,13 @@ class Trainer(
                         self.wandb_run.summary['best/metric'] = self.best_val_metric
                         self.wandb_run.summary['best/auc'] = overall_metrics.get('auc', 0)
                         self.wandb_run.summary['best/eer'] = overall_metrics.get('eer', 0)
+                        self.wandb_run.summary['best/eer_threshold'] = overall_metrics.get('eer_threshold', 0)
                         self.wandb_run.summary['best/acc'] = overall_metrics.get('acc', 0)
+                        # FPR operating points at best epoch
+                        for fpr_key in ['tpr_at_fpr1pct', 'tpr_at_fpr2pct', 'tpr_at_fpr5pct',
+                                        'thresh_at_fpr1pct', 'thresh_at_fpr2pct', 'thresh_at_fpr5pct']:
+                            if fpr_key in overall_metrics:
+                                self.wandb_run.summary[f'best/{fpr_key}'] = overall_metrics[fpr_key]
 
                     if self.config.get('save_ckpt', True):
                         self.logger.info(f"✅ Saving new best checkpoint to GCS (Epoch {epoch + 1})...")
@@ -1820,6 +2130,26 @@ class Trainer(
                 self.logger.info(f"Method '{method}' per-method accuracy: {per_method_accuracy:.4f} ({correct_predictions}/{len(method_labels_array)})")
 
         # Create and log a simplified W&B Table with only meaningful metrics
+        # --- Weakest-method tracking ---
+        real_method_accs = {
+            m: metrics['acc'] for m, metrics in method_table_metrics.items()
+            if m in real_source_names and metrics.get('acc') is not None
+        }
+        fake_method_accs = {
+            m: metrics['acc'] for m, metrics in method_table_metrics.items()
+            if m not in real_source_names and metrics.get('acc') is not None
+        }
+        if real_method_accs:
+            worst_real = min(real_method_accs.items(), key=lambda x: x[1])
+            wandb_log_dict[f'{log_prefix}/weakest/real_method'] = worst_real[0]
+            wandb_log_dict[f'{log_prefix}/weakest/real_acc'] = worst_real[1]
+            self.logger.info(f"Weakest real method: {worst_real[0]} ({worst_real[1]:.4f})")
+        if fake_method_accs:
+            worst_fake = min(fake_method_accs.items(), key=lambda x: x[1])
+            wandb_log_dict[f'{log_prefix}/weakest/fake_method'] = worst_fake[0]
+            wandb_log_dict[f'{log_prefix}/weakest/fake_acc'] = worst_fake[1]
+            self.logger.info(f"Weakest fake method: {worst_fake[0]} ({worst_fake[1]:.4f})")
+
         if self.wandb_run:
             columns = ["epoch", "method", "acc", "n_samples"]
             table_data = []
@@ -1877,36 +2207,71 @@ class Trainer(
             'overall': overall_metrics,
             'per_method': method_table_metrics,
             'macro_accuracy': macro_accuracy if 'macro_accuracy' in locals() else None,
-            'real_real_auc': real_real_auc
+            'real_real_auc': real_real_auc,
+            'all_preds': np.array(all_preds),
+            'all_labels': np.array(all_labels),
         }
 
-        del all_preds, all_labels, method_labels, method_preds, overall_metrics, all_losses
+        del method_labels, method_preds, overall_metrics, all_losses
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.info(f"===> Evaluation for '{log_prefix}' Done!")
         return returned_metrics
 
-    def _run_ood_monitoring(self, epoch, step_cnt):
-        """Helper to run the OOD monitoring loop."""
-        if self.ood_loader is not None and self.config['local_rank'] == 0:
-            self.logger.info(f"\n===> OOD Monitoring at epoch {epoch + 1}")
-            self.ood_monitoring_epoch(epoch, step_cnt)
+    def _run_ood_monitoring(self, epoch, step_cnt, indist_threshold=None):
+        """Helper to run the OOD monitoring loop.
+
+        Returns:
+            float | None: Overall OOD AUC if monitoring ran, else None.
+        """
+        if self.ood_loader is None or self.config['local_rank'] != 0:
+            return None
+        if not self.ood_monitoring_enabled:
+            return None
+        if step_cnt < self.ood_monitoring_start_step:
+            if not self._ood_warmup_logged:
+                self.logger.info(
+                    "OOD monitoring warmup active: first run at step %d",
+                    self.ood_monitoring_start_step,
+                )
+                self._ood_warmup_logged = True
+            return None
+
+        steps_since_start = step_cnt - self.ood_monitoring_start_step
+        if steps_since_start % self.ood_monitoring_every_steps != 0:
+            return None
+        if self._last_ood_monitor_step == step_cnt:
+            return None
+
+        self._last_ood_monitor_step = step_cnt
+        self.logger.info(f"\n===> OOD Monitoring at epoch {epoch + 1}, step {step_cnt}")
+        return self.ood_monitoring_epoch(epoch, step_cnt, indist_threshold=indist_threshold)
 
     @torch.no_grad()
-    def ood_monitoring_epoch(self, epoch, step_cnt):
+    def ood_monitoring_epoch(self, epoch, step_cnt, indist_threshold=None):
         """
-        Runs evaluation on the OOD set. Logs metrics with an 'ood/' prefix
-        and does NOT affect checkpointing or early stopping.
+        Runs evaluation on the OOD set. Logs metrics with an 'ood/' prefix.
+
+        Returns the overall OOD AUC so callers can use it for composite
+        checkpointing (R12+).  Does NOT trigger checkpointing itself.
+
+        Args:
+            indist_threshold: If provided, also logs ``ood/at_indist/*`` metrics
+                evaluated at this fixed threshold (the val_in_dist EER threshold).
+
+        Returns:
+            float | None: Overall OOD AUC, or None if evaluation failed.
         """
         self.setEval()
 
         total_videos = sum(len(v_list) for v_list in self.ood_loader.videos_by_method.values())
         if total_videos == 0:
             self.logger.warning("OOD loader is configured but contains no videos. Skipping.")
-            return
+            return None
 
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
+        method_jitters = defaultdict(list)  # frame-to-frame score jitter per method
         all_preds, all_labels = [], []
 
         self.logger.info(f"Starting OOD Monitoring for {total_videos} videos...")
@@ -1924,6 +2289,13 @@ class Trainer(
                 B, T = data_dict['image'].shape[:2]
                 predictions = self.model(data_dict, inference=True)
                 video_probs = predictions['prob'].view(B, T).mean(dim=1)
+
+                # Frame-to-frame score jitter per video
+                frame_probs = predictions['prob'].view(B, T).detach().cpu().numpy()
+                for b in range(B):
+                    fp = frame_probs[b]
+                    if len(fp) >= 2:
+                        method_jitters[method].append(float(np.mean(np.abs(np.diff(fp)))))
 
                 labels_np = data_dict['label'].cpu().numpy()
                 probs_np = video_probs.cpu().numpy()
@@ -1978,11 +2350,39 @@ class Trainer(
                 if name in ['acc', 'auc', 'eer']:
                     wandb_log_dict[f'ood/method/{method_key}/{name}'] = value
 
+        # Log per-method score jitter
+        for method, jitters in method_jitters.items():
+            if jitters:
+                mean_jitter = float(np.mean(jitters))
+                wandb_log_dict[f'ood/score_jitter/{method}'] = mean_jitter
+                self.logger.info(f"OOD score jitter for {method}: {mean_jitter:.4f}")
+
+        # --- At-indist-threshold metrics for OOD ---
+        if indist_threshold is not None and indist_threshold > 0:
+            ood_at_indist = metrics_at_threshold(
+                np.array(all_preds), np.array(all_labels), indist_threshold
+            )
+            if ood_at_indist:
+                for k, v in ood_at_indist.items():
+                    wandb_log_dict[f'ood/at_indist/{k}'] = v
+                wandb_log_dict['ood/at_indist/threshold'] = indist_threshold
+                self.logger.info(
+                    f"OOD @ indist threshold {indist_threshold:.4f}: "
+                    f"acc={ood_at_indist['acc']:.4f}  f1={ood_at_indist['f1']:.4f}  "
+                    f"fpr={ood_at_indist['fpr']:.4f}  fnr={ood_at_indist['fnr']:.4f}"
+                )
+
         if self.wandb_run: self.wandb_run.log(wandb_log_dict)
-        del all_preds, all_labels, method_labels, method_preds, overall_metrics
+
+        # Capture OOD AUC before cleanup so callers can use it for
+        # composite checkpointing (R12+).
+        ood_auc = overall_metrics.get('auc')
+
+        del all_preds, all_labels, method_labels, method_preds, method_jitters, overall_metrics
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.info("===> OOD Monitoring Done!")
+        return ood_auc
 
     def _generate_and_upload_reports(self, log_prefix, frame_data, video_data, all_preds, all_labels, method_preds,
                                      method_labels, generate_detailed_reports=False, run_name="",
@@ -2003,17 +2403,32 @@ class Trainer(
         
         # Track what we successfully generated
         files_generated = []
-        
+        expected_files = 4
+
+        def _resolve_group_family_from_row(row):
+            if len(row) >= 8:
+                return row[6], row[7]
+            return infer_group_and_family(label=row[1], method=row[0], source=None)
+
+        normalized_video_rows = []
+
         try:
             # 1. --- Create Frame-level CSV ---
             try:
                 frame_filename = f'{prefix}frames_report.csv'
                 frame_csv_path = os.path.join(local_temp_dir, frame_filename)
+                frame_rows = []
+                for row in frame_data:
+                    if len(row) >= 7:
+                        frame_rows.append([row[0], row[1], row[2], row[3], row[4], row[5], row[6]])
+                    else:
+                        group_key, family_key = _resolve_group_family_from_row(row)
+                        frame_rows.append([row[0], row[1], row[2], row[3], row[4], group_key, family_key])
                 with open(frame_csv_path, 'w', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(['method', 'label', 'video_id', 'frame_path', 'frame_prob'])
-                    writer.writerows(frame_data)
-                self.logger.info(f"Frame report generated with {len(frame_data)} entries.")
+                    writer.writerow(['method', 'label', 'video_id', 'frame_path', 'frame_prob', 'group_key', 'family_key'])
+                    writer.writerows(frame_rows)
+                self.logger.info(f"Frame report generated with {len(frame_rows)} entries.")
                 files_generated.append((frame_filename, frame_csv_path))
             except Exception as e:
                 self.logger.error(f"Failed to generate frame report: {e}")
@@ -2022,16 +2437,88 @@ class Trainer(
             try:
                 video_filename = f'{prefix}videos_report.csv'
                 video_csv_path = os.path.join(local_temp_dir, video_filename)
+                for row in video_data:
+                    if len(row) >= 8:
+                        normalized_video_rows.append([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]])
+                    else:
+                        group_key, family_key = _resolve_group_family_from_row(row)
+                        normalized_video_rows.append([
+                            row[0], row[1], row[2], row[3], row[4], row[5], group_key, family_key
+                        ])
                 with open(video_csv_path, 'w', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(['method', 'label', 'video_id', 'avg_video_prob', 'prediction', 'is_correct'])
-                    writer.writerows(video_data)
-                self.logger.info(f"Video report generated with {len(video_data)} entries.")
+                    writer.writerow([
+                        'method', 'label', 'video_id', 'avg_video_prob', 'prediction', 'is_correct',
+                        'group_key', 'family_key'
+                    ])
+                    writer.writerows(normalized_video_rows)
+                self.logger.info(f"Video report generated with {len(normalized_video_rows)} entries.")
                 files_generated.append((video_filename, video_csv_path))
             except Exception as e:
                 self.logger.error(f"Failed to generate video report: {e}")
 
-            # 3. --- Create Summary TXT file ---
+            # 3. --- Create Per-Group Metrics CSV ---
+            group_metrics_rows = []
+            try:
+                group_filename = f'{prefix}group_metrics.csv'
+                group_csv_path = os.path.join(local_temp_dir, group_filename)
+                group_to_rows = defaultdict(list)
+                for row in normalized_video_rows:
+                    group_to_rows[row[6]].append(row)
+
+                for group_key in sorted(group_to_rows.keys()):
+                    rows = group_to_rows[group_key]
+                    labels = np.array([int(r[1]) for r in rows], dtype=np.int64)
+                    preds = np.array([int(r[4]) for r in rows], dtype=np.int64)
+                    probs = np.array([float(r[3]) for r in rows], dtype=np.float32)
+
+                    tn = int(np.sum((labels == 0) & (preds == 0)))
+                    fp = int(np.sum((labels == 0) & (preds == 1)))
+                    fn = int(np.sum((labels == 1) & (preds == 0)))
+                    tp = int(np.sum((labels == 1) & (preds == 1)))
+
+                    n_videos = len(rows)
+                    accuracy = (tp + tn) / n_videos if n_videos > 0 else 0.0
+                    tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+                    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0.0
+
+                    mean_prob = float(np.mean(probs)) if probs.size > 0 else 0.0
+                    p50_prob = float(np.percentile(probs, 50)) if probs.size > 0 else 0.0
+                    p90_prob = float(np.percentile(probs, 90)) if probs.size > 0 else 0.0
+                    family_key = rows[0][7] if len(rows[0]) >= 8 else "unknown"
+
+                    group_metrics_rows.append([
+                        group_key,
+                        family_key,
+                        n_videos,
+                        accuracy,
+                        tp,
+                        tn,
+                        fp,
+                        fn,
+                        tpr,
+                        fpr,
+                        fnr,
+                        mean_prob,
+                        p50_prob,
+                        p90_prob,
+                    ])
+
+                with open(group_csv_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        'group_key', 'family_key', 'n_videos', 'accuracy', 'tp', 'tn', 'fp', 'fn',
+                        'tpr', 'fpr', 'fnr', 'mean_prob', 'p50_prob', 'p90_prob'
+                    ])
+                    writer.writerows(group_metrics_rows)
+
+                self.logger.info(f"Group metrics report generated with {len(group_metrics_rows)} groups.")
+                files_generated.append((group_filename, group_csv_path))
+            except Exception as e:
+                self.logger.error(f"Failed to generate group metrics report: {e}")
+
+            # 4. --- Create Summary TXT file ---
             try:
                 summary_filename = f'{prefix}summary_report.txt'
                 summary_txt_path = os.path.join(local_temp_dir, summary_filename)
@@ -2047,10 +2534,10 @@ class Trainer(
                     # Note: fake=1 (positive), real=0 (negative)
                     
                     # When detailed reports are enabled, use video-level aggregated data for summary
-                    if generate_detailed_reports and video_data:
+                    if generate_detailed_reports and normalized_video_rows:
                         # Extract video-level predictions and labels from the detailed report data
-                        video_labels = [row[1] for row in video_data]  # Column 1 is label
-                        video_preds = [row[4] for row in video_data]   # Column 4 is prediction (binary)
+                        video_labels = [row[1] for row in normalized_video_rows]  # Column 1 is label
+                        video_preds = [row[4] for row in normalized_video_rows]   # Column 4 is prediction (binary)
                         
                         tn, fp, fn, tp = confusion_matrix(video_labels, video_preds, labels=[0, 1]).ravel()
                         total = len(video_labels)
@@ -2075,7 +2562,7 @@ class Trainer(
 
                     # Calculate per-method performance using deduplicated video data
                     method_video_data = defaultdict(list)
-                    for row in video_data:  # video_data is deduplicated
+                    for row in normalized_video_rows:  # video_data is deduplicated
                         method = row[0]  # Column 0 is method
                         method_video_data[method].append(row)
                     
@@ -2109,6 +2596,30 @@ class Trainer(
                             m_acc = (m_tp + m_tn) / m_total if m_total > 0 else 0
                             f.write(f"Accuracy: {m_acc:.4f}\n")
                             f.write(f"  TN: {m_tn}, FP: {m_fp}, FN: {m_fn}, TP: {m_tp}\n\n")
+
+                    f.write("=" * 40 + "\n")
+                    f.write("Per-Group Performance\n")
+                    f.write("-" * 40 + "\n")
+                    if group_metrics_rows:
+                        best_group = max(group_metrics_rows, key=lambda row: row[3])
+                        worst_group = min(group_metrics_rows, key=lambda row: row[3])
+                        for row in group_metrics_rows:
+                            f.write(
+                                f"{row[0]} (family={row[1]}): "
+                                f"n={row[2]}, acc={row[3]:.4f}, tpr={row[8]:.4f}, "
+                                f"fpr={row[9]:.4f}, fnr={row[10]:.4f}\n"
+                            )
+                        gap = best_group[3] - worst_group[3]
+                        f.write("\n")
+                        f.write(
+                            f"Best-group accuracy: {best_group[0]} = {best_group[3]:.4f}\n"
+                        )
+                        f.write(
+                            f"Worst-group accuracy: {worst_group[0]} = {worst_group[3]:.4f}\n"
+                        )
+                        f.write(f"Best-vs-worst group accuracy gap: {gap:.4f}\n")
+                    else:
+                        f.write("No group-level rows were available.\n")
                 files_generated.append((summary_filename, summary_txt_path))
             except Exception as e:
                 self.logger.error(f"Failed to generate summary report: {e}")
@@ -2135,7 +2646,7 @@ class Trainer(
                     self.logger.error(f"Failed to upload {filename} to GCS: {e}")
             
             if files_generated:
-                self.logger.info(f"Successfully processed {len(files_generated)}/{3} report files.")
+                self.logger.info(f"Successfully processed {len(files_generated)}/{expected_files} report files.")
             else:
                 self.logger.warning("No report files were successfully generated.")
 

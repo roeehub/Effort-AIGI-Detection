@@ -1,0 +1,103 @@
+# ==============================================================================
+# TEST DEBUG CONFIGURATION
+# ==============================================================================
+# 
+# Minimal configuration for local debugging and testing.
+# Uses mock data, skips GCS downloads, runs minimal batches.
+#
+# Usage:
+#   python train_sweep.py --param-config config/test_debug.yaml
+#
+# ==============================================================================
+
+# Run name for identification
+name: "debug-test-run"
+
+# ==============================================================================
+# Debug/Testing Flags
+# ==============================================================================
+debug_mode: true
+dry_run: true
+skip_gcs_download: true
+
+# ==============================================================================
+# Minimal Training Parameters
+# ==============================================================================
+nEpochs: 1
+max_train_steps: 10  # Stop after 10 steps
+evaluate_every_steps: 5
+
+# Learning rate and optimizer
+learning_rate: 0.0001
+weight_decay: 0.0001
+optimizer_eps: 1.0e-8
+
+# Model parameters
+rank: 128  # Smaller for faster testing
+lambda_reg: 1.0
+
+# Scheduler
+lr_scheduler: null
+total_training_steps: 10
+lr_scheduler_warmup_steps: 0
+
+# Gradient clipping
+gradient_clip_val: 1.0
+
+# ==============================================================================
+# Data Parameters (Minimal)
+# ==============================================================================
+seed: 42
+data_subset_percentage: 0.001  # Use only 0.1% of data
+val_split_ratio: 0.5
+
+# Dataloader
+dataloader_strategy: "frame_level"  # Simplest strategy
+frames_per_batch: 4
+videos_per_batch: 2
+frames_per_video: 2
+test_batch_size: 4
+num_workers: 0  # No multiprocessing for easier debugging
+prefetch_factor: 2
+evaluation_frequency: 1
+
+# Property balancing
+property_balancing_enabled: false
+
+# ==============================================================================
+# Loss and Training Features
+# ==============================================================================
+use_focal_loss: false
+use_arcface_head: false
+use_group_dro: false
+
+# Early stopping
+early_stopping_enabled: false
+
+# ==============================================================================
+# Checkpointing
+# ==============================================================================
+load_base_checkpoint: false
+
+# ==============================================================================
+# Augmentation (Minimal)
+# ==============================================================================
+augmentation_version: "surgical"
+augmentation_params:
+  use_geometric: false
+  use_advanced_noise: false
+  use_color_jitter: false
+  use_occlusion: false
+  sharpness_adjust_prob: 0.0
+  occlusion_prob: 0.0
+
+# ==============================================================================
+# Dataset Methods (Minimal for testing)
+# ==============================================================================
+dataset_methods:
+  use_real_sources:
+    - "FaceForensics++"
+  use_fake_methods_for_training:
+    - "faceswap"
+  use_fake_methods_for_validation:
+    - "simswap"

@@ -29,7 +29,32 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 logger = logging.getLogger("effort-aigi-api-v3")
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _resolve_device() -> torch.device:
+    """Resolve the inference device from the DEVICE env var.
+
+    Precedence:
+      1. DEVICE env var ("cuda", "mps", "cpu")
+      2. CUDA if available  (preserves original default)
+      3. CPU fallback
+    """
+    requested = os.getenv("DEVICE", "").lower().strip()
+    if requested == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError(
+                "DEVICE=mps was requested but MPS is not available on this machine."
+            )
+        return torch.device("mps")
+    if requested == "cpu":
+        return torch.device("cpu")
+    # Default path: CUDA (matches original behaviour)
+    if requested and requested != "cuda":
+        logger.warning("Unknown DEVICE=%r — falling back to default CUDA/CPU selection.", requested)
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+device = _resolve_device()
 DEBUG_FRAME_DIR = "./debug_frames"
 
 
@@ -142,8 +167,8 @@ def download_assets_from_gcs(config, logger):
         for key, asset_info in assets_to_download.items():
             gcs_path, local_path = asset_info.get('gcs_path'), asset_info.get('local_path')
             if not gcs_path or not local_path:
-                logger.error(f"Asset '{key}' is missing 'gcs_path' or 'local_path'.")
-                return None
+                logger.info(f"Asset '{key}' has no gcs_path or local_path configured. Skipping.")
+                continue
             if not gcs_path.startswith('gs://'):
                 logger.error(f"Invalid GCS path for asset '{key}': '{gcs_path}'.")
                 return None
@@ -192,11 +217,17 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
         if model_config:
             logger.info("📋 Restoring model configuration from checkpoint:")
             for key, value in model_config.items():
-                if key != 'current_arcface_s':  # Skip dynamic parameter
-                    old_value = cfg.get(key)
+                if key == 'current_arcface_s':  # Skip dynamic parameter
+                    continue
+                old_value = cfg.get(key)
+                if key == 'gcs_assets' and isinstance(value, dict):
+                    # Merge instead of replace to preserve runtime entries
+                    # (e.g. custom_checkpoint added by startup_event)
+                    cfg.setdefault('gcs_assets', {}).update(value)
+                else:
                     cfg[key] = value
-                    if old_value != value:
-                        logger.info(f"  {key}: {old_value} → {value}")
+                if old_value != value:
+                    logger.info(f"  {key}: {old_value} → {value}")
             
             logger.info(f"📊 Checkpoint: Epoch {ckpt.get('epoch')}, AUC: {ckpt.get('auc', 0):.4f}")
         else:
@@ -207,6 +238,22 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
         model_config = {}
         logger.warning("⚠️  Old checkpoint format detected. Configuration validation not possible.")
     
+    # If checkpoint restored gcs_assets (e.g. a different backbone), ensure those
+    # assets are downloaded before we attempt to instantiate the model.
+    if model_config.get('gcs_assets'):
+        restored_assets = cfg.get('gcs_assets', {})
+        missing = {
+            k: v for k, v in restored_assets.items()
+            if v.get('local_path') and not os.path.exists(v['local_path'])
+        }
+        if missing:
+            logger.info(f"📥 Downloading {len(missing)} asset(s) restored from checkpoint config...")
+            result = download_assets_from_gcs({'gcs_assets': missing}, logger)
+            if result is None:
+                raise RuntimeError(
+                    f"Failed to download checkpoint-specified assets: {list(missing.keys())}"
+                )
+
     # Initialize model with (possibly updated) config
     model_cls = DETECTOR[cfg["model_name"]]
     model = model_cls(cfg).to(device)
@@ -361,11 +408,11 @@ def startup_event() -> None:
     app.state.models = {}
     app.state.loaded_weights_paths = {}
 
-    # 1) CUDA Check
-    if not torch.cuda.is_available():
-        logger.error("CUDA is not available. This service requires a GPU.")
-        raise RuntimeError("CUDA is required for this service")
-    logger.info("CUDA is available. Using device: %s", device)
+    # 1) Device Check
+    if device.type == "cuda" and not torch.cuda.is_available():
+        logger.error("CUDA is not available. Set DEVICE=mps or DEVICE=cpu to run without CUDA.")
+        raise RuntimeError("CUDA was selected but is not available")
+    logger.info("Using device: %s", device)
 
     # 2) Define paths and check for required config files
     repo_base = Path(".")

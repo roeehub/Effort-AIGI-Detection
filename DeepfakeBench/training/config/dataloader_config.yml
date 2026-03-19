@@ -20,8 +20,30 @@ data_params:
 property_balancing:
   enabled: true
 
+# ==============================================================================
+# Dataset Methods Configuration
+# ==============================================================================
+# These define which real/fake sources to use for training and validation.
+# Can be overridden by experiment YAML via wandb config.
+dataset_methods:
+  use_real_sources:
+    - "celeb_real"
+    - "youtube_real"
+    - "external_youtube_avspeech"
+    - "faceforensics++"
+  
+  use_fake_methods_for_training:
+    - "simswap"
+    - "fomm"
+    - "deepfakedetection"
+  
+  use_fake_methods_for_validation:
+    - "faceswapff"
+    - "fsgan"
+    - "faceshifter"
 
-# --- test ----
+# --- Legacy 'methods' key (for backward compatibility with older code paths) ---
+# This is kept for backward compatibility - new code should use 'dataset_methods'
 #methods:
 #  use_real_sources:  # Real sources are shared for training and validation
 #    - "FaceForensics++"

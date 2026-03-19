@@ -17,16 +17,11 @@ SWA: False
 
 gcs_assets:
   base_checkpoint:
-#    gcs_path: "gs://base-checkpoints/effort-aigi/effort_clip_L14_trainOn_FaceForensic.pth"
-#    local_path: "./weights/effort_clip_L14_trainOn_FaceForensic.pth"
-    gcs_path: "gs://training-job-outputs/best_checkpoints/7a19nea9/top_n_effort_20251003_ep1_auc0.9460_eer0.1222.pth"
+    gcs_path: null  # Set by experiment YAML via gcs_base_checkpoint key
     local_path: "./weights/base.pth"
-  clip_backbone:
-    gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
-    local_path: "./weights/models--openai--clip-vit-large-patch14/"
-    files:
-      - config.json
-      - pytorch_model.bin
+  # clip_backbone: set by experiment YAML, backbone_registry auto-resolution,
+  #   or merged from checkpoint's saved config at validation time.
+  #   NOT listed here to avoid null stubs blocking the merge logic.
   frame_manifest_json:
     gcs_path: 'gs://df40-frames/manifests/frame_manifest_v3.json'
     local_path: './frame_manifest.json'

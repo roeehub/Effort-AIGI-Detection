@@ -131,11 +131,14 @@ class CrossEntropyLossWithReduction(nn.Module):
     Standard CrossEntropyLoss that allows the 'reduction' parameter
     to be passed during the forward call. This is necessary for training
     strategies like Group-DRO that require per-sample losses.
+
+    Supports ``label_smoothing`` (PyTorch ≥ 1.10) for calibration.
     """
 
-    def __init__(self, reduction='mean'):
+    def __init__(self, reduction='mean', label_smoothing: float = 0.0):
         super(CrossEntropyLossWithReduction, self).__init__()
         self.default_reduction = reduction
+        self.label_smoothing = label_smoothing
 
     def forward(self, inputs, targets, reduction=None):
         """
@@ -146,7 +149,11 @@ class CrossEntropyLossWithReduction(nn.Module):
                                        Can be 'mean', 'sum', or 'none'.
         """
         reduction_to_use = reduction if reduction is not None else self.default_reduction
-        return F.cross_entropy(inputs, targets, reduction=reduction_to_use)
+        return F.cross_entropy(
+            inputs, targets,
+            reduction=reduction_to_use,
+            label_smoothing=self.label_smoothing,
+        )
 
 
 class OpenCLIPVisionModelWrapper(nn.Module):
@@ -195,6 +202,76 @@ class OpenCLIPVisionModelWrapper(nn.Module):
     def modules(self, *args, **kwargs):
         """Delegate modules to the wrapped visual encoder."""
         return self.visual.modules(*args, **kwargs)
+
+
+# =============================================================================
+# Gradient Reversal Layer & Quality-Domain Adversarial Head
+# =============================================================================
+
+class GradientReversalFunction(torch.autograd.Function):
+    """Reverses gradient by factor lambda during backprop (DANN, Ganin 2015)."""
+
+    @staticmethod
+    def forward(ctx, x, lambda_val):
+        ctx.lambda_val = lambda_val
+        return x.clone()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return -ctx.lambda_val * grad_output, None
+
+
+class GradientReversalLayer(nn.Module):
+    def __init__(self, lambda_val: float = 1.0):
+        super().__init__()
+        self.lambda_val = lambda_val
+
+    def set_lambda(self, val: float):
+        self.lambda_val = val
+
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_val)
+
+
+class QualityDomainHead(nn.Module):
+    """
+    Small MLP that predicts quality domain from backbone features.
+
+    Attached via a gradient reversal layer so the backbone learns to
+    REMOVE quality information from its representations.
+
+    Quality domain IDs:
+        0 = clean_academic  (DF40 reals — soft, smooth, low-noise)
+        1 = webcam_codec    (VCD reals, external webcam — sharp, noisy, codec artifacts)
+        2 = studio_capture  (DeepLive/VisoMaster reals — studio lighting, variable quality)
+        3 = social_media    (YouTube reals — heavier compression, variable resolution)
+    """
+
+    DOMAIN_MAP = {
+        "df40": 0,
+        "external": 1,
+        "deeplive": 2,
+        "visomaster": 2,
+        "deeplive_teams": 1,
+        "youtube": 3,
+    }
+
+    def __init__(self, in_features: int, num_domains: int = 4, hidden_dim: int = 128):
+        super().__init__()
+        self.grl = GradientReversalLayer()
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim, num_domains),
+        )
+
+    def set_lambda(self, val: float):
+        self.grl.set_lambda(val)
+
+    def forward(self, features):
+        reversed_features = self.grl(features)
+        return self.classifier(reversed_features)
 
 
 @DETECTOR.register_module(module_name='effort')
@@ -256,16 +333,43 @@ class EffortDetector(nn.Module):
             logger.info("Using standard Linear head")
             self.head = nn.Linear(self.hidden_size, 2)
 
+        # Embedding-space mixup (R10+): interpolate features before the head
+        # to smooth the decision boundary.  Gated by mixup_alpha (default 0 = off).
+        self.mixup_alpha = config.get('mixup_alpha', 0.0)
+        if self.mixup_alpha > 0:
+            logger.info(f"Embedding-space mixup ENABLED: alpha={self.mixup_alpha}")
+
         # Controlled initialization of the loss function
         # If ArcFace is used, we MUST use CrossEntropyLoss, not FocalLoss.
         # The margin 'm' in ArcFace serves a similar purpose to Focal Loss's gamma.
+        self.label_smoothing = config.get('label_smoothing', 0.0)
         if self.use_arcface_head:
             logger.info("ArcFace head is active. Switching to standard CrossEntropyLoss.")
-            self.loss_func = CrossEntropyLossWithReduction()
+            self.loss_func = CrossEntropyLossWithReduction(label_smoothing=self.label_smoothing)
         else:
             # Setup loss function for non-ArcFace case (may use Focal Loss)
             self._setup_loss_function(config, logger)
-        
+
+        # Quality domain adversarial head (optional — gradient reversal for
+        # quality-invariant representations, per REAL_ROBUSTNESS_PLAN Part C)
+        self.use_quality_head = config.get('use_quality_domain_head', False)
+        self.quality_domain_loss_weight = config.get('quality_domain_loss_weight', 0.1)
+        self.quality_domain_require_labels = config.get('quality_domain_require_labels', True)
+        self._quality_head_warning_emitted = False
+        if self.use_quality_head:
+            num_domains = config.get('quality_domain_count', 4)
+            self.quality_head = QualityDomainHead(
+                in_features=self.hidden_size,
+                num_domains=num_domains,
+                hidden_dim=config.get('quality_head_hidden_dim', 128),
+            )
+            logger.info(
+                f"Quality domain adversarial head ENABLED: "
+                f"{num_domains} domains, hidden_dim={config.get('quality_head_hidden_dim', 128)}, "
+                f"loss_weight={self.quality_domain_loss_weight}, "
+                f"require_labels={self.quality_domain_require_labels}"
+            )
+
         # Initialize tracking variables and log parameter analysis
         self._setup_tracking_vars()
     
@@ -306,7 +410,7 @@ class EffortDetector(nn.Module):
             self.loss_func = FocalLoss(gamma=gamma, alpha=alpha)
         else:
             logger.info("Using standard CrossEntropyLoss")
-            self.loss_func = CrossEntropyLossWithReduction()
+            self.loss_func = CrossEntropyLossWithReduction(label_smoothing=self.label_smoothing)
 
     def _setup_tracking_vars(self) -> None:
         """Initialize tracking variables for metrics."""
@@ -554,8 +658,12 @@ class EffortDetector(nn.Module):
             )
         
         # Get OpenCLIP-specific config
-        openclip_model = backbone_config.get('openclip_model', 'ViT-B-16')
-        openclip_pretrained = backbone_config.get('openclip_pretrained', 'datacomp_xl_s13b_b90k')
+        # Support both dedicated keys (openclip_model/openclip_pretrained) and
+        # checkpoint-embedded keys (model_name/pretrained).
+        openclip_model = (backbone_config.get('openclip_model')
+                          or backbone_config.get('model_name', 'ViT-B-16'))
+        openclip_pretrained = (backbone_config.get('openclip_pretrained')
+                               or backbone_config.get('pretrained', 'datacomp_xl_s13b_b90k'))
         
         logger.info(f"Loading OpenCLIP backbone: {openclip_model} (pretrained: {openclip_pretrained})")
         
@@ -766,13 +874,100 @@ class EffortDetector(nn.Module):
                 raw_reg_sum = orthogonal_loss_total + keepsv_loss_total
                 reg_term = lambda_reg * raw_reg_sum / num_reg
 
+        # --- Quality domain adversarial loss (gradient reversal) ---
+        quality_loss_raw = torch.tensor(0.0, device=device)
+        quality_loss = torch.tensor(0.0, device=device)
+        quality_domain_has_logits = torch.tensor(0.0, device=device)
+        quality_domain_has_labels = torch.tensor(0.0, device=device)
+        quality_domain_unique_count = torch.tensor(0.0, device=device)
+        if self.use_quality_head and self.training:
+            has_quality_logits = 'quality_domain_logits' in pred_dict
+            quality_domain_has_logits = torch.tensor(
+                1.0 if has_quality_logits else 0.0, device=device
+            )
+            domain_labels = data_dict.get('quality_domain')
+
+            if domain_labels is not None and not isinstance(domain_labels, torch.Tensor):
+                try:
+                    domain_labels = torch.as_tensor(domain_labels, dtype=torch.long)
+                except Exception as exc:
+                    msg = (
+                        "Quality head enabled but `quality_domain` labels could not be "
+                        f"converted to a tensor: {exc}"
+                    )
+                    if self.quality_domain_require_labels:
+                        raise RuntimeError(msg)
+                    if not self._quality_head_warning_emitted:
+                        logger.warning(msg)
+                        self._quality_head_warning_emitted = True
+                    domain_labels = None
+
+            if not has_quality_logits:
+                msg = (
+                    "Quality head enabled but `quality_domain_logits` is missing from pred_dict. "
+                    "Ensure model.forward adds quality-domain logits during training."
+                )
+                if self.quality_domain_require_labels:
+                    raise RuntimeError(msg)
+                if not self._quality_head_warning_emitted:
+                    logger.warning(msg)
+                    self._quality_head_warning_emitted = True
+            elif domain_labels is None:
+                msg = (
+                    "Quality head enabled but `quality_domain` is missing from data_dict. "
+                    "Ensure the dataloader/collate function provides quality-domain labels."
+                )
+                if self.quality_domain_require_labels:
+                    raise RuntimeError(msg)
+                if not self._quality_head_warning_emitted:
+                    logger.warning(msg)
+                    self._quality_head_warning_emitted = True
+            elif domain_labels.numel() == 0:
+                msg = (
+                    "Quality head enabled but `quality_domain` tensor is empty. "
+                    "Cannot compute quality-domain adversarial loss on an empty batch."
+                )
+                if self.quality_domain_require_labels:
+                    raise RuntimeError(msg)
+                if not self._quality_head_warning_emitted:
+                    logger.warning(msg)
+                    self._quality_head_warning_emitted = True
+            else:
+                quality_domain_has_labels = torch.tensor(1.0, device=device)
+                domain_labels = domain_labels.to(device)
+                quality_domain_unique_count = torch.tensor(
+                    float(domain_labels.unique().numel()), device=device
+                )
+                # Expand for video batches
+                if pred_dict['quality_domain_logits'].shape[0] > domain_labels.shape[0]:
+                    B_q = domain_labels.shape[0]
+                    T_q = pred_dict['quality_domain_logits'].shape[0] // B_q
+                    domain_labels = domain_labels.repeat_interleave(T_q)
+                quality_loss_raw = F.cross_entropy(
+                    pred_dict['quality_domain_logits'],
+                    domain_labels.long(),
+                )
+                quality_loss = quality_loss_raw * self.quality_domain_loss_weight
+
         # --- Main Loss Calculation based on reduction type ---
+        # Check for embedding-space mixup metadata
+        _has_mixup = '_mixup_lam' in pred_dict
+
         if reduction == 'mean':
             # --- DEFAULT BEHAVIOR: Return a single scalar loss ---
-            cls_loss = self.loss_func(pred, label)  # Classification loss ONLY
+            if _has_mixup:
+                # Mixup: blend CE losses for the two label sets
+                lam = pred_dict['_mixup_lam']
+                idx = pred_dict['_mixup_index']
+                label_b = label[idx]
+                cls_loss = lam * self.loss_func(pred, label) + (1.0 - lam) * self.loss_func(pred, label_b)
+            else:
+                cls_loss = self.loss_func(pred, label)  # Classification loss ONLY
 
-            # Combined loss = classification + regularization
+            # Combined loss = classification + regularization + quality reversal
             overall_loss = cls_loss + reg_term if self.training else cls_loss
+            if self.training:
+                overall_loss = overall_loss + quality_loss
 
             # For logging, calculate separate real/fake losses
             mask_real = label == 0
@@ -792,14 +987,30 @@ class EffortDetector(nn.Module):
                 'num_svd_layers': torch.tensor(float(num_reg), device=device),  # For sanity checking
                 # === KEY DIAGNOSTIC RATIO: If this grows >> 1.0, regularization is dominating ===
                 'reg_cls_ratio': (reg_term / (cls_loss + 1e-8)).detach() if self.training else torch.tensor(0.0, device=device),
+                'quality_domain_loss_raw': quality_loss_raw.detach(),
+                'quality_domain_loss': quality_loss.detach(),
+                'quality_domain_has_logits': quality_domain_has_logits.detach(),
+                'quality_domain_has_labels': quality_domain_has_labels.detach(),
+                'quality_domain_unique_count': quality_domain_unique_count.detach(),
             }
 
         elif reduction == 'none':
             # --- NEW BEHAVIOR: Return per-sample losses for Group-DRO ---
-            per_sample_cls_loss = self.loss_func(pred, label, reduction='none')
+            if _has_mixup:
+                lam = pred_dict['_mixup_lam']
+                idx = pred_dict['_mixup_index']
+                label_b = label[idx]
+                per_sample_cls_loss = (
+                    lam * self.loss_func(pred, label, reduction='none')
+                    + (1.0 - lam) * self.loss_func(pred, label_b, reduction='none')
+                )
+            else:
+                per_sample_cls_loss = self.loss_func(pred, label, reduction='none')
 
-            # Add scalar regularization term (PyTorch broadcasts this correctly)
+            # Add scalar regularization term + quality loss (PyTorch broadcasts this correctly)
             per_sample_loss = per_sample_cls_loss + reg_term if self.training else per_sample_cls_loss
+            if self.training:
+                per_sample_loss = per_sample_loss + quality_loss
 
             # For logging, calculate the mean of the per-sample losses for each class
             mask_real = label == 0
@@ -819,6 +1030,11 @@ class EffortDetector(nn.Module):
                 'num_svd_layers': torch.tensor(float(num_reg), device=device),
                 # === KEY DIAGNOSTIC RATIO ===
                 'reg_cls_ratio': (reg_term / (per_sample_cls_loss.mean() + 1e-8)).detach() if self.training else torch.tensor(0.0, device=device),
+                'quality_domain_loss_raw': quality_loss_raw.detach(),
+                'quality_domain_loss': quality_loss.detach(),
+                'quality_domain_has_logits': quality_domain_has_logits.detach(),
+                'quality_domain_has_labels': quality_domain_has_labels.detach(),
+                'quality_domain_unique_count': quality_domain_unique_count.detach(),
             }
         else:
             raise ValueError(f"Unsupported reduction type: '{reduction}'. Must be 'mean' or 'none'.")
@@ -919,6 +1135,22 @@ class EffortDetector(nn.Module):
             if not self._first_forward_done:
                 logger.info(f"[FIRST FORWARD] Features normalized to unit length")
 
+        # --- Embedding-space mixup (R10+) ---
+        # Interpolate backbone features before the classification head.
+        # When active, we skip the ArcFace angular margin (use raw cosine logits)
+        # because the margin assumes one-hot labels.  The mixed CE loss in
+        # get_losses() handles the soft label combination instead.
+        _mixup_active = (
+            self.mixup_alpha > 0
+            and self.training
+            and not inference
+            and label is not None
+        )
+        if _mixup_active:
+            lam = float(np.random.beta(self.mixup_alpha, self.mixup_alpha))
+            shuffle_idx = torch.randperm(features.size(0), device=features.device)
+            features = lam * features + (1.0 - lam) * features[shuffle_idx]
+
         # 3. Pass features through the appropriate head
         if self.use_arcface_head:
             if inference:
@@ -926,7 +1158,12 @@ class EffortDetector(nn.Module):
                 # `label` is passed as None to the head.
                 raw_logits = self.head(features, label=None)
                 pred_for_loss = raw_logits
-            else:  # During training
+            elif _mixup_active:
+                # Mixup: skip angular margin — use raw cosine logits for both
+                # loss and metrics.  The mixed CE is computed in get_losses().
+                raw_logits = self.head(features, label=None)
+                pred_for_loss = raw_logits
+            else:  # Normal training (no mixup)
                 # Make ONE call to get both penalized and raw logits efficiently.
                 pred_for_loss, raw_logits = self.head(features, label=label, return_raw_logits=True)
         else:
@@ -944,6 +1181,15 @@ class EffortDetector(nn.Module):
             'feat': features,
             'raw_logits': raw_logits
         }
+
+        # Store mixup metadata so get_losses() can compute the mixed CE
+        if _mixup_active:
+            pred_dict['_mixup_lam'] = lam
+            pred_dict['_mixup_index'] = shuffle_idx
+
+        # 5. Quality domain prediction (gradient reversal head)
+        if self.use_quality_head and not inference:
+            pred_dict['quality_domain_logits'] = self.quality_head(features)
 
         return pred_dict
 

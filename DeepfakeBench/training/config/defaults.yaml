@@ -1,0 +1,568 @@
+# ==============================================================================
+# DEFAULT TRAINING CONFIGURATION
+# ==============================================================================
+# 
+# This file contains all default values for training configuration.
+# Override specific values in your experiment YAML or via W&B sweep.
+#
+# Configuration hierarchy (later overrides earlier):
+#   1. defaults.yaml (this file) - base defaults
+#   2. detector/<model>.yaml - model-specific settings
+#   3. experiment YAML - experiment-specific overrides
+#   4. W&B sweep config - hyperparameter search values
+#
+# Last Updated: December 2024
+# ==============================================================================
+
+# ==============================================================================
+# Runtime Mode
+# ==============================================================================
+mode: train
+dry_run: false
+ddp: false
+local_rank: 0
+
+
+# ==============================================================================
+# Model Configuration
+# ==============================================================================
+model:
+  model_name: effort
+  num_classes: 2
+  pretrained: null
+  
+  # SVD parameters (EFFORT-specific)
+  rank: 1023
+  lambda_reg: 1.0
+
+
+# ==============================================================================
+# Backbone Configuration
+# ==============================================================================
+# Defines the vision backbone used for feature extraction.
+# Currently supports CLIP-based models with different variants.
+#
+# To use a different backbone, override these values in your experiment config:
+#   backbone:
+#     type: clip
+#     variant: ViT-L-14-336
+#     source: openai
+#     resolution: 336
+#
+# The gcs_path and local_path are auto-resolved based on source/variant unless
+# explicitly overridden with 'gcs_path_override' and 'local_path_override'.
+backbone:
+  # Backbone type: clip, openclip, siglip, dinov2 (future)
+  type: clip
+  
+  # Model variant - architecture specification
+  # Options: ViT-B-16, ViT-B-32, ViT-L-14, ViT-L-14-336
+  variant: ViT-L-14
+  
+  # Model source/provider
+  # Options: openai, laion, laion2b, datacomp, apple (future)
+  source: openai
+  
+  # Input image resolution (must match backbone architecture)
+  # Standard options: 224, 336
+  resolution: 224
+  
+  # Normalization parameters (auto-set based on backbone type)
+  # CLIP default: mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]
+  mean: [0.48145466, 0.4578275, 0.40821073]
+  std: [0.26862954, 0.26130258, 0.27577711]
+  
+  # Explicit path overrides (optional - if set, these take precedence)
+  gcs_path_override: null   # e.g., "gs://custom-bucket/my-backbone/"
+  local_path_override: null # e.g., "./weights/my-backbone/"
+
+
+# ==============================================================================
+# Backbone Registry - GCS Paths
+# ==============================================================================
+# Maps backbone (source, variant) to GCS download paths.
+# Used to auto-resolve backbone paths when not explicitly overridden.
+backbone_registry:
+  openai:
+    ViT-L-14:
+      gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
+      local_path: "./weights/models--openai--clip-vit-large-patch14/"
+      hidden_size: 1024
+    ViT-L-14-336:
+      gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14-336/"
+      local_path: "./weights/models--openai--clip-vit-large-patch14-336/"
+      hidden_size: 1024
+    ViT-B-16:
+      gcs_path: "gs://base-checkpoints/effort-aigi/clip-vit-base-patch16/"
+      local_path: "./weights/clip-vit-base-patch16/"
+      hidden_size: 768
+    ViT-B-32:
+      gcs_path: "gs://base-checkpoints/effort-aigi/clip-vit-base-patch32/"
+      local_path: "./weights/clip-vit-base-patch32/"
+      hidden_size: 768  # Fixed: vision hidden_size is 768, NOT 512 (512 is projection_dim)
+  laion:
+    ViT-B-16-DataComp-XL:
+      gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+      local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+      hidden_size: 512
+      files:
+        - open_clip_config.json
+        - open_clip_pytorch_model.bin
+    ViT-L-14:
+      gcs_path: "gs://base-checkpoints/effort-aigi/models--laion--CLIP-ViT-L-14-laion2B-s32B-b82K/"
+      local_path: "./weights/models--laion--CLIP-ViT-L-14-laion2B-s32B-b82K/"
+      hidden_size: 1024
+    ViT-H-14:
+      gcs_path: "gs://base-checkpoints/effort-aigi/models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/"
+      local_path: "./weights/models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/"
+      hidden_size: 1280
+
+
+# ==============================================================================
+# Optimizer Configuration
+# ==============================================================================
+optimizer:
+  type: adam
+  
+  adam:
+    lr: 0.0002
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1.0e-8
+    weight_decay: 0.0005
+    amsgrad: false
+  
+  sgd:
+    lr: 0.0002
+    momentum: 0.9
+    weight_decay: 0.0005
+
+
+# ==============================================================================
+# Learning Rate Scheduler
+# ==============================================================================
+scheduler:
+  type: null  # Options: null, 'cosine', 'cosine_with_warmup'
+  total_training_steps: 35000
+  warmup_steps: 1000
+
+
+# ==============================================================================
+# Training Parameters
+# ==============================================================================
+training:
+  epochs: 10
+  start_epoch: 0
+  manual_seed: 1024
+  gradient_clip_val: 0.0
+  
+  # Device settings
+  cuda: true
+  cudnn: true
+  ngpu: 1
+  
+  # Logging
+  log_dir: ./logs
+  rec_iter: 100
+  save_epoch: 1
+  save_ckpt: true
+  save_feat: true
+  save_avg: true
+  
+  # Evaluation
+  metric_scoring: auc  # Options: 'auc', 'acc', 'eer', 'ap'
+
+
+# ==============================================================================
+# Early Stopping
+# ==============================================================================
+early_stopping:
+  enabled: true
+  patience: 4
+  min_delta: 0.001
+  mode: max
+  monitor: val/auc
+
+
+# ==============================================================================
+# GCS Assets
+# ==============================================================================
+gcs_assets:
+  base_checkpoint:
+    gcs_path: null  # Set in experiment config
+    local_path: ./weights/base.pth
+  
+  # Note: clip_backbone is now auto-resolved from backbone_registry based on
+  # backbone.source and backbone.variant. Only needed if using explicit override.
+  clip_backbone:
+    gcs_path: null  # Auto-resolved from backbone config
+    local_path: null  # Auto-resolved from backbone config
+    files:
+      - config.json
+      - model.safetensors  # Prefer safetensors over pytorch_model.bin (more memory-efficient)
+  
+  frame_manifest_json:
+    gcs_path: gs://df40-frames/manifests/frame_manifest_v3.json
+    local_path: ./frame_manifest.json
+  
+  property_manifest_parquet:
+    gcs_path: gs://df40-frames/manifests/frame_properties_v9.parquet
+    local_path: ./frame_properties.parquet
+
+
+# ==============================================================================
+# Checkpointing
+# ==============================================================================
+checkpointing:
+  gcs_prefix: gs://training-job-outputs/best_checkpoints/
+  load_base_checkpoint: false
+
+
+# ==============================================================================
+# Data Configuration
+# ==============================================================================
+data:
+  # GCS bucket names (can be overridden in experiment config)
+  bucket_name: df40-frames-recropped-rfa85
+  ood_bucket_name: deep-fake-test-10-08-25-frames-v2
+  
+  # Alternative buckets (documented for reference)
+  # bucket_name: df40-frames                        # Original unrecropped
+  # ood_bucket_name: deep-fake-test-10-08-25-frames-yolo  # YOLO-cropped OOD
+  
+  # Splitting
+  seed: 737
+  val_split_ratio: 0.3
+  data_subset_percentage: 1.0
+  num_frames_per_video: 8
+
+
+# ==============================================================================
+# Dataloader Configuration
+# ==============================================================================
+dataloader:
+  strategy: property_balancing  # Options: 'frame_level', 'video_level', 'per_method', 'property_balancing'
+  batch_size: 4
+  test_batch_size: null  # Defaults to batch_size if null
+  frames_per_batch: null  # For frame_level strategy
+  videos_per_batch: 8
+  frames_per_video: 8
+  real_label_ratio: null  # For balanced sampling
+  num_workers: 2
+  prefetch_factor: 3
+  evaluation_frequency: 1
+
+
+# ==============================================================================
+# Property Balancing
+# ==============================================================================
+property_balancing:
+  enabled: true
+  frame_properties_parquet_path: null  # Set by gcs_assets download
+  
+  # Default category weights (can be overridden)
+  real_category_weights: {}
+  fake_category_weights: {}
+
+
+# ==============================================================================
+# Dataset Methods
+# ==============================================================================
+methods:
+  # Real sources used for both training and validation
+  use_real_sources:
+    - FaceForensics++
+    - Celeb-real
+    - YouTube-real
+    - external_youtube_avspeech
+  
+  # Fake methods for training (model will learn from these)
+  use_fake_methods_for_training: []  # Set in experiment config
+  
+  # Fake methods for validation (held out for generalization testing)
+  use_fake_methods_for_validation: []  # Set in experiment config
+  
+  # Real methods only used in validation (not training)
+  use_real_methods_for_validation_only: []
+  
+  # Per-method sample multipliers
+  method_multipliers: {}
+
+
+# ==============================================================================
+# Augmentation Configuration
+# ==============================================================================
+augmentation:
+  enabled: true
+  version: surgical  # Options: 3, 4, 5, 6, 7, 'surgical'
+  
+  params:
+    use_geometric: true
+    use_advanced_noise: false
+    use_color_jitter: true
+    use_occlusion: true
+    sharpness_adjust_prob: 0.6
+    occlusion_prob: 0.4
+
+
+# ==============================================================================
+# Loss Configuration
+# ==============================================================================
+loss:
+  type: cross_entropy
+  use_focal_loss: false
+  focal_loss_gamma: 2.0
+  focal_loss_alpha: null  # null = balanced, or float value
+
+# Embedding-space mixup (R10+): interpolate backbone features before the head.
+# alpha > 0 enables mixup with Beta(alpha, alpha) sampling.
+# Default 0.0 = disabled.
+mixup_alpha: 0.0
+
+
+# ==============================================================================
+# ArcFace Configuration
+# ==============================================================================
+arcface:
+  enabled: false
+  trainable: true
+  scale: 30.0
+  margin: 0.35
+  
+  # Curriculum annealing
+  s_start: null  # Defaults to scale if null
+  s_end: null    # Defaults to scale if null
+  anneal_steps: 0
+
+
+# ==============================================================================
+# Group-DRO Configuration
+# ==============================================================================
+group_dro:
+  enabled: false
+  beta: 3.0
+  clip_min: 1.0
+  clip_max: 4.0
+  ema_alpha: 0.1
+
+
+# ==============================================================================
+# Curriculum Learning
+# ==============================================================================
+curriculum:
+  max_train_steps: null
+  evaluate_every_steps: null
+  
+  lesson_gate:
+    enabled: false
+    checks: []
+    plateau_check: {}
+    guardrail_check: {}
+  
+  lesson_data_control_enabled: false
+
+
+# ==============================================================================
+# Label Dictionary
+# ==============================================================================
+# Maps dataset/method names to binary labels (0=real, 1=fake)
+label_dict:
+  # DFD
+  DFD_fake: 1
+  DFD_real: 0
+  
+  # FaceForensics++ (FF++)
+  FF-SH: 1
+  FF-F2F: 1
+  FF-DF: 1
+  FF-FS: 1
+  FF-NT: 1
+  FF-FH: 1
+  FF-real: 0
+  
+  # CelebDF
+  CelebDFv1_real: 0
+  CelebDFv1_fake: 1
+  CelebDFv2_real: 0
+  CelebDFv2_fake: 1
+  
+  # DFDCP
+  DFDCP_Real: 0
+  DFDCP_FakeA: 1
+  DFDCP_FakeB: 1
+  
+  # DFDC
+  DFDC_Fake: 1
+  DFDC_Real: 0
+  
+  # DeeperForensics
+  DF_fake: 1
+  DF_real: 0
+  
+  # UADFV
+  UADFV_Fake: 1
+  UADFV_Real: 0
+  
+  # Roop
+  roop_Real: 0
+  roop_Fake: 1
+  
+  # DF40 aggregate
+  FSAll_Fake: 1
+  FSAll_Real: 0
+  FRAll_Fake: 1
+  FRAll_Real: 0
+  EFSAll_Fake: 1
+  EFSAll_Real: 0
+  DF40_train_Fake: 1
+  DF40_train_Real: 0
+  
+  # Face Swapping Methods
+  e4s_Fake: 1
+  e4s_Real: 0
+  facedancer_Fake: 1
+  facedancer_Real: 0
+  faceswap_Fake: 1
+  faceswap_Real: 0
+  fsgan_Fake: 1
+  fsgan_Real: 0
+  inswap_Fake: 1
+  inswap_Real: 0
+  simswap_Fake: 1
+  simswap_Real: 0
+  uniface_Fake: 1
+  uniface_Real: 0
+  blendface_Fake: 1
+  blendface_Real: 0
+  mobileswap_Fake: 1
+  mobileswap_Real: 0
+  deepfacelab_Fake: 1
+  deepfacelab_Real: 0
+  
+  # Face Reenactment Methods
+  danet_Fake: 1
+  danet_Real: 0
+  fomm_Fake: 1
+  fomm_Real: 0
+  hyperreenact_Fake: 1
+  hyperreenact_Real: 0
+  MRAA_Fake: 1
+  MRAA_Real: 0
+  mraa_Fake: 1
+  mraa_Real: 0
+  one_shot_free_Fake: 1
+  one_shot_free_Real: 0
+  pirender_Fake: 1
+  pirender_Real: 0
+  facevid2vid_Fake: 1
+  facevid2vid_Real: 0
+  lia_Fake: 1
+  lia_Real: 0
+  mcnet_Fake: 1
+  mcnet_Real: 0
+  sadtalker_Fake: 1
+  sadtalker_Real: 0
+  wav2lip_Fake: 1
+  wav2lip_Real: 0
+  tpsm_Fake: 1
+  tpsm_Real: 0
+  
+  # Entire Face Synthesis - GANs
+  StyleGAN2_Fake: 1
+  StyleGAN2_Real: 0
+  StyleGAN3_Fake: 1
+  StyleGAN3_Real: 0
+  StyleGANXL_Fake: 1
+  StyleGANXL_Real: 0
+  VQGAN_Fake: 1
+  VQGAN_Real: 0
+  stargan_Fake: 1
+  stargan_Real: 0
+  starganv2_Fake: 1
+  starganv2_Real: 0
+  styleclip_Fake: 1
+  styleclip_Real: 0
+  e4e_Fake: 1
+  e4e_Real: 0
+  
+  # Entire Face Synthesis - Diffusion
+  ddim_Fake: 1
+  ddim_Real: 0
+  DiT_Fake: 1
+  DiT_Real: 0
+  SiT_Fake: 1
+  SiT_Real: 0
+  RDDM_Fake: 1
+  RDDM_Real: 0
+  rddm_Fake: 1
+  rddm_Real: 0
+  Collaborative_Diffusion_Fake: 1
+  Collaborative_Diffusion_Real: 0
+  CollabDiff_Fake: 1
+  CollabDiff_Real: 0
+  pixart_Fake: 1
+  pixart_Real: 0
+  sd1.5_Fake: 1
+  sd1.5_Real: 0
+  sd2.1_Fake: 1
+  sd2.1_Real: 0
+  
+  # Commercial/External
+  dalle2_face_Fake: 1
+  dalle2_face_Real: 0
+  MidJourney_Fake: 1
+  MidJourney_Real: 0
+  midjourney_Fake: 1
+  midjourney_Real: 0
+  heygen_Fake: 1
+  heygen_Real: 0
+  whichisreal_Fake: 1
+  whichisreal_Real: 0
+  
+  # VisoMaster swap models
+  visomaster_real: 0
+  visomaster_CSCS: 1
+  visomaster_GhostFace-v1: 1
+  visomaster_GhostFace-v2: 1
+  visomaster_GhostFace-v3: 1
+  visomaster_Inswapper128: 1
+  visomaster_InStyleSwapper256-A: 1
+  visomaster_InStyleSwapper256-B: 1
+  visomaster_InStyleSwapper256-C: 1
+  visomaster_SimSwap512: 1
+  visomaster_tier_MINIMAL: 1
+  visomaster_tier_MODERATE: 1
+  visomaster_tier_STRONG: 1
+  
+  # VisoMaster Enhanced (post-hoc face enhancement)
+  visomaster_enhanced_real: 0
+  visomaster_enhanced_gfpgan: 1
+  visomaster_enhanced_codeformer: 1
+  visomaster_enhanced_gpen_bfr_256: 1
+  visomaster_enhanced_gpen_bfr_512: 1
+  visomaster_enhanced_gpen_bfr_1024: 1
+  visomaster_enhanced_gpen_bfr_2048: 1
+  visomaster_enhanced_restoreformer_pp: 1
+  visomaster_enhanced_vqfr_v2: 1
+  
+  # GenImage
+  adm_Fake: 1
+  adm_Real: 0
+  biggan_Fake: 1
+  biggan_Real: 0
+  glide_Fake: 1
+  glide_Real: 0
+  sdv4_Fake: 1
+  sdv4_Real: 0
+  sdv5_Fake: 1
+  sdv5_Real: 0
+  vqdm_Fake: 1
+  vqdm_Real: 0
+  wukong_Fake: 1
+  wukong_Real: 0
+  
+  # Misc
+  GPA_fake: 1
+  GPA_real: 0
+  Chameleon_Fake: 1
+  Chameleon_Real: 0

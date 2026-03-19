@@ -14,6 +14,7 @@ from .config_helpers import (
     apply_wandb_loss_params,
     apply_wandb_group_dro_params,
     apply_wandb_arcface_params,
+    apply_wandb_quality_domain_params,
     apply_wandb_early_stopping_params,
     apply_wandb_curriculum_params,
     # Dataloader params
@@ -33,6 +34,14 @@ from .config_helpers import (
     apply_all_wandb_overrides,
     generate_run_name,
     create_curated_config_log,
+)
+from .grouping import (
+    DEFAULT_ENHANCED_STRATEGIES,
+    infer_family_key,
+    infer_group_and_family,
+    infer_group_key,
+    normalize_label_value,
+    normalize_method_name,
 )
 
 __all__ = [
@@ -54,6 +63,7 @@ __all__ = [
     'apply_wandb_loss_params',
     'apply_wandb_group_dro_params',
     'apply_wandb_arcface_params',
+    'apply_wandb_quality_domain_params',
     'apply_wandb_early_stopping_params',
     'apply_wandb_curriculum_params',
     # Config helpers - dataloader
@@ -73,4 +83,11 @@ __all__ = [
     'apply_all_wandb_overrides',
     'generate_run_name',
     'create_curated_config_log',
+    # Group/family taxonomy helpers
+    'DEFAULT_ENHANCED_STRATEGIES',
+    'infer_family_key',
+    'infer_group_and_family',
+    'infer_group_key',
+    'normalize_label_value',
+    'normalize_method_name',
 ]

@@ -1,7 +1,9 @@
 # app4.py
 
 import os
+import json
 import logging
+import math
 from pathlib import Path
 from typing import Optional, List, Dict
 import tempfile
@@ -34,6 +36,116 @@ logger = logging.getLogger("effort-aigi-api-v4")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEBUG_FRAME_DIR = "./debug_frames"
 MIN_VIDEO_FRAMES = 8
+
+
+# ──────────────────────────────────────────
+# Platt Scaling Calibrator
+# ──────────────────────────────────────────
+EPS = 1e-6
+
+
+def _clip_prob(p: float) -> float:
+    return max(EPS, min(1.0 - EPS, p))
+
+
+def _logit(p: float) -> float:
+    pp = _clip_prob(p)
+    return math.log(pp / (1.0 - pp))
+
+
+def _sigmoid(z: float) -> float:
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+class PlattCalibrator:
+    """Applies Platt scaling: calibrated = sigmoid(a * logit(raw) + b).
+
+    Loaded from a calibrator_bundle.json produced by run_r8_calibration_fit.py.
+    """
+
+    def __init__(self, bundle_path: str):
+        with open(bundle_path, "r") as f:
+            bundle = json.load(f)
+
+        platt = bundle["models"]["platt"]
+        self.a: float = float(platt["a"])
+        self.b: float = float(platt["b"])
+
+        # Best model selected by the calibration pipeline
+        self.best_model: str = bundle.get("best_model", "platt")
+
+        # Extract recommended threshold from the bundle
+        recs = bundle.get("recommended_thresholds", {})
+        best_rec = recs.get(self.best_model, recs.get("platt", {}))
+        frame_rec = best_rec.get("frame", {})
+        self.optimal_threshold: float = float(frame_rec.get("threshold", 0.5))
+
+        logger.info(
+            "Calibrator loaded: a=%.4f, b=%.4f, best_model=%s, optimal_threshold=%.4f",
+            self.a, self.b, self.best_model, self.optimal_threshold,
+        )
+
+    def calibrate(self, raw_prob: float) -> float:
+        """Apply Platt scaling to a single raw probability."""
+        z = self.a * _logit(raw_prob) + self.b
+        return _clip_prob(_sigmoid(z))
+
+    def calibrate_array(self, raw_probs: List[float]) -> List[float]:
+        """Apply Platt scaling to a list of raw probabilities."""
+        return [self.calibrate(p) for p in raw_probs]
+
+
+def _load_calibrator_from_gcs(gcs_path: str, local_dir: str = "./weights/calibrator") -> Optional[PlattCalibrator]:
+    """Download a calibrator_bundle.json from GCS and return a PlattCalibrator."""
+    if not gcs_path.startswith("gs://"):
+        logger.error("Invalid CALIBRATOR_GCS_PATH: '%s'. Must start with 'gs://'.", gcs_path)
+        return None
+    try:
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, "calibrator_bundle.json")
+        if os.path.exists(local_path):
+            logger.info("Calibrator bundle already cached at %s", local_path)
+            return PlattCalibrator(local_path)
+
+        bucket_name = gcs_path.split("gs://", 1)[1].split("/", 1)[0]
+        blob_name = gcs_path.split(f"gs://{bucket_name}/", 1)[1]
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        blob.download_to_filename(local_path)
+        logger.info("Downloaded calibrator bundle from %s", gcs_path)
+        return PlattCalibrator(local_path)
+    except Exception as e:
+        logger.error("Failed to load calibrator from GCS: %s", e)
+        return None
+
+
+# ──────────────────────────────────────────
+# Test-Time Augmentation (TTA)
+# ──────────────────────────────────────────
+def tta_inference(model: nn.Module, image_tensor: torch.Tensor) -> torch.Tensor:
+    """Run TTA: original + horizontal flip, return averaged probabilities.
+
+    Args:
+        model: The detector model in eval mode.
+        image_tensor: Tensor of shape [B, C, H, W] or [B, T, C, H, W].
+
+    Returns:
+        Averaged probabilities tensor (same shape as model's single-pass prob output).
+    """
+    is_video = image_tensor.dim() == 5  # [B, T, C, H, W]
+
+    if is_video:
+        flipped = torch.flip(image_tensor, dims=[-1])  # flip W
+    else:
+        flipped = torch.flip(image_tensor, dims=[-1])  # flip W
+
+    with torch.inference_mode():
+        preds_orig = model({"image": image_tensor}, inference=True)
+        preds_flip = model({"image": flipped}, inference=True)
+
+    probs = (preds_orig["prob"] + preds_flip["prob"]) / 2.0
+    return probs
 
 
 # ──────────────────────────────────────────
@@ -132,13 +244,14 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
 # ──────────────────────────────────────────
 # FastAPI app
 # ──────────────────────────────────────────
-app = FastAPI(title="Effort-AIGI Detector API v4", version="0.7.0")
+app = FastAPI(title="Effort-AIGI Detector API v4", version="0.8.0")
 
 
 # --- API Models ---
 class FrameInferResponse(BaseModel):
     pred_label: str
     fake_prob: float
+    calibrated_prob: Optional[float] = None
 
 
 class Decision(BaseModel):
@@ -151,6 +264,7 @@ class MultiDecisionResponse(BaseModel):
     median_decision: Decision
     majority_vote_decision: Decision
     frame_probs: Optional[List[float]] = None
+    calibrated_frame_probs: Optional[List[float]] = None
 
 
 class GCSVideoRequest(BaseModel):
@@ -165,6 +279,8 @@ def startup_event() -> None:
     # 0) Initialize state
     app.state.models = {}
     app.state.loaded_weights_paths = {}
+    app.state.calibrator: Optional[PlattCalibrator] = None
+    app.state.tta_enabled: bool = os.getenv("TTA_ENABLED", "false").lower() in ("1", "true", "yes")
 
     # 1) CUDA Check
     if not torch.cuda.is_available():
@@ -253,6 +369,29 @@ def startup_event() -> None:
         logger.exception("Failed to load YOLO model")
         raise RuntimeError("Failed to load YOLO model") from e
 
+    # 9) Load calibrator (if configured)
+    calibrator_gcs_path = os.getenv("CALIBRATOR_GCS_PATH")
+    calibrator_local_path = os.getenv("CALIBRATOR_LOCAL_PATH")
+    if calibrator_local_path and os.path.exists(calibrator_local_path):
+        try:
+            app.state.calibrator = PlattCalibrator(calibrator_local_path)
+            logger.info("✅ Calibrator loaded from local path: %s", calibrator_local_path)
+        except Exception as e:
+            logger.error("Failed to load local calibrator: %s", e)
+    elif calibrator_gcs_path:
+        app.state.calibrator = _load_calibrator_from_gcs(calibrator_gcs_path)
+        if app.state.calibrator:
+            logger.info("✅ Calibrator loaded from GCS: %s", calibrator_gcs_path)
+        else:
+            logger.warning("Calibrator could not be loaded — raw probabilities will be used.")
+    else:
+        logger.info("No calibrator configured. Raw probabilities will be used.")
+
+    if app.state.tta_enabled:
+        logger.info("✅ TTA (test-time augmentation) is ENABLED.")
+    else:
+        logger.info("TTA is disabled. Set TTA_ENABLED=true to enable.")
+
     logger.info("Startup complete. Available models: %s", list(app.state.models.keys()))
 
 
@@ -322,10 +461,20 @@ async def check_frame(
         rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
         image_tensor = transform(rgb_face).unsqueeze(0).to(device)
 
-        with torch.inference_mode():
-            preds = model({'image': image_tensor}, inference=True)
-            prob = preds["prob"].squeeze().cpu().item()
-            pred_label = "FAKE" if prob >= threshold else "REAL"
+        if request.app.state.tta_enabled:
+            probs_tensor = tta_inference(model, image_tensor)
+            prob = probs_tensor.squeeze().cpu().item()
+        else:
+            with torch.inference_mode():
+                preds = model({'image': image_tensor}, inference=True)
+                prob = preds["prob"].squeeze().cpu().item()
+
+        # Apply calibration if available
+        calibrator = request.app.state.calibrator
+        calibrated = calibrator.calibrate(prob) if calibrator else None
+        effective_prob = calibrated if calibrated is not None else prob
+        effective_threshold = calibrator.optimal_threshold if calibrator else threshold
+        pred_label = "FAKE" if effective_prob >= effective_threshold else "REAL"
 
     except HTTPException:
         raise
@@ -333,8 +482,8 @@ async def check_frame(
         logger.exception("Inference failed for frame.")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Model inference failed.") from e
 
-    logger.info("Frame inference result: label=%s, fake_prob=%.4f", pred_label, prob)
-    return FrameInferResponse(pred_label=pred_label, fake_prob=prob)
+    logger.info("Frame inference result: label=%s, fake_prob=%.4f, calibrated_prob=%s", pred_label, prob, calibrated)
+    return FrameInferResponse(pred_label=pred_label, fake_prob=prob, calibrated_prob=calibrated)
 
 
 def _calculate_video_decisions(frame_probs: List[float], threshold: float) -> tuple:
@@ -398,9 +547,13 @@ async def check_video(
                 detail=f"Video could not be processed. Found {num_frames_found} faces, but a minimum of {MIN_VIDEO_FRAMES} is required."
             )
 
-        with torch.inference_mode():
-            preds = model({'image': video_tensor.to(device)}, inference=True)
-            frame_probs = preds["prob"].cpu().numpy().tolist()
+        if request.app.state.tta_enabled:
+            probs_tensor = tta_inference(model, video_tensor.to(device))
+            frame_probs = probs_tensor.cpu().numpy().tolist()
+        else:
+            with torch.inference_mode():
+                preds = model({'image': video_tensor.to(device)}, inference=True)
+                frame_probs = preds["prob"].cpu().numpy().tolist()
 
     except HTTPException:
         raise
@@ -410,21 +563,31 @@ async def check_video(
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    mean_decision, median_decision, majority_vote_decision = _calculate_video_decisions(frame_probs, threshold)
+    # Apply calibration if available
+    calibrator = request.app.state.calibrator
+    calibrated_probs = calibrator.calibrate_array(frame_probs) if calibrator else None
+    effective_probs = calibrated_probs if calibrated_probs is not None else frame_probs
+    effective_threshold = calibrator.optimal_threshold if calibrator else threshold
+
+    mean_decision, median_decision, majority_vote_decision = _calculate_video_decisions(
+        effective_probs, effective_threshold
+    )
 
     logger.info(
-        "Video inference complete: mean_label=%s (%.4f), median_label=%s (%.4f), majority_label=%s (%.4f), frames=%d",
+        "Video inference complete: mean_label=%s (%.4f), median_label=%s (%.4f), majority_label=%s (%.4f), frames=%d, calibrated=%s",
         mean_decision.label, mean_decision.score,
         median_decision.label, median_decision.score,
         majority_vote_decision.label, majority_vote_decision.score,
-        len(frame_probs)
+        len(frame_probs),
+        calibrator is not None,
     )
 
     return MultiDecisionResponse(
         mean_decision=mean_decision,
         median_decision=median_decision,
         majority_vote_decision=majority_vote_decision,
-        frame_probs=frame_probs if return_probs else None
+        frame_probs=frame_probs if return_probs else None,
+        calibrated_frame_probs=calibrated_probs if return_probs and calibrated_probs else None,
     )
 
 
@@ -472,9 +635,13 @@ async def check_video_from_gcp(
                 detail=f"Video could not be processed. Found {num_frames_found} faces, but a minimum of {MIN_VIDEO_FRAMES} is required."
             )
 
-        with torch.inference_mode():
-            preds = model({'image': video_tensor.to(device)}, inference=True)
-            frame_probs = preds["prob"].cpu().numpy().tolist()
+        if request.app.state.tta_enabled:
+            probs_tensor = tta_inference(model, video_tensor.to(device))
+            frame_probs = probs_tensor.cpu().numpy().tolist()
+        else:
+            with torch.inference_mode():
+                preds = model({'image': video_tensor.to(device)}, inference=True)
+                frame_probs = preds["prob"].cpu().numpy().tolist()
 
     except HTTPException:
         raise
@@ -488,21 +655,31 @@ async def check_video_from_gcp(
         logger.info(f"Cleaning up temporary directory: {tmp_dir}")
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    mean_decision, median_decision, majority_vote_decision = _calculate_video_decisions(frame_probs, threshold)
+    # Apply calibration if available
+    calibrator = request.app.state.calibrator
+    calibrated_probs = calibrator.calibrate_array(frame_probs) if calibrator else None
+    effective_probs = calibrated_probs if calibrated_probs is not None else frame_probs
+    effective_threshold = calibrator.optimal_threshold if calibrator else threshold
+
+    mean_decision, median_decision, majority_vote_decision = _calculate_video_decisions(
+        effective_probs, effective_threshold
+    )
 
     logger.info(
-        "GCS video inference complete: mean_label=%s (%.4f), median_label=%s (%.4f), majority_label=%s (%.4f), frames=%d",
+        "GCS video inference complete: mean_label=%s (%.4f), median_label=%s (%.4f), majority_label=%s (%.4f), frames=%d, calibrated=%s",
         mean_decision.label, mean_decision.score,
         median_decision.label, median_decision.score,
         majority_vote_decision.label, majority_vote_decision.score,
-        len(frame_probs)
+        len(frame_probs),
+        calibrator is not None,
     )
 
     return MultiDecisionResponse(
         mean_decision=mean_decision,
         median_decision=median_decision,
         majority_vote_decision=majority_vote_decision,
-        frame_probs=frame_probs if return_probs else None
+        frame_probs=frame_probs if return_probs else None,
+        calibrated_frame_probs=calibrated_probs if return_probs and calibrated_probs else None,
     )
 
 

@@ -3,7 +3,7 @@ from venv import logger
 # =============================================================================
 # CODE VERSION STAMP - Update this when making changes to verify deployment
 # =============================================================================
-CODE_VERSION = "2026-01-01-UNIFIED-V1"  # Unified training with data source factory
+CODE_VERSION = "2026-01-02-COMBINED-PAIRED-FIX-V1"  # Fix: pass combined_paired config to data pipeline
 # =============================================================================
 
 import yaml  # noqa
@@ -213,11 +213,32 @@ def main():
         else:
             print(f"  ⚠️ 'augmentation' NOT in single_cfg! Keys: {list(single_cfg.keys())}")
         
+        # Apply combined_paired config directly (DF40/DeepLive/VisoMaster enabled flags, 
+        # bucket settings, swap models, etc.). This is CRITICAL — without it,
+        # combined_paired.py falls back to defaults and ignores enabled flags.
+        if 'combined_paired' in single_cfg:
+            data_config['combined_paired'] = single_cfg['combined_paired']
+            cp = single_cfg['combined_paired']
+            df40_en = cp.get('df40', {}).get('enabled', True)
+            dl_en = cp.get('deeplive', {}).get('enabled', True)
+            vm_en = cp.get('visomaster', {}).get('enabled', False)
+            print(f"  ✅ Applied combined_paired config (df40={df40_en}, deeplive={dl_en}, visomaster={vm_en})")
+            logger.info(f"  Applied combined_paired config (df40={df40_en}, deeplive={dl_en}, visomaster={vm_en})")
+
         # Apply deeplive config directly (for GCS bucket settings, etc.)
+        # Note: This handles TOP-LEVEL deeplive config (legacy/non-combined mode).
+        # For combined_paired mode, deeplive config is inside combined_paired above.
         if 'deeplive' in single_cfg:
             data_config['deeplive'] = single_cfg['deeplive']
-            print(f"  ✅ Applied deeplive config")
-            logger.info(f"  Applied deeplive config")
+            print(f"  ✅ Applied top-level deeplive config")
+            logger.info(f"  Applied top-level deeplive config")
+        
+        # Apply visomaster config directly (for GCS bucket settings, swap models, tiers, etc.)
+        # Note: Same as deeplive — this is for TOP-LEVEL visomaster config only.
+        if 'visomaster' in single_cfg:
+            data_config['visomaster'] = single_cfg['visomaster']
+            print(f"  ✅ Applied top-level visomaster config")
+            logger.info(f"  Applied top-level visomaster config")
         
         # Apply backbone config directly
         if 'backbone' in single_cfg:
@@ -225,12 +246,68 @@ def main():
             print(f"  ✅ Applied backbone: {single_cfg['backbone'].get('name', 'unknown')}")
             logger.info(f"  Applied backbone: {single_cfg['backbone'].get('name', 'unknown')}")
         
+        # Apply checkpointing config directly (GCS prefix, save frequency, etc.)
+        if 'checkpointing' in single_cfg:
+            config['checkpointing'] = single_cfg['checkpointing']
+            print(f"  ✅ Applied checkpointing: gcs_prefix={single_cfg['checkpointing'].get('gcs_prefix', 'N/A')}")
+            logger.info(f"  Applied checkpointing: gcs_prefix={single_cfg['checkpointing'].get('gcs_prefix', 'N/A')}")
+
+        # Apply stability / label-smoothing flat keys directly
+        # (These are simple scalars — W&B won't flatten them, but
+        # apply_wandb_stability_params also handles them as belt-and-suspenders.)
+        for _flat_key in ('stability_lambda', 'stability_noise_std',
+                          'stability_crop_jitter', 'label_smoothing'):
+            if _flat_key in single_cfg:
+                config[_flat_key] = single_cfg[_flat_key]
+                print(f"  ✅ Applied {_flat_key}: {single_cfg[_flat_key]}")
+                logger.info(f"  Applied {_flat_key}: {single_cfg[_flat_key]}")
+
+        # Apply Group DRO config directly (W&B flattens group_dro_params.beta
+        # to 'group_dro_params.beta' but config helper expects 'group_dro_beta')
+        if 'use_group_dro' in single_cfg:
+            config['use_group_dro'] = single_cfg['use_group_dro']
+            print(f"  ✅ Applied use_group_dro: {single_cfg['use_group_dro']}")
+            logger.info(f"  Applied use_group_dro: {single_cfg['use_group_dro']}")
+        if 'group_dro_params' in single_cfg:
+            config['group_dro_params'] = single_cfg['group_dro_params']
+            print(f"  ✅ Applied group_dro_params: {single_cfg['group_dro_params']}")
+            logger.info(f"  Applied group_dro_params: {single_cfg['group_dro_params']}")
+
         print("=" * 70)
     else:
         print("⚠️ single_cfg is None/empty - no direct config application!")
     
     # Apply all W&B overrides to config and data_config (handles flat keys)
     apply_all_wandb_overrides(config, data_config, wandb.config, logger)
+
+    # Fail fast on config-propagation mismatches for critical Round-6+ fields.
+    if single_cfg:
+        if 'use_quality_domain_head' in single_cfg:
+            requested_quality_head = bool(single_cfg.get('use_quality_domain_head'))
+            effective_quality_head = bool(config.get('use_quality_domain_head', False))
+            if requested_quality_head != effective_quality_head:
+                raise RuntimeError(
+                    "Config propagation mismatch: `use_quality_domain_head` "
+                    f"requested={requested_quality_head}, effective={effective_quality_head}. "
+                    "Refusing to launch with inconsistent GRL settings."
+                )
+
+        if bool(single_cfg.get('use_quality_domain_head', False)):
+            for key in (
+                'quality_domain_count',
+                'quality_head_hidden_dim',
+                'quality_domain_loss_weight',
+            ):
+                if key not in single_cfg:
+                    continue
+                requested_val = single_cfg.get(key)
+                effective_val = config.get(key)
+                if requested_val != effective_val:
+                    raise RuntimeError(
+                        f"Config propagation mismatch for `{key}`: "
+                        f"requested={requested_val}, effective={effective_val}. "
+                        "Refusing to launch with inconsistent GRL settings."
+                    )
     
     # IMPORTANT: Apply gcs_assets AFTER wandb overrides, because apply_wandb_backbone_params
     # constructs default GCS paths that we may need to override for OpenCLIP models
@@ -244,13 +321,6 @@ def main():
             print(f"  ✅ Override gcs_assets['{asset_key}']: {asset_config.get('gcs_path', 'no path')}")
             logger.info(f"  Override gcs_assets['{asset_key}']: {asset_config.get('gcs_path', 'no path')}")
 
-    # Log curated config snapshot for W&B filtering
-    curated_config_log = create_curated_config_log(config, data_config)
-    wandb.config.update(curated_config_log, allow_val_change=True)
-
-    # Generate and set run name
-    wandb.run.name = generate_run_name(config, wandb.config)
-
     # ===========================================================================
     # --- 3. Standard Setup ---
     # ===========================================================================
@@ -259,7 +329,25 @@ def main():
     if args.test_dataset: config['test_dataset'] = args.test_dataset
     config['save_ckpt'] = args.save_ckpt
     config['ddp'] = args.ddp
+
+    # Resolve a single canonical seed once and propagate it.
+    canonical_seed = config.get('manualSeed')
+    if canonical_seed is None:
+        canonical_seed = config.get('seed')
+    if canonical_seed is None:
+        canonical_seed = data_config.get('data_params', {}).get('seed')
+    if canonical_seed is None:
+        canonical_seed = 737
+    config['manualSeed'] = canonical_seed
+    config['seed'] = canonical_seed
+    if 'data_params' not in data_config:
+        data_config['data_params'] = {}
+    data_config['data_params']['seed'] = canonical_seed
+    if isinstance(data_config.get('combined_paired'), dict):
+        data_config['combined_paired'].setdefault('split_seed', canonical_seed)
+
     init_seed(config)
+    logger.info(f"Canonical seed resolved: {canonical_seed}")
     if config['cudnn']: cudnn.benchmark = True
     if config['ddp']:
         dist.init_process_group(backend='nccl', timeout=timedelta(minutes=30))
@@ -274,10 +362,36 @@ def main():
             logger.info("`load_base_checkpoint` is False. Skipping download of the base checkpoint.")
             del config['gcs_assets']['base_checkpoint']
 
-    # override the config gcs_assets - base_checkpoint - gcs_path with the wandb.config
-    if wandb.config.get('gcs_base_checkpoint') and config.get('load_base_checkpoint', False):
-        config['gcs_assets']['base_checkpoint']['gcs_path'] = wandb.config.get('gcs_base_checkpoint')
-        logger.info(f"Overrode base checkpoint GCS path to: {config['gcs_assets']['base_checkpoint']['gcs_path']}")
+    # Override gcs_assets.base_checkpoint.gcs_path from the experiment YAML's
+    # top-level gcs_base_checkpoint key. Read from single_cfg first (authoritative),
+    # then fall back to wandb.config. This MUST happen BEFORE create_curated_config_log
+    # so the curated log captures the correct (not stale) checkpoint path.
+    if config.get('load_base_checkpoint', False):
+        # Prefer single_cfg (experiment YAML) as the authoritative source
+        gcs_ckpt_override = (
+            (single_cfg or {}).get('gcs_base_checkpoint')
+            or wandb.config.get('gcs_base_checkpoint')
+        )
+        if gcs_ckpt_override:
+            base_ckpt = config.setdefault('gcs_assets', {}).setdefault('base_checkpoint', {})
+            base_ckpt['gcs_path'] = gcs_ckpt_override
+            base_ckpt.setdefault('local_path', './weights/base.pth')
+            logger.info(f"Set base checkpoint GCS path to: {gcs_ckpt_override}")
+        else:
+            current_path = config.get('gcs_assets', {}).get('base_checkpoint', {}).get('gcs_path')
+            if not current_path:
+                logger.warning(
+                    "load_base_checkpoint=True but no gcs_base_checkpoint provided "
+                    "in experiment YAML or wandb.config, and gcs_assets.base_checkpoint.gcs_path is null. "
+                    "The model will start from base CLIP weights."
+                )
+
+    # Log curated config snapshot for W&B filtering (AFTER checkpoint path is resolved)
+    curated_config_log = create_curated_config_log(config, data_config)
+    wandb.config.update(curated_config_log, allow_val_change=True)
+
+    # Generate and set run name
+    wandb.run.name = generate_run_name(config, wandb.config)
 
     # Download assets from GCS
     downloaded_assets = download_assets_from_gcs(config, logger)
@@ -307,7 +421,9 @@ def main():
     # The data source is determined by data_config['data_source']:
     #   - 'manifest' (default): Traditional GCS manifest-based loading
     #   - 'deeplive': DeepLive GCS bucket with paired real/fake frames
-    #   - Future: 'hf_dataset' for HuggingFace datasets
+    #   - 'df40_paired': DF40 dataset with paired real/fake frames
+    #   - 'combined_paired': Unified pipeline combining DF40 + DeepLive + VisoMaster
+    #   - 'visomaster': VisoMaster standalone with paired real/fake frames
     # ===========================================================================
     
     # Set default data source if not specified (backward compatibility)
@@ -355,6 +471,139 @@ def main():
     current_data_source = data_config.get('data_source', 'manifest')
     logger.info(f"Data pipeline created successfully (data_source={current_data_source}, property_balancing={is_property_balancing})")
 
+    # ===========================================================================
+    # --- DATA VERIFICATION (added 2026-01-02) ---
+    # Logs per-source sample counts, enabled flags, and method lists to W&B.
+    # This makes it impossible to miss a misconfigured data pipeline.
+    # ===========================================================================
+    if current_data_source == 'combined_paired':
+        cp_cfg = data_config.get('combined_paired', {})
+        df40_en = cp_cfg.get('df40', {}).get('enabled', True)
+        dl_en = cp_cfg.get('deeplive', {}).get('enabled', True)
+        vm_en = cp_cfg.get('visomaster', {}).get('enabled', False)
+
+        df40_n = data_split_stats.get('df40_samples', -1)
+        dl_n = data_split_stats.get('deeplive_samples', -1)
+        vm_n = data_split_stats.get('visomaster_samples', -1)
+        total_n = data_split_stats.get('total_samples', -1)
+
+        # Log to console/file with highly visible formatting
+        logger.info("=" * 70)
+        logger.info("📊 DATA VERIFICATION — COMBINED PAIRED PIPELINE")
+        logger.info("=" * 70)
+        logger.info(f"  DF40:        enabled={str(df40_en):5s}  →  {df40_n:,} samples")
+        logger.info(f"  DeepLive:    enabled={str(dl_en):5s}  →  {dl_n:,} samples")
+        logger.info(f"  VisoMaster:  enabled={str(vm_en):5s}  →  {vm_n:,} samples")
+        logger.info(f"  TOTAL:                           {total_n:,} samples")
+        logger.info(f"  Methods: {data_split_stats.get('methods', [])}")
+        logger.info("=" * 70)
+
+        # Sanity checks — fail fast if config doesn't match reality
+        if not df40_en and df40_n > 0:
+            raise RuntimeError(f"DATA INTEGRITY ERROR: DF40 is DISABLED but got {df40_n} samples!")
+        if not dl_en and dl_n > 0:
+            raise RuntimeError(f"DATA INTEGRITY ERROR: DeepLive is DISABLED but got {dl_n} samples!")
+        if not vm_en and vm_n > 0:
+            raise RuntimeError(f"DATA INTEGRITY ERROR: VisoMaster is DISABLED but got {vm_n} samples!")
+        if df40_en and df40_n == 0:
+            logger.warning("⚠️ DF40 is ENABLED but produced 0 samples!")
+        if dl_en and dl_n == 0:
+            logger.warning("⚠️ DeepLive is ENABLED but produced 0 samples!")
+        if vm_en and vm_n == 0:
+            logger.warning("⚠️ VisoMaster is ENABLED but produced 0 samples!")
+
+        # Persist to W&B summary for easy querying across runs
+        wandb.run.summary["data/sources_enabled"] = {
+            "df40": df40_en, "deeplive": dl_en, "visomaster": vm_en
+        }
+        wandb.run.summary["data/source_counts"] = {
+            "df40": df40_n, "deeplive": dl_n, "visomaster": vm_n, "total": total_n
+        }
+        vm_models = cp_cfg.get('visomaster', {}).get('swap_models', [])
+        if vm_models:
+            wandb.run.summary["data/visomaster_swap_models"] = vm_models
+        wandb.log({
+            "data/df40_samples": df40_n,
+            "data/deeplive_samples": dl_n,
+            "data/visomaster_samples": vm_n,
+        })
+
+        strategy_counts = data_split_stats.get('strategy_counts', {})
+        family_counts = data_split_stats.get('family_counts', {})
+        train_strategy_counts = data_split_stats.get('train_strategy_counts', {})
+        train_family_counts = data_split_stats.get('train_family_counts', {})
+        deeplive_raw_strategy_counts = data_split_stats.get('deeplive_raw_strategy_counts', {})
+        deeplive_effective_strategy_counts = data_split_stats.get('deeplive_effective_strategy_counts', {})
+        deeplive_strategy_preflight = data_split_stats.get('deeplive_strategy_preflight', {})
+        sampling_strategy = data_split_stats.get('sampling_strategy')
+        sampling_family_weights = data_split_stats.get('sampling_family_weights', {})
+        holdout_mode = data_split_stats.get('holdout_mode')
+        holdout_methods = data_split_stats.get('holdout_methods', [])
+        holdout_method_counts = data_split_stats.get('holdout_method_counts', {})
+        train_df40_methods = data_split_stats.get('train_df40_methods', [])
+        holdout_df40_methods = data_split_stats.get('holdout_df40_methods', [])
+        ood_video_count = data_split_stats.get('ood_video_count', 0)
+        ood_method_count = data_split_stats.get('ood_method_count', 0)
+
+        wandb.run.summary["data/run_seed"] = data_split_stats.get('run_seed', canonical_seed)
+        wandb.run.summary["data/split_seed"] = data_split_stats.get('split_seed', canonical_seed)
+        wandb.run.summary["data/strategy_counts"] = strategy_counts
+        wandb.run.summary["data/family_counts"] = family_counts
+        wandb.run.summary["data/train_strategy_counts"] = train_strategy_counts
+        wandb.run.summary["data/train_family_counts"] = train_family_counts
+        wandb.run.summary["data/deeplive_raw_strategy_counts"] = deeplive_raw_strategy_counts
+        wandb.run.summary["data/deeplive_effective_strategy_counts"] = deeplive_effective_strategy_counts
+        wandb.run.summary["data/deeplive_strategy_preflight"] = deeplive_strategy_preflight
+        if sampling_strategy:
+            wandb.run.summary["data/sampling_strategy"] = sampling_strategy
+        if sampling_family_weights:
+            wandb.run.summary["data/sampling_family_weights"] = sampling_family_weights
+        if holdout_mode:
+            wandb.run.summary["data/holdout_mode"] = holdout_mode
+        if holdout_methods:
+            wandb.run.summary["data/holdout_methods"] = holdout_methods
+        if holdout_method_counts:
+            wandb.run.summary["data/holdout_method_counts"] = holdout_method_counts
+        if train_df40_methods:
+            wandb.run.summary["data/train_df40_methods"] = train_df40_methods
+        if holdout_df40_methods:
+            wandb.run.summary["data/holdout_df40_methods"] = holdout_df40_methods
+        wandb.run.summary["data/ood_video_count"] = ood_video_count
+        wandb.run.summary["data/ood_method_count"] = ood_method_count
+
+        logger.info(f"Strategy counts (all): {strategy_counts}")
+        logger.info(f"Family counts (all): {family_counts}")
+        logger.info(f"Strategy counts (train): {train_strategy_counts}")
+        logger.info(f"Family counts (train): {train_family_counts}")
+        logger.info(f"DeepLive raw strategy counts: {deeplive_raw_strategy_counts}")
+        logger.info(f"DeepLive effective strategy counts: {deeplive_effective_strategy_counts}")
+        logger.info(f"DeepLive strategy preflight: {deeplive_strategy_preflight}")
+        if sampling_strategy:
+            logger.info(f"Sampling strategy: {sampling_strategy}")
+        if sampling_family_weights:
+            logger.info(f"Sampling family weights: {sampling_family_weights}")
+        if holdout_mode:
+            logger.info(f"Holdout mode: {holdout_mode}")
+        if holdout_methods:
+            logger.info(f"Holdout methods: {holdout_methods}")
+        if holdout_method_counts:
+            logger.info(f"Holdout method counts: {holdout_method_counts}")
+        if train_df40_methods or holdout_df40_methods:
+            logger.info(
+                f"DF40 method placement: train={train_df40_methods}, holdout={holdout_df40_methods}"
+            )
+        logger.info(f"OOD monitoring videos: {ood_video_count} (methods={ood_method_count})")
+
+        if isinstance(deeplive_strategy_preflight, dict):
+            preflight_passed = deeplive_strategy_preflight.get("passed", True)
+            preflight_mode = deeplive_strategy_preflight.get("mode")
+            if preflight_mode and not preflight_passed:
+                raise RuntimeError(
+                    f"DeepLive strategy preflight failed in mode '{preflight_mode}': "
+                    f"{deeplive_strategy_preflight.get('errors', [])}"
+                )
+        logger.info("✅ Data verification passed. Logged source counts to W&B.")
+
     # --- Create and log the comprehensive run overview ---
     # Handle different data sources - DeepLive uses 'strategies' instead of 'methods'
     if current_data_source == 'deeplive':
@@ -371,6 +620,11 @@ def main():
         # Combined Paired: Get methods from data_stats
         methods = data_split_stats.get('methods', [])
         real_methods = ['paired_real']  # Combined paired always has paired real frames
+        all_fake_methods_used = sorted(list(methods)) if isinstance(methods, (list, set)) else sorted(list(methods.keys()))
+    elif current_data_source == 'visomaster':
+        # VisoMaster standalone: Get swap_models from data_stats
+        methods = data_split_stats.get('methods', [])
+        real_methods = ['paired_real']  # VisoMaster always has paired real frames
         all_fake_methods_used = sorted(list(methods)) if isinstance(methods, (list, set)) else sorted(list(methods.keys()))
     else:
         # Manifest-based: Get methods from config
@@ -492,6 +746,14 @@ def main():
         train_real_count = num_samples  # Each sample has real frames
         train_fake_count = num_samples  # Each sample has fake frames
         real_source_names = []  # Not used for combined paired counting
+    elif current_data_source == 'visomaster':
+        # VisoMaster standalone: Each sample is a VisoMasterSample with .swap_model attribute
+        # Each sample contains BOTH real and fake frames (paired)
+        num_samples = len(train_data)
+        train_counts = Counter(getattr(s, 'swap_model', 'unknown') for s in train_data)
+        train_real_count = num_samples  # Each sample has real frames
+        train_fake_count = num_samples  # Each sample has fake frames
+        real_source_names = []  # Not used for visomaster counting
     elif is_property_balancing:
         # Property-balancing: train_data is a list of frame dictionaries; count frames per method
         train_counts = Counter(frame['method'] for frame in train_data)
@@ -669,6 +931,20 @@ def main():
         logger.info(f"   - s_end: {config.get('s_end', config.get('arcface_s', 30))}")
         logger.info(f"   - anneal_steps: {config.get('anneal_steps', 0)}")
         logger.info(f"   - margin (m): {config.get('arcface_m', 0.35)}")
+
+    # Quality-domain adversarial head (GRL)
+    if config.get('use_quality_domain_head', False):
+        logger.info(f"🧪 QUALITY DOMAIN HEAD:")
+        logger.info(f"   - enabled: True")
+        logger.info(f"   - domains: {config.get('quality_domain_count', 4)}")
+        logger.info(f"   - hidden_dim: {config.get('quality_head_hidden_dim', 128)}")
+        logger.info(f"   - loss_weight: {config.get('quality_domain_loss_weight', 0.1)}")
+        logger.info(
+            f"   - require_labels: {config.get('quality_domain_require_labels', True)}"
+        )
+    else:
+        logger.info(f"🧪 QUALITY DOMAIN HEAD:")
+        logger.info(f"   - enabled: False")
     
     # Augmentation
     aug_config = config.get('augmentation', {})
