@@ -1,0 +1,14 @@
+{
+  "checkpoint": "gs://training-job-outputs/phase2r9_experiments/1551zxa8/top_n_effort_20260228_step6000_auc0.9891_eer0.0457.pth",
+  "experiments_run": [
+    "0C"
+  ],
+  "total_time_seconds": 1467.4,
+  "results": {
+    "0C": {
+      "auc": 1.0,
+      "accuracy": 0.855,
+      "n_videos": 200
+    }
+  }
+}

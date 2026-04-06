@@ -1,0 +1,117 @@
+# =============================================================================
+# Manifest-based Training Configuration (Traditional)
+# =============================================================================
+# This configuration demonstrates the 'manifest' data source, which is the
+# traditional approach for training from GCS video manifests.
+#
+# Usage:
+#   python train_sweep.py --param-config experiments/example_manifest.yaml
+#
+# The manifest data source:
+#   - Loads video manifests from GCS buckets
+#   - Supports multiple batching strategies (per_method, video_level, frame_level, property_balancing)
+#   - Handles train/val/holdout splits based on method categories
+#   - Supports weighted sampling for class imbalance
+# =============================================================================
+
+# --- Data Source Configuration ---
+# This is the key setting that determines which data pipeline to use
+data_source: manifest  # Options: 'manifest' (default), 'deeplive'
+
+# --- Model Configuration ---
+model_name: effort
+backbone:
+  huggingface_id: "openai/clip-vit-large-patch14"
+  hidden_size: 1024
+  resolution: 224
+
+# --- Core Training Hyperparameters ---
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 1023  # hidden_size - 1
+
+# --- Training Schedule ---
+nEpochs: 20
+early_stopping_enabled: true
+early_stopping_patience: 5
+early_stopping_min_delta: 0.01
+
+# --- Dataloader Configuration ---
+# Available strategies: per_method, video_level, frame_level, property_balancing
+dataloader_strategy: property_balancing
+frames_per_batch: 64
+frames_per_video: 8
+num_workers: 12
+prefetch_factor: 3
+
+# --- Property Balancing Configuration ---
+# Only used when dataloader_strategy: property_balancing
+property_balancing_enabled: true
+
+# --- Hierarchical Sampling Weights ---
+# These control class balance during training
+real_category_weights:
+  BASE_DF40_REG: 0.60
+  external_youtube_avspeech: 0.40
+  vcd: 0.0
+
+fake_category_weights:
+  BASE_DF40_EFS: 0.05
+  BASE_DF40_REG: 0.60
+  BASE_FF++: 0.25
+  hey_gen: 0.0
+  veo3_creations: 0.10
+
+# --- Augmentation ---
+augmentation_version: 4
+
+# --- Dataset Method Configuration ---
+# Defines which methods go to training vs. validation
+dataset_methods:
+  use_real_sources:
+    - "celeb_real"
+    - "faceforensics++"
+    - "youtube_real"
+    - "external_youtube_avspeech"
+    - "vcd"
+
+  use_fake_methods_for_training:
+    # FF++ Methods
+    - "deepfakedetection"
+    - "deepfakes"
+    - "face2face"
+    - "faceshifter"
+    - "neuraltextures"
+    # Base DF40 Methods
+    - "simswap"
+    - "fsgan"
+    - "fomm"
+    - "facedancer"
+
+  use_fake_methods_for_validation:
+    # Holdout methods for OOD validation
+    - "wav2lip"
+    - "sadtalker"
+
+# --- Fixed Context ---
+test_batch_size: 8
+val_split_ratio: 0.1
+evaluation_frequency: 5
+seed: 737
+data_subset_percentage: 1.0
+load_base_checkpoint: false
+
+# --- Learning Rate Scheduler ---
+lr_scheduler: cosine_with_warmup
+total_training_steps: 50000
+lr_scheduler_warmup_steps: 1000
+
+# --- Loss Configuration ---
+use_focal_loss: true
+focal_loss_gamma: 3.0
+focal_loss_alpha: null
+
+# --- ArcFace Head (Optional) ---
+use_arcface_head: false

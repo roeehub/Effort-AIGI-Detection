@@ -1,0 +1,121 @@
+# =============================================================================
+# Round 3 — R3_S2: Curriculum — Phase 1 light aug → Phase 2 moderate aug
+# =============================================================================
+# Purpose: Two-phase curriculum approach to avoid overwhelming the model with
+#   aggressive augmentation from the start. Phase 1 trains from scratch with
+#   quality_robust_light (15 epochs). Phase 2 continues from Phase 1's best
+#   checkpoint with quality_robust_moderate (10 epochs, lower LR).
+#
+# ★ IMPORTANT: This is a TWO-STEP experiment. Launch Phase 1 first. When it
+#   finishes and early-stops, update gcs_base_checkpoint in Phase 2 YAML
+#   with the best checkpoint path, then launch Phase 2.
+#
+# Theme: Stage B — augmentation curriculum (ramp up over training)
+# Compare: R3_S1 (moderate from epoch 0) — is curriculum better?
+#          R3_FT1 (fine-tune from R25_F1) — fine-tune vs curriculum
+# =============================================================================
+
+# ===================== PHASE 1 — LIGHT AUGMENTATION =====================
+name: "R3_S2_curriculum_phase1_light"
+description: "Curriculum Phase 1: from-scratch k=32 with quality_robust light"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736  # k=32
+gradient_clip_val: 1.0
+
+nEpochs: 15  # Phase 1 only — will continue in Phase 2
+total_training_steps: 35000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1000
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: false
+
+combined_paired:
+  identity_balanced_sampling: true
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods: null
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "Inswapper128"
+    tiers: null
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+  seed: 737
+
+# ★ Phase 1: LIGHT augmentation — let SVD structure form first
+augmentation:
+  version: "quality_robust"
+  strength: "light"
+
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 10.0
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 30000
+
+evaluate_every_steps: 500
+test_batch_size: 32
+seed: 737
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r3_experiments/"
+
+# W&B tags
+# tags: phase2-round3, R3-S2-phase1, from-scratch, quality-robust, light, curriculum

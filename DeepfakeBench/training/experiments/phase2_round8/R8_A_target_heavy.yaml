@@ -1,0 +1,241 @@
+# ============================================================================
+# R8_A_target_heavy.yaml
+# Phase 2, Round 8 — Target-Heavy: Massive shift toward DeepLive + VisoMaster
+#
+# Purpose: INVERT the training distribution. DeepLiveCam and VisoMaster
+#          become the primary training signal; DF40 is a supplement for
+#          generic face-swap awareness.
+#
+# Key changes vs R6_S1:
+#   - Fine-tune from R6_S1 step-4500 checkpoint (best EER, more plastic than step-6000)
+#   - df40_fake weight: 0.9 → 0.2 (4.5× reduction)
+#   - visomaster_fake weight: 0.8 → 3.0 (3.75× increase)
+#   - deeplive_non_enhanced_fake: 2.4 → 4.0
+#   - deeplive_enhanced_fake: 3.0 → 5.0
+#   - external_real: 0.6 → 1.5 (diverse real quality profiles)
+#   - ALL 9 VisoMaster swap models in training (was 6 — adds GhostFace-v3,
+#     InStyleSwapper256-C, SimSwap512)
+#   - NO VisoMaster method holdout (all in training)
+#   - VCD identity_train_fraction: 0.20 → 0.40
+#   - Strong context variation (VC lighting diversity)
+#   - faceswap excluded (broken data)
+#   - LR 5e-5 (fine-tune), 10K steps
+#
+# Success criteria:
+#   - DeepLive TPR ≥ 95% (gate), ≥ 97% (target)
+#   - VisoMaster overall ≥ 75% (gate), ≥ 82% (target)
+#   - VisoMaster MINIMAL tier ≥ 55% (gate), ≥ 65% (target)
+#   - VCD real acc ≥ 78% (gate), ≥ 85% (target)
+#
+# Seed: 737
+# ============================================================================
+
+name: "R8_A_target_heavy"
+description: "Target-heavy — DeepLive+VisoMaster primary, DF40 supplement, all swap models, strong context var"
+seed: 737
+
+wandb:
+  tags: ["phase2-round8", "target-heavy", "fine-tune", "all-viso-models", "strong-context-var", "seed-737"]
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+# Fine-tune rate (not scratch)
+learning_rate: 5.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 10
+total_training_steps: 10000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Fine-tune from R6_S1 step-4500 (AUC 0.9691, EER 0.0674 — best EER, more plastic than step-6000)
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r6_experiments/s3tx3fk4/top_n_effort_20260219_step4500_auc0.9691_eer0.0674.pth"
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  # Strong context variation — simulate VC lighting/camera diversity
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 737
+  seed: 737
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    # Exclude faceswap — broken data (54% across all rounds)
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    # ALL 9 swap models — no holdout. Train on everything.
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null  # all tiers
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40  # 2× more VCD identities (was 0.20)
+      identity_split_seed: 737
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2              # was 0.9 — DF40 is now supplementary
+      visomaster_fake: 3.0        # was 0.8 — deployment target, massive upweight
+      deeplive_non_enhanced_fake: 4.0   # was 2.4 — most important data source
+      deeplive_enhanced_fake: 5.0       # was 3.0 — critical for anti-enhancement
+      df40_real: 0.5              # was 1.0 — reduce to match df40_fake reduction
+      realpool_real: 1.5          # was 1.0 — DeepLive/Viso reals matter
+      external_real: 1.5          # was 0.6 — webcam quality diversity
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  # NO method holdout — all swap models + all DF40 methods in training
+  # Identity-based split: same methods in train/val, different identities
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 10.0
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 24000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 500
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r8_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3

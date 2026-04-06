@@ -1,0 +1,7 @@
+{
+  "FT1": "gs://training-job-outputs/phase2r4_experiments/9eqvw1i2/top_n_effort_20260217_step1500_auc0.9928_eer0.0150.pth",
+  "FT2": "gs://training-job-outputs/phase2r4_experiments/zzzpm53d/top_n_effort_20260217_step500_auc0.9945_eer0.0150.pth",
+  "FT5": "gs://training-job-outputs/phase2r4_experiments/tu0zeofr/top_n_effort_20260217_step500_auc0.9920_eer0.0122.pth",
+  "FT7": "gs://training-job-outputs/phase2r4_experiments/udgwsu7o/top_n_effort_20260217_step500_auc0.9935_eer0.0088.pth"
+}
+

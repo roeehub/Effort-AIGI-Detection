@@ -1,0 +1,103 @@
+# =============================================================================
+# Phase 2 — Experiment B1: Flat Training (All Data from Step 0)
+# =============================================================================
+# Purpose: Simplest baseline — all data from the start, uniform sampling.
+# Night: 2 (Training Strategy)
+# Assumes A3 data composition (DF40 + DeepLive + VisoMaster).
+# =============================================================================
+
+name: "P2_B1_flat_training"
+description: "Flat training: all 3 sources from step 0, uniform identity-balanced sampling"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 760
+gradient_clip_val: 1.0
+
+nEpochs: 30
+total_training_steps: 65000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1000
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# All 3 sources enabled — flat sampling (no curriculum, no DRO)
+combined_paired:
+  identity_balanced_sampling: true
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods: null
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models: ["CSCS", "GhostFace-v1", "GhostFace-v2", "InStyleSwapper256-A", "InStyleSwapper256-B", "Inswapper128"]
+    tiers: null
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+  seed: 737
+
+# No Group DRO
+use_group_dro: false
+
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+
+use_arcface_head: false
+evaluate_every_steps: 500
+test_batch_size: 32
+seed: 737
+load_base_checkpoint: false
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+early_stopping_min_delta: 0.001
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files: [open_clip_config.json, open_clip_pytorch_model.bin]
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3
+
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+wandb:
+  project: "phase2-training-strategy"
+  tags: ["phase2", "night2", "B1-flat-training", "training-strategy"]

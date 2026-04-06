@@ -1,0 +1,133 @@
+# --- B16_LAION: CosFace-style (m=0, no angular margin) ---
+# PURPOSE: Test ArcFace loss without angular margin - pure cosine scaling
+# HYPOTHESIS: The angular margin itself may be incompatible with Effort constraints
+# RATIONALE: If this works, the issue is specifically with the margin, not the scaling
+# Note: m=0 effectively makes ArcFace equivalent to scaled cosine softmax
+# Created: Jan 13, 2026
+
+name: "B16_LAION_cosface_style_full_svd"
+description: "B16 LAION + Full SVD + CosFace-style (m=0, no angular margin)"
+
+# === DATA SOURCE ===
+data_source: combined_paired
+
+# Backbone Configuration (LAION via OpenCLIP)
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+# Training Hyperparameters
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 767
+
+# Gradient Clipping
+gradient_clip_val: 1.0
+
+# Training Schedule
+nEpochs: 150
+
+# Dataloader Configuration
+dataloader_strategy: combined_paired
+frames_per_batch: 256
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Combined Dataset Configuration
+combined_paired:
+  identity_balanced_sampling: true
+  df40:
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods: null
+  deeplive:
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+  seed: 737
+
+# Augmentation
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# Fixed Context
+test_batch_size: 32
+evaluate_every_steps: 500
+seed: 737
+load_base_checkpoint: false
+
+# Early stopping
+early_stopping_enabled: true
+early_stopping_patience: 15
+early_stopping_min_delta: 0.001
+
+# Learning rate scheduler
+lr_scheduler: "cosine_with_warmup"
+total_training_steps: 12000
+lr_scheduler_warmup_steps: 1000
+
+# ============================================
+# ArcFace Configuration - COSFACE STYLE (m=0)
+# Key Change: m=0 (no angular margin)
+# This tests if the margin is the problem
+# Still uses normalized weights + scaled cosine
+# ============================================
+use_arcface_head: true
+arcface_s: 18.0  # Keep scale for sharpness
+arcface_m: 0.0   # NO MARGIN (KEY CHANGE)
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 1000
+
+# Normalization
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+# GCS Assets
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+# Checkpointing
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/B16_LAION_cosface_style_full_svd/"
+  save_every_steps: 2000
+  keep_last_n: 3
+
+# Evaluation
+evaluation:
+  metrics: ["auc", "eer", "accuracy"]
+  evaluate_every_steps: 500
+
+# W&B
+wandb:
+  project: "B16-LAION-optimized"
+  tags:
+    - "B16-LAION-cosface-style"
+    - "m_0"
+    - "no_angular_margin"
+    - "margin_ablation"
+    - "collapse_investigation"

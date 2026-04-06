@@ -1,0 +1,49 @@
+suites:
+  - name: in_dist_df40_target_source
+    df40_mode: paired
+    df40_orientation: target_source
+    eval_num_workers: 0
+
+  - name: holdout_df40_source_target
+    df40_mode: paired
+    df40_orientation: source_target
+    eval_num_workers: 0
+
+  - name: ood_vcd_vs_wma
+    df40_mode: none
+    eval_num_workers: 0
+    external_real_bucket: effort-collected-data/real/VCD
+    external_real_method: zoom_vcd_real
+    external_real_cache: /tmp/r6_vcd_real_frames_manifest.json
+    external_real_deterministic: true
+    max_external_real: 1200
+    external_fake_bucket: effort-collected-data
+    external_fake_prefix: wma_validation/enhanced_fake
+    external_fake_method: wma_failure_fake
+    external_fake_cache: /tmp/r6_wma_fake_frames_manifest.json
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 1202
+
+  - name: ood_youtube_vs_wma
+    df40_mode: none
+    eval_num_workers: 0
+    external_real_bucket: effort-collected-data/real/external_youtube_avspeech
+    external_real_method: external_youtube_avspeech
+    external_real_cache: /tmp/r6_youtube_real_frames_manifest.json
+    external_real_deterministic: true
+    max_external_real: 2000
+    external_fake_bucket: effort-collected-data
+    external_fake_prefix: wma_validation/enhanced_fake
+    external_fake_method: wma_failure_fake
+    external_fake_cache: /tmp/r6_wma_fake_frames_manifest.json
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 1202
+
+  - name: deeplive_enhanced_all
+    df40_mode: none
+    eval_num_workers: 0
+    deeplive_bucket: live-deepfake-methods-real-and-fake-frames-cropped
+    deeplive_split: all
+    deeplive_strategies: quality_enhancement,edge_cases_enhanced,minimal_processing_enhanced

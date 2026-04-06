@@ -1,0 +1,129 @@
+# --- B16_LAION: Low-Scale ArcFace Experiment (s_end=10) ---
+# PURPOSE: Test if reducing ArcFace scale prevents collapse on B16_LAION
+# HYPOTHESIS: B16's smaller embedding (512) may need lower scale than L14 (1024)
+# BASED ON: Investigation showing collapse with s_end=18, stable without ArcFace
+# Created: Jan 13, 2026
+
+name: "B16_LAION_s10_full_svd"
+description: "B16 LAION + Full SVD + Low ArcFace scale (s_end=10)"
+
+# === DATA SOURCE ===
+data_source: combined_paired
+
+# Backbone Configuration (LAION via OpenCLIP)
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+# Training Hyperparameters
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 767  # embed_dim - 1
+
+# Gradient Clipping
+gradient_clip_val: 1.0
+
+# Training Schedule
+nEpochs: 150
+
+# Dataloader Configuration
+dataloader_strategy: combined_paired
+frames_per_batch: 256
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Combined Dataset Configuration
+combined_paired:
+  identity_balanced_sampling: true
+  df40:
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods: null
+  deeplive:
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+  seed: 737
+
+# Augmentation
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# Fixed Context
+test_batch_size: 32
+evaluate_every_steps: 500
+seed: 737
+load_base_checkpoint: false
+
+# Early stopping
+early_stopping_enabled: true
+early_stopping_patience: 15
+early_stopping_min_delta: 0.001
+
+# Learning rate scheduler
+lr_scheduler: "cosine_with_warmup"
+total_training_steps: 12000
+lr_scheduler_warmup_steps: 1000
+
+# ============================================
+# ArcFace Configuration - LOW SCALE
+# Key Change: s_end reduced from 18 to 10
+# ============================================
+use_arcface_head: true
+arcface_s: 10.0  # Reduced from 18.0
+arcface_m: 0.28
+s_start: 5.0    # Reduced from 10.0
+s_end: 10.0     # Reduced from 18.0 (KEY CHANGE)
+anneal_steps: 1000
+
+# Normalization
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+# GCS Assets
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+# Checkpointing
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/B16_LAION_s10_full_svd/"
+  save_every_steps: 2000
+  keep_last_n: 3
+
+# Evaluation
+evaluation:
+  metrics: ["auc", "eer", "accuracy"]
+  evaluate_every_steps: 500
+
+# W&B
+wandb:
+  project: "B16-LAION-optimized"
+  tags:
+    - "B16-LAION-low-scale-arcface"
+    - "s_end_10"
+    - "scale_experiment"
+    - "collapse_investigation"

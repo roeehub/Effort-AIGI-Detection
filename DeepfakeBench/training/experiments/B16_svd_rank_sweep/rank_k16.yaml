@@ -1,0 +1,96 @@
+# B16 SVD Rank Sweep - k=16
+#
+# Purpose: Test 16x baseline capacity (k=16 trainable singular directions)
+# Hypothesis: May approach full finetune performance (0.98 ceiling)
+# Trainable Params: ~1.18M
+#
+# Reference: B16_BREAKTHROUGH_RESULTS.md
+
+name: "B16_svd_rank_k16"
+description: "SVD rank sweep: k=16 trainable singular directions (~1.18M params)"
+
+# === DATA SOURCE ===
+data_source: df40_paired
+
+# === BACKBONE: B16 LAION ===
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+# === EFFORT SVD CONFIGURATION ===
+# k = embed_dim - rank = 768 - 752 = 16 trainable directions per layer
+rank: 752  # Freeze 752 singular values, train 16
+lambda_reg: 1.0
+
+# === TRAINING HYPERPARAMETERS ===
+# Lower LR for highest capacity
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+gradient_clip_val: 1.0
+
+# === LOSS: Simple CrossEntropyLoss ===
+use_arcface_head: false
+
+# === TRAINING SCHEDULE ===
+nEpochs: 30
+total_training_steps: 65000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1000
+
+# === DATALOADER ===
+dataloader_strategy: df40_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# === DF40 PAIRED CONFIG ===
+df40_paired:
+  pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+  gcs_bucket: "df40-frames-recropped-rfa85"
+  sampling_mode: "sparse"
+  anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+  methods: null
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  seed: 737
+
+# === AUGMENTATION ===
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# === EVALUATION ===
+evaluate_every_steps: 500
+test_batch_size: 32
+seed: 737
+
+# === EARLY STOPPING ===
+early_stopping_enabled: true
+early_stopping_patience: 10
+early_stopping_min_delta: 0.001
+
+# === NORMALIZATION (CLIP) ===
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+# === GCS ASSETS ===
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

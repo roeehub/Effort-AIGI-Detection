@@ -1,0 +1,108 @@
+# =============================================================================
+# DeepLive Training Configuration (Unified)
+# =============================================================================
+# This configuration demonstrates the 'deeplive' data source with the unified
+# training script. DeepLive provides paired real/fake frames from a GCS bucket
+# with landmark-based augmentation support.
+#
+# Usage (SAME SCRIPT as manifest-based training!):
+#   python train_sweep.py --param-config experiments/example_deeplive.yaml
+#
+# The DeepLive data source:
+#   - Loads paired real/fake frames from GCS bucket
+#   - Supports sparse frame sampling
+#   - Enables landmark-based occlusion augmentation
+#   - Automatically handles train/val/test splits
+# =============================================================================
+
+# --- Data Source Configuration ---
+# This is the key setting that determines which data pipeline to use
+data_source: deeplive  # Options: 'manifest', 'deeplive'
+
+# --- DeepLive-Specific Configuration ---
+deeplive:
+  gcs_bucket: "live-deepfake-methods-real-and-fake-frames"
+  gcs_project: null  # Uses GOOGLE_CLOUD_PROJECT env var if not set
+  use_landmarks: true
+  
+  # Frame sampling
+  sampling_mode: "sparse"  # Options: 'sparse', 'full'
+  anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]  # Sparse frame indices
+  
+  # Data splits (80/10/10)
+  train_split: 0.8
+  val_split: 0.1
+  # test_split is implicit: 1 - train_split - val_split
+
+# --- Model Configuration ---
+model_name: effort
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16"
+  source: "laion"  # Triggers OpenCLIP loading
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512  # OpenCLIP output_dim
+  resolution: 224
+
+# --- Core Training Hyperparameters ---
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 511  # hidden_size - 1
+
+# --- Training Schedule ---
+nEpochs: 50  # More epochs for small DeepLive dataset
+early_stopping_enabled: true
+early_stopping_patience: 10
+early_stopping_min_delta: 0.001
+
+# --- Dataloader Configuration ---
+# The strategy is automatically set to 'deeplive' when using deeplive data source
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# --- Augmentation Configuration ---
+# Landmark-based occlusion augmentation
+augmentation:
+  version: "landmark_occlusion"
+  occlusion_type: "mixed"  # Options: 'black', 'blur', 'noise', 'mixed'
+  regions:
+    - "left_eye"
+    - "right_eye"
+    - "nose"
+    - "mouth"
+  num_regions: [1, 2]  # Apply occlusion to 1-2 regions per image
+  occlusion_prob: 0.8  # 80% probability of applying occlusion
+  landmark_format: "mediapipe"
+
+# --- ArcFace Head Configuration ---
+use_arcface_head: true
+arcface_s: 30.0
+arcface_m: 0.28
+s_start: 10.0  # Curriculum: start with lower scale
+s_end: 30.0    # End at full scale
+anneal_steps: 3000
+train_arcface: true
+
+# --- Learning Rate Scheduler ---
+lr_scheduler: "cosine_with_warmup"
+total_training_steps: 5000  # Adjusted for small dataset
+lr_scheduler_warmup_steps: 500
+
+# --- Loss Configuration ---
+use_focal_loss: false  # Standard BCE for DeepLive
+
+# --- Fixed Context ---
+test_batch_size: 32
+evaluation_frequency: 100
+seed: 737
+load_base_checkpoint: false
+
+# --- Checkpointing ---
+checkpointing:
+  gcs_prefix: "gs://your-bucket/checkpoints/deeplive/"
+  keep_last_n: 3

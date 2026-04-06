@@ -1,0 +1,78 @@
+# B16 Capacity Ceiling - Experiment 4: FULL FINETUNE (THE CEILING TEST)
+# 
+# Purpose: Determine the THEORETICAL MAXIMUM performance of B16 on this task
+# This is the definitive experiment - if this can't reach 0.95, B16 can't do it.
+#
+# ALL backbone parameters are trainable
+
+name: "B16_ceiling_4_full_finetune"
+description: "FULL FINETUNE - Entire backbone trainable (ceiling test)"
+
+# === CAPACITY CEILING CONFIG ===
+unfreeze_mode: "full"
+
+# === DATA SOURCE ===
+data_source: df40_paired
+
+# === BACKBONE: B16 LAION (NO SVD) ===
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+
+# === TRAINING HYPERPARAMETERS ===
+# Conservative LR for full finetune to avoid catastrophic forgetting
+backbone_lr: 1.0e-6
+head_lr: 1.0e-4
+weight_decay: 0.01  # Lighter regularization
+gradient_clip_val: 1.0
+
+# === TRAINING SCHEDULE ===
+nEpochs: 50  # More epochs for full finetune
+total_training_steps: 15000  # Required for scheduler (IterableDataset)
+lr_scheduler_warmup_steps: 2000
+evaluate_every_steps: 500
+
+# === DATALOADER ===
+dataloader_strategy: df40_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# === DF40 PAIRED CONFIG ===
+df40_paired:
+  pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+  gcs_bucket: "df40-frames-recropped-rfa85"
+  sampling_mode: "sparse"
+  anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+  methods: null
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  seed: 737
+
+# === AUGMENTATION (stronger for full finetune to prevent overfitting) ===
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# === EVALUATION ===
+test_batch_size: 32
+seed: 737
+
+# === EARLY STOPPING ===
+# More patience for full finetune
+early_stopping_patience: 15
+
+# === NORMALIZATION ===
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]

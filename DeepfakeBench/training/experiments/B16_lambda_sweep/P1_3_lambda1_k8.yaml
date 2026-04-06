@@ -1,0 +1,107 @@
+# Phase 1 Experiment 3: λ=1.0, k=8 (Control - full constraint)
+#
+# Purpose: Control to see if k=8 capacity alone helps with full constraint
+# Expected: ~0.82 AUC (matching previous rank sweep results)
+# This isolates: Does relaxing λ matter, or is k=8 alone enough?
+#
+# k = embed_dim - rank = 768 - 760 = 8 trainable directions per layer
+
+name: "P1_3_lambda1_k8"
+description: "Phase 1: λ=1.0 + k=8 + CE head - Control (full orthogonal constraint)"
+
+# === DATA SOURCE ===
+data_source: combined_paired
+
+# === BACKBONE: B16 LAION (EXACT copy from template) ===
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512  # Output dim (projected from 768 embed_dim)
+  resolution: 224
+  apply_svd_to_in_proj: true  # Full SVD coverage (q, k, v, out)
+
+# === EFFORT SVD CONFIGURATION ===
+# k = embed_dim - rank = 768 - 760 = 8 trainable directions per layer
+rank: 760
+
+# === KEY VARIABLE: Full orthogonal constraint (baseline) ===
+lambda_reg: 1.0  # Standard Effort regularization
+
+# === TRAINING HYPERPARAMETERS ===
+learning_rate: 1.0e-4  # Matching diagnostic B1/B2
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+gradient_clip_val: 1.0
+
+# === LOSS: Simple CrossEntropyLoss ===
+use_arcface_head: false
+
+# === TRAINING SCHEDULE ===
+nEpochs: 30
+total_training_steps: 65000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1000
+
+# === DATALOADER ===
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# === COMBINED PAIRED CONFIG ===
+combined_paired:
+  identity_balanced_sampling: true
+  
+  df40:
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods: null
+  
+  deeplive:
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+  
+  # Maximize training data - 90/10/0 split
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+  seed: 737
+
+# === AUGMENTATION ===
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# === EVALUATION ===
+evaluate_every_steps: 500
+test_batch_size: 32
+seed: 737
+
+# === EARLY STOPPING ===
+early_stopping_enabled: true
+early_stopping_patience: 10
+early_stopping_min_delta: 0.001
+
+# === NORMALIZATION (CLIP) ===
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+# === GCS ASSETS ===
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

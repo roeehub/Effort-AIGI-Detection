@@ -1,0 +1,61 @@
+# Target-domain validation suite template (Zoom-like deployment reality)
+#
+# Use with:
+#   python run_target_domain_validation_sequential.py \
+#     --checkpoints FT7,FT5 \
+#     --checkpoint_map <map.json> \
+#     --suite_manifest experiments/phase2_round5/TARGET_DOMAIN_SUITES_TEMPLATE.yaml
+
+suites:
+  - name: zoom_real
+    df40_mode: none
+    external_real_bucket: "<bucket-or-bucket/prefix>"
+    external_real_prefix: "zoom_validation/real"
+    external_real_method: "zoom_real"
+    max_external_real: 2000
+    external_real_deterministic: true
+
+  - name: zoom_deeplive_regular_fake
+    df40_mode: none
+    external_fake_bucket: "<bucket-or-bucket/prefix>"
+    external_fake_prefix: "zoom_validation/deeplive_regular_fake"
+    external_fake_method: "zoom_deeplive_regular_fake"
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 4000
+
+  - name: zoom_deeplive_enhanced_fake
+    df40_mode: none
+    external_fake_bucket: "<bucket-or-bucket/prefix>"
+    external_fake_prefix: "zoom_validation/deeplive_enhanced_fake"
+    external_fake_method: "zoom_deeplive_enhanced_fake"
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 4000
+
+  - name: zoom_stress_tight_crop_fake
+    df40_mode: none
+    external_fake_bucket: "<bucket-or-bucket/prefix>"
+    external_fake_prefix: "zoom_validation/stress_tight_crop_fake"
+    external_fake_method: "zoom_stress_tight_crop_fake"
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 4000
+
+  - name: zoom_stress_compression_fake
+    df40_mode: none
+    external_fake_bucket: "<bucket-or-bucket/prefix>"
+    external_fake_prefix: "zoom_validation/stress_compression_fake"
+    external_fake_method: "zoom_stress_compression_fake"
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 4000
+
+  - name: zoom_stress_resize_downscale_fake
+    df40_mode: none
+    external_fake_bucket: "<bucket-or-bucket/prefix>"
+    external_fake_prefix: "zoom_validation/stress_resize_downscale_fake"
+    external_fake_method: "zoom_stress_resize_downscale_fake"
+    external_fake_grouping: per_image
+    external_fake_deterministic: true
+    max_external_fake: 4000

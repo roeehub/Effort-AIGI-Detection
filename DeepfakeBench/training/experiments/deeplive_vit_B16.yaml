@@ -1,0 +1,120 @@
+# --- DeepLive Experiment: ViT-B-16 (OpenAI CLIP) ---
+# Smaller backbone for efficiency comparison
+# Updated: Jan 3, 2026 - ~340 pairs, 80/10/10 split, 20% occlusion
+
+name: "DeepLive_ViT_B16_OpenAI"
+description: "DeepLive dataset (~340 pairs), 80/10/10 split, 20% landmark occlusion, ViT-B-16 backbone"
+
+# === DATA SOURCE (required for unified training) ===
+data_source: deeplive
+
+# Backbone Configuration
+backbone:
+  name: "vit_b_16_openai"
+  variant: "ViT-B-16"  # Must match VARIANT_HIDDEN_SIZES keys
+  source: "openai"
+  huggingface_id: "openai/clip-vit-base-patch16"
+  hidden_size: 768
+  resolution: 224
+
+# Training Hyperparameters
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 767  # Adjusted for smaller hidden_size
+
+# Gradient Clipping (added Jan 4, 2026 - Task D1)
+gradient_clip_val: 1.0
+
+# Training Schedule
+nEpochs: 50  # More epochs for small dataset
+# early_stopping is configured below in "Fixed Context" section
+
+# Dataloader Configuration (DeepLive-specific)
+dataloader_strategy: deeplive
+frames_per_batch: 32
+frames_per_video: 8  # Sparse sampling - 8 anchor frames
+num_workers: 4  # Reduced for small dataset
+prefetch_factor: 2
+
+# DeepLive Dataset Configuration (~600 pairs)
+deeplive:
+  gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+  sampling_mode: "sparse"
+  anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+  pairs_per_sample: 4
+  # 90/10/0 split - no test set for now (Jan 4, 2026)
+  # ~600 samples = ~540 train, ~60 val
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+  seed: 737
+
+# Augmentation Configuration (Landmark Occlusions - 20% probability)
+# Reduced from 80% to let model learn base signal first
+augmentation:
+  version: "landmark_occlusion"
+  occlusion_type: "mixed"
+  regions:
+    - "left_eye"
+    - "right_eye"
+    - "nose"
+    - "mouth"
+  num_regions: [1, 2]
+  occlusion_prob: 0.2  # 20% probability of applying occlusion
+  landmark_format: "mediapipe"  # Using MediaPipe 478-point format
+  additional_augs: false
+
+# Fixed Context
+test_batch_size: 32
+# With ~272 train samples × 16 frames = ~4352 frames / 32 batch = ~136 steps/epoch
+evaluate_every_steps: 100  # Evaluate ~once per epoch
+seed: 737
+load_base_checkpoint: false
+
+# Early stopping - be more patient for small datasets
+early_stopping_enabled: true
+early_stopping_patience: 15  # ~15 epochs without improvement
+early_stopping_min_delta: 0.001
+
+# Learning rate scheduler
+# ~136 steps/epoch × 50 epochs = ~6800 total steps
+lr_scheduler: "cosine_with_warmup"
+total_training_steps: 7000
+lr_scheduler_warmup_steps: 700  # ~10% warmup
+
+# ArcFace head - anneal over first ~30% of training
+use_arcface_head: true
+arcface_s: 30.0
+arcface_m: 0.28
+s_start: 10.0
+s_end: 30.0
+anneal_steps: 2000  # Anneal s over ~15 epochs
+
+# Mean and std for normalization (CLIP)
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+# Checkpointing
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/deeplive_experiments/"
+  save_every_steps: 1000
+  keep_last_n: 3
+
+# Evaluation
+evaluation:
+  metrics:
+    - "auc"
+    - "eer"
+    - "accuracy"
+  evaluate_every_steps: 500
+
+# W&B Configuration
+wandb:
+  project: "deeplive-experiments"
+  tags:
+    - "deeplive"
+    - "vit-b-16"
+    - "openai"
+    - "landmark-occlusion"

@@ -1,0 +1,89 @@
+# docker-compose.yml
+# Local development setup for training pipeline
+#
+# Usage:
+#   docker-compose build dev        # Build development image
+#   docker-compose run dev bash     # Interactive shell
+#   docker-compose run dev python test_imports.py  # Run a script
+#   docker-compose run dev python -m pytest tests/ # Run tests
+#
+# For debugging with VS Code:
+#   docker-compose up dev-debug     # Starts container with debugpy
+#   Then attach VS Code debugger to localhost:5678
+
+services:
+  # ============================================================================
+  # Development container - mounts code for fast iteration
+  # ============================================================================
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: effort-detector-dev:latest
+    container_name: effort-dev
+    
+    # Mount code directory so changes are reflected immediately
+    volumes:
+      - .:/workspace
+      # Cache pip packages between runs
+      - pip-cache:/root/.cache/pip
+      # Mount test data if available
+      - ./test_data:/workspace/test_data:ro
+    
+    # Environment for local development
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace
+      - WANDB_MODE=offline  # Don't upload to W&B during local testing
+      - DEBUG_MODE=1
+      - CUDA_VISIBLE_DEVICES=  # Empty = CPU only
+      # Pass through W&B credentials if set
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - WANDB_ENTITY=${WANDB_ENTITY:-}
+      - WANDB_PROJECT=${WANDB_PROJECT:-}
+    
+    working_dir: /workspace
+    
+    # Keep container running for interactive use
+    stdin_open: true
+    tty: true
+    
+    # Default command - can be overridden
+    command: bash
+
+  # ============================================================================
+  # Debug container - for VS Code remote debugging
+  # ============================================================================
+  dev-debug:
+    extends: dev
+    container_name: effort-dev-debug
+    ports:
+      - "5678:5678"  # debugpy port
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WANDB_MODE=offline
+      - DEBUG_MODE=1
+      - CUDA_VISIBLE_DEVICES=
+      - DEBUGPY_ENABLE=1
+    command: >
+      python -m debugpy --listen 0.0.0.0:5678 --wait-for-client
+      -m pytest tests/ -v
+
+  # ============================================================================
+  # Test runner - runs unit tests
+  # ============================================================================
+  test:
+    extends: dev
+    container_name: effort-test
+    command: python -m pytest tests/ -v --tb=short
+
+  # ============================================================================
+  # Sanity check - quick validation that everything loads
+  # ============================================================================
+  sanity:
+    extends: dev
+    container_name: effort-sanity
+    command: python scripts/verify_refactoring.py
+
+volumes:
+  pip-cache:

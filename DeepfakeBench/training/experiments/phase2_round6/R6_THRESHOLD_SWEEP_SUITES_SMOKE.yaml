@@ -1,0 +1,12 @@
+suites:
+  - name: smoke_in_dist_df40_target_source
+    df40_mode: paired
+    df40_orientation: target_source
+    df40_methods: faceswap
+    eval_num_workers: 0
+
+  - name: smoke_holdout_df40_source_target
+    df40_mode: paired
+    df40_orientation: source_target
+    df40_methods: mcnet
+    eval_num_workers: 0

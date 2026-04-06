@@ -1,0 +1,91 @@
+# B16 Capacity Ceiling - Experiment 1: Baseline Effort (Control)
+# 
+# Purpose: Confirm current best B16 performance with Effort method
+# Expected: ~0.83 AUC (matches cosface_style from investigation)
+#
+# This is the CONTROL experiment - should reproduce existing results
+
+name: "B16_ceiling_1_baseline_effort"
+description: "Baseline: B16 with Effort SVD (k=1), cosine-softmax (m=0)"
+
+# === DATA SOURCE (same as investigation) ===
+data_source: df40_paired
+
+# === BACKBONE: B16 LAION ===
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  # Standard Effort SVD settings
+  apply_svd_to_in_proj: true
+
+# === EFFORT CONFIGURATION ===
+# Standard Effort: k=1 frozen (rank = hidden_size - 1)
+rank: 511
+
+# === TRAINING HYPERPARAMETERS ===
+learning_rate: 2.0e-4  # Same as investigation
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+gradient_clip_val: 1.0
+
+# === LOSS: Cosine-Softmax (m=0) - STABLE ===
+use_arcface_head: true
+arcface_m: 0.0  # No margin - just scaled cosine
+arcface_s: 18.0
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 1000
+
+# === TRAINING SCHEDULE ===
+nEpochs: 30
+total_training_steps: 65000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 6500
+
+# === DATALOADER ===
+dataloader_strategy: df40_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# === DF40 PAIRED CONFIG ===
+df40_paired:
+  pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+  gcs_bucket: "df40-frames-recropped-rfa85"
+  sampling_mode: "sparse"
+  anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+  methods: null  # All methods
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  seed: 737
+
+# === AUGMENTATION ===
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# === EVALUATION ===
+test_batch_size: 32
+evaluate_every_steps: 500
+seed: 737
+
+# === EARLY STOPPING ===
+early_stopping_enabled: true
+early_stopping_patience: 15
+early_stopping_min_delta: 0.001
+
+# === NORMALIZATION ===
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]

@@ -1,0 +1,127 @@
+# --- L14 Ablation: ViT-L-14 OpenAI - Higher LR (2e-4) ---
+# PURPOSE: Test if even higher LR helps with limited trainable params
+# HYPOTHESIS: With only ~40k trainable params (L14), we may need aggressive LR
+# Created: Jan 12, 2026
+
+name: "L14_OpenAI_s18_lr2e4"
+description: "L14 with LR=2e-4, warmup=1000, s_end=18 - aggressive LR test"
+
+# === DATA SOURCE ===
+data_source: combined_paired
+
+# Backbone Configuration (OpenAI via HuggingFace)
+backbone:
+  name: "vit_l_14_openai"
+  variant: "ViT-L-14"
+  source: "openai"
+  huggingface_id: "openai/clip-vit-large-patch14"
+  hidden_size: 1024
+  resolution: 224
+
+# Training Hyperparameters - AGGRESSIVE LR
+learning_rate: 2.0e-4  # 4x higher than original 5e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 1.0
+rank: 1023
+
+# Gradient Clipping
+gradient_clip_val: 1.0
+
+# Training Schedule
+nEpochs: 150
+
+# Dataloader Configuration
+dataloader_strategy: combined_paired
+frames_per_batch: 128
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Combined Dataset Configuration
+combined_paired:
+  identity_balanced_sampling: true
+  df40:
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods: null
+  deeplive:
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+  seed: 737
+
+# Augmentation
+augmentation:
+  version: "base_only"
+  base:
+    horizontal_flip: true
+    color_augmentations: true
+    quality_augmentations: true
+    geometric_augmentations: true
+
+# Fixed Context
+test_batch_size: 32
+evaluate_every_steps: 500
+seed: 737
+load_base_checkpoint: false
+
+# Early stopping
+early_stopping_enabled: true
+early_stopping_patience: 15
+early_stopping_min_delta: 0.001
+
+# Learning rate scheduler
+lr_scheduler: "cosine_with_warmup"
+total_training_steps: 12000
+lr_scheduler_warmup_steps: 1000
+
+# ============================================
+# ArcFace Configuration - MODERATE (s_end=18)
+# ============================================
+use_arcface_head: true
+arcface_s: 18.0
+arcface_m: 0.28
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 1000
+
+# Normalization
+mean: [0.48145466, 0.4578275, 0.40821073]
+std: [0.26862954, 0.26130258, 0.27577711]
+
+# GCS Assets
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
+    local_path: "./weights/models--openai--clip-vit-large-patch14/"
+    allowed_files:
+      - "model.safetensors"
+      - "config.json"
+
+# Checkpointing
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/L14_ablation/"
+  save_every_steps: 2000
+  keep_last_n: 3
+
+# Evaluation
+evaluation:
+  metrics: ["auc", "eer", "accuracy"]
+  evaluate_every_steps: 500
+
+# W&B
+wandb:
+  project: "L14-ablation"
+  tags:
+    - "L14-ablation"
+    - "vit-l-14"
+    - "openai"
+    - "s_end_18"
+    - "lr_2e4"
+    - "aggressive_lr"

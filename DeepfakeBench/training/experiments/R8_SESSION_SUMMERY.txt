@@ -1,0 +1,81 @@
+## R8 Session Summary — February 23, 2026
+
+### The Problem We Diagnosed
+
+After 7 rounds of training, the model is near-perfect on DF40 academic data (92-99% per-method) but fails on the actual deployment targets:
+
+- **VisoMaster overall: 69%**, MINIMAL tier: **44% (coin flip)**, GhostFace-v2: 46%, InStyleSwapper-A: 47%
+- **VCD reals false-positive rate: ~30%** (acc 70%)
+- **DeepLiveCam: 96%** — good but cannot regress
+
+**Root cause:** DF40 dominates training (5,400 pairs, 8 methods) and drowns out ~1,000 DeepLive + VisoMaster samples. The model learned DF40's quality profile (smooth, low-noise, lab-grade) as a shortcut — "smooth = real" — which inverts on webcam video where reals are noisy and fakes are smooth. Previous rounds also held out the weakest VisoMaster methods (GhostFace-v2, Inswapper128) instead of training on them.
+
+### Key Insights From the User
+
+1. **VisoMaster tiers are semantically different.** STRONG has obvious color blobs/warping — too easy, and training on them may teach non-generalizable artifact patterns. MINIMAL is subtle but critical — if the model catches MINIMAL, it catches everything.
+2. **DeepLiveCam is the most important source** despite having less data — it's the most realistic deployment scenario (real-time webcam face swap).
+3. **Augmentations for video-conferencing biases matter** — webcam auto-exposure, office lighting, camera quality variation all create distribution shifts.
+
+### What We Built
+
+**9 experiment configs** in experiments/phase2_round8/, organized into fine-tune (A-D) and scratch (E-H) tracks:
+
+#### Fine-Tune Track (from R6_S1 step-4500, LR 5e-5, 10K steps)
+
+| Config | Strategy | DF40 | Viso | DeepLive | Viso Tiers |
+|--------|----------|------|------|----------|------------|
+| **R8_A** | Target-heavy (primary) | 0.2 | 3.0 | 4.0/5.0 | All |
+| **R8_B** | DF40-zero (ablation) | disabled | 3.0 | 4.0/5.0 | All |
+| **R8_C** | Moderate rebalance | 0.5 | 2.0 | 3.5/4.5 | All |
+| **R8_D** | Smart tiers | 0.2 | 3.0 | 4.0/5.0 | MINIMAL+MODERATE only |
+
+#### Scratch Track (from CLIP weights, LR 2e-4, 12K steps)
+
+| Config | Based on | Tests |
+|--------|----------|-------|
+| **R8_E** | R8_A scratch | Does target-heavy work without checkpoint lineage? |
+| **R8_F** | R8_D scratch | Smart tiers from scratch |
+| **R8_G** | R8_B scratch | DF40-zero from scratch — purest "deployment-only" test |
+| **R8_H** | R8_E, seed 1337 | Seed robustness of R8_E |
+
+Plus **R8_SMOKE** (1K steps, 30-min pipeline validation with OOD monitoring enabled).
+
+### What's the Same Across All Configs
+
+- **All 9 VisoMaster swap models** in training (was 6 — adds GhostFace-v3, InStyleSwapper256-C, SimSwap512)
+- **40% VCD identities** in training (was 20%)
+- **Strong context variation** (gamma 80-120, brightness/contrast ±0.25, spatial transforms)
+- **`quality_targeted_family` + `vcd_targeted`** augmentation preset
+- **`faceswap` excluded** from training (broken data, 54% across all rounds)
+- **Identity-based holdout** (no method holdout — all methods in training)
+- **ArcFace** s: 10→18, m=0.0
+- OOD monitoring: YouTube reals, VCD reals, WMA fakes — all separately tracked
+
+### Decisions Made and Why
+
+**A) Checkpoint selection: step 4500 (not step 6000 "best")**
+- Step 4500 has the best EER (0.0674 vs 0.0713)
+- Steps 4500→6000 gained only +0.0003 AUC — nearly zero signal
+- Since R8 inverts the training distribution, we want a checkpoint that hasn't over-committed to DF40 patterns — more "plastic" for rebalancing
+
+**B) Validation coverage confirmed:**
+- In-dist val: per-method accuracy for each VisoMaster swap model and each DeepLive strategy
+- OOD monitoring: VCD real accuracy, YouTube real accuracy, WMA fake accuracy — all separately logged to W&B
+- Gap: no tier-level aggregation (must manually map swap models to tiers from per-model metrics)
+
+### Bugs Found and Fixed
+
+1. **`base_checkpoint_path` → `gcs_base_checkpoint`** — The code reads `gcs_base_checkpoint`, not `base_checkpoint_path`. Without this fix, fine-tuning silently falls back to base CLIP weights. (Same bug existed in R7 configs.)
+
+2. **Holdout `mode: "method_holdout"` with empty/impossible methods → `mode: "identity"`** — Setting `methods: ["faceswap"]` with `df40_orientation: "source_target"` resolved to 0 holdout samples (faceswap excluded from loading, reenactment methods not loaded) → `ValueError`. Fixed by switching to identity-based splitting where all methods appear in both train and val, split by identity.
+
+3. **Missing W&B run ID in GCS checkpoint path** — Checkpoints are saved at `{gcs_prefix}/{wandb_run_id}/{filename}`, so the correct path needs `s3tx3fk4/` in it. Without this, GCS returns 404.
+
+4. **SMOKE test had OOD monitoring disabled** — Enabled it with reduced counts (50/100/100) to validate the full monitoring pipeline before overnight runs.
+
+### Current Status
+
+- **R8_B** (fine-tune, DF40-zero): running successfully
+- **R8_A, R8_C, R8_D, R8_SMOKE**: relaunched after holdout fix
+- **R8_E, R8_F, R8_G, R8_H**: scratch configs created, launch command provided
+- All configs validated against codebase (`combined_paired.py`, `visomaster.py`, `pipelines.py`, train_sweep.py)

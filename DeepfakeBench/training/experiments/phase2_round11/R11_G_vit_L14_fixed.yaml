@@ -1,0 +1,236 @@
+# ============================================================================
+# R11_G_vit_L14_fixed.yaml
+# Phase 2, Round 11 — ViT-L-14 FIXED: correct SVD residual hyperparameters
+#
+# Purpose: R10_D had OOD=0.9807 (best ever!) but in-dist AUC=0.9042 (terrible).
+#          Root cause: lambda_reg=1.0 and rank=1023 created too-constrained
+#          residual space. SVD diagnostics showed S_res_max=0.032 (barely
+#          perturbed), cosine_sim=-0.992 (near identity).
+#
+# Fixes applied:
+#   - lambda_reg: 1.0 → 0.01 (same as B-16 runs — let residuals move)
+#   - rank: 1023 → 768 (fewer residual components, larger per-component signal)
+#   - LR: 2e-4 → 3e-4 (slightly higher — need to break out of near-identity)
+#   - 30K steps (more time to converge with new hyperparameters)
+#   - Narrow aug (R10 showed narrow slightly better)
+#
+# If this works, ViT-L-14 could achieve 0.99+ AUC AND 0.98+ OOD.
+#
+# Seed: 737
+# ============================================================================
+
+name: "R11_G_vit_L14_fixed"
+description: "ViT-L-14 with fixed SVD params: lambda=0.01, rank=768, LR=3e-4"
+seed: 737
+
+wandb:
+  tags: ["phase2-round11", "scratch", "vit-l-14", "fixed-svd", "teams-v2", "seed-737"]
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_l_14_openai"
+  variant: "ViT-L-14"
+  source: "openai"
+  huggingface_id: "openai/clip-vit-large-patch14"
+  hidden_size: 1024
+  resolution: 224
+
+# Higher LR to break out of near-identity
+learning_rate: 3.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+# KEY FIX: lambda_reg from 1.0 → 0.01 (same as B-16)
+lambda_reg: 0.01
+# KEY FIX: rank from 1023 → 768 (stronger per-component signal)
+rank: 768
+gradient_clip_val: 1.0
+
+nEpochs: 20
+total_training_steps: 30000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1500
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Scratch
+load_base_checkpoint: false
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  # Narrow aug
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 737
+  seed: 737
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 737
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.15
+      visomaster_fake: 2.5
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 4.0
+      deeplive_teams_real: 3.0
+      df40_real: 0.4
+      realpool_real: 2.0
+      external_real: 2.5
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 14.0
+s_start: 10.0
+s_end: 14.0
+anneal_steps: 30000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 500
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 15
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
+    local_path: "./weights/models--openai--clip-vit-large-patch14/"
+    allowed_files:
+      - "model.safetensors"
+      - "config.json"
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r11_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3

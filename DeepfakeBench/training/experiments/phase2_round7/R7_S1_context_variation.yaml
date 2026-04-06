@@ -1,0 +1,232 @@
+# ============================================================================
+# R7_S1_context_variation.yaml
+# Phase 2, Round 7 — Strategy 1: Context variation augmentation (Track B)
+#
+# Purpose: Add lighting/exposure/framing robustness via context_variation_block
+#          in the vcd_targeted augmentation preset. Fine-tune from best R6
+#          checkpoint to recalibrate decision boundaries.
+#
+# Changes from R6_S1:
+#   - context_variation_enabled: True (now default in vcd_targeted preset)
+#   - Loads R6 best checkpoint for fine-tuning (shorter run)
+#   - Reduced total_training_steps for fine-tune probe
+#   - faceswap excluded from training/val, moved to holdout for monitoring
+#
+# Gate criteria (vs R6 baseline):
+#   - VCD real acc: +2pp minimum
+#   - YouTube real acc: ≤1pp drop
+#   - OOD AUC: ≤0.5pp drop
+#
+# Seed: 737
+# ============================================================================
+
+name: "R7_S1_context_variation"
+description: "R6 best + context variation augmentation (lighting/exposure/framing), fine-tune probe"
+seed: 737
+
+wandb:
+  tags: ["phase2-round7", "context-variation", "fine-tune", "track-b", "no-faceswap", "seed-737"]
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+# Lower LR for fine-tuning from checkpoint
+learning_rate: 5.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 5
+total_training_steps: 5000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 250
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Fine-tune from R6 best checkpoint
+load_base_checkpoint: true
+base_checkpoint_path: "gs://training-job-outputs/phase2r6_experiments/best_checkpoint.pth"
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  # Context variation is enabled by default in vcd_targeted preset.
+  # These overrides allow tuning without changing code:
+  # context_variation_enabled: true  (already default in vcd_targeted)
+  # context_variation_gamma_limit: [90, 110]
+  # context_variation_brightness: 0.15
+  # context_variation_contrast: 0.15
+  # context_variation_shift: 0.03
+  # context_variation_scale: 0.10
+  # context_variation_rotate: 6
+  # context_variation_oneof_p: 0.18
+  # context_variation_individual_p: 0.10
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 737
+  seed: 737
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    # Exclude faceswap — suspected data quality issues; moved to holdout for monitoring only
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "Inswapper128"
+    tiers: null
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.20
+      identity_split_seed: 737
+      max_frames_per_identity: 10
+      max_total_samples: 800
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.9
+      visomaster_fake: 0.8
+      deeplive_non_enhanced_fake: 2.4
+      deeplive_enhanced_fake: 3.0
+      df40_real: 1.0
+      realpool_real: 1.0
+      external_real: 0.6
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "method_holdout"
+    df40_orientation: "source_target"
+    methods:
+      - "visomaster_Inswapper128"
+      - "visomaster_GhostFace-v2"
+      # faceswap excluded from training — monitor via holdout evaluation
+      - "faceswap"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 10.0
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 24000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 500
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 8
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r7_experiments/"
+  save_every_steps: 1000
+  keep_last_n: 3

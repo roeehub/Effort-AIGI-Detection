@@ -1,0 +1,37 @@
+[
+  [
+    "blendface",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/blendface/005_010/"
+  ],
+  [
+    "facedancer",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/facedancer/005_010/"
+  ],
+  [
+    "faceswap",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/faceswap/005_010/"
+  ],
+  [
+    "inswap",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/inswap/005_010/"
+  ],
+  [
+    "mobileswap",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/mobileswap/005_010/"
+  ],
+  [
+    "simswap",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/simswap/005_010/"
+  ],
+  [
+    "e4s",
+    "005",
+    "gs://df40-frames-recropped-rfa85/fake/e4s/005_010/"
+  ]
+]

@@ -1,0 +1,271 @@
+# ============================================================================
+# R13_G — Seed Insurance (k=32, seed=1337)
+# Phase 2, Round 13 — B-16, k=32, seed=1337
+#
+# JUSTIFICATION:
+#   Seed sensitivity is one of the most persistent risks in our training:
+#   - R8: 12.7pp VCD Real gap between seeds (82.1% vs 69.4%)
+#   - R12: R12_G (seed=1337) composite 0.9869 vs R12_A (seed=737) 0.9816
+#     — the SAME config with different seeds produced a 0.005 composite gap,
+#     and R12_G went from worst OOD at epoch 3 to best by epoch 8.
+#
+#   With new VisoMaster Enhanced data, the training distribution shifts.
+#   We don't know which seed will find the better basin in this new
+#   landscape. Running BOTH seeds with IDENTICAL configs (vs R13_A) gives
+#   a clean measure of remaining seed sensitivity AND provides insurance:
+#   if seed=737 hits a bad basin, seed=1337 is the fallback.
+#
+#   R13_G is IDENTICAL to R13_A except for the seed. This makes the
+#   A vs G comparison the cleanest possible seed ablation.
+#
+# Ablation reads:
+#   G vs A  → seed 1337 vs 737 (CLEAN — everything else identical)
+#   G vs H  → k=32 vs k=64 with seed=1337
+# ============================================================================
+
+name: "R13_G_seed_insurance_k32"
+description: "Seed insurance — R13_A clone with seed=1337 for clean seed comparison"
+seed: 1337
+
+wandb:
+  tags: ["phase2-round13", "scratch", "vit-b-16", "enhanced-visomaster", "k32",
+         "teams-v2", "seed-1337", "seed-insurance", "compound-aug", "gamma-up"]
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736            # k = 32 (same as R13_A)
+gradient_clip_val: 1.0
+
+nEpochs: 20
+total_training_steps: 30000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1500
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: false
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [70, 130]
+  context_variation_brightness: [-0.20, 0.60]
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.04
+  context_variation_scale: 0.12
+  context_variation_rotate: 8
+  context_variation_individual_p: 0.15
+  context_variation_cct_p: 0.15
+  context_variation_cct_range: [2700, 8000]
+  hue_shift: 20
+  gamma_up_p: 0.15
+  gamma_up_range: [0.45, 0.85]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 1337
+  seed: 1337
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_enhanced:
+    enabled: true
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    gcs_project: "train-cvit2"
+    exclude_tiers: ["ARTIFACT"]
+    enhancers: null
+    cache_manifest_uri: "gs://visomaster-enhanced-face-cropped/cache/discovery_manifest.json"
+    cache_max_age_hours: 12.0
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 1337
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.15                  # Identical to R13_A
+      visomaster_fake: 2.5
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      visomaster_enhanced_fake: 3.5    # Identical to R13_A
+      deeplive_teams_fake: 5.0         # Identical to R13_A
+      deeplive_teams_real: 4.0         # Identical to R13_A
+      df40_real: 0.4
+      realpool_real: 2.5
+      external_real: 2.5
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+        prefix: "samples"
+        method: "teams_ood_real"
+        grouping: "by_folder"
+        path_contains: "/frames/real/"
+        video_id_depth: -4
+        max_videos: 300
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+        prefix: "samples"
+        method: "teams_ood_fake"
+        grouping: "by_folder"
+        path_contains: "/frames/fake/"
+        video_id_depth: -4
+        max_videos: 300
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: false
+
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 14.0
+s_start: 10.0
+s_end: 14.0
+anneal_steps: 30000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 500
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 15
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3
+  ood_composite_enabled: true
+  ood_composite_top_n_size: 3
