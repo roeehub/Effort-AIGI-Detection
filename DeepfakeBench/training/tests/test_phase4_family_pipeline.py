@@ -194,6 +194,12 @@ def _load_combined_paired_source_module():
     return module
 
 
+def _loader_option(loader, name):
+    if hasattr(loader, "kwargs"):
+        return loader.kwargs[name]
+    return getattr(loader, name)
+
+
 def test_context_variation_disabled_by_default_for_non_vcd_presets():
     """Non-vcd presets should NOT include context variation transforms."""
     pytest.importorskip("albumentations")
@@ -498,6 +504,67 @@ def test_combined_paired_preflight_fails_when_withenhanced_missing(monkeypatch):
 
     with pytest.raises(ValueError, match="DeepLive strategy preflight failed"):
         create_combined_paired_pipeline(config, data_config, logging.getLogger("test"))
+
+
+def test_combined_paired_pipeline_uses_top_level_num_workers_and_persistent_workers(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+    create_combined_paired_pipeline = combined_paired_module.create_combined_paired_pipeline
+
+    monkeypatch.setitem(
+        sys.modules,
+        "dataset.df40_paired_dataset",
+        types.SimpleNamespace(DF40PairedDataset=_FakeDF40Dataset),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "dataset.deeplive_dataset",
+        types.SimpleNamespace(DeepLiveDataset=_FakeDeepLiveDataset),
+    )
+    monkeypatch.setattr(combined_paired_module.torch.cuda, "is_available", lambda: True)
+
+    config = {
+        "manualSeed": 737,
+        "frames_per_batch": 2,
+        "frames_per_video": 1,
+        "num_workers": 3,
+        "prefetch_factor": 5,
+    }
+    data_config = {
+        "data_source": "combined_paired",
+        "combined_paired": {
+            "split_seed": 123,
+            "identity_balanced_sampling": True,
+            "df40": {
+                "enabled": True,
+                "pair_json": "dataset/df40_pairs/df40-pair-matching.json",
+                "methods": ["blendface"],
+                "anchor_indices": [0],
+            },
+            "deeplive": {
+                "enabled": True,
+                "anchor_indices": [0],
+                "include_strategies": ["edge_cases", "minimal_processing"],
+                "exclude_strategies": ["edge_cases_enhanced"],
+                "strategy_expectations": {"mode": "noenhanced"},
+            },
+            "visomaster": {"enabled": False},
+            "train_split": 0.8,
+            "val_split": 0.1,
+        },
+    }
+
+    result = create_combined_paired_pipeline(
+        config,
+        data_config,
+        logging.getLogger("test"),
+        transform=lambda image, landmarks, meta=None: image,
+    )
+
+    assert _loader_option(result.train_loader, "num_workers") == 3
+    assert _loader_option(result.train_loader, "prefetch_factor") == 5
+    assert _loader_option(result.train_loader, "persistent_workers") is True
+    assert _loader_option(result.val_in_dist_loader._dataloader, "persistent_workers") is True
+    assert _loader_option(result.val_holdout_loader._dataloader, "persistent_workers") is True
 
 
 class _MiniDF40Dataset:
@@ -989,7 +1056,7 @@ def test_visomaster_teams_enhanced_iteration_switches_branch_metadata(monkeypatc
 
     seen_branches = []
 
-    def _fake_load(sample, anchor_indices, fake_branch="original", as_array=True):
+    def _fake_load(sample, anchor_indices, fake_branch="original", as_array=True, client=None):
         seen_branches.append(fake_branch)
         real = [np.full((8, 8, 3), 10, dtype=np.uint8) for _ in anchor_indices]
         fake_value = 20 if fake_branch == "original" else 30
@@ -1065,3 +1132,66 @@ def test_visomaster_teams_enhanced_iteration_switches_branch_metadata(monkeypatc
     assert enhanced_items[1]["method"] == "visomaster_enhanced_gfpgan"
     assert enhanced_items[1]["quality_domain"] == 2
     assert enhanced_items[1]["method_id"] == 1
+
+
+def test_visomaster_iteration_reuses_cached_gcs_client(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+    visomaster_module = _load_visomaster_source_module()
+    CombinedBatchingConfig = combined_paired_module.CombinedBatchingConfig
+    CombinedPairedIterableDataset = combined_paired_module.CombinedPairedIterableDataset
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+    VisoMasterSample = visomaster_module.VisoMasterSample
+
+    sentinel_client = object()
+    client_calls = {"count": 0}
+
+    def _fake_client_factory():
+        client_calls["count"] += 1
+        return sentinel_client
+
+    monkeypatch.setattr(combined_paired_module.storage, "Client", _fake_client_factory)
+
+    seen_clients = []
+
+    def _fake_load(sample, anchor_indices, as_array=True, client=None):
+        seen_clients.append(client)
+        real = [np.full((8, 8, 3), 10, dtype=np.uint8) for _ in anchor_indices]
+        fake = [np.full((8, 8, 3), 20, dtype=np.uint8) for _ in anchor_indices]
+        return real, fake
+
+    monkeypatch.setattr(visomaster_module, "load_visomaster_frames", _fake_load)
+
+    sample = VisoMasterSample(
+        sample_id="visomaster_CSCS_00007",
+        swap_model="CSCS",
+        frame_count=16,
+        tier="MINIMAL",
+        identity_delta=0.0,
+        bucket_name="bucket",
+        manifest={"original_video_name": "cropped_vid_a.mp4"},
+    )
+    unified_sample = UnifiedPairedSample(
+        identity="realpool_vid_a",
+        source="visomaster",
+        original_sample=sample,
+        method="visomaster_CSCS",
+        has_landmarks=False,
+        sample_id=sample.sample_id,
+    )
+
+    ds = CombinedPairedIterableDataset(
+        samples=[unified_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(visomaster_sparse_indices=[0, 2]),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={"visomaster_CSCS": 0},
+    )
+
+    list(ds._iterate_visomaster_sample(unified_sample, random.Random(1)))
+    list(ds._iterate_visomaster_sample(unified_sample, random.Random(2)))
+
+    assert client_calls["count"] == 1
+    assert seen_clients == [sentinel_client, sentinel_client]

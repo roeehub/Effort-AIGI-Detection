@@ -6,6 +6,48 @@
 
 ---
 
+## Pass 1 Status (Branch `training-speedup-pass1`)
+
+**Completed on 2026-04-08**
+
+- **#1-#4 applied to non-smoke Round 13 experiment YAMLs** under `training/experiments/phase2_round13/`:
+  - `num_workers: 8` (was `4`)
+  - `prefetch_factor: 4` (was `2`)
+  - OOD `zoom_vcd_real.max_videos: 300` (was `1200`)
+  - `expected_counts.zoom_vcd_real: 300` (was `1200`)
+  - `ood_monitoring_start_step: 5000` (was `500`)
+  - `R13_SMOKE_trackA_teams_enhanced.yaml` was intentionally **not** changed.
+- **#5 implemented in `trainer/trainer.py`**:
+  - Removed the per-parameter `.item()` loop from the hot path.
+  - Grad norm logging now uses a single total-norm reduction.
+  - To preserve the current logged semantics when clipping is enabled, the code measures the **post-clip** norm via `clip_grad_norm_(..., inf)` after clipping.
+- **#6 implemented in `data/sources/combined_paired.py`**:
+  - `persistent_workers` is now enabled on train/val/test loaders when `num_workers > 0`.
+- **#7 implemented in `data/sources/visomaster.py` + `data/sources/combined_paired.py`**:
+  - VisoMaster-family frame loaders now accept an optional reusable GCS client.
+  - Each combined-paired worker now caches and reuses one GCS client across:
+    - `visomaster`
+    - `visomaster_enhanced`
+    - `visomaster_teams_enhanced`
+    - `visomaster_res_variant`
+  - The standalone `VisoMasterIterableDataset` now also reuses a per-worker client.
+  - While implementing this, a config drift was fixed: `combined_paired` now honors the existing top-level experiment `num_workers` setting instead of silently defaulting to `4`.
+
+**Validated**
+
+- Targeted source-pipeline tests passed:
+  - `test_combined_paired_pipeline_uses_top_level_num_workers_and_persistent_workers`
+  - `test_visomaster_iteration_reuses_cached_gcs_client`
+  - `test_visomaster_teams_enhanced_iteration_switches_branch_metadata`
+
+**Still Open for Next Pass**
+
+- **#8 Parallel frame downloads within each worker**.
+- Short fixed-seed training A/B validation run to measure real wall-clock improvement and confirm no behavioral surprises.
+- Rollout of the same config changes beyond Round 13, if you want earlier experiment families updated too.
+
+---
+
 ## Problem Statement
 
 Training has gotten progressively slower from R3 → R13 due to:

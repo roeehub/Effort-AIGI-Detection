@@ -866,6 +866,13 @@ class Trainer(
 
         return losses, predictions
 
+    def _current_total_grad_norm(self) -> float:
+        """Measure the current total grad norm with a single device sync."""
+        total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), float('inf'))
+        if torch.is_tensor(total_norm):
+            return float(total_norm.item())
+        return float(total_norm)
+
     def _next_batch_from_group(self, method_name, loaders, iters):
         """
         Gets the next batch from a specific method's dataloader.
@@ -1268,14 +1275,8 @@ class Trainer(
                     
                     # Compute gradient health metrics before they're cleared
                     model_ref = self.model.module if is_ddp else self.model
-                    _grad_norm = 0.0
-                    _num_params_with_grad = 0
-                    for p in model_ref.parameters():
-                        if p.grad is not None:
-                            _grad_norm += p.grad.data.norm(2).item() ** 2
-                            _num_params_with_grad += 1
-                    if _num_params_with_grad > 0:
-                        _grad_norm = _grad_norm ** 0.5
+                    _grad_norm = self._current_total_grad_norm()
+                    _num_params_with_grad = sum(1 for p in model_ref.parameters() if p.grad is not None)
                     # Store for later logging
                     self._last_grad_norm = _grad_norm
                     self._last_params_with_grad = _num_params_with_grad
