@@ -1056,7 +1056,15 @@ def test_visomaster_teams_enhanced_iteration_switches_branch_metadata(monkeypatc
 
     seen_branches = []
 
-    def _fake_load(sample, anchor_indices, fake_branch="original", as_array=True, client=None):
+    def _fake_load(
+        sample,
+        anchor_indices,
+        fake_branch="original",
+        as_array=True,
+        client=None,
+        executor=None,
+        parallel_download_workers=4,
+    ):
         seen_branches.append(fake_branch)
         real = [np.full((8, 8, 3), 10, dtype=np.uint8) for _ in anchor_indices]
         fake_value = 20 if fake_branch == "original" else 30
@@ -1153,7 +1161,14 @@ def test_visomaster_iteration_reuses_cached_gcs_client(monkeypatch):
 
     seen_clients = []
 
-    def _fake_load(sample, anchor_indices, as_array=True, client=None):
+    def _fake_load(
+        sample,
+        anchor_indices,
+        as_array=True,
+        client=None,
+        executor=None,
+        parallel_download_workers=4,
+    ):
         seen_clients.append(client)
         real = [np.full((8, 8, 3), 10, dtype=np.uint8) for _ in anchor_indices]
         fake = [np.full((8, 8, 3), 20, dtype=np.uint8) for _ in anchor_indices]
@@ -1195,3 +1210,301 @@ def test_visomaster_iteration_reuses_cached_gcs_client(monkeypatch):
 
     assert client_calls["count"] == 1
     assert seen_clients == [sentinel_client, sentinel_client]
+
+
+def test_load_visomaster_frames_parallel_preserves_anchor_order(monkeypatch):
+    visomaster_module = _load_visomaster_source_module()
+    VisoMasterSample = visomaster_module.VisoMasterSample
+
+    sample = VisoMasterSample(
+        sample_id="visomaster_CSCS_00007",
+        swap_model="CSCS",
+        frame_count=16,
+        tier="MINIMAL",
+        identity_delta=0.0,
+        bucket_name="bucket",
+        manifest={"original_video_name": "cropped_vid_a.mp4"},
+    )
+
+    delays = {0: 0.03, 2: 0.02, 4: 0.01}
+
+    def _fake_load_blob_image(bucket, blob_path, as_array):
+        import time
+
+        idx = int(blob_path.rsplit("frame_", 1)[1].split(".", 1)[0])
+        time.sleep(delays[idx])
+        value = idx if "/real/" in blob_path else idx + 100
+        return np.full((1, 1, 3), value, dtype=np.uint8)
+
+    class _FakeClient:
+        def bucket(self, _bucket_name):
+            return object()
+
+    monkeypatch.setattr(visomaster_module, "_load_blob_image", _fake_load_blob_image)
+
+    real_frames, fake_frames = visomaster_module.load_visomaster_frames(
+        sample,
+        [0, 2, 4],
+        as_array=True,
+        client=_FakeClient(),
+        parallel_download_workers=3,
+    )
+
+    assert [int(frame[0, 0, 0]) for frame in real_frames] == [0, 2, 4]
+    assert [int(frame[0, 0, 0]) for frame in fake_frames] == [100, 102, 104]
+
+
+def test_iterate_visomaster_sample_skips_missing_positions_without_misalignment(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+    visomaster_module = _load_visomaster_source_module()
+    CombinedBatchingConfig = combined_paired_module.CombinedBatchingConfig
+    CombinedPairedIterableDataset = combined_paired_module.CombinedPairedIterableDataset
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+    VisoMasterSample = visomaster_module.VisoMasterSample
+
+    sentinel_client = object()
+    monkeypatch.setattr(combined_paired_module.storage, "Client", lambda: sentinel_client)
+
+    def _fake_load(
+        sample,
+        anchor_indices,
+        as_array=True,
+        client=None,
+        executor=None,
+        parallel_download_workers=4,
+    ):
+        assert client is sentinel_client
+        return (
+            [
+                np.full((8, 8, 3), 10, dtype=np.uint8),
+                None,
+                np.full((8, 8, 3), 40, dtype=np.uint8),
+            ],
+            [
+                np.full((8, 8, 3), 20, dtype=np.uint8),
+                None,
+                np.full((8, 8, 3), 50, dtype=np.uint8),
+            ],
+        )
+
+    monkeypatch.setattr(visomaster_module, "load_visomaster_frames", _fake_load)
+
+    sample = VisoMasterSample(
+        sample_id="visomaster_CSCS_00007",
+        swap_model="CSCS",
+        frame_count=16,
+        tier="MINIMAL",
+        identity_delta=0.0,
+        bucket_name="bucket",
+        manifest={"original_video_name": "cropped_vid_a.mp4"},
+    )
+    unified_sample = UnifiedPairedSample(
+        identity="realpool_vid_a",
+        source="visomaster",
+        original_sample=sample,
+        method="visomaster_CSCS",
+        has_landmarks=False,
+        sample_id=sample.sample_id,
+    )
+
+    ds = CombinedPairedIterableDataset(
+        samples=[unified_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(
+            visomaster_sparse_indices=[0, 2, 4],
+            visomaster_parallel_download_workers=1,
+        ),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={"visomaster_CSCS": 0},
+    )
+
+    items = list(ds._iterate_visomaster_sample(unified_sample, random.Random(1)))
+
+    assert [item["frame_idx"] for item in items] == [0, 0, 4, 4]
+    assert [item["label"] for item in items] == [0, 1, 0, 1]
+    assert [int(item["image"][0, 0, 0]) for item in items] == [10, 20, 40, 50]
+
+
+def test_standalone_visomaster_dataset_skips_missing_positions_without_misalignment(monkeypatch):
+    visomaster_module = _load_visomaster_source_module()
+    VisoMasterSample = visomaster_module.VisoMasterSample
+    VisoMasterIterableDataset = visomaster_module.VisoMasterIterableDataset
+
+    monkeypatch.setattr(
+        visomaster_module.torch.utils.data,
+        "get_worker_info",
+        lambda: None,
+        raising=False,
+    )
+
+    sentinel_client = object()
+    monkeypatch.setattr(
+        VisoMasterIterableDataset,
+        "_get_gcs_client",
+        lambda self: sentinel_client,
+    )
+
+    def _fake_load(
+        sample,
+        anchor_indices,
+        as_array=True,
+        client=None,
+        executor=None,
+        parallel_download_workers=4,
+    ):
+        assert client is sentinel_client
+        return (
+            [
+                np.full((8, 8, 3), 10, dtype=np.uint8),
+                None,
+                np.full((8, 8, 3), 40, dtype=np.uint8),
+            ],
+            [
+                np.full((8, 8, 3), 20, dtype=np.uint8),
+                None,
+                np.full((8, 8, 3), 50, dtype=np.uint8),
+            ],
+        )
+
+    monkeypatch.setattr(visomaster_module, "load_visomaster_frames", _fake_load)
+
+    sample = VisoMasterSample(
+        sample_id="visomaster_CSCS_00007",
+        swap_model="CSCS",
+        frame_count=16,
+        tier="MINIMAL",
+        identity_delta=0.0,
+        bucket_name="bucket",
+        manifest={"original_video_name": "cropped_vid_a.mp4"},
+    )
+
+    ds = VisoMasterIterableDataset(
+        samples=[sample],
+        anchor_indices=[0, 2, 4],
+        transform=None,
+        shuffle=False,
+        seed=1,
+        identity_balanced=False,
+        parallel_download_workers=1,
+    )
+
+    items = list(iter(ds))
+
+    assert [item["frame_idx"] for item in items] == [0, 0, 4, 4]
+    assert [item["label"] for item in items] == [0, 1, 0, 1]
+    assert [int(item["image"][0, 0, 0]) for item in items] == [10, 20, 40, 50]
+
+
+def test_load_teams_frame_map_parallel_overlaps_downloads(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+
+    import threading
+    import time
+
+    state = {"active": 0, "max_active": 0}
+    lock = threading.Lock()
+
+    def _fake_load(bucket, blob_path):
+        idx = int(blob_path.rsplit("frame_", 1)[1].split(".", 1)[0])
+        with lock:
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+        time.sleep({0: 0.03, 2: 0.02, 4: 0.01}[idx])
+        with lock:
+            state["active"] -= 1
+        return np.full((1, 1, 3), idx, dtype=np.uint8)
+
+    monkeypatch.setattr(
+        combined_paired_module,
+        "_load_teams_frame_from_blob",
+        _fake_load,
+    )
+
+    frame_map = combined_paired_module._load_teams_frame_map(
+        object(),
+        "samples/teams_seq_1/frames/real/",
+        [0, 2, 4],
+        parallel_download_workers=3,
+    )
+
+    assert [int(frame_map[idx][0, 0, 0]) for idx in [0, 2, 4]] == [0, 2, 4]
+    assert state["max_active"] > 1
+
+
+def test_iterate_teams_sample_skips_missing_positions_and_reuses_cached_client(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+    CombinedBatchingConfig = combined_paired_module.CombinedBatchingConfig
+    CombinedPairedIterableDataset = combined_paired_module.CombinedPairedIterableDataset
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+    TeamsSample = combined_paired_module.TeamsSample
+
+    sentinel_bucket = object()
+    client_calls = {"count": 0}
+
+    class _FakeClient:
+        def bucket(self, _bucket_name):
+            return sentinel_bucket
+
+    def _fake_client_factory():
+        client_calls["count"] += 1
+        return _FakeClient()
+
+    monkeypatch.setattr(combined_paired_module.storage, "Client", _fake_client_factory)
+
+    def _fake_load(bucket, blob_path):
+        assert bucket is sentinel_bucket
+        idx = int(blob_path.rsplit("frame_", 1)[1].split(".", 1)[0])
+        if "/fake/" in blob_path and idx == 2:
+            raise FileNotFoundError(blob_path)
+        value = idx if "/real/" in blob_path else idx + 100
+        return np.full((8, 8, 3), value, dtype=np.uint8)
+
+    monkeypatch.setattr(
+        combined_paired_module,
+        "_load_teams_frame_from_blob",
+        _fake_load,
+    )
+
+    sample = TeamsSample(
+        sample_id="teams_seq_1",
+        strategy="codec_aug",
+        original_video_name="cropped_vid_a.mp4",
+        frame_count=16,
+        gcs_bucket="bucket",
+        real_prefix="samples/teams_seq_1/frames/real/",
+        fake_prefix="samples/teams_seq_1/frames/fake/",
+    )
+    unified_sample = UnifiedPairedSample(
+        identity="realpool_vid_a",
+        source="deeplive_teams",
+        original_sample=sample,
+        method="deeplive_teams_codec_aug",
+        has_landmarks=False,
+        sample_id=sample.sample_id,
+    )
+
+    ds = CombinedPairedIterableDataset(
+        samples=[unified_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(
+            teams_sparse_indices=[0, 2, 4],
+            teams_parallel_download_workers=3,
+        ),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={"deeplive_teams_codec_aug": 0},
+    )
+
+    first_items = list(ds._iterate_teams_sample(unified_sample, random.Random(1)))
+    second_items = list(ds._iterate_teams_sample(unified_sample, random.Random(2)))
+
+    assert client_calls["count"] == 1
+    assert [item["frame_idx"] for item in first_items] == [0, 0, 4, 4]
+    assert [item["label"] for item in first_items] == [0, 1, 0, 1]
+    assert [int(item["image"][0, 0, 0]) for item in first_items] == [0, 100, 4, 104]
+    assert [item["frame_idx"] for item in second_items] == [0, 0, 4, 4]

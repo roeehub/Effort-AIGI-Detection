@@ -32,6 +32,20 @@
     - `visomaster_res_variant`
   - The standalone `VisoMasterIterableDataset` now also reuses a per-worker client.
   - While implementing this, a config drift was fixed: `combined_paired` now honors the existing top-level experiment `num_workers` setting instead of silently defaulting to `4`.
+- **#8 implemented in `data/sources/visomaster.py` + `data/sources/combined_paired.py`**:
+  - `load_visomaster_frames()`, `load_visomaster_enhanced_frames()`, and `load_visomaster_teams_enhanced_frames()` now download paired frame indices in parallel within each worker.
+  - Combined-paired and standalone VisoMaster iterators now lazily create and reuse one per-worker thread pool instead of rebuilding it per sample.
+  - Loaded frames are reassembled in the original anchor-index order before yielding.
+  - Failed/missing frame positions now stay aligned to their original anchor slot and are skipped explicitly by iterators, avoiding index drift after partial GCS failures.
+  - Added optional config plumbing for worker-local parallelism:
+    - `combined_paired.visomaster_parallel_download_workers` (default `4`)
+    - `visomaster.parallel_download_workers` (default `4`)
+- **#8 follow-up implemented in `data/sources/combined_paired.py`**:
+  - Teams passthrough (`deeplive_teams`) JPG frame downloads now also run in parallel within each worker.
+  - Each combined-paired worker now reuses one Teams-specific thread pool across samples instead of rebuilding it per sample.
+  - The Teams iterator still intersects real/fake frame maps by anchor index, so partial failures drop only the affected slot rather than shifting later frames.
+  - Added optional config plumbing:
+    - `combined_paired.teams_parallel_download_workers` (default `4`)
 
 **Validated**
 
@@ -39,10 +53,14 @@
   - `test_combined_paired_pipeline_uses_top_level_num_workers_and_persistent_workers`
   - `test_visomaster_iteration_reuses_cached_gcs_client`
   - `test_visomaster_teams_enhanced_iteration_switches_branch_metadata`
+  - `test_load_visomaster_frames_parallel_preserves_anchor_order`
+  - `test_iterate_visomaster_sample_skips_missing_positions_without_misalignment`
+  - `test_standalone_visomaster_dataset_skips_missing_positions_without_misalignment`
+  - `test_load_teams_frame_map_parallel_overlaps_downloads`
+  - `test_iterate_teams_sample_skips_missing_positions_and_reuses_cached_client`
 
 **Still Open for Next Pass**
 
-- **#8 Parallel frame downloads within each worker**.
 - Short fixed-seed training A/B validation run to measure real wall-clock improvement and confirm no behavioral surprises.
 - Rollout of the same config changes beyond Round 13, if you want earlier experiment families updated too.
 
