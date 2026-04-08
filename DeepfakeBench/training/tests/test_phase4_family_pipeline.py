@@ -7,6 +7,7 @@ import random
 import sys
 import types
 import importlib.util
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import Mock
@@ -86,6 +87,109 @@ def _load_pipelines_module():
     module = importlib.util.module_from_spec(spec)
     # Patch the relative import to use absolute
     sys.modules["data.augmentations.pipelines"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _ensure_torch_stub():
+    if "torch" in sys.modules:
+        return
+
+    torch_module = types.ModuleType("torch")
+    torch_utils_module = types.ModuleType("torch.utils")
+    torch_utils_data_module = types.ModuleType("torch.utils.data")
+
+    class _StubDataLoader:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    class _StubIterableDataset:
+        pass
+
+    torch_utils_data_module.DataLoader = _StubDataLoader
+    torch_utils_data_module.IterableDataset = _StubIterableDataset
+    torch_utils_module.data = torch_utils_data_module
+    torch_module.utils = torch_utils_module
+    torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+
+    sys.modules["torch"] = torch_module
+    sys.modules["torch.utils"] = torch_utils_module
+    sys.modules["torch.utils.data"] = torch_utils_data_module
+
+
+def _ensure_source_package_stubs():
+    data_module = sys.modules.get("data")
+    if data_module is None:
+        data_module = types.ModuleType("data")
+        data_module.__path__ = []
+        sys.modules["data"] = data_module
+
+    sources_module = sys.modules.get("data.sources")
+    if sources_module is None:
+        sources_module = types.ModuleType("data.sources")
+        sources_module.__path__ = []
+
+        @dataclass
+        class _StubDataPipelineResult:
+            train_loader: object
+            val_in_dist_loader: object
+            val_holdout_loader: object
+            train_samples: list
+            data_stats: dict
+            ood_loader: object = None
+
+        def _register_data_source(_name):
+            def decorator(func):
+                return func
+            return decorator
+
+        sources_module.DataPipelineResult = _StubDataPipelineResult
+        sources_module.register_data_source = _register_data_source
+        sys.modules["data.sources"] = sources_module
+        data_module.sources = sources_module
+
+    utils_module = sys.modules.get("utils")
+    if utils_module is None:
+        utils_module = types.ModuleType("utils")
+        utils_module.__path__ = []
+        sys.modules["utils"] = utils_module
+
+    if "utils.grouping" not in sys.modules:
+        sys.modules["utils.grouping"] = _load_grouping_module()
+
+
+def _load_visomaster_source_module():
+    _ensure_torch_stub()
+    _ensure_source_package_stubs()
+
+    module_name = "data.sources.visomaster"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    module_path = Path(__file__).resolve().parents[1] / "data" / "sources" / "visomaster.py"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_combined_paired_source_module():
+    _ensure_torch_stub()
+    _ensure_source_package_stubs()
+    _load_visomaster_source_module()
+
+    module_name = "data.sources.combined_paired"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    module_path = Path(__file__).resolve().parents[1] / "data" / "sources" / "combined_paired.py"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
 
@@ -725,3 +829,239 @@ def test_visomaster_enhanced_router_registered():
 
     router = create_quality_targeted_family_router(strength="vcd_targeted")
     assert "visomaster_enhanced_fake" in router._pipelines
+
+
+def _make_visomaster_teams_enhanced_sample(companion_domain="teams_v2", enhancers=("gfpgan", "codeformer")):
+    visomaster_module = _load_visomaster_source_module()
+    VisoMasterTeamsEnhancedSample = visomaster_module.VisoMasterTeamsEnhancedSample
+
+    return VisoMasterTeamsEnhancedSample(
+        sample_id="visomaster_CSCS_00007",
+        strategy="visomaster_CSCS",
+        swap_model="CSCS",
+        frame_count=16,
+        companion_bucket=(
+            "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+            if companion_domain == "teams_v2"
+            else "live-deepfake-methods-real-and-fake-frames-cropped"
+        ),
+        companion_domain=companion_domain,
+        companion_real_ext=".jpg" if companion_domain == "teams_v2" else ".png",
+        companion_fake_ext=".jpg" if companion_domain == "teams_v2" else ".png",
+        companion_real_frame_count=16,
+        companion_fake_frame_count=16,
+        enhanced_bucket="enhanced-visomaster-cropped",
+        available_enhancers=tuple(enhancers),
+        enhancer_frame_counts={name: 16 for name in enhancers},
+        manifest={},
+    )
+
+
+def test_visomaster_teams_enhanced_resolver_manifest_loads_merged_samples(tmp_path):
+    visomaster_module = _load_visomaster_source_module()
+    discover_visomaster_teams_enhanced_samples = (
+        visomaster_module.discover_visomaster_teams_enhanced_samples
+    )
+
+    resolver_manifest = {
+        "version": 1,
+        "rows": [
+            {
+                "sample_id": "visomaster_CSCS_00007",
+                "strategy": "visomaster_CSCS",
+                "resolved_companion_bucket": "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2",
+                "resolution_status": "teams_v2_companion",
+                "resolved_real_frame_count": 22,
+                "resolved_fake_frame_count": 18,
+                "resolved_extensions": {
+                    "real": {".jpg": 22},
+                    "fake": {".jpg": 18},
+                },
+                "available_enhancers": ["gfpgan", "codeformer"],
+                "enhancer_frame_counts": {"gfpgan": 16, "codeformer": 17},
+                "all_expected_enhancers_present": True,
+            },
+            {
+                "sample_id": "visomaster_SimSwap512_00099",
+                "strategy": "visomaster_SimSwap512",
+                "resolved_companion_bucket": "live-deepfake-methods-real-and-fake-frames-cropped",
+                "resolution_status": "clean_companion_only",
+                "resolved_real_frame_count": 16,
+                "resolved_fake_frame_count": 16,
+                "resolved_extensions": {
+                    "real": {".png": 16},
+                    "fake": {".png": 16},
+                },
+                "available_enhancers": ["gpen-512"],
+                "enhancer_frame_counts": {"gpen-512": 16},
+                "all_expected_enhancers_present": False,
+            },
+            {
+                "sample_id": "visomaster_CSCS_00999",
+                "strategy": "visomaster_CSCS",
+                "resolved_companion_bucket": "",
+                "resolution_status": "missing_companion",
+                "resolved_real_frame_count": 0,
+                "resolved_fake_frame_count": 0,
+                "resolved_extensions": {},
+                "available_enhancers": ["gfpgan"],
+                "enhancer_frame_counts": {"gfpgan": 16},
+                "all_expected_enhancers_present": True,
+            },
+        ],
+    }
+    manifest_path = tmp_path / "resolver.json"
+    manifest_path.write_text(json.dumps(resolver_manifest))
+
+    samples = discover_visomaster_teams_enhanced_samples(
+        resolver_manifest_uri=str(manifest_path),
+        enhanced_bucket="enhanced-visomaster-cropped",
+    )
+
+    assert len(samples) == 2
+    teams_sample = samples[0]
+    clean_sample = samples[1]
+
+    assert teams_sample.companion_domain == "teams_v2"
+    assert teams_sample.companion_real_ext == ".jpg"
+    assert teams_sample.companion_fake_ext == ".jpg"
+    assert teams_sample.method_variants == (
+        "visomaster_CSCS",
+        "visomaster_enhanced_codeformer",
+        "visomaster_enhanced_gfpgan",
+    )
+
+    assert clean_sample.companion_domain == "clean_fallback"
+    assert clean_sample.method_variants == (
+        "visomaster_SimSwap512",
+        "visomaster_enhanced_gpen_bfr_512",
+    )
+
+
+def test_visomaster_teams_enhanced_unified_samples_do_not_multiply_by_enhancer():
+    combined_paired_module = _load_combined_paired_source_module()
+    create_unified_samples_from_visomaster_teams_enhanced = (
+        combined_paired_module.create_unified_samples_from_visomaster_teams_enhanced
+    )
+
+    merged_sample = _make_visomaster_teams_enhanced_sample(
+        companion_domain="teams_v2",
+        enhancers=("gfpgan", "codeformer", "vqfr-v2"),
+    )
+    unified = create_unified_samples_from_visomaster_teams_enhanced(
+        [merged_sample],
+        logging.getLogger("test"),
+    )
+
+    assert len(unified) == 1
+    assert unified[0].sample_id == "visomaster_CSCS_00007"
+    assert unified[0].method == "visomaster_CSCS"
+    assert unified[0].method_variants == (
+        "visomaster_CSCS",
+        "visomaster_enhanced_gfpgan",
+        "visomaster_enhanced_codeformer",
+        "visomaster_enhanced_vqfr_v2",
+    )
+    assert unified[0].sampling_family_key == "visomaster_enhanced_fake"
+
+
+def test_visomaster_teams_enhanced_iteration_switches_branch_metadata(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+    visomaster_module = _load_visomaster_source_module()
+    CombinedBatchingConfig = combined_paired_module.CombinedBatchingConfig
+    CombinedPairedIterableDataset = combined_paired_module.CombinedPairedIterableDataset
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+
+    merged_sample = _make_visomaster_teams_enhanced_sample(
+        companion_domain="teams_v2",
+        enhancers=("gfpgan",),
+    )
+    unified_sample = UnifiedPairedSample(
+        identity="realpool_00007",
+        source="visomaster_teams_enhanced",
+        original_sample=merged_sample,
+        method=merged_sample.original_method,
+        has_landmarks=False,
+        sample_id=merged_sample.sample_id,
+        method_variants=merged_sample.method_variants,
+        sampling_family_key="visomaster_enhanced_fake",
+    )
+
+    seen_branches = []
+
+    def _fake_load(sample, anchor_indices, fake_branch="original", as_array=True):
+        seen_branches.append(fake_branch)
+        real = [np.full((8, 8, 3), 10, dtype=np.uint8) for _ in anchor_indices]
+        fake_value = 20 if fake_branch == "original" else 30
+        fake = [np.full((8, 8, 3), fake_value, dtype=np.uint8) for _ in anchor_indices]
+        return real, fake
+
+    monkeypatch.setattr(
+        visomaster_module,
+        "load_visomaster_teams_enhanced_frames",
+        _fake_load,
+    )
+
+    original_ds = CombinedPairedIterableDataset(
+        samples=[unified_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(
+            visomaster_teams_enhanced_sparse_indices=[0, 2],
+            visomaster_teams_enhanced_p_original=1.0,
+        ),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={
+            "visomaster_CSCS": 0,
+            "visomaster_enhanced_gfpgan": 1,
+        },
+    )
+    original_items = list(
+        original_ds._iterate_visomaster_teams_enhanced_sample(
+            unified_sample,
+            random.Random(1),
+        )
+    )
+
+    assert seen_branches[-1] == "original"
+    assert original_items[0]["label"] == 0
+    assert original_items[0]["method"] == "visomaster_CSCS"
+    assert original_items[0]["quality_domain"] == 1
+    assert original_items[1]["label"] == 1
+    assert original_items[1]["method"] == "visomaster_CSCS"
+    assert original_items[1]["quality_domain"] == 1
+    assert original_items[1]["method_id"] == 0
+
+    enhanced_ds = CombinedPairedIterableDataset(
+        samples=[unified_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(
+            visomaster_teams_enhanced_sparse_indices=[0, 2],
+            visomaster_teams_enhanced_p_original=0.0,
+        ),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={
+            "visomaster_CSCS": 0,
+            "visomaster_enhanced_gfpgan": 1,
+        },
+    )
+    enhanced_items = list(
+        enhanced_ds._iterate_visomaster_teams_enhanced_sample(
+            unified_sample,
+            random.Random(1),
+        )
+    )
+
+    assert seen_branches[-1] == "gfpgan"
+    assert enhanced_items[0]["label"] == 0
+    assert enhanced_items[0]["method"] == "visomaster_enhanced_gfpgan"
+    assert enhanced_items[0]["quality_domain"] == 1
+    assert enhanced_items[1]["label"] == 1
+    assert enhanced_items[1]["method"] == "visomaster_enhanced_gfpgan"
+    assert enhanced_items[1]["quality_domain"] == 2
+    assert enhanced_items[1]["method_id"] == 1

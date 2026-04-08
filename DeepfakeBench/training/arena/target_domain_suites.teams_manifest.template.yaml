@@ -1,0 +1,126 @@
+# Manifest-based Teams target-domain validation suites.
+#
+# 1. Build the frozen manifest:
+#    python arena/build_teams_target_domain_manifest.py \
+#      --source-root gs://teams-faces-data-test-2914-fake-4420-real-feb-28 \
+#      --prefix-rules arena/prefix_rules.teams_manifest.template.yaml \
+#      --output <manifest-path>
+#
+# 2. Run validation:
+#    python arena/run_target_domain_validation_sequential.py \
+#      --checkpoints FT7 \
+#      --checkpoint_map <map.json> \
+#      --suite_manifest arena/target_domain_suites.teams_manifest.template.yaml \
+#      --scorecard_csv /tmp/teams_target_domain_scorecard.csv \
+#      --scorecard_wide_csv /tmp/teams_target_domain_scorecard.wide.csv
+#
+# Notes:
+# - Replace <manifest-path> below with the path written by the builder.
+# - The builder currently guarantees:
+#     * teams_real_all
+#     * teams_real_poor_quality
+#     * teams_real_lighting_extreme
+#     * teams_fake_all
+#     * visomaster_enhanced_macro (prefix-based)
+#     * deeplive_enhanced (prefix-based for deeplive_dor)
+# - With the bundled prefix-rules template, the frozen manifest also exposes:
+#     * teams_capture_cam_test
+#     * teams_capture_pc_generator
+#     * teams_capture_test_cam
+#     * teams_capture_noyn_sharker
+#     * teams_capture_dor_shkedi
+#     * teams_flat_xiang_xiang2_feng
+# - Session-level slices (for example `teams_capture_cam_test_s33`) are also
+#   available when the bundled prefix-rules template is used.
+
+suites:
+  - name: teams_real_all_dev
+    df40_mode: none
+    external_real_manifest: "<manifest-path>"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_real_poor_quality_dev
+    df40_mode: none
+    external_real_manifest: "<manifest-path>"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_poor_quality"
+    external_real_deterministic: true
+
+  - name: teams_real_lighting_extreme_dev
+    df40_mode: none
+    external_real_manifest: "<manifest-path>"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_lighting_extreme"
+    external_real_deterministic: true
+
+  - name: teams_real_all_lockbox
+    df40_mode: none
+    external_real_manifest: "<manifest-path>"
+    external_real_manifest_split: "lockbox"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: visomaster_enhanced_macro_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "visomaster_enhanced_macro"
+    external_fake_deterministic: true
+
+  - name: deeplive_enhanced_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "deeplive_enhanced"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam"
+    external_fake_deterministic: true
+
+  - name: teams_capture_noyn_sharker_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_noyn_sharker"
+    external_fake_deterministic: true
+
+  - name: teams_capture_dor_shkedi_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_dor_shkedi"
+    external_fake_deterministic: true
+
+  - name: teams_flat_xiang_xiang2_feng_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_flat_xiang_xiang2_feng"
+    external_fake_deterministic: true
+
+  - name: teams_fake_all_dev
+    df40_mode: none
+    external_fake_manifest: "<manifest-path>"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true

@@ -26,12 +26,473 @@ suites:
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
+import math
 import os
 import subprocess
 import sys
 import time
-from typing import Dict, List, Any
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+RUNNER_DIR = Path(__file__).resolve().parent
+TRAINING_ROOT = RUNNER_DIR.parent
+VALIDATE_CUSTOM_SOURCES_SCRIPT = TRAINING_ROOT / "validate_custom_sources.py"
+
+
+def _split_gs_uri(uri: str) -> Tuple[str, str]:
+    stripped = uri.replace("gs://", "", 1)
+    if "/" not in stripped:
+        return stripped, ""
+    return tuple(stripped.split("/", 1))
+
+
+def _read_text_from_path(path: str) -> str:
+    if path.startswith("gs://"):
+        from google.cloud import storage
+
+        bucket_name, blob_path = _split_gs_uri(path)
+        client = storage.Client(project=os.environ.get("GOOGLE_CLOUD_PROJECT"))
+        return client.bucket(bucket_name).blob(blob_path).download_as_text()
+
+    with open(path, "r") as f:
+        return f.read()
+
+
+def _write_text_to_path(path: str, text: str) -> None:
+    if path.startswith("gs://"):
+        from google.cloud import storage
+
+        bucket_name, blob_path = _split_gs_uri(path)
+        client = storage.Client(project=os.environ.get("GOOGLE_CLOUD_PROJECT"))
+        client.bucket(bucket_name).blob(blob_path).upload_from_string(
+            text,
+            content_type="text/plain; charset=utf-8",
+        )
+        return
+
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text)
+
+
+def _join_path(root: str, filename: str) -> str:
+    if root.startswith("gs://"):
+        return f"{root.rstrip('/')}/{filename}"
+    return str(Path(root) / filename)
+
+
+def _join_present(values: List[Any]) -> str:
+    ordered: List[str] = []
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text or text in ordered:
+            continue
+        ordered.append(text)
+    return "|".join(ordered)
+
+
+def _suite_label_mode(suite: Dict[str, Any]) -> str:
+    has_real = bool(suite.get("external_real_manifest") or suite.get("external_real_bucket"))
+    has_fake = bool(suite.get("external_fake_manifest") or suite.get("external_fake_bucket"))
+    if has_real and has_fake:
+        return "mixed"
+    if has_real:
+        return "real_only"
+    if has_fake:
+        return "fake_only"
+    return "unknown"
+
+
+def _suite_split_hint(suite: Dict[str, Any]) -> str:
+    return _join_present(
+        [
+            suite.get("external_real_manifest_split"),
+            suite.get("external_fake_manifest_split"),
+        ]
+    )
+
+
+def _suite_slice_hint(suite: Dict[str, Any]) -> str:
+    return _join_present(
+        [
+            suite.get("external_real_manifest_slices"),
+            suite.get("external_fake_manifest_slices"),
+            suite.get("external_real_prefix"),
+            suite.get("external_fake_prefix"),
+        ]
+    )
+
+
+def _suite_method_hint(suite: Dict[str, Any]) -> str:
+    return _join_present(
+        [
+            suite.get("external_real_method"),
+            suite.get("external_fake_method"),
+        ]
+    )
+
+
+def _checkpoint_precision(checkpoint_key: str) -> str:
+    upper = str(checkpoint_key).strip().upper()
+    if upper.endswith("_FP32"):
+        return "fp32"
+    if upper.endswith("_INT8"):
+        return "int8"
+    return "other"
+
+
+def _checkpoint_pair_key(checkpoint_key: str) -> str:
+    upper = str(checkpoint_key).strip().upper()
+    for suffix in ("_FP32", "_INT8"):
+        if upper.endswith(suffix):
+            return upper[: -len(suffix)]
+    return upper
+
+
+def _metric_direction(metric_name: str) -> str:
+    if str(metric_name).strip() in {"real_fpr_at_0p5", "fake_fnr_at_0p5"}:
+        return "lower_is_better"
+    return "higher_is_better"
+
+
+def _quantile(values: List[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(float(value) for value in values)
+    if len(ordered) == 1:
+        return ordered[0]
+
+    position = (len(ordered) - 1) * q
+    lower_index = int(math.floor(position))
+    upper_index = int(math.ceil(position))
+    if lower_index == upper_index:
+        return ordered[lower_index]
+
+    lower = ordered[lower_index]
+    upper = ordered[upper_index]
+    fraction = position - lower_index
+    return lower + (upper - lower) * fraction
+
+
+def _report_path_for_job(output_root: str, checkpoint_key: str, suite_name: str) -> str:
+    filename = f"{suite_name}_{checkpoint_key.lower()}_videos_report.csv"
+    return _join_path(output_root, filename)
+
+
+def _read_text_with_retries(path: str, attempts: int = 3, retry_delay_seconds: float = 5.0) -> str:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return _read_text_from_path(path)
+        except Exception as exc:  # pragma: no cover - exercised in integration runs
+            last_error = exc
+            if attempt == attempts:
+                break
+            time.sleep(retry_delay_seconds)
+    if last_error is None:
+        raise RuntimeError(f"Failed to read report from {path}")
+    raise last_error
+
+
+def _load_video_report_rows(report_path: str) -> List[Dict[str, Any]]:
+    text = _read_text_with_retries(report_path)
+    reader = csv.DictReader(io.StringIO(text))
+    rows: List[Dict[str, Any]] = []
+    for raw_row in reader:
+        rows.append(
+            {
+                "method": str(raw_row.get("method", "")).strip(),
+                "label": int(float(str(raw_row.get("label", "0")).strip() or "0")),
+                "video_id": str(raw_row.get("video_id", "")).strip(),
+                "avg_video_prob": float(str(raw_row.get("avg_video_prob", "0")).strip() or "0"),
+                "prediction": int(float(str(raw_row.get("prediction", "0")).strip() or "0")),
+                "group_key": str(raw_row.get("group_key", "")).strip(),
+                "family_key": str(raw_row.get("family_key", "")).strip(),
+            }
+        )
+
+    if not rows:
+        raise ValueError(f"Video report at {report_path} contained no rows.")
+
+    return rows
+
+
+def _build_scorecard_row(
+    checkpoint_key: str,
+    checkpoint_path: str,
+    suite: Dict[str, Any],
+    report_path: str,
+    video_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    label_mode = _suite_label_mode(suite)
+    suite_name = str(suite["name"])
+
+    tn = fp = fn = tp = 0
+    probs: List[float] = []
+    methods_seen: List[str] = []
+    for row in video_rows:
+        label = int(row["label"])
+        prediction = int(row["prediction"])
+        prob = float(row["avg_video_prob"])
+        probs.append(prob)
+
+        method = str(row.get("method", "")).strip()
+        if method and method not in methods_seen:
+            methods_seen.append(method)
+
+        if label == 0 and prediction == 0:
+            tn += 1
+        elif label == 0 and prediction == 1:
+            fp += 1
+        elif label == 1 and prediction == 0:
+            fn += 1
+        elif label == 1 and prediction == 1:
+            tp += 1
+
+    n_videos = len(video_rows)
+    real_total = tn + fp
+    fake_total = tp + fn
+    accuracy = (tp + tn) / n_videos if n_videos > 0 else 0.0
+    real_fpr = fp / real_total if real_total > 0 else None
+    real_tnr = tn / real_total if real_total > 0 else None
+    fake_recall = tp / fake_total if fake_total > 0 else None
+    fake_fnr = fn / fake_total if fake_total > 0 else None
+
+    if label_mode == "real_only":
+        score_metric_name = "real_fpr_at_0p5"
+        score_metric_value = real_fpr
+    elif label_mode == "fake_only":
+        score_metric_name = "fake_recall_at_0p5"
+        score_metric_value = fake_recall
+    else:
+        score_metric_name = "accuracy_at_0p5"
+        score_metric_value = accuracy
+
+    methods_seen_text = "|".join(methods_seen)
+    explicit_method_hint = _suite_method_hint(suite)
+
+    return {
+        "checkpoint_key": checkpoint_key,
+        "checkpoint_path": checkpoint_path,
+        "checkpoint_precision": _checkpoint_precision(checkpoint_key),
+        "checkpoint_pair_key": _checkpoint_pair_key(checkpoint_key),
+        "suite_name": suite_name,
+        "label_mode": label_mode,
+        "split_hint": _suite_split_hint(suite),
+        "slice_hint": _suite_slice_hint(suite),
+        "method_hint": explicit_method_hint or methods_seen_text,
+        "methods_seen": methods_seen_text,
+        "report_path": report_path,
+        "n_videos": n_videos,
+        "accuracy_at_0p5": round(float(accuracy), 6),
+        "mean_prob": round(float(sum(probs) / n_videos), 6),
+        "p50_prob": round(float(_quantile(probs, 0.50)), 6),
+        "p90_prob": round(float(_quantile(probs, 0.90)), 6),
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "tp": tp,
+        "real_fpr_at_0p5": None if real_fpr is None else round(float(real_fpr), 6),
+        "real_tnr_at_0p5": None if real_tnr is None else round(float(real_tnr), 6),
+        "fake_recall_at_0p5": None if fake_recall is None else round(float(fake_recall), 6),
+        "fake_fnr_at_0p5": None if fake_fnr is None else round(float(fake_fnr), 6),
+        "score_metric_name": score_metric_name,
+        "score_metric_value": None if score_metric_value is None else round(float(score_metric_value), 6),
+    }
+
+
+def _load_scorecard_row(
+    checkpoint_key: str,
+    checkpoint_path: str,
+    suite: Dict[str, Any],
+    output_root: str,
+) -> Dict[str, Any]:
+    report_path = _report_path_for_job(
+        output_root=output_root,
+        checkpoint_key=checkpoint_key,
+        suite_name=str(suite["name"]),
+    )
+    video_rows = _load_video_report_rows(report_path)
+    return _build_scorecard_row(
+        checkpoint_key=checkpoint_key,
+        checkpoint_path=checkpoint_path,
+        suite=suite,
+        report_path=report_path,
+        video_rows=video_rows,
+    )
+
+
+def _scorecard_requested(args: argparse.Namespace) -> bool:
+    return bool(
+        args.scorecard_csv
+        or args.scorecard_wide_csv
+        or args.scorecard_delta_csv
+        or args.scorecard_json
+    )
+
+
+def _build_wide_scorecard_rows(scorecard_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    by_checkpoint: Dict[str, Dict[str, Any]] = {}
+    for row in scorecard_rows:
+        checkpoint_key = str(row["checkpoint_key"])
+        wide_row = by_checkpoint.setdefault(
+            checkpoint_key,
+            {
+                "checkpoint_key": checkpoint_key,
+                "checkpoint_path": row["checkpoint_path"],
+                "checkpoint_precision": row.get("checkpoint_precision", "other"),
+                "checkpoint_pair_key": row.get("checkpoint_pair_key", checkpoint_key),
+            },
+        )
+        suite_name = str(row["suite_name"])
+        wide_row[f"{suite_name}__score_metric_name"] = row["score_metric_name"]
+        if row.get("score_metric_value") is not None:
+            wide_row[f"{suite_name}__{row['score_metric_name']}"] = row["score_metric_value"]
+        wide_row[f"{suite_name}__accuracy_at_0p5"] = row["accuracy_at_0p5"]
+        wide_row[f"{suite_name}__n_videos"] = row["n_videos"]
+
+    return [by_checkpoint[key] for key in sorted(by_checkpoint.keys())]
+
+
+def _build_pair_delta_rows(scorecard_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    pair_rows: Dict[Tuple[str, str], Dict[str, Dict[str, Any]]] = {}
+    for row in scorecard_rows:
+        precision = str(row.get("checkpoint_precision") or _checkpoint_precision(str(row["checkpoint_key"])))
+        if precision not in {"fp32", "int8"}:
+            continue
+
+        pair_key = str(row.get("checkpoint_pair_key") or _checkpoint_pair_key(str(row["checkpoint_key"])))
+        suite_name = str(row["suite_name"])
+        entry = pair_rows.setdefault((pair_key, suite_name), {})
+        entry[precision] = row
+
+    delta_rows: List[Dict[str, Any]] = []
+    for pair_key, suite_name in sorted(pair_rows.keys()):
+        paired = pair_rows[(pair_key, suite_name)]
+        fp32_row = paired.get("fp32")
+        int8_row = paired.get("int8")
+        if fp32_row is None or int8_row is None:
+            continue
+
+        fp32_metric_name = str(fp32_row.get("score_metric_name", "")).strip()
+        int8_metric_name = str(int8_row.get("score_metric_name", "")).strip()
+        metric_names_match = fp32_metric_name == int8_metric_name
+        metric_direction = _metric_direction(fp32_metric_name) if metric_names_match else ""
+
+        fp32_metric_value = fp32_row.get("score_metric_value")
+        int8_metric_value = int8_row.get("score_metric_value")
+        raw_delta = None
+        directional_delta = None
+        if (
+            metric_names_match
+            and fp32_metric_value is not None
+            and int8_metric_value is not None
+        ):
+            raw_delta = round(float(int8_metric_value) - float(fp32_metric_value), 6)
+            if metric_direction == "lower_is_better":
+                directional_delta = round(float(fp32_metric_value) - float(int8_metric_value), 6)
+            else:
+                directional_delta = raw_delta
+
+        accuracy_delta = None
+        if (
+            fp32_row.get("accuracy_at_0p5") is not None
+            and int8_row.get("accuracy_at_0p5") is not None
+        ):
+            accuracy_delta = round(
+                float(int8_row["accuracy_at_0p5"]) - float(fp32_row["accuracy_at_0p5"]),
+                6,
+            )
+
+        delta_rows.append(
+            {
+                "checkpoint_pair_key": pair_key,
+                "suite_name": suite_name,
+                "label_mode": fp32_row.get("label_mode", ""),
+                "split_hint": fp32_row.get("split_hint", ""),
+                "slice_hint": fp32_row.get("slice_hint", ""),
+                "method_hint": fp32_row.get("method_hint", ""),
+                "metric_names_match": metric_names_match,
+                "score_metric_name": fp32_metric_name if metric_names_match else "",
+                "metric_direction": metric_direction,
+                "fp32_checkpoint_key": fp32_row["checkpoint_key"],
+                "fp32_checkpoint_path": fp32_row["checkpoint_path"],
+                "fp32_score_metric_value": fp32_metric_value,
+                "fp32_accuracy_at_0p5": fp32_row.get("accuracy_at_0p5"),
+                "fp32_n_videos": fp32_row.get("n_videos"),
+                "int8_checkpoint_key": int8_row["checkpoint_key"],
+                "int8_checkpoint_path": int8_row["checkpoint_path"],
+                "int8_score_metric_value": int8_metric_value,
+                "int8_accuracy_at_0p5": int8_row.get("accuracy_at_0p5"),
+                "int8_n_videos": int8_row.get("n_videos"),
+                "n_videos_match": fp32_row.get("n_videos") == int8_row.get("n_videos"),
+                "score_metric_delta_int8_minus_fp32": raw_delta,
+                "score_metric_directional_delta": directional_delta,
+                "accuracy_at_0p5_delta_int8_minus_fp32": accuracy_delta,
+            }
+        )
+
+    return delta_rows
+
+
+def _write_dict_rows_to_csv(path: str, rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        raise ValueError(f"No rows available for scorecard export: {path}")
+
+    fieldnames: List[str] = []
+    seen = set()
+    for row in rows:
+        for key in row.keys():
+            if key in seen:
+                continue
+            seen.add(key)
+            fieldnames.append(key)
+
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+
+    _write_text_to_path(path, buffer.getvalue())
+
+
+def _write_scorecard_outputs(args: argparse.Namespace, scorecard_rows: List[Dict[str, Any]]) -> None:
+    wide_rows = _build_wide_scorecard_rows(scorecard_rows)
+    pair_delta_rows = _build_pair_delta_rows(scorecard_rows)
+
+    if args.scorecard_csv:
+        _write_dict_rows_to_csv(args.scorecard_csv, scorecard_rows)
+        print(f"Scorecard CSV written to: {args.scorecard_csv}")
+
+    if args.scorecard_wide_csv:
+        _write_dict_rows_to_csv(args.scorecard_wide_csv, wide_rows)
+        print(f"Wide scorecard CSV written to: {args.scorecard_wide_csv}")
+
+    if args.scorecard_delta_csv:
+        if pair_delta_rows:
+            _write_dict_rows_to_csv(args.scorecard_delta_csv, pair_delta_rows)
+            print(f"Pair delta CSV written to: {args.scorecard_delta_csv}")
+        else:
+            _write_text_to_path(args.scorecard_delta_csv, "")
+            print(
+                "Pair delta CSV requested but no FP32/INT8 pairs were available: "
+                f"{args.scorecard_delta_csv}"
+            )
+
+    if args.scorecard_json:
+        payload = {
+            "scorecard_rows": scorecard_rows,
+            "wide_rows": wide_rows,
+            "pair_delta_rows": pair_delta_rows,
+        }
+        _write_text_to_path(args.scorecard_json, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        print(f"Scorecard JSON written to: {args.scorecard_json}")
 
 
 def _default_checkpoint_map() -> Dict[str, str]:
@@ -41,6 +502,13 @@ def _default_checkpoint_map() -> Dict[str, str]:
         env_key = f"R4_{key}_CKPT"
         mapping[key] = os.environ.get(env_key, "").strip()
     return mapping
+
+
+def _merged_checkpoint_map(checkpoint_map_path: str | None) -> Dict[str, str]:
+    checkpoint_map = _default_checkpoint_map()
+    if checkpoint_map_path:
+        checkpoint_map.update(_load_checkpoint_map(checkpoint_map_path))
+    return checkpoint_map
 
 
 def _load_checkpoint_map(path: str) -> Dict[str, str]:
@@ -65,9 +533,7 @@ def _load_checkpoint_map(path: str) -> Dict[str, str]:
 
 
 def _resolve_checkpoints(selected_keys: List[str], checkpoint_map_path: str | None) -> Dict[str, str]:
-    checkpoint_map = _default_checkpoint_map()
-    if checkpoint_map_path:
-        checkpoint_map.update(_load_checkpoint_map(checkpoint_map_path))
+    checkpoint_map = _merged_checkpoint_map(checkpoint_map_path)
 
     resolved: Dict[str, str] = {}
     missing: List[str] = []
@@ -86,6 +552,48 @@ def _resolve_checkpoints(selected_keys: List[str], checkpoint_map_path: str | No
         )
 
     return resolved
+
+
+def _resolve_requested_checkpoint_keys(
+    checkpoints_arg: str,
+    checkpoint_map_path: str | None,
+) -> List[str]:
+    selected = [part.strip().upper() for part in checkpoints_arg.split(",") if part.strip()]
+    if not selected:
+        raise ValueError("No checkpoint keys were requested.")
+
+    checkpoint_map = _merged_checkpoint_map(checkpoint_map_path)
+    available_with_paths = sorted(
+        key for key, value in checkpoint_map.items() if str(value).strip()
+    )
+
+    if selected == ["ALL"]:
+        if not available_with_paths:
+            raise ValueError(
+                "No checkpoint paths are available for --checkpoints ALL. "
+                "Provide --checkpoint_map or env vars R4_FT*_CKPT."
+            )
+        return available_with_paths
+
+    if checkpoint_map_path:
+        available_keys = sorted(checkpoint_map.keys())
+        invalid = [key for key in selected if key not in checkpoint_map]
+        if invalid:
+            raise ValueError(
+                f"Invalid checkpoint key(s): {invalid}. "
+                f"Available keys from checkpoint map/env: {available_keys}"
+            )
+        return selected
+
+    valid = {f"FT{i}" for i in range(1, 9)}
+    invalid = [key for key in selected if key not in valid]
+    if invalid:
+        raise ValueError(
+            f"Invalid checkpoint key(s): {invalid}. "
+            f"Valid default keys: {sorted(valid)}. "
+            "Provide --checkpoint_map for custom aliases."
+        )
+    return selected
 
 
 def _load_suites(path: str) -> List[Dict[str, Any]]:
@@ -176,8 +684,11 @@ def _build_job_args(
         _append_if_present(args, "--visomaster_tiers", suite.get("visomaster_tiers"))
 
     # External real
+    _append_if_present(args, "--external_real_manifest", suite.get("external_real_manifest"))
+    _append_if_present(args, "--external_real_manifest_split", suite.get("external_real_manifest_split"))
+    _append_if_present(args, "--external_real_manifest_slices", suite.get("external_real_manifest_slices"))
     _append_if_present(args, "--external_real_bucket", suite.get("external_real_bucket"))
-    if suite.get("external_real_bucket"):
+    if suite.get("external_real_manifest") or suite.get("external_real_bucket"):
         _append_if_present(args, "--external_real_prefix", suite.get("external_real_prefix"))
         _append_if_present(args, "--external_real_method", suite.get("external_real_method"))
         _append_if_present(args, "--external_real_cache", suite.get("external_real_cache"))
@@ -187,8 +698,11 @@ def _build_job_args(
             args.append("--external_real_deterministic")
 
     # External fake
+    _append_if_present(args, "--external_fake_manifest", suite.get("external_fake_manifest"))
+    _append_if_present(args, "--external_fake_manifest_split", suite.get("external_fake_manifest_split"))
+    _append_if_present(args, "--external_fake_manifest_slices", suite.get("external_fake_manifest_slices"))
     _append_if_present(args, "--external_fake_bucket", suite.get("external_fake_bucket"))
-    if suite.get("external_fake_bucket"):
+    if suite.get("external_fake_manifest") or suite.get("external_fake_bucket"):
         _append_if_present(args, "--external_fake_prefix", suite.get("external_fake_prefix"))
         _append_if_present(args, "--external_fake_method", suite.get("external_fake_method"))
         _append_if_present(args, "--external_fake_cache", suite.get("external_fake_cache"))
@@ -199,6 +713,10 @@ def _build_job_args(
             args.append("--external_fake_deterministic")
 
     return args
+
+
+def _build_validation_command(job_args: List[str]) -> List[str]:
+    return [sys.executable, "-u", str(VALIDATE_CUSTOM_SOURCES_SCRIPT)] + job_args
 
 
 def _run_job(index: int, total: int, job_name: str, cmd: List[str], dry_run: bool) -> bool:
@@ -213,7 +731,7 @@ def _run_job(index: int, total: int, job_name: str, cmd: List[str], dry_run: boo
         return True
 
     start = time.time()
-    result = subprocess.run(cmd, cwd=os.path.dirname(os.path.abspath(__file__)))
+    result = subprocess.run(cmd, cwd=str(TRAINING_ROOT))
     elapsed = time.time() - start
     if result.returncode != 0:
         print(f"FAILED {job_name} (exit={result.returncode}) after {elapsed:.1f}s")
@@ -225,7 +743,15 @@ def _run_job(index: int, total: int, job_name: str, cmd: List[str], dry_run: boo
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sequential target-domain validation runner")
-    parser.add_argument("--checkpoints", type=str, default="FT7")
+    parser.add_argument(
+        "--checkpoints",
+        type=str,
+        default="FT7",
+        help=(
+            "Comma-separated checkpoint aliases to run. "
+            "Use --checkpoint_map for custom aliases, or ALL to run every available alias."
+        ),
+    )
     parser.add_argument("--checkpoint_map", type=str, default=None)
     parser.add_argument("--suite_manifest", type=str, required=True,
                         help="JSON/YAML manifest containing validation suites.")
@@ -238,6 +764,30 @@ def main() -> None:
     parser.add_argument("--detailed_reports", dest="detailed_reports", action="store_true")
     parser.add_argument("--no_detailed_reports", dest="detailed_reports", action="store_false")
     parser.set_defaults(detailed_reports=True)
+    parser.add_argument(
+        "--scorecard_csv",
+        type=str,
+        default=None,
+        help="Optional long-form scorecard CSV output path (local or gs://).",
+    )
+    parser.add_argument(
+        "--scorecard_wide_csv",
+        type=str,
+        default=None,
+        help="Optional checkpoint-by-suite comparison CSV output path (local or gs://).",
+    )
+    parser.add_argument(
+        "--scorecard_json",
+        type=str,
+        default=None,
+        help="Optional JSON payload containing the long, wide, and pair-delta scorecard tables.",
+    )
+    parser.add_argument(
+        "--scorecard_delta_csv",
+        type=str,
+        default=None,
+        help="Optional FP32-vs-INT8 pair-delta CSV output path (local or gs://).",
+    )
 
     # Defaults for optional suite keys
     parser.add_argument("--df40_mode", type=str, default="none",
@@ -247,27 +797,37 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    selected = [part.strip().upper() for part in args.checkpoints.split(",") if part.strip()]
-    valid = {f"FT{i}" for i in range(1, 9)}
-    invalid = [key for key in selected if key not in valid]
-    if invalid:
-        raise ValueError(f"Invalid checkpoint key(s): {invalid}. Valid keys: {sorted(valid)}")
+    selected = _resolve_requested_checkpoint_keys(
+        checkpoints_arg=args.checkpoints,
+        checkpoint_map_path=args.checkpoint_map,
+    )
+    if _scorecard_requested(args) and not args.detailed_reports:
+        raise ValueError("Scorecard export requires detailed reports to stay enabled.")
 
     checkpoints = _resolve_checkpoints(selected, args.checkpoint_map)
     suites = _load_suites(args.suite_manifest)
 
-    jobs = []
+    jobs: List[Dict[str, Any]] = []
     for suite in suites:
         suite_name = str(suite["name"])
         for ckpt_key in selected:
             ckpt_path = checkpoints[ckpt_key]
-            cmd = [sys.executable, "-u", "validate_custom_sources.py"] + _build_job_args(
+            cmd = _build_validation_command(_build_job_args(
                 checkpoint_key=ckpt_key,
                 checkpoint_path=ckpt_path,
                 suite=suite,
                 common=args,
+            ))
+            jobs.append(
+                {
+                    "job_name": f"suite={suite_name} checkpoint={ckpt_key}",
+                    "cmd": cmd,
+                    "suite": suite,
+                    "suite_name": suite_name,
+                    "checkpoint_key": ckpt_key,
+                    "checkpoint_path": ckpt_path,
+                }
             )
-            jobs.append((f"suite={suite_name} checkpoint={ckpt_key}", cmd))
 
     print("=" * 88)
     print("Target-domain validation plan")
@@ -278,10 +838,35 @@ def main() -> None:
     print("=" * 88)
 
     results = []
+    scorecard_rows: List[Dict[str, Any]] = []
+    scorecard_failures: List[str] = []
     global_start = time.time()
-    for idx, (job_name, cmd) in enumerate(jobs, 1):
-        ok = _run_job(idx, len(jobs), job_name, cmd, args.dry_run)
-        results.append((job_name, ok))
+    for idx, job in enumerate(jobs, 1):
+        ok = _run_job(idx, len(jobs), job["job_name"], job["cmd"], args.dry_run)
+        results.append((job["job_name"], ok))
+        if ok and _scorecard_requested(args) and not args.dry_run:
+            try:
+                row = _load_scorecard_row(
+                    checkpoint_key=job["checkpoint_key"],
+                    checkpoint_path=job["checkpoint_path"],
+                    suite=job["suite"],
+                    output_root=args.output_gcs_folder,
+                )
+                scorecard_rows.append(row)
+                metric_value = row.get("score_metric_value")
+                metric_text = "n/a" if metric_value is None else f"{metric_value:.4f}"
+                print(
+                    "Scorecard "
+                    f"{job['checkpoint_key']} {job['suite_name']}: "
+                    f"{row['score_metric_name']}={metric_text}"
+                )
+            except Exception as exc:
+                message = (
+                    "FAILED to build scorecard row for "
+                    f"suite={job['suite_name']} checkpoint={job['checkpoint_key']}: {exc}"
+                )
+                print(message)
+                scorecard_failures.append(message)
 
     elapsed = time.time() - global_start
     failed = [job_name for job_name, ok in results if not ok]
@@ -292,8 +877,14 @@ def main() -> None:
     for job_name, ok in results:
         print(f"{'OK ' if ok else 'ERR'} {job_name}")
 
+    if _scorecard_requested(args) and not args.dry_run and scorecard_rows:
+        _write_scorecard_outputs(args, scorecard_rows)
+
     if failed:
         print(f"\nFailed jobs: {failed}")
+        raise SystemExit(1)
+    if scorecard_failures:
+        print(f"\nScorecard failures: {scorecard_failures}")
         raise SystemExit(1)
 
 

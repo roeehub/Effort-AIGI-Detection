@@ -6,6 +6,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TRAINING_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
 # -------- defaults (override via flags) --------
 MODE="train"                       # train | sweep
 AGENTS=1                           # number of jobs to submit (parallel sweep agents)
@@ -18,7 +21,7 @@ SWEEP_ID=""                        # required for 'sweep' mode
 
 PROJECT=""                         # --project for gcloud
 REGIONS="us-central1,europe-west4,asia-southeast1"
-YAML_TEMPLATE="./vertex_job_template.yaml"
+YAML_TEMPLATE="${TRAINING_DIR}/infra/cloudbuild/vertex_job_template.yaml"
 
 IMAGE_URI=""                       # required (or set in your env)
 GPU_TYPE="NVIDIA_TESLA_A100"       # matches a2-highgpu-1g
@@ -116,6 +119,18 @@ if [[ -z "$SERVICE_ACCOUNT" && -n "$PROJECT" ]]; then
   # Use a sensible default if you follow the convention; override with --service-account to customize.
   SERVICE_ACCOUNT="vertex-job-runner-train-cvit2@${PROJECT}.iam.gserviceaccount.com"
 fi
+
+if [[ "$YAML_TEMPLATE" != /* ]]; then
+  if [[ -f "$YAML_TEMPLATE" ]]; then
+    YAML_TEMPLATE="$(cd "$(dirname "$YAML_TEMPLATE")" && pwd)/$(basename "$YAML_TEMPLATE")"
+  elif [[ -f "${SCRIPT_DIR}/${YAML_TEMPLATE}" ]]; then
+    YAML_TEMPLATE="${SCRIPT_DIR}/${YAML_TEMPLATE}"
+  elif [[ -f "${TRAINING_DIR}/${YAML_TEMPLATE}" ]]; then
+    YAML_TEMPLATE="${TRAINING_DIR}/${YAML_TEMPLATE}"
+  fi
+fi
+
+[[ -f "$YAML_TEMPLATE" ]] || { echo "ERROR: YAML template not found: $YAML_TEMPLATE"; exit 2; }
 
 # -------- helpers --------
 ts() { date +%Y%m%d-%H%M%S; }

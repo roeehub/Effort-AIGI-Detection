@@ -1,0 +1,103 @@
+# Concrete local-machine suite manifest for the frozen Teams target-domain split.
+#
+# Intended usage from the training root:
+#   cd DeepfakeBench/training
+#   bash arena/run_teams_target_domain_scorecard.sh \
+#     --checkpoint-map arena/checkpoint_maps/teams_target_domain.template.yaml \
+#     --checkpoints R12_G_FP32,R12_G_INT8 \
+#     --dry-run
+#
+# If you need to run the scorecard from Vertex or another machine, prefer a copy
+# of this file that points at a staged `gs://...` manifest instead.
+
+suites:
+  - name: teams_real_all_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_real_poor_quality_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_poor_quality"
+    external_real_deterministic: true
+
+  - name: teams_real_lighting_extreme_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_lighting_extreme"
+    external_real_deterministic: true
+
+  - name: teams_real_all_lockbox
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_real_manifest_split: "lockbox"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: visomaster_enhanced_macro_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "visomaster_enhanced_macro"
+    external_fake_deterministic: true
+
+  - name: deeplive_enhanced_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "deeplive_enhanced"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam"
+    external_fake_deterministic: true
+
+  - name: teams_capture_noyn_sharker_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_noyn_sharker"
+    external_fake_deterministic: true
+
+  - name: teams_capture_dor_shkedi_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_dor_shkedi"
+    external_fake_deterministic: true
+
+  - name: teams_flat_xiang_xiang2_feng_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_flat_xiang_xiang2_feng"
+    external_fake_deterministic: true
+
+  - name: teams_fake_all_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true

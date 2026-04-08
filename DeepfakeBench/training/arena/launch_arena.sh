@@ -29,6 +29,7 @@ RESUME=""
 INFERENCE_DIR=""
 CONFIG="arena_config.yaml"
 CHECKPOINTS=""
+OUTPUT_GCS_FOLDER=""
 
 # ── Parse args ──
 while [[ $# -gt 0 ]]; do
@@ -60,6 +61,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+CONFIG_PATH_LOCAL="${SCRIPT_DIR}/${CONFIG}"
+if [[ -f "${CONFIG_PATH_LOCAL}" ]]; then
+    OUTPUT_GCS_FOLDER="$(
+        python - "${CONFIG_PATH_LOCAL}" <<'PY'
+import sys
+import yaml
+
+path = sys.argv[1]
+try:
+    with open(path, "r") as handle:
+        cfg = yaml.safe_load(handle) or {}
+    print((cfg.get("output_gcs_folder") or "").rstrip("/"))
+except Exception:
+    print("")
+PY
+    )"
+fi
 
 # ── Dry-run: just run locally (no GPU needed) ──
 if [[ -n "${DRY_RUN}" ]]; then
@@ -104,7 +122,7 @@ if [[ -n "${INFERENCE_DIR}" ]]; then
 fi
 echo ""
 
-"${TRAINING_DIR}/launch_experiment_jobs.sh" \
+"${TRAINING_DIR}/scripts/launch/launch_experiment_jobs.sh" \
   --mode train \
   --job-name "arena-${TIMESTAMP}" \
   --project "${PROJECT}" \
@@ -119,8 +137,15 @@ echo ""
 echo "============================================================"
 echo "Arena job submitted!"
 echo ""
-echo "Output will be at:"
-echo "  gs://training-job-outputs/arena_results/${TIMESTAMP}/"
+if [[ -n "${SMOKE_TEST}" ]]; then
+    echo "Smoke-test mode: GCS upload is skipped by model_arena.py."
+    echo "Use a non-smoke run for persistent arena artifacts."
+elif [[ -n "${OUTPUT_GCS_FOLDER}" ]]; then
+    echo "Output will be at:"
+    echo "  ${OUTPUT_GCS_FOLDER}/${TIMESTAMP}/"
+else
+    echo "Output GCS folder is not configured in ${CONFIG}."
+fi
 echo ""
 echo "Expected outputs:"
 echo "  inference/     — Per-frame CSVs (model__source.csv)"

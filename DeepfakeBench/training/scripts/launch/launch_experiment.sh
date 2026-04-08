@@ -2,6 +2,7 @@
 # launch_experiment.sh - Generic script to launch training experiments on GCP Vertex AI
 #
 # Usage:
+#   ./launch_experiment.sh <WANDB_PROJECT> <PARAM_CONFIG>
 #   ./launch_experiment.sh <WANDB_PROJECT> <REGION> <PARAM_CONFIG>
 #
 # Example:
@@ -14,11 +15,13 @@ set -euo pipefail
 # ==============================================
 usage() {
     cat << EOF
-Usage: $0 [-y] <WANDB_PROJECT> <REGION> <PARAM_CONFIG>
+Usage:
+  $0 [-y] <WANDB_PROJECT> <PARAM_CONFIG>
+  $0 [-y] <WANDB_PROJECT> <REGION> <PARAM_CONFIG>
 
 Arguments:
   WANDB_PROJECT    W&B project name (e.g., "effort-baseline-dec2025")
-  REGION           GCP region (e.g., "asia-southeast1", "us-central1")
+  REGION           Optional GCP region (defaults to "asia-southeast1")
   PARAM_CONFIG     Path to experiment config YAML (relative to repo root)
                    (e.g., "orgenize_training/sanity_exp.yaml")
 
@@ -26,6 +29,7 @@ Options:
   -y, --yes        Auto-confirm (skip confirmation prompt)
 
 Example:
+  $0 effort-baseline-dec2025 orgenize_training/sanity_exp.yaml
   $0 effort-baseline-dec2025 asia-southeast1 orgenize_training/sanity_exp.yaml
   $0 -y effort-baseline-dec2025 asia-southeast1 orgenize_training/sanity_exp.yaml
 
@@ -59,20 +63,30 @@ for arg in "$@"; do
 done
 
 # Restore positional args
-set -- "${POSITIONAL_ARGS[@]}"
+if [ ${#POSITIONAL_ARGS[@]} -gt 0 ]; then
+    set -- "${POSITIONAL_ARGS[@]}"
+else
+    set --
+fi
 
 # Check for required arguments (after flag parsing)
-if [ $# -lt 3 ]; then
-    echo "Error: Missing required arguments"
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+    echo "Error: Expected 2 or 3 positional arguments"
     echo ""
     usage
     exit 1
 fi
 
 # Required arguments
+DEFAULT_REGION="${REGION:-asia-southeast1}"
 WANDB_PROJECT="$1"
-REGION="$2"
-PARAM_CONFIG_INPUT="$3"
+if [ $# -eq 2 ]; then
+    REGION="${DEFAULT_REGION}"
+    PARAM_CONFIG_INPUT="$2"
+else
+    REGION="$2"
+    PARAM_CONFIG_INPUT="$3"
+fi
 
 # GCP Project (can be overridden via env var)
 PROJECT="${PROJECT:-train-cvit2}"
@@ -83,8 +97,9 @@ WANDB_ENTITY="${WANDB_ENTITY:-dtect-vision}"
 
 # Docker image version (read from VERSION file if not set)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TRAINING_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 if [ -z "${VERSION:-}" ]; then
-    VERSION="$(cat "${SCRIPT_DIR}/VERSION")"
+    VERSION="$(cat "${TRAINING_DIR}/VERSION")"
 fi
 # Always rebuild IMAGE_URI from VERSION to avoid stale env vars
 IMAGE_URI="us-docker.pkg.dev/${PROJECT}/effort-detector/effort-detector:${VERSION}"
@@ -102,6 +117,27 @@ if [[ "${PARAM_CONFIG_INPUT}" = /* ]]; then
     PARAM_CONFIG="${PARAM_CONFIG_INPUT}"
 else
     PARAM_CONFIG="/workspace/${PARAM_CONFIG_INPUT}"
+fi
+
+EXPECTED_GCS_BASE=""
+if [[ -f "${PARAM_CONFIG_INPUT}" ]]; then
+    EXPECTED_GCS_BASE="$(
+        python - "${PARAM_CONFIG_INPUT}" <<'PY'
+import sys
+import yaml
+
+path = sys.argv[1]
+try:
+    with open(path, "r") as handle:
+        cfg = yaml.safe_load(handle) or {}
+    prefix = ((cfg.get("checkpointing") or {}).get("gcs_prefix") or "").strip()
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    print(prefix)
+except Exception:
+    print("")
+PY
+    )"
 fi
 
 # ==============================================
@@ -130,6 +166,9 @@ echo "Job Name:      ${JOB_NAME}"
 echo "Config:        ${PARAM_CONFIG}"
 echo "GPU:           ${GPU_TYPE} x ${GPU_COUNT}"
 echo "Region:        ${REGION}"
+if [[ -n "${EXPECTED_GCS_BASE}" ]]; then
+    echo "Results:       ${EXPECTED_GCS_BASE}<wandb_run_id>/"
+fi
 echo "=============================================="
 echo ""
 
@@ -146,10 +185,10 @@ else
 fi
 
 # Launch the job
-./launch_experiment_jobs.sh \
-    --mode "${MODE}" \
-    --job-name "${JOB_NAME}" \
-    --project "${PROJECT}" \
+"${SCRIPT_DIR}/launch_experiment_jobs.sh" \
+  --mode "${MODE}" \
+  --job-name "${JOB_NAME}" \
+  --project "${PROJECT}" \
     --regions "${REGION}" \
     --image-uri "${IMAGE_URI}" \
     --gpu-type "${GPU_TYPE}" \
@@ -170,4 +209,9 @@ echo "  gcloud ai custom-jobs stream-logs ${JOB_NAME} --region=${REGION} --proje
 echo ""
 echo "W&B dashboard:"
 echo "  https://wandb.ai/${WANDB_ENTITY}/${WANDB_PROJECT}"
+if [[ -n "${EXPECTED_GCS_BASE}" ]]; then
+echo ""
+echo "Checkpoint prefix:"
+echo "  ${EXPECTED_GCS_BASE}<wandb_run_id>/"
+fi
 echo ""

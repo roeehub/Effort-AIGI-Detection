@@ -1,0 +1,21 @@
+# Target-domain scorecard checkpoint map template.
+#
+# Keys are free-form aliases. They are consumed by:
+#   python arena/run_target_domain_validation_sequential.py --checkpoint_map ...
+# or:
+#   bash arena/run_teams_target_domain_scorecard.sh --checkpoint-map ...
+#
+# Recommended baseline/candidate aliases for the current plan:
+# - R12_G_FP32
+# - R12_G_INT8
+# - POST_R12_ENH_FP32
+# - POST_R12_ENH_INT8
+# - TRACK_A_CANDIDATE
+#
+# Replace the placeholder URIs below with the real checkpoint paths.
+
+R12_G_FP32: "gs://replace-me/r12_g_fp32.pth"
+R12_G_INT8: "gs://replace-me/r12_g_int8.pth"
+POST_R12_ENH_FP32: "gs://replace-me/post_r12_enh_fp32.pth"
+POST_R12_ENH_INT8: "gs://replace-me/post_r12_enh_int8.pth"
+TRACK_A_CANDIDATE: "gs://replace-me/track_a_candidate.pth"

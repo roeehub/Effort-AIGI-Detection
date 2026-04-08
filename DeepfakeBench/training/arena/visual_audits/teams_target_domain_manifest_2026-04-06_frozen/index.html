@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset='utf-8'>
+<title>Frozen Teams Target-Domain Manifest Audit</title>
+<style>
+body { background: #141414; color: #eee; font-family: Menlo, Consolas, monospace; padding: 24px; }
+h1, h2 { color: #fff; }
+.summary { background: #1e1e1e; border: 1px solid #2d2d2d; border-radius: 10px; padding: 16px; margin-bottom: 24px; }
+.section { margin: 28px 0 40px; }
+.section-meta { color: #bdbdbd; margin-bottom: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); gap: 14px; }
+.card { background: #1b1b1b; border: 1px solid #3a3a3a; border-radius: 10px; padding: 10px; }
+.card img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.meta { font-size: 12px; color: #b7b7b7; margin-top: 6px; line-height: 1.5; }
+pre { white-space: pre-wrap; word-break: break-word; }
+a { color: #8dc2ff; }
+</style>
+</head><body>
+<h1>Frozen Teams Target-Domain Manifest Audit</h1>
+<div class='summary'>
+<p><b>Manifest:</b> DeepfakeBench/training/arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json</p>
+<p><b>Split filter:</b> all | <b>Samples per slice:</b> 5 | <b>Frames per video:</b> 4</p>
+<pre>
+{
+  &quot;label_counts&quot;: {
+    &quot;fake&quot;: 2662,
+    &quot;real&quot;: 4614
+  },
+  &quot;method_counts&quot;: {
+    &quot;deeplive_enhanced&quot;: 545,
+    &quot;teams_capture_cam_test_s32&quot;: 139,
+    &quot;teams_capture_cam_test_s33&quot;: 191,
+    &quot;teams_capture_cam_test_s35&quot;: 244,
+    &quot;teams_capture_cam_test_s38&quot;: 51,
+    &quot;teams_capture_cam_test_s46&quot;: 89,
+    &quot;teams_capture_dor_shkedi_s16&quot;: 57,
+    &quot;teams_capture_noyn_sharker_s23&quot;: 204,
+    &quot;teams_capture_pc_generator_s15&quot;: 62,
+    &quot;teams_capture_pc_generator_s3&quot;: 99,
+    &quot;teams_capture_pc_generator_s4&quot;: 30,
+    &quot;teams_capture_pc_generator_s9&quot;: 46,
+    &quot;teams_capture_test_cam_s53&quot;: 90,
+    &quot;teams_capture_test_cam_s73&quot;: 55,
+    &quot;teams_capture_test_cam_s76&quot;: 75,
+    &quot;teams_flat_xiang_xiang2_feng&quot;: 135,
+    &quot;teams_real&quot;: 4614,
+    &quot;visomaster_enhanced_macro&quot;: 550
+  },
+  &quot;slice_counts&quot;: {
+    &quot;deeplive_enhanced&quot;: 545,
+    &quot;teams_capture_cam_test&quot;: 714,
+    &quot;teams_capture_cam_test_s32&quot;: 139,
+    &quot;teams_capture_cam_test_s33&quot;: 191,
+    &quot;teams_capture_cam_test_s35&quot;: 244,
+    &quot;teams_capture_cam_test_s38&quot;: 51,
+    &quot;teams_capture_cam_test_s46&quot;: 89,
+    &quot;teams_capture_dor_shkedi&quot;: 57,
+    &quot;teams_capture_dor_shkedi_s16&quot;: 57,
+    &quot;teams_capture_noyn_sharker&quot;: 204,
+    &quot;teams_capture_noyn_sharker_s23&quot;: 204,
+    &quot;teams_capture_pc_generator&quot;: 237,
+    &quot;teams_capture_pc_generator_s15&quot;: 62,
+    &quot;teams_capture_pc_generator_s3&quot;: 99,
+    &quot;teams_capture_pc_generator_s4&quot;: 30,
+    &quot;teams_capture_pc_generator_s9&quot;: 46,
+    &quot;teams_capture_test_cam&quot;: 220,
+    &quot;teams_capture_test_cam_s53&quot;: 90,
+    &quot;teams_capture_test_cam_s73&quot;: 55,
+    &quot;teams_capture_test_cam_s76&quot;: 75,
+    &quot;teams_fake_all&quot;: 2662,
+    &quot;teams_flat_xiang_xiang2_feng&quot;: 135,
+    &quot;teams_real_all&quot;: 4614,
+    &quot;teams_real_lighting_extreme&quot;: 1608,
+    &quot;teams_real_poor_quality&quot;: 945,
+    &quot;visomaster_enhanced_macro&quot;: 550
+  },
+  &quot;split_counts&quot;: {
+    &quot;dev&quot;: 5662,
+    &quot;lockbox&quot;: 1614
+  },
+  &quot;videos_total&quot;: 7276
+}
+</pre>
+</div>
+<div class='section'>
+<h2>teams_real_all</h2>
+<div class='section-meta'>Candidates in manifest: 4614 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/real_Cam_Test__s32__seg_308.0__real_ad6a5d4642.jpg' alt='Cam_Test__s32__seg_308.0__real'><div class='meta'>video=Cam_Test__s32__seg_308.0__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_Roy_D__seq1510__real_033fca01c4.jpg' alt='Roy_D__seq1510__real'><div class='meta'>video=Roy_D__seq1510__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+<div class='card'><img src='cards/real_Xiang_Xiang2_Feng__seq36949__real_9c22f1bf04.jpg' alt='Xiang_Xiang2_Feng__seq36949__real'><div class='meta'>video=Xiang_Xiang2_Feng__seq36949__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+<div class='card'><img src='cards/real_dor_shkedi__seq2363__real_0ad9cf67c6.jpg' alt='dor_shkedi__seq2363__real'><div class='meta'>video=dor_shkedi__seq2363__real | label=real | method=teams_real | split=lockbox | source=flat_upload</div></div>
+<div class='card'><img src='cards/real_xiang__seq24607__real_2503cdd715.jpg' alt='xiang__seq24607__real'><div class='meta'>video=xiang__seq24607__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_real_poor_quality</h2>
+<div class='section-meta'>Candidates in manifest: 945 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/real_Cam_Test__s32__seg_331.0__real_80483c9be5.jpg' alt='Cam_Test__s32__seg_331.0__real'><div class='meta'>video=Cam_Test__s32__seg_331.0__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_PC_Generator__s8__seg_141.2__real_b12c50b79c.jpg' alt='PC_Generator__s8__seg_141.2__real'><div class='meta'>video=PC_Generator__s8__seg_141.2__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_Test_Cam__s76__seg_223.3__real_b21c2d2124.jpg' alt='Test_Cam__s76__seg_223.3__real'><div class='meta'>video=Test_Cam__s76__seg_223.3__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_bla_bla_chow__s2__seg_513.0__real_40c60fb827.jpg' alt='bla_bla_chow__s2__seg_513.0__real'><div class='meta'>video=bla_bla_chow__s2__seg_513.0__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_xiang__seq24533__real_c08f55d4b3.jpg' alt='xiang__seq24533__real'><div class='meta'>video=xiang__seq24533__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_real_lighting_extreme</h2>
+<div class='section-meta'>Candidates in manifest: 1608 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/real_Md_noyn_Sharker__s15__seg_1447.4__real_bdd6ddead0.jpg' alt='Md_noyn_Sharker__s15__seg_1447.4__real'><div class='meta'>video=Md_noyn_Sharker__s15__seg_1447.4__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_PC_Generator__s22__seg_53.0__real_038daacbe9.jpg' alt='PC_Generator__s22__seg_53.0__real'><div class='meta'>video=PC_Generator__s22__seg_53.0__real | label=real | method=teams_real | split=dev | source=session_capture</div></div>
+<div class='card'><img src='cards/real_Xiang_Xiang2_Feng__seq1412__real_00e320756e.jpg' alt='Xiang_Xiang2_Feng__seq1412__real'><div class='meta'>video=Xiang_Xiang2_Feng__seq1412__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+<div class='card'><img src='cards/real_bla_bla_chow__seq2157__real_f14e69ff48.jpg' alt='bla_bla_chow__seq2157__real'><div class='meta'>video=bla_bla_chow__seq2157__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+<div class='card'><img src='cards/real_xiang__seq24371__real_eb69909f0e.jpg' alt='xiang__seq24371__real'><div class='meta'>video=xiang__seq24371__real | label=real | method=teams_real | split=dev | source=flat_upload</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_fake_all</h2>
+<div class='section-meta'>Candidates in manifest: 2662 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_0.0__fake_652ae94f3b.jpg' alt='Cam_Test__s32__seg_0.0__fake'><div class='meta'>video=Cam_Test__s32__seg_0.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_149.0__fake_dc72fbfe6e.jpg' alt='Cam_Test__s46__seg_149.0__fake'><div class='meta'>video=Cam_Test__s46__seg_149.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1241.3__fake_6b4eab20cb.jpg' alt='Test_Cam__s76__seg_1241.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1241.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+<div class='card'><img src='cards/fake_deeplive_dor__seq5168__fake_c30a92fb90.jpg' alt='deeplive_dor__seq5168__fake'><div class='meta'>video=deeplive_dor__seq5168__fake | label=fake | method=deeplive_enhanced | split=dev | source=flat_upload | rule=deeplive_dor</div></div>
+<div class='card'><img src='cards/fake_visomaster_enhanced_teams__seq9853__fake_d3473b96f2.jpg' alt='visomaster_enhanced_teams__seq9853__fake'><div class='meta'>video=visomaster_enhanced_teams__seq9853__fake | label=fake | method=visomaster_enhanced_macro | split=dev | source=flat_upload | rule=visomaster_enhanced_teams</div></div>
+</div></div>
+<div class='section'>
+<h2>visomaster_enhanced_macro</h2>
+<div class='section-meta'>Candidates in manifest: 550 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_visomaster_enhanced_raw__seq12349__fake_c57431af6b.jpg' alt='visomaster_enhanced_raw__seq12349__fake'><div class='meta'>video=visomaster_enhanced_raw__seq12349__fake | label=fake | method=visomaster_enhanced_macro | split=dev | source=flat_upload | rule=visomaster_enhanced_raw</div></div>
+<div class='card'><img src='cards/fake_visomaster_enhanced_raw__seq5843__fake_c4f57c173e.jpg' alt='visomaster_enhanced_raw__seq5843__fake'><div class='meta'>video=visomaster_enhanced_raw__seq5843__fake | label=fake | method=visomaster_enhanced_macro | split=dev | source=flat_upload | rule=visomaster_enhanced_raw</div></div>
+<div class='card'><img src='cards/fake_visomaster_enhanced_raw__seq9853__fake_617ea0a8f3.jpg' alt='visomaster_enhanced_raw__seq9853__fake'><div class='meta'>video=visomaster_enhanced_raw__seq9853__fake | label=fake | method=visomaster_enhanced_macro | split=dev | source=flat_upload | rule=visomaster_enhanced_raw</div></div>
+<div class='card'><img src='cards/fake_visomaster_enhanced_teams__seq5843__fake_47e3109fc3.jpg' alt='visomaster_enhanced_teams__seq5843__fake'><div class='meta'>video=visomaster_enhanced_teams__seq5843__fake | label=fake | method=visomaster_enhanced_macro | split=dev | source=flat_upload | rule=visomaster_enhanced_teams</div></div>
+<div class='card'><img src='cards/fake_visomaster_enhanced_teams__seq9853__fake_d3473b96f2.jpg' alt='visomaster_enhanced_teams__seq9853__fake'><div class='meta'>video=visomaster_enhanced_teams__seq9853__fake | label=fake | method=visomaster_enhanced_macro | split=dev | source=flat_upload | rule=visomaster_enhanced_teams</div></div>
+</div></div>
+<div class='section'>
+<h2>deeplive_enhanced</h2>
+<div class='section-meta'>Candidates in manifest: 545 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_deeplive_dor__seq10006__fake_b4bcc64df9.jpg' alt='deeplive_dor__seq10006__fake'><div class='meta'>video=deeplive_dor__seq10006__fake | label=fake | method=deeplive_enhanced | split=dev | source=flat_upload | rule=deeplive_dor</div></div>
+<div class='card'><img src='cards/fake_deeplive_dor__seq12261__fake_6cf8964095.jpg' alt='deeplive_dor__seq12261__fake'><div class='meta'>video=deeplive_dor__seq12261__fake | label=fake | method=deeplive_enhanced | split=dev | source=flat_upload | rule=deeplive_dor</div></div>
+<div class='card'><img src='cards/fake_deeplive_dor__seq14734__fake_f68ad5c4c6.jpg' alt='deeplive_dor__seq14734__fake'><div class='meta'>video=deeplive_dor__seq14734__fake | label=fake | method=deeplive_enhanced | split=dev | source=flat_upload | rule=deeplive_dor</div></div>
+<div class='card'><img src='cards/fake_deeplive_dor__seq16865__fake_cb69dbb9ac.jpg' alt='deeplive_dor__seq16865__fake'><div class='meta'>video=deeplive_dor__seq16865__fake | label=fake | method=deeplive_enhanced | split=dev | source=flat_upload | rule=deeplive_dor</div></div>
+<div class='card'><img src='cards/fake_deeplive_dor__seq9994__fake_d022a3baf9.jpg' alt='deeplive_dor__seq9994__fake'><div class='meta'>video=deeplive_dor__seq9994__fake | label=fake | method=deeplive_enhanced | split=dev | source=flat_upload | rule=deeplive_dor</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_cam_test</h2>
+<div class='section-meta'>Candidates in manifest: 714 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_0.0__fake_652ae94f3b.jpg' alt='Cam_Test__s32__seg_0.0__fake'><div class='meta'>video=Cam_Test__s32__seg_0.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s33__seg_133.0__fake_bdfaa4cc9b.jpg' alt='Cam_Test__s33__seg_133.0__fake'><div class='meta'>video=Cam_Test__s33__seg_133.0__fake | label=fake | method=teams_capture_cam_test_s33 | split=lockbox | source=session_capture | rule=Cam_Test__s33</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_1226.0__fake_ba59944b78.jpg' alt='Cam_Test__s35__seg_1226.0__fake'><div class='meta'>video=Cam_Test__s35__seg_1226.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_704.0__fake_eccdca03f8.jpg' alt='Cam_Test__s35__seg_704.0__fake'><div class='meta'>video=Cam_Test__s35__seg_704.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_210.0__fake_47dc35bccc.jpg' alt='Cam_Test__s46__seg_210.0__fake'><div class='meta'>video=Cam_Test__s46__seg_210.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_cam_test_s32</h2>
+<div class='section-meta'>Candidates in manifest: 139 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_0.0__fake_652ae94f3b.jpg' alt='Cam_Test__s32__seg_0.0__fake'><div class='meta'>video=Cam_Test__s32__seg_0.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_132.0__fake_5e62c41928.jpg' alt='Cam_Test__s32__seg_132.0__fake'><div class='meta'>video=Cam_Test__s32__seg_132.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_28.0__fake_96e552ce96.jpg' alt='Cam_Test__s32__seg_28.0__fake'><div class='meta'>video=Cam_Test__s32__seg_28.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_68.0__fake_926d1cc04a.jpg' alt='Cam_Test__s32__seg_68.0__fake'><div class='meta'>video=Cam_Test__s32__seg_68.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s32__seg_99.0__fake_b5facfec71.jpg' alt='Cam_Test__s32__seg_99.0__fake'><div class='meta'>video=Cam_Test__s32__seg_99.0__fake | label=fake | method=teams_capture_cam_test_s32 | split=dev | source=session_capture | rule=Cam_Test__s32</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_cam_test_s33</h2>
+<div class='section-meta'>Candidates in manifest: 191 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s33__seg_0.0__fake_40dade2650.jpg' alt='Cam_Test__s33__seg_0.0__fake'><div class='meta'>video=Cam_Test__s33__seg_0.0__fake | label=fake | method=teams_capture_cam_test_s33 | split=lockbox | source=session_capture | rule=Cam_Test__s33</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s33__seg_141.0__fake_d2626612d8.jpg' alt='Cam_Test__s33__seg_141.0__fake'><div class='meta'>video=Cam_Test__s33__seg_141.0__fake | label=fake | method=teams_capture_cam_test_s33 | split=lockbox | source=session_capture | rule=Cam_Test__s33</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s33__seg_190.0__fake_3eb6d62b12.jpg' alt='Cam_Test__s33__seg_190.0__fake'><div class='meta'>video=Cam_Test__s33__seg_190.0__fake | label=fake | method=teams_capture_cam_test_s33 | split=lockbox | source=session_capture | rule=Cam_Test__s33</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s33__seg_54.0__fake_1349b7efc1.jpg' alt='Cam_Test__s33__seg_54.0__fake'><div class='meta'>video=Cam_Test__s33__seg_54.0__fake | label=fake | method=teams_capture_cam_test_s33 | split=lockbox | source=session_capture | rule=Cam_Test__s33</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s33__seg_99.0__fake_72f60d6d4f.jpg' alt='Cam_Test__s33__seg_99.0__fake'><div class='meta'>video=Cam_Test__s33__seg_99.0__fake | label=fake | method=teams_capture_cam_test_s33 | split=lockbox | source=session_capture | rule=Cam_Test__s33</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_cam_test_s35</h2>
+<div class='section-meta'>Candidates in manifest: 244 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_1200.0__fake_d0c2f42833.jpg' alt='Cam_Test__s35__seg_1200.0__fake'><div class='meta'>video=Cam_Test__s35__seg_1200.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_1667.0__fake_330b7344fc.jpg' alt='Cam_Test__s35__seg_1667.0__fake'><div class='meta'>video=Cam_Test__s35__seg_1667.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_619.0__fake_b303ee0343.jpg' alt='Cam_Test__s35__seg_619.0__fake'><div class='meta'>video=Cam_Test__s35__seg_619.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_680.0__fake_7fb08382ed.jpg' alt='Cam_Test__s35__seg_680.0__fake'><div class='meta'>video=Cam_Test__s35__seg_680.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s35__seg_744.0__fake_d8d9ab0643.jpg' alt='Cam_Test__s35__seg_744.0__fake'><div class='meta'>video=Cam_Test__s35__seg_744.0__fake | label=fake | method=teams_capture_cam_test_s35 | split=dev | source=session_capture | rule=Cam_Test__s35</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_cam_test_s38</h2>
+<div class='section-meta'>Candidates in manifest: 51 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s38__seg_148.0__fake_2e27cb93ce.jpg' alt='Cam_Test__s38__seg_148.0__fake'><div class='meta'>video=Cam_Test__s38__seg_148.0__fake | label=fake | method=teams_capture_cam_test_s38 | split=dev | source=session_capture | rule=Cam_Test__s38</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s38__seg_160.0__fake_34302fc5cc.jpg' alt='Cam_Test__s38__seg_160.0__fake'><div class='meta'>video=Cam_Test__s38__seg_160.0__fake | label=fake | method=teams_capture_cam_test_s38 | split=dev | source=session_capture | rule=Cam_Test__s38</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s38__seg_178.0__fake_cd4e24baf2.jpg' alt='Cam_Test__s38__seg_178.0__fake'><div class='meta'>video=Cam_Test__s38__seg_178.0__fake | label=fake | method=teams_capture_cam_test_s38 | split=dev | source=session_capture | rule=Cam_Test__s38</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s38__seg_192.0__fake_d22d55f872.jpg' alt='Cam_Test__s38__seg_192.0__fake'><div class='meta'>video=Cam_Test__s38__seg_192.0__fake | label=fake | method=teams_capture_cam_test_s38 | split=dev | source=session_capture | rule=Cam_Test__s38</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s38__seg_204.0__fake_943b0d8d28.jpg' alt='Cam_Test__s38__seg_204.0__fake'><div class='meta'>video=Cam_Test__s38__seg_204.0__fake | label=fake | method=teams_capture_cam_test_s38 | split=dev | source=session_capture | rule=Cam_Test__s38</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_cam_test_s46</h2>
+<div class='section-meta'>Candidates in manifest: 89 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_109.0__fake_73ec8a2f17.jpg' alt='Cam_Test__s46__seg_109.0__fake'><div class='meta'>video=Cam_Test__s46__seg_109.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_131.0__fake_09310cf1d8.jpg' alt='Cam_Test__s46__seg_131.0__fake'><div class='meta'>video=Cam_Test__s46__seg_131.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_153.0__fake_1f750aff06.jpg' alt='Cam_Test__s46__seg_153.0__fake'><div class='meta'>video=Cam_Test__s46__seg_153.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_183.0__fake_f5563ffeb7.jpg' alt='Cam_Test__s46__seg_183.0__fake'><div class='meta'>video=Cam_Test__s46__seg_183.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+<div class='card'><img src='cards/fake_Cam_Test__s46__seg_210.0__fake_47dc35bccc.jpg' alt='Cam_Test__s46__seg_210.0__fake'><div class='meta'>video=Cam_Test__s46__seg_210.0__fake | label=fake | method=teams_capture_cam_test_s46 | split=dev | source=session_capture | rule=Cam_Test__s46</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_dor_shkedi</h2>
+<div class='section-meta'>Candidates in manifest: 57 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_156.3__fake_b4c16601d4.jpg' alt='dor_shkedi__s16__seg_156.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_156.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_170.3__fake_29360c2290.jpg' alt='dor_shkedi__s16__seg_170.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_170.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_185.3__fake_58d4b9f451.jpg' alt='dor_shkedi__s16__seg_185.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_185.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_199.3__fake_c4d14f07ff.jpg' alt='dor_shkedi__s16__seg_199.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_199.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_213.3__fake_20b9680e6e.jpg' alt='dor_shkedi__s16__seg_213.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_213.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_dor_shkedi_s16</h2>
+<div class='section-meta'>Candidates in manifest: 57 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_156.3__fake_b4c16601d4.jpg' alt='dor_shkedi__s16__seg_156.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_156.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_170.3__fake_29360c2290.jpg' alt='dor_shkedi__s16__seg_170.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_170.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_185.3__fake_58d4b9f451.jpg' alt='dor_shkedi__s16__seg_185.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_185.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_199.3__fake_c4d14f07ff.jpg' alt='dor_shkedi__s16__seg_199.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_199.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+<div class='card'><img src='cards/fake_dor_shkedi__s16__seg_213.3__fake_20b9680e6e.jpg' alt='dor_shkedi__s16__seg_213.3__fake'><div class='meta'>video=dor_shkedi__s16__seg_213.3__fake | label=fake | method=teams_capture_dor_shkedi_s16 | split=dev | source=session_capture | rule=dor_shkedi__s16</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_noyn_sharker</h2>
+<div class='section-meta'>Candidates in manifest: 204 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_10.2__fake_00deeaec2e.jpg' alt='Noyn_sharker__s23__seg_10.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_10.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_149.2__fake_80cb284ace.jpg' alt='Noyn_sharker__s23__seg_149.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_149.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_28.2__fake_e8aa9fe160.jpg' alt='Noyn_sharker__s23__seg_28.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_28.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_50.2__fake_0a41b4b06b.jpg' alt='Noyn_sharker__s23__seg_50.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_50.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_99.2__fake_4a522489fd.jpg' alt='Noyn_sharker__s23__seg_99.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_99.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_noyn_sharker_s23</h2>
+<div class='section-meta'>Candidates in manifest: 204 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_10.2__fake_00deeaec2e.jpg' alt='Noyn_sharker__s23__seg_10.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_10.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_149.2__fake_80cb284ace.jpg' alt='Noyn_sharker__s23__seg_149.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_149.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_28.2__fake_e8aa9fe160.jpg' alt='Noyn_sharker__s23__seg_28.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_28.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_50.2__fake_0a41b4b06b.jpg' alt='Noyn_sharker__s23__seg_50.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_50.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+<div class='card'><img src='cards/fake_Noyn_sharker__s23__seg_99.2__fake_4a522489fd.jpg' alt='Noyn_sharker__s23__seg_99.2__fake'><div class='meta'>video=Noyn_sharker__s23__seg_99.2__fake | label=fake | method=teams_capture_noyn_sharker_s23 | split=dev | source=session_capture | rule=Noyn_sharker__s23</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_pc_generator</h2>
+<div class='section-meta'>Candidates in manifest: 237 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1507.4__fake_1a68598b48.jpg' alt='PC_Generator__s15__seg_1507.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1507.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1570.4__fake_7128d4c76d.jpg' alt='PC_Generator__s15__seg_1570.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1570.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s3__seg_51.0__fake_2bc90049b0.jpg' alt='PC_Generator__s3__seg_51.0__fake'><div class='meta'>video=PC_Generator__s3__seg_51.0__fake | label=fake | method=teams_capture_pc_generator_s3 | split=dev | source=session_capture | rule=PC_Generator__s3</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s4__seg_4.0__fake_bd758a4261.jpg' alt='PC_Generator__s4__seg_4.0__fake'><div class='meta'>video=PC_Generator__s4__seg_4.0__fake | label=fake | method=teams_capture_pc_generator_s4 | split=dev | source=session_capture | rule=PC_Generator__s4</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s9__seg_192.2__fake_c9c3dc383e.jpg' alt='PC_Generator__s9__seg_192.2__fake'><div class='meta'>video=PC_Generator__s9__seg_192.2__fake | label=fake | method=teams_capture_pc_generator_s9 | split=dev | source=session_capture | rule=PC_Generator__s9</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_pc_generator_s15</h2>
+<div class='section-meta'>Candidates in manifest: 62 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1507.4__fake_1a68598b48.jpg' alt='PC_Generator__s15__seg_1507.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1507.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1523.4__fake_a13558aa7d.jpg' alt='PC_Generator__s15__seg_1523.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1523.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1539.4__fake_653edc5b90.jpg' alt='PC_Generator__s15__seg_1539.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1539.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1556.4__fake_1ebe42e4b3.jpg' alt='PC_Generator__s15__seg_1556.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1556.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s15__seg_1572.4__fake_022017afec.jpg' alt='PC_Generator__s15__seg_1572.4__fake'><div class='meta'>video=PC_Generator__s15__seg_1572.4__fake | label=fake | method=teams_capture_pc_generator_s15 | split=lockbox | source=session_capture | rule=PC_Generator__s15</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_pc_generator_s3</h2>
+<div class='section-meta'>Candidates in manifest: 99 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_PC_Generator__s3__seg_1.0__fake_06404acb15.jpg' alt='PC_Generator__s3__seg_1.0__fake'><div class='meta'>video=PC_Generator__s3__seg_1.0__fake | label=fake | method=teams_capture_pc_generator_s3 | split=dev | source=session_capture | rule=PC_Generator__s3</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s3__seg_19.0__fake_c5825f7ffb.jpg' alt='PC_Generator__s3__seg_19.0__fake'><div class='meta'>video=PC_Generator__s3__seg_19.0__fake | label=fake | method=teams_capture_pc_generator_s3 | split=dev | source=session_capture | rule=PC_Generator__s3</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s3__seg_43.0__fake_fa29023ffa.jpg' alt='PC_Generator__s3__seg_43.0__fake'><div class='meta'>video=PC_Generator__s3__seg_43.0__fake | label=fake | method=teams_capture_pc_generator_s3 | split=dev | source=session_capture | rule=PC_Generator__s3</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s3__seg_70.0__fake_5f73dea265.jpg' alt='PC_Generator__s3__seg_70.0__fake'><div class='meta'>video=PC_Generator__s3__seg_70.0__fake | label=fake | method=teams_capture_pc_generator_s3 | split=dev | source=session_capture | rule=PC_Generator__s3</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s3__seg_99.0__fake_1899a7ae64.jpg' alt='PC_Generator__s3__seg_99.0__fake'><div class='meta'>video=PC_Generator__s3__seg_99.0__fake | label=fake | method=teams_capture_pc_generator_s3 | split=dev | source=session_capture | rule=PC_Generator__s3</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_pc_generator_s4</h2>
+<div class='section-meta'>Candidates in manifest: 30 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_PC_Generator__s4__seg_0.0__fake_97955aa3b9.jpg' alt='PC_Generator__s4__seg_0.0__fake'><div class='meta'>video=PC_Generator__s4__seg_0.0__fake | label=fake | method=teams_capture_pc_generator_s4 | split=dev | source=session_capture | rule=PC_Generator__s4</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s4__seg_21.0__fake_f14ad75d11.jpg' alt='PC_Generator__s4__seg_21.0__fake'><div class='meta'>video=PC_Generator__s4__seg_21.0__fake | label=fake | method=teams_capture_pc_generator_s4 | split=dev | source=session_capture | rule=PC_Generator__s4</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s4__seg_35.0__fake_55c3033972.jpg' alt='PC_Generator__s4__seg_35.0__fake'><div class='meta'>video=PC_Generator__s4__seg_35.0__fake | label=fake | method=teams_capture_pc_generator_s4 | split=dev | source=session_capture | rule=PC_Generator__s4</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s4__seg_50.0__fake_315bdc7784.jpg' alt='PC_Generator__s4__seg_50.0__fake'><div class='meta'>video=PC_Generator__s4__seg_50.0__fake | label=fake | method=teams_capture_pc_generator_s4 | split=dev | source=session_capture | rule=PC_Generator__s4</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s4__seg_9.0__fake_faca0413db.jpg' alt='PC_Generator__s4__seg_9.0__fake'><div class='meta'>video=PC_Generator__s4__seg_9.0__fake | label=fake | method=teams_capture_pc_generator_s4 | split=dev | source=session_capture | rule=PC_Generator__s4</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_pc_generator_s9</h2>
+<div class='section-meta'>Candidates in manifest: 46 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_PC_Generator__s9__seg_123.2__fake_63c395fa02.jpg' alt='PC_Generator__s9__seg_123.2__fake'><div class='meta'>video=PC_Generator__s9__seg_123.2__fake | label=fake | method=teams_capture_pc_generator_s9 | split=dev | source=session_capture | rule=PC_Generator__s9</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s9__seg_144.2__fake_1fba95a7eb.jpg' alt='PC_Generator__s9__seg_144.2__fake'><div class='meta'>video=PC_Generator__s9__seg_144.2__fake | label=fake | method=teams_capture_pc_generator_s9 | split=dev | source=session_capture | rule=PC_Generator__s9</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s9__seg_162.2__fake_6b3babe711.jpg' alt='PC_Generator__s9__seg_162.2__fake'><div class='meta'>video=PC_Generator__s9__seg_162.2__fake | label=fake | method=teams_capture_pc_generator_s9 | split=dev | source=session_capture | rule=PC_Generator__s9</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s9__seg_177.2__fake_489cf8ca55.jpg' alt='PC_Generator__s9__seg_177.2__fake'><div class='meta'>video=PC_Generator__s9__seg_177.2__fake | label=fake | method=teams_capture_pc_generator_s9 | split=dev | source=session_capture | rule=PC_Generator__s9</div></div>
+<div class='card'><img src='cards/fake_PC_Generator__s9__seg_192.2__fake_c9c3dc383e.jpg' alt='PC_Generator__s9__seg_192.2__fake'><div class='meta'>video=PC_Generator__s9__seg_192.2__fake | label=fake | method=teams_capture_pc_generator_s9 | split=dev | source=session_capture | rule=PC_Generator__s9</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_test_cam</h2>
+<div class='section-meta'>Candidates in manifest: 220 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_100.0__fake_3330166330.jpg' alt='Test_Cam__s53__seg_100.0__fake'><div class='meta'>video=Test_Cam__s53__seg_100.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_65.0__fake_9467fd9388.jpg' alt='Test_Cam__s53__seg_65.0__fake'><div class='meta'>video=Test_Cam__s53__seg_65.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s73__seg_120.5__fake_f6f4a0b23e.jpg' alt='Test_Cam__s73__seg_120.5__fake'><div class='meta'>video=Test_Cam__s73__seg_120.5__fake | label=fake | method=teams_capture_test_cam_s73 | split=dev | source=session_capture | rule=Test_Cam__s73</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1230.3__fake_d8cbfdcb10.jpg' alt='Test_Cam__s76__seg_1230.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1230.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1285.3__fake_2cf408a1d3.jpg' alt='Test_Cam__s76__seg_1285.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1285.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_test_cam_s53</h2>
+<div class='section-meta'>Candidates in manifest: 90 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_100.0__fake_3330166330.jpg' alt='Test_Cam__s53__seg_100.0__fake'><div class='meta'>video=Test_Cam__s53__seg_100.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_122.0__fake_f7361d7d9f.jpg' alt='Test_Cam__s53__seg_122.0__fake'><div class='meta'>video=Test_Cam__s53__seg_122.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_54.0__fake_b23a9e8e07.jpg' alt='Test_Cam__s53__seg_54.0__fake'><div class='meta'>video=Test_Cam__s53__seg_54.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_77.0__fake_bd5c73f73b.jpg' alt='Test_Cam__s53__seg_77.0__fake'><div class='meta'>video=Test_Cam__s53__seg_77.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s53__seg_99.0__fake_2f8ab8c6a0.jpg' alt='Test_Cam__s53__seg_99.0__fake'><div class='meta'>video=Test_Cam__s53__seg_99.0__fake | label=fake | method=teams_capture_test_cam_s53 | split=dev | source=session_capture | rule=Test_Cam__s53</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_test_cam_s73</h2>
+<div class='section-meta'>Candidates in manifest: 55 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Test_Cam__s73__seg_100.5__fake_67e8284fc5.jpg' alt='Test_Cam__s73__seg_100.5__fake'><div class='meta'>video=Test_Cam__s73__seg_100.5__fake | label=fake | method=teams_capture_test_cam_s73 | split=dev | source=session_capture | rule=Test_Cam__s73</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s73__seg_114.5__fake_bf9c761423.jpg' alt='Test_Cam__s73__seg_114.5__fake'><div class='meta'>video=Test_Cam__s73__seg_114.5__fake | label=fake | method=teams_capture_test_cam_s73 | split=dev | source=session_capture | rule=Test_Cam__s73</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s73__seg_127.5__fake_c2a13b1528.jpg' alt='Test_Cam__s73__seg_127.5__fake'><div class='meta'>video=Test_Cam__s73__seg_127.5__fake | label=fake | method=teams_capture_test_cam_s73 | split=dev | source=session_capture | rule=Test_Cam__s73</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s73__seg_85.5__fake_08d32cf630.jpg' alt='Test_Cam__s73__seg_85.5__fake'><div class='meta'>video=Test_Cam__s73__seg_85.5__fake | label=fake | method=teams_capture_test_cam_s73 | split=dev | source=session_capture | rule=Test_Cam__s73</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s73__seg_99.5__fake_d48fece51b.jpg' alt='Test_Cam__s73__seg_99.5__fake'><div class='meta'>video=Test_Cam__s73__seg_99.5__fake | label=fake | method=teams_capture_test_cam_s73 | split=dev | source=session_capture | rule=Test_Cam__s73</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_capture_test_cam_s76</h2>
+<div class='section-meta'>Candidates in manifest: 75 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1202.3__fake_7df96cf286.jpg' alt='Test_Cam__s76__seg_1202.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1202.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1229.3__fake_3c10edbdd4.jpg' alt='Test_Cam__s76__seg_1229.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1229.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1248.3__fake_b5d24d3df2.jpg' alt='Test_Cam__s76__seg_1248.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1248.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1267.3__fake_bbe1646b99.jpg' alt='Test_Cam__s76__seg_1267.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1267.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+<div class='card'><img src='cards/fake_Test_Cam__s76__seg_1285.3__fake_2cf408a1d3.jpg' alt='Test_Cam__s76__seg_1285.3__fake'><div class='meta'>video=Test_Cam__s76__seg_1285.3__fake | label=fake | method=teams_capture_test_cam_s76 | split=dev | source=session_capture | rule=Test_Cam__s76</div></div>
+</div></div>
+<div class='section'>
+<h2>teams_flat_xiang_xiang2_feng</h2>
+<div class='section-meta'>Candidates in manifest: 135 | Rendered rows: 5</div>
+<div class='cards'>
+<div class='card'><img src='cards/fake_Xiang_Xiang2_Feng__seq46024__fake_f807ff1ec6.jpg' alt='Xiang_Xiang2_Feng__seq46024__fake'><div class='meta'>video=Xiang_Xiang2_Feng__seq46024__fake | label=fake | method=teams_flat_xiang_xiang2_feng | split=dev | source=flat_upload | rule=Xiang_Xiang2_Feng</div></div>
+<div class='card'><img src='cards/fake_Xiang_Xiang2_Feng__seq46954__fake_7f3f809cd9.jpg' alt='Xiang_Xiang2_Feng__seq46954__fake'><div class='meta'>video=Xiang_Xiang2_Feng__seq46954__fake | label=fake | method=teams_flat_xiang_xiang2_feng | split=dev | source=flat_upload | rule=Xiang_Xiang2_Feng</div></div>
+<div class='card'><img src='cards/fake_Xiang_Xiang2_Feng__seq47472__fake_8a7e1d4dae.jpg' alt='Xiang_Xiang2_Feng__seq47472__fake'><div class='meta'>video=Xiang_Xiang2_Feng__seq47472__fake | label=fake | method=teams_flat_xiang_xiang2_feng | split=dev | source=flat_upload | rule=Xiang_Xiang2_Feng</div></div>
+<div class='card'><img src='cards/fake_Xiang_Xiang2_Feng__seq50164__fake_9adb74f3ad.jpg' alt='Xiang_Xiang2_Feng__seq50164__fake'><div class='meta'>video=Xiang_Xiang2_Feng__seq50164__fake | label=fake | method=teams_flat_xiang_xiang2_feng | split=dev | source=flat_upload | rule=Xiang_Xiang2_Feng</div></div>
+<div class='card'><img src='cards/fake_Xiang_Xiang2_Feng__seq63798__fake_c9006bcfce.jpg' alt='Xiang_Xiang2_Feng__seq63798__fake'><div class='meta'>video=Xiang_Xiang2_Feng__seq63798__fake | label=fake | method=teams_flat_xiang_xiang2_feng | split=dev | source=flat_upload | rule=Xiang_Xiang2_Feng</div></div>
+</div></div>
+</body></html>

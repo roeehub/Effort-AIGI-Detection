@@ -1,0 +1,80 @@
+# ============================================================================
+# Track A one-off arena config
+#
+# Update TRACK_A_CANDIDATE.path before launching:
+#   ./launch_arena.sh --config arena_config.track_a.yaml --checkpoints TRACK_A_CANDIDATE
+#
+# Note:
+#   --checkpoints filters checkpoint names defined in this file.
+#   It does NOT accept raw gs://...pth URIs directly.
+# ============================================================================
+
+output_dir: "./arena_results"
+output_gcs_folder: "gs://training-job-outputs/arena_results"
+
+checkpoints:
+  TRACK_A_CANDIDATE:
+    path: "gs://REPLACE_ME_TRACK_A_CHECKPOINT.pth"
+    backbone: B16
+    notes: "Replace with the first Track A smoke/full-run checkpoint before launch"
+
+data_sources:
+  teams_test:
+    bucket: "teams-faces-data-test-2914-fake-4420-real-feb-28"
+    layout: teams_flat
+    chronological: true
+    notes: "Teams target domain - ~3,464 fake (incl 550 visomaster_enhanced) + 5,982 real (updated Mar 15)"
+
+  poc_phase1:
+    bucket: "poc-phase-1-test"
+    layout: poc
+    chronological: true
+    notes: "PoC test set with natural video grouping"
+
+  teams_v2:
+    bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    layout: teams_paired
+    chronological: true
+    notes: "Teams v2 paired samples - 4.7x larger than v1"
+
+inference:
+  batch_size: 256
+  num_workers: 12
+  save_embeddings: true
+  detector_config: "./config/detector/effort.yaml"
+  train_config: "./config/defaults.yaml"
+
+analysis:
+  stability:
+    enabled: true
+    thresholds: [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+  prob_health:
+    enabled: true
+    healthy_threshold_range: [0.25, 0.75]
+
+  embeddings:
+    enabled: true
+    method: "tsne"
+    perplexity: 30
+    max_samples: 5000
+    save_plots: true
+
+  per_method:
+    enabled: true
+    target_methods:
+      - FaceSwap
+      - inswap
+      - mobileswap
+      - simswap
+
+strategy:
+  enabled: true
+  window_sizes: [16, 24, 32]
+  threshold_range: [0.20, 0.95]
+  threshold_step: 0.01
+  k_ratio_range: [0.30, 0.80]
+  k_ratio_step: 0.02
+  max_teams_fpr: 0.0
+  healthy_threshold_range: [0.15, 0.85]
+  uncertain_margins: [0, 1, 2, 3]

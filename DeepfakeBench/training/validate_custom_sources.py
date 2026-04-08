@@ -10,6 +10,7 @@ import wandb
 
 from data.validation_sources import (
     load_df40_pairs_validation,
+    load_external_manifest_videos,
     load_external_fake_videos,
     load_external_real_videos,
     load_deeplive_validation,
@@ -145,6 +146,12 @@ def main():
                         help="GCS bucket name for external real data.")
     parser.add_argument("--external_real_prefix", type=str, default="real/external_youtube_avspeech")
     parser.add_argument("--external_real_method", type=str, default="external_youtube_avspeech")
+    parser.add_argument("--external_real_manifest", type=str, default=None,
+                        help="Frozen manifest path (local or gs://) for external real validation.")
+    parser.add_argument("--external_real_manifest_split", type=str, default=None,
+                        help="Optional split filter for external real manifest (e.g. dev, lockbox).")
+    parser.add_argument("--external_real_manifest_slices", type=str, default=None,
+                        help="Comma-separated slice tags for external real manifest filtering.")
     parser.add_argument("--external_real_cache", type=str, default=None,
                         help="Optional local JSON cache of frame paths.")
     parser.add_argument("--max_external_real", type=int, default=None,
@@ -158,6 +165,12 @@ def main():
                         help="GCS bucket name for external fake data (e.g., WMA failure set).")
     parser.add_argument("--external_fake_prefix", type=str, default="wma_validation/enhanced_fake")
     parser.add_argument("--external_fake_method", type=str, default="wma_failure_fake")
+    parser.add_argument("--external_fake_manifest", type=str, default=None,
+                        help="Frozen manifest path (local or gs://) for external fake validation.")
+    parser.add_argument("--external_fake_manifest_split", type=str, default=None,
+                        help="Optional split filter for external fake manifest (e.g. dev, lockbox).")
+    parser.add_argument("--external_fake_manifest_slices", type=str, default=None,
+                        help="Comma-separated slice tags for external fake manifest filtering.")
     parser.add_argument("--external_fake_cache", type=str, default=None,
                         help="Optional local JSON cache of external fake frame paths.")
     parser.add_argument("--external_fake_grouping", type=str, default="by_folder",
@@ -318,7 +331,24 @@ def main():
         )
         all_videos.extend(df40_videos)
 
-    if args.external_real_bucket:
+    if args.external_real_manifest:
+        external_real_deterministic_frames = (
+            args.frames_per_video if args.external_real_deterministic else None
+        )
+        external_real_slices = _parse_list_arg(args.external_real_manifest_slices)
+        external_videos = load_external_manifest_videos(
+            manifest_path=args.external_real_manifest,
+            label="real",
+            split=args.external_real_manifest_split,
+            slices=external_real_slices,
+            default_method=args.external_real_method,
+            default_label="real",
+            max_videos=args.max_external_real,
+            seed=args.external_real_seed,
+            deterministic_frame_count=external_real_deterministic_frames,
+        )
+        all_videos.extend(external_videos)
+    elif args.external_real_bucket:
         bucket_name, prefix = _parse_external_real_location(
             args.external_real_bucket, args.external_real_prefix, logger
         )
@@ -336,7 +366,24 @@ def main():
         )
         all_videos.extend(external_videos)
 
-    if args.external_fake_bucket:
+    if args.external_fake_manifest:
+        external_fake_slices = _parse_list_arg(args.external_fake_manifest_slices)
+        external_fake_deterministic_frames = None
+        if args.external_fake_deterministic:
+            external_fake_deterministic_frames = args.frames_per_video
+        external_fake_videos = load_external_manifest_videos(
+            manifest_path=args.external_fake_manifest,
+            label="fake",
+            split=args.external_fake_manifest_split,
+            slices=external_fake_slices,
+            default_method=args.external_fake_method,
+            default_label="fake",
+            max_videos=args.max_external_fake,
+            seed=args.external_fake_seed,
+            deterministic_frame_count=external_fake_deterministic_frames,
+        )
+        all_videos.extend(external_fake_videos)
+    elif args.external_fake_bucket:
         bucket_name, prefix = _parse_external_real_location(
             args.external_fake_bucket, args.external_fake_prefix, logger
         )
@@ -418,19 +465,7 @@ def main():
     # --- Ensure real sources are correctly registered ---
     _ensure_dataset_methods(config)
     real_sources = set(config["dataset_methods"].get("use_real_sources", []))
-    if args.df40_mode in {"paired", "real_only"}:
-        real_sources.add(args.df40_real_method)
-    if args.external_real_bucket:
-        real_sources.add(args.external_real_method)
-    # DeepLive methods include both real and fake, register strategy-based methods
-    if args.deeplive_bucket:
-        # DeepLive strategies are the methods, they contain both real/fake
-        deeplive_strategies = set(v.method for v in all_videos if v.method.startswith('deeplive_'))
-        for strategy in deeplive_strategies:
-            real_sources.add(strategy)
-    # VisoMaster real source
-    if args.visomaster_bucket:
-        real_sources.add("visomaster_real")
+    real_sources.update(v.method for v in all_videos if v.label == "real")
     config["dataset_methods"]["use_real_sources"] = sorted(real_sources)
 
     # --- Create dataloader ---

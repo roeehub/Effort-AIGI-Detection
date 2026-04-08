@@ -1,0 +1,2790 @@
+{
+  "frames_per_video": 4,
+  "manifest_path": "DeepfakeBench/training/arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json",
+  "samples_per_slice": 5,
+  "slice_sections": [
+    {
+      "candidate_count": 4614,
+      "cards": [
+        {
+          "card_path": "cards/real_Cam_Test__s32__seg_308.0__real_ad6a5d4642.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Cam_Test__s32_308.0_frame_000349_crop_000__4df523de.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_real_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_308.0__real"
+        },
+        {
+          "card_path": "cards/real_Roy_D__seq1510__real_033fca01c4.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Roy_D__frame_000141_seq1510.png"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Roy_D",
+          "sequence_id": "seq1510",
+          "session_id": null,
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Roy_D__seq1510__real"
+        },
+        {
+          "card_path": "cards/real_Xiang_Xiang2_Feng__seq36949__real_9c22f1bf04.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Xiang_Xiang2_Feng__frame_003548_seq36949__67778b79.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq36949",
+          "session_id": null,
+          "slices": [
+            "teams_real_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq36949__real"
+        },
+        {
+          "card_path": "cards/real_dor_shkedi__seq2363__real_0ad9cf67c6.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/dor_shkedi__frame_000251_seq2363__eb7a7695.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "dor_shkedi",
+          "sequence_id": "seq2363",
+          "session_id": null,
+          "slices": [
+            "teams_real_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "lockbox",
+          "video_id": "dor_shkedi__seq2363__real"
+        },
+        {
+          "card_path": "cards/real_xiang__seq24607__real_2503cdd715.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/xiang__frame_000181_seq24607.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "xiang",
+          "sequence_id": "seq24607",
+          "session_id": null,
+          "slices": [
+            "teams_real_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "xiang__seq24607__real"
+        }
+      ],
+      "slice": "teams_real_all"
+    },
+    {
+      "candidate_count": 945,
+      "cards": [
+        {
+          "card_path": "cards/real_Cam_Test__s32__seg_331.0__real_80483c9be5.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Cam_Test__s32_331.0_frame_001095_crop_001__817aaf60.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Cam_Test__s32_331.0_frame_001113_crop_001__1859b9c0.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_real_all",
+            "teams_real_poor_quality"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_331.0__real"
+        },
+        {
+          "card_path": "cards/real_PC_Generator__s8__seg_141.2__real_b12c50b79c.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/PC_Generator__s8_141.2_frame_005149_crop_001__66609f1a.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/PC_Generator__s8_141.2_frame_005169_crop_000__f386073b.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s8",
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme",
+            "teams_real_poor_quality"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s8__seg_141.2__real"
+        },
+        {
+          "card_path": "cards/real_Test_Cam__s76__seg_223.3__real_b21c2d2124.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Test_Cam__s76_223.3_frame_007754_crop_001__fca11790.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Test_Cam__s76_223.3_frame_007777_crop_001__284683da.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_real_all",
+            "teams_real_poor_quality"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_223.3__real"
+        },
+        {
+          "card_path": "cards/real_bla_bla_chow__s2__seg_513.0__real_40c60fb827.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/bla_bla_chow__s2_513.0_frame_025341_crop_001__14f90f8c.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "bla_bla_chow",
+          "sequence_id": null,
+          "session_id": "s2",
+          "slices": [
+            "teams_real_all",
+            "teams_real_poor_quality"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "bla_bla_chow__s2__seg_513.0__real"
+        },
+        {
+          "card_path": "cards/real_xiang__seq24533__real_c08f55d4b3.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/xiang__frame_000173_seq24533.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "xiang",
+          "sequence_id": "seq24533",
+          "session_id": null,
+          "slices": [
+            "teams_real_all",
+            "teams_real_poor_quality"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "xiang__seq24533__real"
+        }
+      ],
+      "slice": "teams_real_poor_quality"
+    },
+    {
+      "candidate_count": 1608,
+      "cards": [
+        {
+          "card_path": "cards/real_Md_noyn_Sharker__s15__seg_1447.4__real_bdd6ddead0.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Md_noyn_Sharker__s15_1447.4_frame_048741_crop_000__c8c8beef.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Md_noyn_Sharker",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Md_noyn_Sharker__s15__seg_1447.4__real"
+        },
+        {
+          "card_path": "cards/real_PC_Generator__s22__seg_53.0__real_038daacbe9.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/PC_Generator__s22_53.0_frame_002154_crop_001__1becd270.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s22",
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s22__seg_53.0__real"
+        },
+        {
+          "card_path": "cards/real_Xiang_Xiang2_Feng__seq1412__real_00e320756e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/Xiang_Xiang2_Feng__frame_000132_seq1412__66878c12.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq1412",
+          "session_id": null,
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme",
+            "teams_real_poor_quality"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq1412__real"
+        },
+        {
+          "card_path": "cards/real_bla_bla_chow__seq2157__real_f14e69ff48.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/bla_bla_chow__frame_000272_seq2157__fddffc0c.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "bla_bla_chow",
+          "sequence_id": "seq2157",
+          "session_id": null,
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "bla_bla_chow__seq2157__real"
+        },
+        {
+          "card_path": "cards/real_xiang__seq24371__real_eb69909f0e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/real/xiang__frame_000153_seq24371.jpg"
+          ],
+          "label": "real",
+          "matched_rule": null,
+          "method": "teams_real",
+          "prefix": "xiang",
+          "sequence_id": "seq24371",
+          "session_id": null,
+          "slices": [
+            "teams_real_all",
+            "teams_real_lighting_extreme"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "xiang__seq24371__real"
+        }
+      ],
+      "slice": "teams_real_lighting_extreme"
+    },
+    {
+      "candidate_count": 2662,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_0.0__fake_652ae94f3b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000074_crop_002__8e9ae142.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000108_crop_001__d6a69434.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000127_crop_001__28b49153.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_0.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_149.0__fake_dc72fbfe6e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_149.0_frame_004839_crop_001__872dac58.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_149.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1241.3__fake_6b4eab20cb.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1241.3_frame_014441_crop_002__0a2e5aef.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1241.3_frame_014454_crop_002__3776ef6a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1241.3__fake"
+        },
+        {
+          "card_path": "cards/fake_deeplive_dor__seq5168__fake_c30a92fb90.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/deeplive_dor__frame_000646_seq5168__8226b581.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "deeplive_dor",
+          "method": "deeplive_enhanced",
+          "prefix": "deeplive_dor",
+          "sequence_id": "seq5168",
+          "session_id": null,
+          "slices": [
+            "deeplive_enhanced",
+            "teams_fake_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "deeplive_dor__seq5168__fake"
+        },
+        {
+          "card_path": "cards/fake_visomaster_enhanced_teams__seq9853__fake_d3473b96f2.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/visomaster_enhanced_teams__frame_001309_seq9853.png"
+          ],
+          "label": "fake",
+          "matched_rule": "visomaster_enhanced_teams",
+          "method": "visomaster_enhanced_macro",
+          "prefix": "visomaster_enhanced_teams",
+          "sequence_id": "seq9853",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "visomaster_enhanced_macro"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "visomaster_enhanced_teams__seq9853__fake"
+        }
+      ],
+      "slice": "teams_fake_all"
+    },
+    {
+      "candidate_count": 550,
+      "cards": [
+        {
+          "card_path": "cards/fake_visomaster_enhanced_raw__seq12349__fake_c57431af6b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/visomaster_enhanced_raw__frame_001595_seq12349.png"
+          ],
+          "label": "fake",
+          "matched_rule": "visomaster_enhanced_raw",
+          "method": "visomaster_enhanced_macro",
+          "prefix": "visomaster_enhanced_raw",
+          "sequence_id": "seq12349",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "visomaster_enhanced_macro"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "visomaster_enhanced_raw__seq12349__fake"
+        },
+        {
+          "card_path": "cards/fake_visomaster_enhanced_raw__seq5843__fake_c4f57c173e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/visomaster_enhanced_raw__frame_000737_seq5843.png"
+          ],
+          "label": "fake",
+          "matched_rule": "visomaster_enhanced_raw",
+          "method": "visomaster_enhanced_macro",
+          "prefix": "visomaster_enhanced_raw",
+          "sequence_id": "seq5843",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "visomaster_enhanced_macro"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "visomaster_enhanced_raw__seq5843__fake"
+        },
+        {
+          "card_path": "cards/fake_visomaster_enhanced_raw__seq9853__fake_617ea0a8f3.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/visomaster_enhanced_raw__frame_001309_seq9853.png"
+          ],
+          "label": "fake",
+          "matched_rule": "visomaster_enhanced_raw",
+          "method": "visomaster_enhanced_macro",
+          "prefix": "visomaster_enhanced_raw",
+          "sequence_id": "seq9853",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "visomaster_enhanced_macro"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "visomaster_enhanced_raw__seq9853__fake"
+        },
+        {
+          "card_path": "cards/fake_visomaster_enhanced_teams__seq5843__fake_47e3109fc3.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/visomaster_enhanced_teams__frame_000737_seq5843.png"
+          ],
+          "label": "fake",
+          "matched_rule": "visomaster_enhanced_teams",
+          "method": "visomaster_enhanced_macro",
+          "prefix": "visomaster_enhanced_teams",
+          "sequence_id": "seq5843",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "visomaster_enhanced_macro"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "visomaster_enhanced_teams__seq5843__fake"
+        },
+        {
+          "card_path": "cards/fake_visomaster_enhanced_teams__seq9853__fake_d3473b96f2.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/visomaster_enhanced_teams__frame_001309_seq9853.png"
+          ],
+          "label": "fake",
+          "matched_rule": "visomaster_enhanced_teams",
+          "method": "visomaster_enhanced_macro",
+          "prefix": "visomaster_enhanced_teams",
+          "sequence_id": "seq9853",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "visomaster_enhanced_macro"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "visomaster_enhanced_teams__seq9853__fake"
+        }
+      ],
+      "slice": "visomaster_enhanced_macro"
+    },
+    {
+      "candidate_count": 545,
+      "cards": [
+        {
+          "card_path": "cards/fake_deeplive_dor__seq10006__fake_b4bcc64df9.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/deeplive_dor__frame_001236_seq10006__1d6e5177.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "deeplive_dor",
+          "method": "deeplive_enhanced",
+          "prefix": "deeplive_dor",
+          "sequence_id": "seq10006",
+          "session_id": null,
+          "slices": [
+            "deeplive_enhanced",
+            "teams_fake_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "deeplive_dor__seq10006__fake"
+        },
+        {
+          "card_path": "cards/fake_deeplive_dor__seq12261__fake_6cf8964095.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/deeplive_dor__frame_001551_seq12261__1663fe69.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "deeplive_dor",
+          "method": "deeplive_enhanced",
+          "prefix": "deeplive_dor",
+          "sequence_id": "seq12261",
+          "session_id": null,
+          "slices": [
+            "deeplive_enhanced",
+            "teams_fake_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "deeplive_dor__seq12261__fake"
+        },
+        {
+          "card_path": "cards/fake_deeplive_dor__seq14734__fake_f68ad5c4c6.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/deeplive_dor__frame_001843_seq14734__4bc69b96.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "deeplive_dor",
+          "method": "deeplive_enhanced",
+          "prefix": "deeplive_dor",
+          "sequence_id": "seq14734",
+          "session_id": null,
+          "slices": [
+            "deeplive_enhanced",
+            "teams_fake_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "deeplive_dor__seq14734__fake"
+        },
+        {
+          "card_path": "cards/fake_deeplive_dor__seq16865__fake_cb69dbb9ac.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/deeplive_dor__frame_002113_seq16865__2f60bfd0.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "deeplive_dor",
+          "method": "deeplive_enhanced",
+          "prefix": "deeplive_dor",
+          "sequence_id": "seq16865",
+          "session_id": null,
+          "slices": [
+            "deeplive_enhanced",
+            "teams_fake_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "deeplive_dor__seq16865__fake"
+        },
+        {
+          "card_path": "cards/fake_deeplive_dor__seq9994__fake_d022a3baf9.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/deeplive_dor__frame_001232_seq9994__53a085d9.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "deeplive_dor",
+          "method": "deeplive_enhanced",
+          "prefix": "deeplive_dor",
+          "sequence_id": "seq9994",
+          "session_id": null,
+          "slices": [
+            "deeplive_enhanced",
+            "teams_fake_all"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "deeplive_dor__seq9994__fake"
+        }
+      ],
+      "slice": "deeplive_enhanced"
+    },
+    {
+      "candidate_count": 714,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_0.0__fake_652ae94f3b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000074_crop_002__8e9ae142.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000108_crop_001__d6a69434.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000127_crop_001__28b49153.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_0.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s33__seg_133.0__fake_bdfaa4cc9b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_133.0_frame_006887_crop_001__8938758e.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s33",
+          "method": "teams_capture_cam_test_s33",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s33",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s33",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "Cam_Test__s33__seg_133.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_1226.0__fake_ba59944b78.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_1226.0_frame_020788_crop_001__29812c0e.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_1226.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_704.0__fake_eccdca03f8.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_704.0_frame_004038_crop_001__80cf5467.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_704.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_210.0__fake_47dc35bccc.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_210.0_frame_006850_crop_001__ccad5df0.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_210.0__fake"
+        }
+      ],
+      "slice": "teams_capture_cam_test"
+    },
+    {
+      "candidate_count": 139,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_0.0__fake_652ae94f3b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000074_crop_002__8e9ae142.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000108_crop_001__d6a69434.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_0.0_frame_000127_crop_001__28b49153.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_0.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_132.0__fake_5e62c41928.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_132.0_frame_004427_crop_001__c8dc0240.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_132.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_28.0__fake_96e552ce96.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_28.0_frame_001034_crop_001__6f47ddd7.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_28.0_frame_001051_crop_001__c91e6748.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_28.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_68.0__fake_926d1cc04a.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_68.0_frame_002334_crop_001__e496be81.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_68.0_frame_002352_crop_001__3eae21c5.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_68.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s32__seg_99.0__fake_b5facfec71.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s32_99.0_frame_003344_crop_001__166214c5.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s32",
+          "method": "teams_capture_cam_test_s32",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s32",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s32",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s32__seg_99.0__fake"
+        }
+      ],
+      "slice": "teams_capture_cam_test_s32"
+    },
+    {
+      "candidate_count": 191,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s33__seg_0.0__fake_40dade2650.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_0.0_frame_002486_crop_001__7236a833.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_0.0_frame_002514_crop_001__4b42ea60.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_0.0_frame_002533_crop_001__8609f131.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_0.0_frame_002553_crop_001__a4f325c3.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s33",
+          "method": "teams_capture_cam_test_s33",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s33",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s33",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "Cam_Test__s33__seg_0.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s33__seg_141.0__fake_d2626612d8.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_141.0_frame_007143_crop_001__fc918d9c.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_141.0_frame_007165_crop_001__acd577bb.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s33",
+          "method": "teams_capture_cam_test_s33",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s33",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s33",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "Cam_Test__s33__seg_141.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s33__seg_190.0__fake_3eb6d62b12.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_190.0_frame_008767_crop_001__4e3a412a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s33",
+          "method": "teams_capture_cam_test_s33",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s33",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s33",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "Cam_Test__s33__seg_190.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s33__seg_54.0__fake_1349b7efc1.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_54.0_frame_004298_crop_001__ecf9f3e2.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_54.0_frame_004316_crop_001__4683fb74.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s33",
+          "method": "teams_capture_cam_test_s33",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s33",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s33",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "Cam_Test__s33__seg_54.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s33__seg_99.0__fake_72f60d6d4f.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_99.0_frame_005769_crop_001__8bc12b2a.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s33_99.0_frame_005787_crop_001__ad2966df.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s33",
+          "method": "teams_capture_cam_test_s33",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s33",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s33",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "Cam_Test__s33__seg_99.0__fake"
+        }
+      ],
+      "slice": "teams_capture_cam_test_s33"
+    },
+    {
+      "candidate_count": 244,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_1200.0__fake_d0c2f42833.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_1200.0_frame_019946_crop_001__e5fd69f7.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_1200.0_frame_019975_crop_001__88e12655.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_1200.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_1667.0__fake_330b7344fc.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_1667.0_frame_034869_crop_001__e256d559.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_1667.0_frame_034894_crop_001__0124669f.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_1667.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_619.0__fake_b303ee0343.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_619.0_frame_001326_crop_001__87fbf7ff.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_619.0_frame_001357_crop_001__81f51993.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_619.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_680.0__fake_7fb08382ed.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_680.0_frame_003264_crop_001__5f70b6e8.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_680.0_frame_003295_crop_000__ab97bdb3.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_680.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s35__seg_744.0__fake_d8d9ab0643.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_744.0_frame_005299_crop_001__8b4aaa07.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s35_744.0_frame_005328_crop_000__5bb955ae.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s35",
+          "method": "teams_capture_cam_test_s35",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s35",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s35",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s35__seg_744.0__fake"
+        }
+      ],
+      "slice": "teams_capture_cam_test_s35"
+    },
+    {
+      "candidate_count": 51,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s38__seg_148.0__fake_2e27cb93ce.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_148.0_frame_005052_crop_001__58189a1e.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_148.0_frame_005075_crop_001__9553814f.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s38",
+          "method": "teams_capture_cam_test_s38",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s38",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s38",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s38__seg_148.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s38__seg_160.0__fake_34302fc5cc.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_160.0_frame_005463_crop_001__d6465e24.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s38",
+          "method": "teams_capture_cam_test_s38",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s38",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s38",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s38__seg_160.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s38__seg_178.0__fake_cd4e24baf2.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_178.0_frame_006032_crop_001__6dd93070.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_178.0_frame_006051_crop_001__3342c159.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s38",
+          "method": "teams_capture_cam_test_s38",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s38",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s38",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s38__seg_178.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s38__seg_192.0__fake_d22d55f872.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_192.0_frame_006499_crop_001__483819d7.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_192.0_frame_006523_crop_001__ea93f423.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s38",
+          "method": "teams_capture_cam_test_s38",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s38",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s38",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s38__seg_192.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s38__seg_204.0__fake_943b0d8d28.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s38_204.0_frame_006899_crop_001__6945defc.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s38",
+          "method": "teams_capture_cam_test_s38",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s38",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s38",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s38__seg_204.0__fake"
+        }
+      ],
+      "slice": "teams_capture_cam_test_s38"
+    },
+    {
+      "candidate_count": 89,
+      "cards": [
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_109.0__fake_73ec8a2f17.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_109.0_frame_003486_crop_001__797e9df3.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_109.0_frame_003525_crop_001__cc7854af.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_109.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_131.0__fake_09310cf1d8.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_131.0_frame_004256_crop_000__216e335a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_131.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_153.0__fake_1f750aff06.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_153.0_frame_004963_crop_001__9c46cd3b.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_153.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_183.0__fake_f5563ffeb7.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_183.0_frame_005953_crop_001__ff081d28.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_183.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Cam_Test__s46__seg_210.0__fake_47dc35bccc.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Cam_Test__s46_210.0_frame_006850_crop_001__ccad5df0.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Cam_Test__s46",
+          "method": "teams_capture_cam_test_s46",
+          "prefix": "Cam_Test",
+          "sequence_id": null,
+          "session_id": "s46",
+          "slices": [
+            "teams_capture_cam_test",
+            "teams_capture_cam_test_s46",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Cam_Test__s46__seg_210.0__fake"
+        }
+      ],
+      "slice": "teams_capture_cam_test_s46"
+    },
+    {
+      "candidate_count": 57,
+      "cards": [
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_156.3__fake_b4c16601d4.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_156.3_frame_005389_crop_000__b02f57d4.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_156.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_170.3__fake_29360c2290.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_170.3_frame_005825_crop_001__73ceaf6b.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_170.3_frame_005854_crop_000__48a068b7.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_170.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_185.3__fake_58d4b9f451.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_185.3_frame_006338_crop_001__cdb3782d.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_185.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_199.3__fake_c4d14f07ff.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_199.3_frame_006808_crop_001__43c77d92.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_199.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_213.3__fake_20b9680e6e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_213.3_frame_007293_crop_000__77755957.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_213.3__fake"
+        }
+      ],
+      "slice": "teams_capture_dor_shkedi"
+    },
+    {
+      "candidate_count": 57,
+      "cards": [
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_156.3__fake_b4c16601d4.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_156.3_frame_005389_crop_000__b02f57d4.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_156.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_170.3__fake_29360c2290.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_170.3_frame_005825_crop_001__73ceaf6b.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_170.3_frame_005854_crop_000__48a068b7.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_170.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_185.3__fake_58d4b9f451.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_185.3_frame_006338_crop_001__cdb3782d.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_185.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_199.3__fake_c4d14f07ff.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_199.3_frame_006808_crop_001__43c77d92.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_199.3__fake"
+        },
+        {
+          "card_path": "cards/fake_dor_shkedi__s16__seg_213.3__fake_20b9680e6e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/dor_shkedi__s16_213.3_frame_007293_crop_000__77755957.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "dor_shkedi__s16",
+          "method": "teams_capture_dor_shkedi_s16",
+          "prefix": "dor_shkedi",
+          "sequence_id": null,
+          "session_id": "s16",
+          "slices": [
+            "teams_capture_dor_shkedi",
+            "teams_capture_dor_shkedi_s16",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "dor_shkedi__s16__seg_213.3__fake"
+        }
+      ],
+      "slice": "teams_capture_dor_shkedi_s16"
+    },
+    {
+      "candidate_count": 204,
+      "cards": [
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_10.2__fake_00deeaec2e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_10.2_frame_000527_crop_001__4495d355.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_10.2_frame_000545_crop_001__8701c30a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_10.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_149.2__fake_80cb284ace.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_149.2_frame_005204_crop_001__24a34916.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_149.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_28.2__fake_e8aa9fe160.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_28.2_frame_001148_crop_001__8911d42f.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_28.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_50.2__fake_0a41b4b06b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_50.2_frame_001865_crop_001__50e877a1.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_50.2_frame_001886_crop_001__c1fa4a0f.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_50.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_99.2__fake_4a522489fd.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_99.2_frame_003524_crop_001__9ec3af8d.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_99.2_frame_003543_crop_001__d9f4d1bf.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_99.2__fake"
+        }
+      ],
+      "slice": "teams_capture_noyn_sharker"
+    },
+    {
+      "candidate_count": 204,
+      "cards": [
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_10.2__fake_00deeaec2e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_10.2_frame_000527_crop_001__4495d355.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_10.2_frame_000545_crop_001__8701c30a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_10.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_149.2__fake_80cb284ace.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_149.2_frame_005204_crop_001__24a34916.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_149.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_28.2__fake_e8aa9fe160.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_28.2_frame_001148_crop_001__8911d42f.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_28.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_50.2__fake_0a41b4b06b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_50.2_frame_001865_crop_001__50e877a1.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_50.2_frame_001886_crop_001__c1fa4a0f.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_50.2__fake"
+        },
+        {
+          "card_path": "cards/fake_Noyn_sharker__s23__seg_99.2__fake_4a522489fd.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_99.2_frame_003524_crop_001__9ec3af8d.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Noyn_sharker__s23_99.2_frame_003543_crop_001__d9f4d1bf.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Noyn_sharker__s23",
+          "method": "teams_capture_noyn_sharker_s23",
+          "prefix": "Noyn_sharker",
+          "sequence_id": null,
+          "session_id": "s23",
+          "slices": [
+            "teams_capture_noyn_sharker",
+            "teams_capture_noyn_sharker_s23",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Noyn_sharker__s23__seg_99.2__fake"
+        }
+      ],
+      "slice": "teams_capture_noyn_sharker_s23"
+    },
+    {
+      "candidate_count": 237,
+      "cards": [
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1507.4__fake_1a68598b48.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1507.4_frame_050780_crop_001__46b23355.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1507.4__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1570.4__fake_7128d4c76d.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1570.4_frame_052956_crop_001__f184cc06.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1570.4_frame_052986_crop_001__0d8abe0a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1570.4__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s3__seg_51.0__fake_2bc90049b0.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_51.0_frame_054375_crop_002__478e5ece.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s3",
+          "method": "teams_capture_pc_generator_s3",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s3",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s3",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s3__seg_51.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s4__seg_4.0__fake_bd758a4261.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s4_4.0_frame_067554_crop_000__0bf0df6e.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s4",
+          "method": "teams_capture_pc_generator_s4",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s4",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s4",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s4__seg_4.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s9__seg_192.2__fake_c9c3dc383e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s9_192.2_frame_006597_crop_002__9d25c5f1.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s9",
+          "method": "teams_capture_pc_generator_s9",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s9",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s9",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s9__seg_192.2__fake"
+        }
+      ],
+      "slice": "teams_capture_pc_generator"
+    },
+    {
+      "candidate_count": 62,
+      "cards": [
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1507.4__fake_1a68598b48.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1507.4_frame_050780_crop_001__46b23355.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1507.4__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1523.4__fake_a13558aa7d.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1523.4_frame_051286_crop_002__2b80b0a7.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1523.4_frame_051320_crop_001__5d856d46.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1523.4__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1539.4__fake_653edc5b90.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1539.4_frame_051697_crop_002__8ff6525c.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1539.4__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1556.4__fake_1ebe42e4b3.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1556.4_frame_052471_crop_001__dc258387.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1556.4_frame_052492_crop_001__4d37be29.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1556.4__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s15__seg_1572.4__fake_022017afec.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1572.4_frame_053024_crop_001__17397064.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s15_1572.4_frame_053042_crop_001__cd01ef20.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s15",
+          "method": "teams_capture_pc_generator_s15",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s15",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s15",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "lockbox",
+          "video_id": "PC_Generator__s15__seg_1572.4__fake"
+        }
+      ],
+      "slice": "teams_capture_pc_generator_s15"
+    },
+    {
+      "candidate_count": 99,
+      "cards": [
+        {
+          "card_path": "cards/fake_PC_Generator__s3__seg_1.0__fake_06404acb15.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_1.0_frame_052759_crop_001__043cb3ca.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_1.0_frame_052780_crop_001__56643e86.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s3",
+          "method": "teams_capture_pc_generator_s3",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s3",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s3",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s3__seg_1.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s3__seg_19.0__fake_c5825f7ffb.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_19.0_frame_053382_crop_001__4ea6788a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s3",
+          "method": "teams_capture_pc_generator_s3",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s3",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s3",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s3__seg_19.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s3__seg_43.0__fake_fa29023ffa.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_43.0_frame_053949_crop_002__524832bd.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s3",
+          "method": "teams_capture_pc_generator_s3",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s3",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s3",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s3__seg_43.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s3__seg_70.0__fake_5f73dea265.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_70.0_frame_054891_crop_002__f24cfd29.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s3",
+          "method": "teams_capture_pc_generator_s3",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s3",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s3",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s3__seg_70.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s3__seg_99.0__fake_1899a7ae64.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s3_99.0_frame_055962_crop_002__8f84090a.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s3",
+          "method": "teams_capture_pc_generator_s3",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s3",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s3",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s3__seg_99.0__fake"
+        }
+      ],
+      "slice": "teams_capture_pc_generator_s3"
+    },
+    {
+      "candidate_count": 30,
+      "cards": [
+        {
+          "card_path": "cards/fake_PC_Generator__s4__seg_0.0__fake_97955aa3b9.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s4_0.0_frame_067480_crop_001__2a34f889.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s4",
+          "method": "teams_capture_pc_generator_s4",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s4",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s4",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s4__seg_0.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s4__seg_21.0__fake_f14ad75d11.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s4_21.0_frame_068094_crop_002__6c131da1.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s4",
+          "method": "teams_capture_pc_generator_s4",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s4",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s4",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s4__seg_21.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s4__seg_35.0__fake_55c3033972.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s4_35.0_frame_068406_crop_002__4430033d.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s4",
+          "method": "teams_capture_pc_generator_s4",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s4",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s4",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s4__seg_35.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s4__seg_50.0__fake_315bdc7784.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s4_50.0_frame_068937_crop_002__7c233bae.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s4",
+          "method": "teams_capture_pc_generator_s4",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s4",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s4",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s4__seg_50.0__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s4__seg_9.0__fake_faca0413db.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s4_9.0_frame_067648_crop_002__51430c6e.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s4",
+          "method": "teams_capture_pc_generator_s4",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s4",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s4",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s4__seg_9.0__fake"
+        }
+      ],
+      "slice": "teams_capture_pc_generator_s4"
+    },
+    {
+      "candidate_count": 46,
+      "cards": [
+        {
+          "card_path": "cards/fake_PC_Generator__s9__seg_123.2__fake_63c395fa02.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s9_123.2_frame_004096_crop_002__b19f8b6b.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s9",
+          "method": "teams_capture_pc_generator_s9",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s9",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s9",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s9__seg_123.2__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s9__seg_144.2__fake_1fba95a7eb.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s9_144.2_frame_004849_crop_002__13329153.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s9",
+          "method": "teams_capture_pc_generator_s9",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s9",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s9",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s9__seg_144.2__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s9__seg_162.2__fake_6b3babe711.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s9_162.2_frame_005577_crop_002__ae983139.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s9",
+          "method": "teams_capture_pc_generator_s9",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s9",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s9",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s9__seg_162.2__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s9__seg_177.2__fake_489cf8ca55.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s9_177.2_frame_006085_crop_002__3ab4e866.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s9",
+          "method": "teams_capture_pc_generator_s9",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s9",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s9",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s9__seg_177.2__fake"
+        },
+        {
+          "card_path": "cards/fake_PC_Generator__s9__seg_192.2__fake_c9c3dc383e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/PC_Generator__s9_192.2_frame_006597_crop_002__9d25c5f1.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "PC_Generator__s9",
+          "method": "teams_capture_pc_generator_s9",
+          "prefix": "PC_Generator",
+          "sequence_id": null,
+          "session_id": "s9",
+          "slices": [
+            "teams_capture_pc_generator",
+            "teams_capture_pc_generator_s9",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "PC_Generator__s9__seg_192.2__fake"
+        }
+      ],
+      "slice": "teams_capture_pc_generator_s9"
+    },
+    {
+      "candidate_count": 220,
+      "cards": [
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_100.0__fake_3330166330.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_100.0_frame_003871_crop_002__5debef60.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_100.0_frame_003890_crop_002__2d971663.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_100.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_65.0__fake_9467fd9388.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_65.0_frame_002654_crop_002__c11bcfb3.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_65.0_frame_002670_crop_002__7031f139.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_65.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s73__seg_120.5__fake_f6f4a0b23e.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_120.5_frame_004421_crop_002__d7d4ea10.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_120.5_frame_004438_crop_002__c079ceb8.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s73",
+          "method": "teams_capture_test_cam_s73",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s73",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s73",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s73__seg_120.5__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1230.3__fake_d8cbfdcb10.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1230.3_frame_014048_crop_002__a66c9934.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1230.3_frame_014066_crop_002__c5717d25.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1230.3_frame_014089_crop_002__7e96d1a6.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1230.3__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1285.3__fake_2cf408a1d3.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1285.3_frame_015956_crop_002__c66f522d.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1285.3_frame_015977_crop_002__f3e602ca.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1285.3__fake"
+        }
+      ],
+      "slice": "teams_capture_test_cam"
+    },
+    {
+      "candidate_count": 90,
+      "cards": [
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_100.0__fake_3330166330.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_100.0_frame_003871_crop_002__5debef60.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_100.0_frame_003890_crop_002__2d971663.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_100.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_122.0__fake_f7361d7d9f.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_122.0_frame_004638_crop_002__c71f8bfb.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_122.0_frame_004658_crop_002__e5e55f09.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_122.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_54.0__fake_b23a9e8e07.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_54.0_frame_002275_crop_002__07052fef.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_54.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_77.0__fake_bd5c73f73b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_77.0_frame_003060_crop_002__e792d936.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_77.0_frame_003085_crop_002__8e42af2e.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_77.0__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s53__seg_99.0__fake_2f8ab8c6a0.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_99.0_frame_003833_crop_002__55ee9c23.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s53_99.0_frame_003852_crop_002__ea1ba9a7.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s53",
+          "method": "teams_capture_test_cam_s53",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s53",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s53",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s53__seg_99.0__fake"
+        }
+      ],
+      "slice": "teams_capture_test_cam_s53"
+    },
+    {
+      "candidate_count": 55,
+      "cards": [
+        {
+          "card_path": "cards/fake_Test_Cam__s73__seg_100.5__fake_67e8284fc5.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_100.5_frame_003717_crop_002__4ff0c576.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_100.5_frame_003737_crop_002__e77674e7.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s73",
+          "method": "teams_capture_test_cam_s73",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s73",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s73",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s73__seg_100.5__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s73__seg_114.5__fake_bf9c761423.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_114.5_frame_004214_crop_002__0254c029.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_114.5_frame_004230_crop_002__b37efea3.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s73",
+          "method": "teams_capture_test_cam_s73",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s73",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s73",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s73__seg_114.5__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s73__seg_127.5__fake_c2a13b1528.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_127.5_frame_004667_crop_002__d0ace81b.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_127.5_frame_004686_crop_002__a0d01118.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s73",
+          "method": "teams_capture_test_cam_s73",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s73",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s73",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s73__seg_127.5__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s73__seg_85.5__fake_08d32cf630.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_85.5_frame_003179_crop_002__7724389c.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_85.5_frame_003200_crop_002__6bbb7c34.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_85.5_frame_003218_crop_002__e119b9ea.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s73",
+          "method": "teams_capture_test_cam_s73",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s73",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s73",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s73__seg_85.5__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s73__seg_99.5__fake_d48fece51b.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s73_99.5_frame_003698_crop_002__3f737d91.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s73",
+          "method": "teams_capture_test_cam_s73",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s73",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s73",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s73__seg_99.5__fake"
+        }
+      ],
+      "slice": "teams_capture_test_cam_s73"
+    },
+    {
+      "candidate_count": 75,
+      "cards": [
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1202.3__fake_7df96cf286.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1202.3_frame_013100_crop_001__54bde23b.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1202.3_frame_013125_crop_002__3f384717.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1202.3__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1229.3__fake_3c10edbdd4.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1229.3_frame_013698_crop_002__d8da0119.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1229.3_frame_013714_crop_002__93cecd22.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1229.3_frame_014012_crop_002__b66702aa.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1229.3__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1248.3__fake_b5d24d3df2.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1248.3_frame_014668_crop_002__46852ddb.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1248.3_frame_014709_crop_002__571889ce.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1248.3__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1267.3__fake_bbe1646b99.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1267.3_frame_015353_crop_002__c1446015.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1267.3__fake"
+        },
+        {
+          "card_path": "cards/fake_Test_Cam__s76__seg_1285.3__fake_2cf408a1d3.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1285.3_frame_015956_crop_002__c66f522d.jpg",
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Test_Cam__s76_1285.3_frame_015977_crop_002__f3e602ca.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Test_Cam__s76",
+          "method": "teams_capture_test_cam_s76",
+          "prefix": "Test_Cam",
+          "sequence_id": null,
+          "session_id": "s76",
+          "slices": [
+            "teams_capture_test_cam",
+            "teams_capture_test_cam_s76",
+            "teams_fake_all"
+          ],
+          "source_kind": "session_capture",
+          "split": "dev",
+          "video_id": "Test_Cam__s76__seg_1285.3__fake"
+        }
+      ],
+      "slice": "teams_capture_test_cam_s76"
+    },
+    {
+      "candidate_count": 135,
+      "cards": [
+        {
+          "card_path": "cards/fake_Xiang_Xiang2_Feng__seq46024__fake_f807ff1ec6.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Xiang_Xiang2_Feng__frame_003048_seq46024__b6d55433.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Xiang_Xiang2_Feng",
+          "method": "teams_flat_xiang_xiang2_feng",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq46024",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "teams_flat_xiang_xiang2_feng"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq46024__fake"
+        },
+        {
+          "card_path": "cards/fake_Xiang_Xiang2_Feng__seq46954__fake_7f3f809cd9.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Xiang_Xiang2_Feng__frame_003154_seq46954__032efa0c.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Xiang_Xiang2_Feng",
+          "method": "teams_flat_xiang_xiang2_feng",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq46954",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "teams_flat_xiang_xiang2_feng"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq46954__fake"
+        },
+        {
+          "card_path": "cards/fake_Xiang_Xiang2_Feng__seq47472__fake_8a7e1d4dae.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Xiang_Xiang2_Feng__frame_003222_seq47472__26d03fa7.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Xiang_Xiang2_Feng",
+          "method": "teams_flat_xiang_xiang2_feng",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq47472",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "teams_flat_xiang_xiang2_feng"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq47472__fake"
+        },
+        {
+          "card_path": "cards/fake_Xiang_Xiang2_Feng__seq50164__fake_9adb74f3ad.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Xiang_Xiang2_Feng__frame_003427_seq50164__fa782cd6.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Xiang_Xiang2_Feng",
+          "method": "teams_flat_xiang_xiang2_feng",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq50164",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "teams_flat_xiang_xiang2_feng"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq50164__fake"
+        },
+        {
+          "card_path": "cards/fake_Xiang_Xiang2_Feng__seq63798__fake_c9006bcfce.jpg",
+          "frame_paths": [
+            "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/Xiang_Xiang2_Feng__frame_004593_seq63798__53aeb921.jpg"
+          ],
+          "label": "fake",
+          "matched_rule": "Xiang_Xiang2_Feng",
+          "method": "teams_flat_xiang_xiang2_feng",
+          "prefix": "Xiang_Xiang2_Feng",
+          "sequence_id": "seq63798",
+          "session_id": null,
+          "slices": [
+            "teams_fake_all",
+            "teams_flat_xiang_xiang2_feng"
+          ],
+          "source_kind": "flat_upload",
+          "split": "dev",
+          "video_id": "Xiang_Xiang2_Feng__seq63798__fake"
+        }
+      ],
+      "slice": "teams_flat_xiang_xiang2_feng"
+    }
+  ],
+  "split": null
+}

@@ -1,0 +1,87 @@
+# Optional explicit prefix/session provenance overrides for
+# build_teams_target_domain_manifest.py.
+#
+# Matching order:
+# 1. "<prefix>__<session_id>" (for example "Cam_Test__s33")
+# 2. "<prefix>"             (for example "deeplive_dor")
+#
+# Keys under each label may set:
+#   method: <metric/reporting method name>
+#   slices: [slice_a, slice_b, ...]
+#
+# Example:
+# fake:
+#   Cam_Test__s33:
+#     method: deeplive_regular
+#     slices: [deeplive_regular]
+#   Test_Cam__s53:
+#     method: visomaster_original_macro
+#     slices: [visomaster_original_macro]
+#   Test_Cam__s76:
+#     method: visomaster_simswap512
+#     slices: [visomaster_simswap512]
+#
+# Safe freeze option:
+# If the bucket filenames are not sufficient to prove the canonical family
+# (`deeplive_regular`, `visomaster_original_macro`, etc.), freeze rows to a
+# session-level provenance label first. That removes `teams_fake_unknown`
+# without over-claiming method identity. The session labels below reflect the
+# unresolved fake lanes discovered on 2026-04-06.
+
+real: {}
+
+fake:
+  # Cam_Test capture lane: 714 grouped fake videos across 5 sessions.
+  Cam_Test__s32:
+    method: teams_capture_cam_test_s32
+    slices: [teams_capture_cam_test, teams_capture_cam_test_s32]
+  Cam_Test__s33:
+    method: teams_capture_cam_test_s33
+    slices: [teams_capture_cam_test, teams_capture_cam_test_s33]
+  Cam_Test__s35:
+    method: teams_capture_cam_test_s35
+    slices: [teams_capture_cam_test, teams_capture_cam_test_s35]
+  Cam_Test__s38:
+    method: teams_capture_cam_test_s38
+    slices: [teams_capture_cam_test, teams_capture_cam_test_s38]
+  Cam_Test__s46:
+    method: teams_capture_cam_test_s46
+    slices: [teams_capture_cam_test, teams_capture_cam_test_s46]
+
+  # PC_Generator capture lane: 237 grouped fake videos across 4 sessions.
+  PC_Generator__s3:
+    method: teams_capture_pc_generator_s3
+    slices: [teams_capture_pc_generator, teams_capture_pc_generator_s3]
+  PC_Generator__s4:
+    method: teams_capture_pc_generator_s4
+    slices: [teams_capture_pc_generator, teams_capture_pc_generator_s4]
+  PC_Generator__s9:
+    method: teams_capture_pc_generator_s9
+    slices: [teams_capture_pc_generator, teams_capture_pc_generator_s9]
+  PC_Generator__s15:
+    method: teams_capture_pc_generator_s15
+    slices: [teams_capture_pc_generator, teams_capture_pc_generator_s15]
+
+  # Test_Cam capture lane: 220 grouped fake videos across 3 sessions.
+  Test_Cam__s53:
+    method: teams_capture_test_cam_s53
+    slices: [teams_capture_test_cam, teams_capture_test_cam_s53]
+  Test_Cam__s73:
+    method: teams_capture_test_cam_s73
+    slices: [teams_capture_test_cam, teams_capture_test_cam_s73]
+  Test_Cam__s76:
+    method: teams_capture_test_cam_s76
+    slices: [teams_capture_test_cam, teams_capture_test_cam_s76]
+
+  # Single-session capture lanes.
+  Noyn_sharker__s23:
+    method: teams_capture_noyn_sharker_s23
+    slices: [teams_capture_noyn_sharker, teams_capture_noyn_sharker_s23]
+  dor_shkedi__s16:
+    method: teams_capture_dor_shkedi_s16
+    slices: [teams_capture_dor_shkedi, teams_capture_dor_shkedi_s16]
+
+  # Unresolved flat-upload lane.
+  Xiang_Xiang2_Feng:
+    method: teams_flat_xiang_xiang2_feng
+    slices: [teams_flat_xiang_xiang2_feng]

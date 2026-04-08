@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import sys
 import types
 from dataclasses import dataclass
@@ -16,15 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import run_r4_validation_sequential as r4_runner
-import run_target_domain_validation_sequential as td_runner
-
 
 def _load_module(module_name: str, relative_path: str):
     module_path = ROOT / relative_path
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec is not None and spec.loader is not None
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -89,6 +88,14 @@ def _load_validation_sources_module():
 
 
 validation_sources = _load_validation_sources_module()
+r4_runner = _load_module(
+    "run_r4_validation_sequential_test_module",
+    "scripts/run/run_r4_validation_sequential.py",
+)
+td_runner = _load_module(
+    "run_target_domain_validation_sequential_test_module",
+    "arena/run_target_domain_validation_sequential.py",
+)
 
 
 class _FakeFS:
@@ -186,6 +193,61 @@ def test_external_fake_per_image_sampling_is_seed_stable(_patched_wma_glob):
     assert [v.video_id for v in videos_a] == [v.video_id for v in videos_b]
 
 
+def test_external_manifest_filters_split_slice_and_shapes_frames(tmp_path):
+    manifest_path = tmp_path / "teams_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "videos": [
+                    {
+                        "label": "real",
+                        "method": "teams_real",
+                        "video_id": "teams_real_dev",
+                        "frame_paths": ["/tmp/frame_a.jpg"],
+                        "identity_key": "cam_test__s32",
+                        "split": "dev",
+                        "slices": ["teams_real_all", "teams_real_poor_quality"],
+                    },
+                    {
+                        "label": "real",
+                        "method": "teams_real",
+                        "video_id": "teams_real_lockbox",
+                        "frame_paths": ["/tmp/frame_b.jpg"],
+                        "identity_key": "cam_test__s33",
+                        "split": "lockbox",
+                        "slices": ["teams_real_all"],
+                    },
+                    {
+                        "label": "fake",
+                        "method": "visomaster_enhanced_macro",
+                        "video_id": "fake_macro_dev",
+                        "frame_path": "/tmp/frame_c.jpg",
+                        "identity_key": "viso_fake",
+                        "split": "dev",
+                        "slices": ["teams_fake_all", "visomaster_enhanced_macro"],
+                    },
+                ]
+            }
+        )
+    )
+
+    videos = validation_sources.load_external_manifest_videos(
+        manifest_path=str(manifest_path),
+        label="real",
+        split="dev",
+        slices=["teams_real_poor_quality"],
+        deterministic_frame_count=4,
+    )
+
+    assert len(videos) == 1
+    assert videos[0].label == "real"
+    assert videos[0].method == "teams_real"
+    assert videos[0].video_id == "teams_real_dev"
+    assert len(videos[0].frame_paths) == 4
+    assert len(set(videos[0].frame_paths)) == 1
+    assert isinstance(videos[0].identity, int)
+
+
 def _r4_args(**overrides):
     base = dict(
         df40_orientation="target_source",
@@ -271,3 +333,398 @@ def test_target_domain_runner_threads_per_image_wma_semantics():
     grouping_value = job_args[job_args.index("--external_fake_grouping") + 1]
     assert grouping_value == "per_image"
     assert "--external_fake_deterministic" in job_args
+
+
+def test_target_domain_runner_threads_manifest_suite_flags():
+    common = argparse.Namespace(
+        output_gcs_folder="gs://training-job-outputs/test_results/target_domain_validation",
+        wandb_project="phase2-experiments",
+        frames_per_video=8,
+        detailed_reports=True,
+        df40_mode="none",
+        df40_orientation="target_source",
+    )
+    suite = {
+        "name": "teams_real_poor_quality_dev",
+        "df40_mode": "none",
+        "external_real_manifest": "gs://training-job-outputs/manifests/teams_target_domain.json",
+        "external_real_manifest_split": "dev",
+        "external_real_manifest_slices": "teams_real_poor_quality",
+        "external_real_method": "teams_real",
+        "max_external_real": 1200,
+        "external_real_deterministic": True,
+        "external_fake_manifest": "gs://training-job-outputs/manifests/teams_target_domain.json",
+        "external_fake_manifest_split": "dev",
+        "external_fake_manifest_slices": "visomaster_enhanced_macro",
+        "external_fake_method": "visomaster_enhanced_macro",
+        "max_external_fake": 600,
+    }
+
+    job_args = td_runner._build_job_args(
+        checkpoint_key="FT7",
+        checkpoint_path="gs://training-job-outputs/phase2r4_experiments/udgwsu7o/top_n_step500.pth",
+        suite=suite,
+        common=common,
+    )
+
+    assert "--external_real_manifest" in job_args
+    assert job_args[job_args.index("--external_real_manifest") + 1] == suite["external_real_manifest"]
+    assert "--external_real_manifest_split" in job_args
+    assert job_args[job_args.index("--external_real_manifest_split") + 1] == "dev"
+    assert "--external_real_manifest_slices" in job_args
+    assert job_args[job_args.index("--external_real_manifest_slices") + 1] == "teams_real_poor_quality"
+    assert "--external_real_deterministic" in job_args
+
+    assert "--external_fake_manifest" in job_args
+    assert job_args[job_args.index("--external_fake_manifest") + 1] == suite["external_fake_manifest"]
+    assert "--external_fake_manifest_split" in job_args
+    assert job_args[job_args.index("--external_fake_manifest_split") + 1] == "dev"
+    assert "--external_fake_manifest_slices" in job_args
+    assert job_args[job_args.index("--external_fake_manifest_slices") + 1] == "visomaster_enhanced_macro"
+
+
+def test_target_domain_runner_accepts_custom_checkpoint_aliases(tmp_path):
+    checkpoint_map_path = tmp_path / "checkpoint_map.yaml"
+    checkpoint_map_path.write_text(
+        "\n".join(
+            [
+                'r12_g_fp32: "gs://bucket/r12_g_fp32.pth"',
+                'track_a_candidate: "gs://bucket/track_a_candidate.pth"',
+            ]
+        )
+    )
+
+    selected = td_runner._resolve_requested_checkpoint_keys(
+        checkpoints_arg="r12_g_fp32,track_a_candidate",
+        checkpoint_map_path=str(checkpoint_map_path),
+    )
+    resolved = td_runner._resolve_checkpoints(selected, str(checkpoint_map_path))
+
+    assert selected == ["R12_G_FP32", "TRACK_A_CANDIDATE"]
+    assert resolved == {
+        "R12_G_FP32": "gs://bucket/r12_g_fp32.pth",
+        "TRACK_A_CANDIDATE": "gs://bucket/track_a_candidate.pth",
+    }
+
+
+def test_target_domain_runner_all_expands_available_checkpoint_aliases(tmp_path):
+    checkpoint_map_path = tmp_path / "checkpoint_map.yaml"
+    checkpoint_map_path.write_text(
+        "\n".join(
+            [
+                'r12_g_fp32: "gs://bucket/r12_g_fp32.pth"',
+                'r12_g_int8: "gs://bucket/r12_g_int8.pth"',
+                'track_a_candidate: "gs://bucket/track_a_candidate.pth"',
+            ]
+        )
+    )
+
+    selected = td_runner._resolve_requested_checkpoint_keys(
+        checkpoints_arg="ALL",
+        checkpoint_map_path=str(checkpoint_map_path),
+    )
+
+    assert selected == ["R12_G_FP32", "R12_G_INT8", "TRACK_A_CANDIDATE"]
+
+
+def test_target_domain_runner_builds_absolute_validation_command():
+    cmd = td_runner._build_validation_command(["--checkpoint_gcs_path", "gs://bucket/model.pth"])
+
+    assert cmd[0] == sys.executable
+    assert cmd[1] == "-u"
+    assert Path(cmd[2]).name == "validate_custom_sources.py"
+    assert Path(cmd[2]).exists()
+
+
+def test_target_domain_scorecard_row_uses_fpr_for_real_only_suite():
+    suite = {
+        "name": "teams_real_all_dev",
+        "external_real_manifest": "gs://training-job-outputs/manifests/teams_target_domain.json",
+        "external_real_manifest_split": "dev",
+        "external_real_manifest_slices": "teams_real_all",
+        "external_real_method": "teams_real",
+    }
+    video_rows = [
+        {
+            "method": "teams_real",
+            "label": 0,
+            "video_id": "real_001",
+            "avg_video_prob": 0.10,
+            "prediction": 0,
+            "group_key": "teams_real",
+            "family_key": "teams_real",
+        },
+        {
+            "method": "teams_real",
+            "label": 0,
+            "video_id": "real_002",
+            "avg_video_prob": 0.91,
+            "prediction": 1,
+            "group_key": "teams_real",
+            "family_key": "teams_real",
+        },
+        {
+            "method": "teams_real",
+            "label": 0,
+            "video_id": "real_003",
+            "avg_video_prob": 0.30,
+            "prediction": 0,
+            "group_key": "teams_real",
+            "family_key": "teams_real",
+        },
+    ]
+
+    row = td_runner._build_scorecard_row(
+        checkpoint_key="FT7",
+        checkpoint_path="gs://training-job-outputs/phase2r13_experiments/example/model.pth",
+        suite=suite,
+        report_path="/tmp/teams_real_all_dev_ft7_videos_report.csv",
+        video_rows=video_rows,
+    )
+
+    assert row["label_mode"] == "real_only"
+    assert row["split_hint"] == "dev"
+    assert row["slice_hint"] == "teams_real_all"
+    assert row["method_hint"] == "teams_real"
+    assert row["n_videos"] == 3
+    assert row["fp"] == 1
+    assert row["tn"] == 2
+    assert row["score_metric_name"] == "real_fpr_at_0p5"
+    assert row["score_metric_value"] == pytest.approx(1 / 3, rel=1e-6)
+    assert row["real_tnr_at_0p5"] == pytest.approx(2 / 3, rel=1e-6)
+
+
+def test_target_domain_scorecard_row_uses_recall_for_fake_only_suite():
+    suite = {
+        "name": "visomaster_enhanced_macro_dev",
+        "external_fake_manifest": "gs://training-job-outputs/manifests/teams_target_domain.json",
+        "external_fake_manifest_split": "dev",
+        "external_fake_manifest_slices": "visomaster_enhanced_macro",
+        "external_fake_method": "visomaster_enhanced_macro",
+    }
+    video_rows = [
+        {
+            "method": "visomaster_enhanced_macro",
+            "label": 1,
+            "video_id": "fake_001",
+            "avg_video_prob": 0.89,
+            "prediction": 1,
+            "group_key": "visomaster_enhanced_fake",
+            "family_key": "visomaster_enhanced_fake",
+        },
+        {
+            "method": "visomaster_enhanced_macro",
+            "label": 1,
+            "video_id": "fake_002",
+            "avg_video_prob": 0.78,
+            "prediction": 1,
+            "group_key": "visomaster_enhanced_fake",
+            "family_key": "visomaster_enhanced_fake",
+        },
+        {
+            "method": "visomaster_enhanced_macro",
+            "label": 1,
+            "video_id": "fake_003",
+            "avg_video_prob": 0.21,
+            "prediction": 0,
+            "group_key": "visomaster_enhanced_fake",
+            "family_key": "visomaster_enhanced_fake",
+        },
+    ]
+
+    row = td_runner._build_scorecard_row(
+        checkpoint_key="FT7",
+        checkpoint_path="gs://training-job-outputs/phase2r13_experiments/example/model.pth",
+        suite=suite,
+        report_path="/tmp/visomaster_enhanced_macro_dev_ft7_videos_report.csv",
+        video_rows=video_rows,
+    )
+
+    assert row["label_mode"] == "fake_only"
+    assert row["split_hint"] == "dev"
+    assert row["slice_hint"] == "visomaster_enhanced_macro"
+    assert row["method_hint"] == "visomaster_enhanced_macro"
+    assert row["n_videos"] == 3
+    assert row["tp"] == 2
+    assert row["fn"] == 1
+    assert row["score_metric_name"] == "fake_recall_at_0p5"
+    assert row["score_metric_value"] == pytest.approx(2 / 3, rel=1e-6)
+    assert row["fake_fnr_at_0p5"] == pytest.approx(1 / 3, rel=1e-6)
+
+
+def test_target_domain_scorecard_row_falls_back_to_methods_seen_for_method_hint():
+    suite = {
+        "name": "teams_capture_cam_test_dev",
+        "external_fake_manifest": "gs://training-job-outputs/manifests/teams_target_domain.json",
+        "external_fake_manifest_split": "dev",
+        "external_fake_manifest_slices": "teams_capture_cam_test",
+    }
+    video_rows = [
+        {
+            "method": "teams_capture_cam_test_s32",
+            "label": 1,
+            "video_id": "fake_001",
+            "avg_video_prob": 0.91,
+            "prediction": 1,
+            "group_key": "teams_capture_cam_test",
+            "family_key": "teams_capture_cam_test",
+        },
+        {
+            "method": "teams_capture_cam_test_s33",
+            "label": 1,
+            "video_id": "fake_002",
+            "avg_video_prob": 0.22,
+            "prediction": 0,
+            "group_key": "teams_capture_cam_test",
+            "family_key": "teams_capture_cam_test",
+        },
+    ]
+
+    row = td_runner._build_scorecard_row(
+        checkpoint_key="R12_G_FP32",
+        checkpoint_path="gs://training-job-outputs/phase2r12_experiments/example/model_fp32.pth",
+        suite=suite,
+        report_path="/tmp/teams_capture_cam_test_dev_r12_g_fp32_videos_report.csv",
+        video_rows=video_rows,
+    )
+
+    assert row["checkpoint_precision"] == "fp32"
+    assert row["checkpoint_pair_key"] == "R12_G"
+    assert row["method_hint"] == "teams_capture_cam_test_s32|teams_capture_cam_test_s33"
+    assert row["methods_seen"] == "teams_capture_cam_test_s32|teams_capture_cam_test_s33"
+
+
+def test_target_domain_scorecard_wide_rows_pivot_primary_metrics():
+    scorecard_rows = [
+        {
+            "checkpoint_key": "FT7",
+            "checkpoint_path": "gs://bucket/model_ft7.pth",
+            "checkpoint_precision": "other",
+            "checkpoint_pair_key": "FT7",
+            "suite_name": "teams_real_all_dev",
+            "score_metric_name": "real_fpr_at_0p5",
+            "score_metric_value": 0.025,
+            "accuracy_at_0p5": 0.975,
+            "n_videos": 400,
+        },
+        {
+            "checkpoint_key": "FT7",
+            "checkpoint_path": "gs://bucket/model_ft7.pth",
+            "checkpoint_precision": "other",
+            "checkpoint_pair_key": "FT7",
+            "suite_name": "visomaster_enhanced_macro_dev",
+            "score_metric_name": "fake_recall_at_0p5",
+            "score_metric_value": 0.820,
+            "accuracy_at_0p5": 0.820,
+            "n_videos": 275,
+        },
+        {
+            "checkpoint_key": "FT8",
+            "checkpoint_path": "gs://bucket/model_ft8.pth",
+            "checkpoint_precision": "other",
+            "checkpoint_pair_key": "FT8",
+            "suite_name": "teams_real_all_dev",
+            "score_metric_name": "real_fpr_at_0p5",
+            "score_metric_value": 0.018,
+            "accuracy_at_0p5": 0.982,
+            "n_videos": 400,
+        },
+    ]
+
+    wide_rows = td_runner._build_wide_scorecard_rows(scorecard_rows)
+
+    assert len(wide_rows) == 2
+
+    ft7 = next(row for row in wide_rows if row["checkpoint_key"] == "FT7")
+    assert ft7["checkpoint_precision"] == "other"
+    assert ft7["checkpoint_pair_key"] == "FT7"
+    assert ft7["teams_real_all_dev__real_fpr_at_0p5"] == pytest.approx(0.025, rel=1e-6)
+    assert ft7["teams_real_all_dev__n_videos"] == 400
+    assert ft7["visomaster_enhanced_macro_dev__fake_recall_at_0p5"] == pytest.approx(0.82, rel=1e-6)
+    assert ft7["visomaster_enhanced_macro_dev__accuracy_at_0p5"] == pytest.approx(0.82, rel=1e-6)
+
+    ft8 = next(row for row in wide_rows if row["checkpoint_key"] == "FT8")
+    assert ft8["teams_real_all_dev__real_fpr_at_0p5"] == pytest.approx(0.018, rel=1e-6)
+    assert ft8["teams_real_all_dev__n_videos"] == 400
+
+
+def test_target_domain_scorecard_pair_delta_rows_compare_fp32_and_int8():
+    scorecard_rows = [
+        {
+            "checkpoint_key": "R12_G_FP32",
+            "checkpoint_path": "gs://bucket/r12_g_fp32.pth",
+            "checkpoint_precision": "fp32",
+            "checkpoint_pair_key": "R12_G",
+            "suite_name": "teams_real_all_dev",
+            "label_mode": "real_only",
+            "split_hint": "dev",
+            "slice_hint": "teams_real_all",
+            "method_hint": "teams_real",
+            "score_metric_name": "real_fpr_at_0p5",
+            "score_metric_value": 0.020,
+            "accuracy_at_0p5": 0.980,
+            "n_videos": 400,
+        },
+        {
+            "checkpoint_key": "R12_G_INT8",
+            "checkpoint_path": "gs://bucket/r12_g_int8.pth",
+            "checkpoint_precision": "int8",
+            "checkpoint_pair_key": "R12_G",
+            "suite_name": "teams_real_all_dev",
+            "label_mode": "real_only",
+            "split_hint": "dev",
+            "slice_hint": "teams_real_all",
+            "method_hint": "teams_real",
+            "score_metric_name": "real_fpr_at_0p5",
+            "score_metric_value": 0.028,
+            "accuracy_at_0p5": 0.972,
+            "n_videos": 400,
+        },
+        {
+            "checkpoint_key": "R12_G_FP32",
+            "checkpoint_path": "gs://bucket/r12_g_fp32.pth",
+            "checkpoint_precision": "fp32",
+            "checkpoint_pair_key": "R12_G",
+            "suite_name": "visomaster_enhanced_macro_dev",
+            "label_mode": "fake_only",
+            "split_hint": "dev",
+            "slice_hint": "visomaster_enhanced_macro",
+            "method_hint": "visomaster_enhanced_macro",
+            "score_metric_name": "fake_recall_at_0p5",
+            "score_metric_value": 0.840,
+            "accuracy_at_0p5": 0.840,
+            "n_videos": 275,
+        },
+        {
+            "checkpoint_key": "R12_G_INT8",
+            "checkpoint_path": "gs://bucket/r12_g_int8.pth",
+            "checkpoint_precision": "int8",
+            "checkpoint_pair_key": "R12_G",
+            "suite_name": "visomaster_enhanced_macro_dev",
+            "label_mode": "fake_only",
+            "split_hint": "dev",
+            "slice_hint": "visomaster_enhanced_macro",
+            "method_hint": "visomaster_enhanced_macro",
+            "score_metric_name": "fake_recall_at_0p5",
+            "score_metric_value": 0.830,
+            "accuracy_at_0p5": 0.830,
+            "n_videos": 275,
+        },
+    ]
+
+    delta_rows = td_runner._build_pair_delta_rows(scorecard_rows)
+
+    assert len(delta_rows) == 2
+
+    real_delta = next(row for row in delta_rows if row["suite_name"] == "teams_real_all_dev")
+    assert real_delta["checkpoint_pair_key"] == "R12_G"
+    assert real_delta["metric_direction"] == "lower_is_better"
+    assert real_delta["score_metric_delta_int8_minus_fp32"] == pytest.approx(0.008, rel=1e-6)
+    assert real_delta["score_metric_directional_delta"] == pytest.approx(-0.008, rel=1e-6)
+    assert real_delta["accuracy_at_0p5_delta_int8_minus_fp32"] == pytest.approx(-0.008, rel=1e-6)
+    assert real_delta["n_videos_match"] is True
+
+    fake_delta = next(row for row in delta_rows if row["suite_name"] == "visomaster_enhanced_macro_dev")
+    assert fake_delta["metric_direction"] == "higher_is_better"
+    assert fake_delta["score_metric_delta_int8_minus_fp32"] == pytest.approx(-0.01, rel=1e-6)
+    assert fake_delta["score_metric_directional_delta"] == pytest.approx(-0.01, rel=1e-6)
