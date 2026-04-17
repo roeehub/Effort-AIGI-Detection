@@ -251,3 +251,87 @@ cd DeepfakeBench/training
 ./launch_experiment.sh -y phase2r13-experiments asia-southeast1 \
   experiments/phase2_round13/R13_TB1_trackB_family_split_sidecar.yaml
 ```
+
+## 8. First Training Ablation Readout (April 11, 2026)
+
+The first full Track B sidecar ablation is now available:
+
+- run:
+  - `exp-R13_TB1_trackB_family_split_sidecar-20260408-131653`
+- Vertex job id:
+  - `4224940225060667392`
+- inferred W&B run id from checkpoint output:
+  - `duo9pxdi`
+
+Reference baseline for the comparison:
+
+- run:
+  - `exp-R13_A_trackA_teams_enhanced-20260407-165545`
+- Vertex job id:
+  - `4166954730590830592`
+- W&B run id:
+  - `f04l917o`
+
+Best checkpoint comparison so far:
+
+| Run | Best checkpoint | Holdout AUC | OOD AUC | OOD composite |
+|---|---|---:|---:|---:|
+| `R13_A_trackA_teams_enhanced` | `f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth` | `0.9836` | `0.9682` | `0.9758` |
+| `R13_TB1_trackB_family_split_sidecar` | `duo9pxdi/ood_composite_effort_20260411_step13500_auc0.9845_eer0.0350.pth` | `0.9845` | `0.9514` | `0.9677` |
+
+Gap versus the Track A baseline:
+
+- OOD composite: `-0.0081`
+- OOD AUC: `-0.0168`
+- holdout AUC: `+0.0009`
+
+Like-for-like step-`15500` comparison from training logs:
+
+- `R13_A_trackA_teams_enhanced`
+  - evaluation EER: `0.0431`
+  - OOD EER: `0.0333`
+  - OOD macro per-method accuracy: `0.9572`
+- `R13_TB1_trackB_family_split_sidecar`
+  - evaluation EER: `0.0653`
+  - OOD EER: `0.0345`
+  - OOD macro per-method accuracy: `0.9519`
+
+Immediate training-side conclusion:
+
+- `family_split` did **not** beat the Track A baseline in the first full
+  training ablation
+- the failure mode is not general collapse; holdout stayed roughly flat
+- the loss is concentrated in broader OOD robustness, so TB1 is not promotion-safe
+
+Important scope caveat:
+
+- this is **not yet** the final target-domain verdict for the augmentation
+- the training OOD monitor is a mixed set:
+  - `external_youtube_avspeech`
+  - `zoom_vcd_real`
+  - `teams_ood_real`
+  - `wma_failure_fake`
+  - `teams_ood_fake`
+- only part of that monitor directly reflects the Teams-specific fake conditions
+  that Track B is trying to model
+- the frozen Track C scorecard is the fairer apples-to-apples target-domain check
+  because it directly contains:
+  - `teams_real_all_dev`
+  - `teams_real_all_lockbox`
+  - `teams_fake_all_dev`
+  - `visomaster_enhanced_macro_dev`
+  - `deeplive_enhanced_dev`
+  - specific `teams_capture_*` fake slices
+
+Current practical recommendation:
+
+1. Do **not** promote `R13_TB1` into the main line.
+2. Treat `family_split` as an interesting but unproven image-space idea.
+3. If Track B continues, the next justified step is **not** another blind
+   augmentation promotion. Instead choose one of:
+   - run the frozen Track C scorecard directly on the best `R13_TB1` checkpoint
+     to check for a narrow target-domain win that the mixed OOD monitor may hide
+   - or continue on the already-drafted real-recovery variant:
+     - `DeepfakeBench/training/experiments/phase2_round13/R13_TB2_trackB_family_split_realboost.yaml`
+4. Keep all Track B work sidecar until one checkpoint wins on the real target
+   scorecard, not just on image-space matched-pair fit.

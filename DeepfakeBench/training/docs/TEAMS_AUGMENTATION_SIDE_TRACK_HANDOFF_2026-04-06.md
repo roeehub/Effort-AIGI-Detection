@@ -14,7 +14,7 @@ This side-track doc was drafted during the same implementation thread that:
 The main-line state is now:
 
 - the first Track A smoke has already **passed** on Vertex;
-- the next main-line Track A step is the first full-length launch;
+- the full-length Track A run is already active and has produced a first arena candidate;
 - Track C manifest tooling is already in place and should remain undisturbed.
 - the frozen Teams target-domain manifest now exists at:
   - `DeepfakeBench/training/arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json`
@@ -38,15 +38,20 @@ Current ownership after regroup:
     - related Track C tests / scorecard helpers
 - Track A is now in progress on the main line.
   - live job:
-    - display name: `exp-R13_A_trackA_teams_enhanced-20260407-160710`
-    - Vertex job id: `7406731712530481152`
+    - display name: `exp-R13_A_trackA_teams_enhanced-20260407-165545`
+    - Vertex job id: `4166954730590830592`
+    - W&B run id: `f04l917o`
+  - current best candidate:
+    - step `15500`
+    - OOD-composite `0.9758`
   - best next move:
-    - wait for the first full-length checkpoint
-    - then hand off to the one-off arena path
+    - score the step-`15500` checkpoint through the one-off arena path
+    - no more runtime monitoring is needed unless the run is relaunched
 - Track B is now in progress.
   - first completed deliverables:
     - `DeepfakeBench/training/tools/analyze_teams_matched_pairs.py`
     - `DeepfakeBench/training/docs/TRACK_B_MATCHED_PAIR_REPORT_2026-04-07.md`
+    - `DeepfakeBench/training/experiments/phase2_round13/R13_TB1_trackB_family_split_sidecar.yaml`
   - first local rerun artifacts:
     - `/tmp/teams_matched_pairs_2026-04-07.json`
     - `/tmp/teams_matched_pairs_2026-04-07.csv`
@@ -54,10 +59,10 @@ Current ownership after regroup:
     - keep all work sidecar
     - do not promote the old single-mode `TeamsCodecSimulation` into active `phase2_round13` configs
   - best next move:
-    - Track B has now produced a first best sidecar candidate:
-      - `teams_codec_simulation.policy: "family_split"`
-    - if Track B continues, test that candidate in a dedicated sidecar ablation
-    - keep all work sidecar and avoid active `phase2_round13` configs
+    - `teams_codec_simulation.policy: "family_split"` has now cleared image-space screening but failed to beat the Track A baseline in the first full sidecar ablation
+    - score the best `R13_TB1` checkpoint on the frozen Track C suite before making a final target-domain call
+    - if a follow-on Track B training run is still justified, prefer:
+      - `DeepfakeBench/training/experiments/phase2_round13/R13_TB2_trackB_family_split_realboost.yaml`
 
 Do not overlap with `Agent C1` files if you pick up Track A or Track B in a
 separate worktree.
@@ -87,6 +92,64 @@ Safe interpretation:
 - the current best sidecar candidate is now:
   - `teams_codec_simulation.policy: "family_split"`
 - the next justified step is a dedicated sidecar ablation of that policy, not a silent re-enable of the old preset
+
+## 0.3 Current Track B Training Readout (April 11, 2026)
+
+The first full sidecar ablation is now available:
+
+- run:
+  - `exp-R13_TB1_trackB_family_split_sidecar-20260408-131653`
+- Vertex job id:
+  - `4224940225060667392`
+- checkpoint directory:
+  - `gs://training-job-outputs/phase2r13_experiments/duo9pxdi/`
+
+Reference baseline:
+
+- run:
+  - `exp-R13_A_trackA_teams_enhanced-20260407-165545`
+- Vertex job id:
+  - `4166954730590830592`
+- checkpoint directory:
+  - `gs://training-job-outputs/phase2r13_experiments/f04l917o/`
+
+Best checkpoint comparison so far:
+
+- `R13_A_trackA_teams_enhanced`
+  - best OOD-composite: `0.9758`
+  - checkpoint:
+    - `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth`
+- `R13_TB1_trackB_family_split_sidecar`
+  - best OOD-composite: `0.9677`
+  - checkpoint:
+    - `gs://training-job-outputs/phase2r13_experiments/duo9pxdi/ood_composite_effort_20260411_step13500_auc0.9845_eer0.0350.pth`
+
+Training-side conclusion:
+
+- `R13_TB1` did **not** beat the Track A baseline
+- holdout stayed roughly flat, but broader OOD robustness got worse
+- Track B therefore still has **no promotion-safe augmentation change**
+
+Important comparison caveat:
+
+- the in-training OOD monitor is a mixed set:
+  - `external_youtube_avspeech`
+  - `zoom_vcd_real`
+  - `teams_ood_real`
+  - `wma_failure_fake`
+  - `teams_ood_fake`
+- only part of that monitor directly matches the Teams-specific fake condition
+  the augmentation is trying to emulate
+- the frozen Track C scorecard is the fairer apples-to-apples target-domain lane
+
+Current next safe moves:
+
+1. Do **not** promote `R13_TB1`.
+2. If Track B continues, score the best `R13_TB1` checkpoint on the frozen
+   Track C suite before making a final target-domain call.
+3. If a follow-on training run is still justified after that, prefer the
+   already-drafted real-recovery variant:
+   - `DeepfakeBench/training/experiments/phase2_round13/R13_TB2_trackB_family_split_realboost.yaml`
 
 ## 1. Scope And Hard Guardrails
 
@@ -146,7 +209,8 @@ So the active R13 path is **not** explicitly applying the Teams-specific simulat
 Operational status update:
 
 - the smoke gate for this path already passed;
-- the next main-line action is the first real full-length Track A launch, not another smoke;
+- the full-length main-line Track A run is already live and has produced a first real candidate checkpoint;
+- the next justified main-line action is arena on that candidate, not another smoke or duplicate relaunch;
 - the smoke checkpoint itself should not be treated as a quality result.
 
 ### 3.2 What the active router still does

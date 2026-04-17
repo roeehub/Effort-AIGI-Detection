@@ -64,6 +64,31 @@
 - Short fixed-seed training A/B validation run to measure real wall-clock improvement and confirm no behavioral surprises.
 - Rollout of the same config changes beyond Round 13, if you want earlier experiment families updated too.
 
+## Follow-up Status (Branch `training-speedup-pass1`)
+
+**Completed on 2026-04-08**
+
+- Added `scripts/run/prepare_training_speedup_validation.py`:
+  - derives short fixed-seed validation configs from an existing experiment YAML
+  - preserves the source seed and schedule
+  - sets `max_train_steps`
+  - disables validation/OOD overhead for the short comparison run
+  - increases W&B progress logging cadence for step-by-step inspection
+  - suppresses frequent checkpoint writes
+- Added `docs/TRAINING_SPEEDUP_VALIDATION_RUNBOOK.md`:
+  - documents the exact two-worktree `main` vs `training-speedup-pass1` A/B procedure
+  - provides config-generation commands, launch commands, and comparison checklist
+- Rolled the config-only speedup changes (#1-#4) out beyond Round 13 to the active pre-R13 combined-paired families:
+  - `phase2_round10/`
+  - `phase2_round11/`
+  - `phase2_round12/`
+  - `phase2_round12_5/`
+  - scope intentionally excludes smoke configs and older historical families to keep churn narrow
+
+**Still Open**
+
+- Execute the short fixed-seed validation runs and record measured wall-clock + early-train behavior deltas.
+
 ---
 
 ## Problem Statement

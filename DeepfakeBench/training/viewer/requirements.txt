@@ -1,0 +1,4 @@
+flask>=2.3
+google-cloud-storage>=2.10
+Pillow>=9.0
+PyYAML>=6.0

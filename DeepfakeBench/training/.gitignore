@@ -14,3 +14,8 @@ arena/arena_results/
 *.npz
 *.gstmp
 *.zip
+.viewer_cache/
+*.png__thumb224
+dataset/HDTF/
+dataset/TalkVid/
+# media folderm such as /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/media/table/val_holdout/method_table_6594_1c5f8ccff35055aad3c7.table.json

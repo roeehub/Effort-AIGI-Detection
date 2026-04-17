@@ -11,6 +11,12 @@ Turn the frozen Teams target-domain manifest into a repeatable comparison table 
 - future `Track A` candidate evaluation
 - later FP32 vs INT8 retention checks
 
+Current operator decision for the April 11, 2026 close-out:
+
+- continue Track C in FP32 only for now
+- defer INT8 until later
+- treat the current best live Track A checkpoint as the active `TRACK_A_CANDIDATE`
+
 The current ready-to-run assets are:
 
 - concrete local suite manifest:
@@ -45,10 +51,13 @@ The target-domain sequential runner now supports:
 Operational meaning:
 
 - you are no longer limited to `FT1..FT8`
-- baseline aliases like `R12_G_FP32`, `R12_G_INT8`, and `TRACK_A_CANDIDATE` are now valid
+- baseline aliases like `R12_G_FP32`, `R13_FT2_FP32`, and `TRACK_A_CANDIDATE` are now valid
 - one run can emit both the underlying detailed reports and:
   - a compact checkpoint-by-suite table
   - an FP32-vs-INT8 delta table for matched alias pairs
+
+Even though INT8 export is wired, the current working path is FP32-only until
+real INT8 artifacts exist and become worth comparing.
 
 The new suite generator now also turns the frozen manifest into a wider
 breakdown manifest that covers:
@@ -68,10 +77,11 @@ Current limitation:
 Use these aliases in the checkpoint map unless there is a strong reason not to:
 
 - `R12_G_FP32`
-- `R12_G_INT8`
-- `POST_R12_ENH_FP32`
-- `POST_R12_ENH_INT8`
+- `R13_FT2_FP32`
 - `TRACK_A_CANDIDATE`
+
+For a wider historical readout, keep `R13_FT1_FP32` and `R13_FT3_FP32` in the
+map as optional extra baselines.
 
 ## Step 1: Fill The Checkpoint Map
 
@@ -91,8 +101,9 @@ That seeded map already includes repo-known FP32 entries for:
 - `R13_FT1_FP32`
 - `R13_FT2_FP32`
 - `R13_FT3_FP32`
+- `TRACK_A_CANDIDATE`
 
-It still requires real INT8 and `TRACK_A_CANDIDATE` paths.
+The seeded map is now runnable as-is for the current FP32-only Track C path.
 
 ## Step 2: Dry Run The Scorecard
 
@@ -102,8 +113,8 @@ From the training root:
 cd DeepfakeBench/training
 
 bash arena/run_teams_target_domain_scorecard.sh \
-  --checkpoint-map arena/checkpoint_maps/teams_target_domain.template.yaml \
-  --checkpoints R12_G_FP32,R12_G_INT8 \
+  --checkpoint-map arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml \
+  --checkpoints R12_G_FP32,R13_FT2_FP32,TRACK_A_CANDIDATE \
   --dry-run
 ```
 
@@ -113,7 +124,7 @@ Or run every alias currently present in the map:
 cd DeepfakeBench/training
 
 bash arena/run_teams_target_domain_scorecard.sh \
-  --checkpoint-map arena/checkpoint_maps/teams_target_domain.template.yaml \
+  --checkpoint-map arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml \
   --checkpoints ALL \
   --dry-run
 ```
@@ -125,9 +136,20 @@ manifest:
 cd DeepfakeBench/training
 
 bash arena/run_teams_target_domain_scorecard.sh \
-  --checkpoint-map arena/checkpoint_maps/teams_target_domain.template.yaml \
+  --checkpoint-map arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml \
   --suite-manifest arena/target_domain_suites.teams_manifest.breakdown_2026-04-07.yaml \
   --checkpoints ALL \
+  --dry-run
+```
+
+Current practical compact comparison:
+
+```bash
+cd DeepfakeBench/training
+
+bash arena/run_teams_target_domain_scorecard.sh \
+  --checkpoint-map arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml \
+  --checkpoints R12_G_FP32,R13_FT2_FP32,TRACK_A_CANDIDATE \
   --dry-run
 ```
 
@@ -137,8 +159,18 @@ bash arena/run_teams_target_domain_scorecard.sh \
 cd DeepfakeBench/training
 
 bash arena/run_teams_target_domain_scorecard.sh \
-  --checkpoint-map arena/checkpoint_maps/teams_target_domain.template.yaml \
+  --checkpoint-map arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml \
   --checkpoints ALL
+```
+
+Current practical FP32-only comparison:
+
+```bash
+cd DeepfakeBench/training
+
+bash arena/run_teams_target_domain_scorecard.sh \
+  --checkpoint-map arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml \
+  --checkpoints R12_G_FP32,R13_FT2_FP32,TRACK_A_CANDIDATE
 ```
 
 If you want the real scorecard to run on Vertex using the freshly built image,
@@ -149,6 +181,14 @@ cd DeepfakeBench/training
 
 bash arena/launch_target_domain_scorecard.sh
 ```
+
+That default Vertex launch now includes:
+
+- `R12_G_FP32`
+- `R13_FT1_FP32`
+- `R13_FT2_FP32`
+- `R13_FT3_FP32`
+- `TRACK_A_CANDIDATE`
 
 That launcher uses the image version from `VERSION`, loads the packaged suite
 manifest + checkpoint map from `/workspace/arena/...`, and writes:
@@ -235,10 +275,52 @@ Pair-delta rows include:
 
 Right now the most useful comparison is:
 
-1. freeze `S0` with baseline FP32 + INT8
-2. add one or two best post-R12 enhanced checkpoints
-3. later append `TRACK_A_CANDIDATE` once the first full-length Track A checkpoint exists
-4. use the breakdown suite manifest when you need family/method attribution, not just the compact freeze table
+1. freeze the current FP32-only finalist table with `R12_G_FP32`, one strong post-`R12` enhanced reference, and `TRACK_A_CANDIDATE`
+2. use `R13_FT2_FP32` as the default post-`R12` enhanced reference unless there is a reason to keep all three FT baselines
+3. use the breakdown suite manifest when you need family/method attribution, not just the compact freeze table
+4. revisit INT8 only after the FP32 ranking is stable enough to be worth quantizing
+
+## Latest Compact Result
+
+Latest Track A compact comparison:
+
+- display name: `td-scorecard-compact-20260410-132025`
+- compared:
+  - `R12_G_FP32`
+  - `TRACK_A_CANDIDATE`
+- scorecards:
+  - `gs://training-job-outputs/test_results/teams_target_domain_scorecard/td-scorecard-compact-20260410-132025/scorecards/`
+
+Key readout at threshold `0.5`:
+
+- real Teams objective regressed for `TRACK_A_CANDIDATE` versus `R12_G`:
+  - `teams_real_all_dev` FPR:
+    - `R12_G`: `0.1980`
+    - `TRACK_A_CANDIDATE`: `0.2355`
+  - `teams_real_poor_quality_dev` FPR:
+    - `R12_G`: `0.1679`
+    - `TRACK_A_CANDIDATE`: `0.2319`
+  - `teams_real_all_lockbox` FPR:
+    - `R12_G`: `0.6334`
+    - `TRACK_A_CANDIDATE`: `0.7252`
+- target fake recall improved for `TRACK_A_CANDIDATE`:
+  - `teams_fake_all_dev` recall:
+    - `R12_G`: `0.8510`
+    - `TRACK_A_CANDIDATE`: `0.8896`
+  - `visomaster_enhanced_macro_dev` recall:
+    - `R12_G`: `0.4527`
+    - `TRACK_A_CANDIDATE`: `0.7400`
+- mixed family detail:
+  - `deeplive_enhanced_dev` still favors `R12_G`:
+    - `0.9706` vs `0.9138`
+  - `teams_capture_cam_test_dev`, `teams_capture_pc_generator_dev`, and `teams_capture_test_cam_dev` are unchanged or effectively tied
+
+Practical conclusion:
+
+- `TRACK_A_CANDIDATE` clearly improves the known VisoMaster-enhanced / target-fake weakness
+- `TRACK_A_CANDIDATE` does not beat `R12_G` on the primary real-Teams false-positive objective
+- on the current compact Track C lane, this is a tradeoff result, not a clean promotion result
+- run the breakdown suite only if we need finer attribution before deciding what to tune next
 
 ## Remaining Gap
 
@@ -246,7 +328,7 @@ This runbook completes the reusable scorecard lane.
 
 What still remains outside this doc:
 
-- producing the actual INT8 checkpoint artifacts if they do not already exist
-- deciding which exact baseline and post-R12 checkpoints become the frozen `S0` set
+- deciding whether the current FP32 tradeoff is good enough to justify Track A follow-on tuning
+- producing the actual INT8 checkpoint artifacts later if quantized retention becomes worth checking
 - reading the scorecard and promoting finalists
 - richer VisoMaster enhanced provenance if per-enhancer rows become mandatory

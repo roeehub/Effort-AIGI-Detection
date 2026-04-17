@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training Data Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+  --text: #c9d1d9; --text2: #8b949e; --accent: #58a6ff; --green: #3fb950;
+  --red: #f85149; --yellow: #d29922; --purple: #bc8cff; --orange: #f0883e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Header */
+.header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 24px;
+  display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header .status { font-size: 13px; color: var(--text2); margin-left: auto; }
+.header .cache-info { font-size: 12px; color: var(--text2); }
+.header button { background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.header button:hover { background: var(--border); }
+
+/* Progress */
+.progress-bar { width: 100%; height: 4px; background: var(--bg3); position: relative; }
+.progress-bar .fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  background: var(--bg2); padding: 0 24px; }
+.tab { padding: 10px 20px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;
+  color: var(--text2); transition: all 0.2s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Content */
+.content { padding: 24px; max-width: 1600px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Cards */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px; margin-bottom: 16px; }
+.card h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; }
+.card-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.stat-row { display: flex; justify-content: space-between; padding: 4px 0;
+  border-bottom: 1px solid var(--bg3); font-size: 13px; }
+.stat-row:last-child { border-bottom: none; }
+.stat-label { color: var(--text2); }
+.stat-value { font-weight: 600; }
+
+/* Highlight boxes */
+.highlight { background: linear-gradient(135deg, #1a2332, #1a2832); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.highlight h3 { color: var(--accent); }
+.highlight .big-number { font-size: 36px; font-weight: 700; color: var(--accent); }
+
+.warning { border-color: var(--yellow); background: linear-gradient(135deg, #2a2215, #2a2515); }
+.warning h3, .warning .big-number { color: var(--yellow); }
+
+/* Chart containers */
+.chart-container { position: relative; height: 280px; width: 100%; }
+.chart-container-tall { position: relative; height: 400px; width: 100%; }
+
+/* Table */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; padding: 8px 12px; background: var(--bg3);
+  border-bottom: 2px solid var(--border); color: var(--text2); font-weight: 600;
+  position: sticky; top: 0; cursor: pointer; }
+.data-table th:hover { color: var(--text); }
+.data-table td { padding: 6px 12px; border-bottom: 1px solid var(--bg3); }
+.data-table tr:hover td { background: var(--bg3); }
+.table-wrapper { max-height: 500px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--border); }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px;
+  font-weight: 600; letter-spacing: 0.02em; }
+.badge-source { background: #1f3a5f; color: #79c0ff; }
+.badge-teams { background: #2d1f3a; color: #d2a8ff; }
+.badge-policy { background: #4a3515; color: #f0c674; }
+
+/* Tier badges */
+.badge-tier-minimal { background: #238636; color: #fff; }
+.badge-tier-moderate { background: #9e6a03; color: #fff; }
+.badge-tier-strong { background: #da3633; color: #fff; }
+.badge-tier-artifact { background: #6e7681; color: #fff; }
+.badge-tier-unknown { background: #30363d; color: #8b949e; }
+.badge-train { background: #1a3a1a; color: var(--green); }
+.badge-val { background: #3a2d1a; color: var(--yellow); }
+.badge-test { background: #3a1a1a; color: var(--red); }
+.badge-real { background: #1a332a; color: #56d364; }
+.badge-fake { background: #3a1a1f; color: #f85149; }
+
+/* Sample explorer */
+.filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+.filters select, .filters input { background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+.filters select { min-width: 160px; }
+.filters input { min-width: 200px; }
+
+.sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.sample-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; cursor: pointer; transition: border-color 0.2s; }
+.sample-card:hover { border-color: var(--accent); }
+.sample-card .thumb { width: 100%; height: 180px; background: var(--bg3); display: flex;
+  align-items: center; justify-content: center; overflow: hidden; position: relative; }
+.sample-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sample-card .thumb .placeholder { color: var(--text2); font-size: 12px; }
+.sample-card .info { padding: 10px; }
+.sample-card .info .sid { font-size: 12px; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.sample-card .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.load-more { display: block; width: 100%; padding: 12px; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+  font-size: 14px; cursor: pointer; text-align: center; margin-top: 16px; }
+.load-more:hover { background: var(--border); }
+
+/* ──── Data Health Tab ──── */
+.health-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 16px; }
+.health-toolbar select, .health-toolbar input { background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+.health-toolbar button { background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+  padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.health-toolbar button:hover { background: var(--border); }
+.health-toolbar .count { font-size: 13px; color: var(--text2); margin-left: auto; }
+
+/* Health table */
+.health-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.health-table th { text-align: left; padding: 6px 8px; background: var(--bg3);
+  border-bottom: 2px solid var(--border); color: var(--text2); font-weight: 600;
+  position: sticky; top: 0; cursor: pointer; white-space: nowrap; user-select: none; z-index: 10; }
+.health-table th:hover { color: var(--text); }
+.health-table th .sort-arrow { font-size: 10px; margin-left: 2px; opacity: 0.5; }
+.health-table th.sorted .sort-arrow { opacity: 1; }
+.health-table td { padding: 5px 8px; border-bottom: 1px solid var(--bg3); vertical-align: middle; }
+.health-table tr { cursor: pointer; }
+.health-table tr:hover td { background: var(--bg3); }
+.health-table tr.selected td { background: #1a2a3a; border-color: var(--accent); }
+.health-table-wrapper { max-height: 600px; overflow-y: auto; border-radius: 8px;
+  border: 1px solid var(--border); }
+
+/* Health indicators */
+.health-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.health-dot.green { background: var(--green); }
+.health-dot.yellow { background: var(--yellow); }
+.health-dot.red { background: var(--red); }
+
+/* Balance bar */
+.balance-bar { display: flex; height: 14px; border-radius: 3px; overflow: hidden;
+  min-width: 60px; max-width: 100px; }
+.balance-bar .real-part { background: var(--green); }
+.balance-bar .fake-part { background: var(--red); }
+
+/* Tier mini bar */
+.tier-bar { display: flex; height: 12px; border-radius: 2px; overflow: hidden;
+  min-width: 50px; max-width: 80px; }
+.tier-bar .t-minimal { background: #238636; }
+.tier-bar .t-moderate { background: #9e6a03; }
+.tier-bar .t-strong { background: #da3633; }
+.tier-bar .t-artifact { background: #6e7681; }
+.tier-bar .t-unknown { background: #30363d; }
+
+/* Issues pills */
+.issue-pill { display: inline-block; padding: 1px 6px; border-radius: 10px;
+  font-size: 10px; font-weight: 600; margin: 1px 2px; }
+.issue-pill.critical { background: #3a1a1a; color: var(--red); }
+.issue-pill.warning { background: #3a2d1a; color: var(--yellow); }
+
+/* Method preview panel */
+.preview-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px; margin-top: 16px; display: none; }
+.preview-panel.active { display: block; }
+.preview-panel h3 { font-size: 15px; margin-bottom: 4px; }
+.preview-panel .preview-meta { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
+.preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.preview-col h4 { font-size: 13px; color: var(--text2); margin-bottom: 8px; text-align: center; }
+.preview-thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.preview-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px;
+  border: 1px solid var(--border); }
+.preview-thumbs .preview-thumb-info { font-size: 10px; color: var(--text2); text-align: center;
+  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-actions { display: flex; gap: 8px; margin-top: 12px; }
+.preview-actions button { background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.preview-actions button:hover { background: var(--border); }
+
+/* Notes */
+.note-cell { position: relative; }
+.note-icon { cursor: pointer; font-size: 14px; opacity: 0.5; }
+.note-icon.has-note { opacity: 1; color: var(--yellow); }
+.note-popup { position: absolute; right: 0; top: 100%; z-index: 50; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px; width: 220px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.note-popup textarea { width: 100%; height: 60px; background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 6px; font-size: 12px;
+  font-family: inherit; resize: vertical; }
+.note-popup .note-btns { display: flex; gap: 4px; margin-top: 4px; }
+.note-popup .note-btns button { flex: 1; padding: 3px 8px; font-size: 11px; }
+
+/* Flag selector */
+.flag-selector { display: flex; gap: 2px; }
+.flag-btn { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; font-size: 10px; display: flex; align-items: center;
+  justify-content: center; transition: all 0.15s; }
+.flag-btn:hover { transform: scale(1.2); }
+.flag-btn.active { border-color: var(--text); }
+.flag-btn.flag-ok { background: var(--green); }
+.flag-btn.flag-warn { background: var(--yellow); }
+.flag-btn.flag-bad { background: var(--red); }
+.flag-btn.flag-none { background: var(--bg3); }
+
+/* ──── Method Gallery (Deep Dive) ──── */
+.gallery-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg); z-index: 200; display: none; flex-direction: column; }
+.gallery-overlay.open { display: flex; }
+.gallery-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--bg2); }
+.gallery-header h2 { font-size: 18px; margin: 0; }
+.gallery-header .gallery-stats { font-size: 13px; color: var(--text2); }
+.gallery-method-nav { display: flex; align-items: center; gap: 6px; }
+.gallery-method-nav button { background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.gallery-method-nav button:hover:not(:disabled) { background: var(--border); }
+.gallery-method-nav button:disabled { opacity: 0.35; cursor: default; }
+.gallery-method-counter { font-size: 12px; color: var(--text2); white-space: nowrap; }
+.gallery-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  padding: 10px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--bg2); }
+.gallery-toolbar select, .gallery-toolbar button {
+  background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.gallery-toolbar button:hover { background: var(--border); }
+.gallery-toolbar button.active { border-color: var(--accent); background: #1a2a3a; }
+.gallery-toolbar .gallery-spacer { flex: 1; }
+.gallery-toolbar .gallery-page-info { font-size: 12px; color: var(--text2); }
+.gallery-close { background: none; border: none; color: var(--text); font-size: 24px;
+  cursor: pointer; padding: 0 8px; margin-left: auto; }
+.gallery-close:hover { color: var(--red); }
+.gallery-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px; }
+.gallery-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; transition: border-color 0.15s; }
+.gallery-card:hover { border-color: var(--accent); }
+.gallery-card.label-real { border-left: 3px solid var(--green); }
+.gallery-card.label-fake { border-left: 3px solid var(--red); }
+.gallery-frames { display: flex; gap: 2px; background: var(--bg3); }
+.gallery-frames img { flex: 1; min-width: 0; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
+.gallery-frames img:hover { opacity: 0.8; }
+.gallery-info { padding: 8px 10px; font-size: 11px; color: var(--text2); }
+.gallery-info .gallery-identity { font-weight: 600; color: var(--text); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gallery-info .gallery-badges { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+.gallery-pager { display: flex; justify-content: center; gap: 8px; padding: 16px;
+  flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg2); }
+.gallery-pager button { padding: 6px 16px; }
+/* Fullscreen image viewer */
+.gallery-lightbox { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 300;
+  background: rgba(0,0,0,0.92); display: none; align-items: center; justify-content: center;
+  cursor: zoom-out; }
+.gallery-lightbox.open { display: flex; }
+.gallery-lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px; }
+
+/* Sample detail panel (expanded card view with pair) */
+.detail-panel { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 250;
+  background: rgba(0,0,0,0.88); display: none; align-items: center; justify-content: center;
+  cursor: default; }
+.detail-panel.open { display: flex; }
+.detail-inner { background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  max-width: 1100px; width: 95%; max-height: 92vh; overflow-y: auto; padding: 0; }
+.detail-header { display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0;
+  background: var(--bg); z-index: 1; border-radius: 12px 12px 0 0; }
+.detail-header h3 { font-size: 15px; margin: 0; }
+.detail-close { background: none; border: none; color: var(--text2); font-size: 22px;
+  cursor: pointer; padding: 4px 8px; }
+.detail-close:hover { color: var(--red); }
+.detail-body { padding: 16px 20px; }
+.detail-section { margin-bottom: 20px; }
+.detail-section-title { font-size: 13px; font-weight: 600; color: var(--text2);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.detail-section-title .badge { font-size: 11px; }
+.detail-frames-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px; }
+.detail-frames-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px;
+  border: 2px solid var(--border); cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+.detail-frames-grid img:hover { border-color: var(--accent); transform: scale(1.03); }
+.detail-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text2);
+  margin-top: 6px; }
+.detail-meta span { background: var(--bg2); padding: 3px 8px; border-radius: 4px; }
+.detail-pair-divider { border: none; border-top: 1px dashed var(--border); margin: 16px 0; }
+.detail-no-pair { color: var(--text2); font-size: 12px; font-style: italic; padding: 12px;
+  text-align: center; background: var(--bg2); border-radius: 6px; }
+
+/* Pair viewer modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; }
+.modal .close { float: right; cursor: pointer; color: var(--text2); font-size: 20px; }
+.modal .close:hover { color: var(--text); }
+.pair-view { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.pair-view .pair-col h4 { font-size: 13px; color: var(--text2); margin-bottom: 8px; text-align: center; }
+.pair-view .frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+.pair-view .frames img { width: 100%; border-radius: 4px; border: 1px solid var(--border); }
+.modal-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; margin-top: 12px; }
+.modal-meta dt { color: var(--text2); }
+.modal-meta dd { color: var(--text); font-weight: 500; }
+
+/* Loading spinner */
+.spinner { width: 24px; height: 24px; border: 3px solid var(--bg3);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Discovery overlay */
+#discovery-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg); z-index: 300; display: flex; align-items: center;
+  justify-content: center; flex-direction: column; gap: 16px; }
+#discovery-overlay.hidden { display: none; }
+#discovery-overlay h2 { font-size: 20px; }
+#discovery-overlay .source-list { font-size: 13px; color: var(--text2); max-width: 500px; }
+#discovery-overlay .source-item { display: flex; justify-content: space-between;
+  padding: 4px 0; border-bottom: 1px solid var(--bg3); }
+</style>
+</head>
+<body>
+
+<!-- Discovery loading overlay -->
+<div id="discovery-overlay">
+  <div class="spinner" style="width:40px;height:40px;border-width:4px;"></div>
+  <h2>Discovering Training Data...</h2>
+  <p style="color:var(--text2);font-size:13px;">Scanning GCS buckets for samples. This may take a few minutes on first run.</p>
+  <div class="source-list" id="discovery-sources"></div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>Training Data Viewer</h1>
+  <span class="status" id="header-status">Loading...</span>
+  <span class="cache-info" id="cache-info"></span>
+  <button onclick="refreshDiscovery()">Refresh Data</button>
+  <button onclick="clearCache()">Clear Cache</button>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" data-tab="overview">Overview</div>
+  <div class="tab" data-tab="explorer">Sample Explorer</div>
+  <div class="tab" data-tab="analysis">Data Health</div>
+</div>
+
+<!-- Tab Panels -->
+<div class="content">
+
+  <!-- ═══════════════ TAB 1: Overview ═══════════════ -->
+  <div class="tab-panel active" id="tab-overview">
+
+    <!-- Key metrics row -->
+    <div class="card-grid" style="margin-bottom:16px;">
+      <div class="highlight" id="total-box">
+        <h3>Total Samples</h3>
+        <div class="big-number" id="total-count">--</div>
+      </div>
+      <div class="highlight" id="target-box">
+        <h3>Target Domain (Teams) Share</h3>
+        <div class="big-number" id="target-pct">--</div>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">
+          Effective sampling weight after family_weights applied
+        </p>
+      </div>
+      <div class="highlight" id="teams-coverage-box">
+        <h3>Teams Identity Coverage</h3>
+        <div class="big-number" id="teams-coverage">--</div>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">
+          % of realpool identities with Teams passthrough data
+        </p>
+      </div>
+    </div>
+
+    <div class="card" id="policy-card" style="display:none;margin-bottom:16px;">
+      <h3>VisoMaster Policy Overlay</h3>
+      <p id="policy-summary-text" style="color:var(--text2);font-size:13px;line-height:1.5;margin:8px 0 14px 0;"></p>
+      <div class="card-grid">
+        <div class="highlight">
+          <h3>Hints</h3>
+          <div class="big-number" id="policy-keep-baseline">--</div>
+        </div>
+        <div class="highlight">
+          <h3>Hints (Teams)</h3>
+          <div class="big-number" id="policy-keep-teams">--</div>
+        </div>
+        <div class="highlight warning">
+          <h3>Ignored</h3>
+          <div class="big-number" id="policy-ignore">--</div>
+        </div>
+        <div class="highlight warning">
+          <h3>Delete</h3>
+          <div class="big-number" id="policy-delete">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row 1: source & family distribution -->
+    <div class="card-grid">
+      <div class="card">
+        <h3>Samples by Source</h3>
+        <div class="chart-container"><canvas id="chart-source"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Samples by Family (Raw Count)</h3>
+        <div class="chart-container"><canvas id="chart-family"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Charts row 2: real/fake & effective distribution -->
+    <div class="card-grid">
+      <div class="card">
+        <h3>Real vs Fake (Overall)</h3>
+        <div class="chart-container"><canvas id="chart-label"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Effective Training Distribution (after weights)</h3>
+        <div class="chart-container"><canvas id="chart-effective"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Chart row 3: Family × Split stacked bar -->
+    <div class="card">
+      <h3>Family × Split Distribution</h3>
+      <div class="chart-container-tall"><canvas id="chart-family-split"></canvas></div>
+    </div>
+
+    <!-- Method detail table -->
+    <div class="card">
+      <h3>Method-Level Breakdown</h3>
+      <div class="table-wrapper">
+        <table class="data-table" id="method-table">
+          <thead>
+            <tr>
+              <th data-sort="method">Method</th>
+              <th data-sort="source">Source</th>
+              <th data-sort="family">Family</th>
+              <th data-sort="total">Total</th>
+              <th data-sort="train">Train</th>
+              <th data-sort="val">Val</th>
+              <th data-sort="test">Test</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB 2: Sample Explorer ═══════════════ -->
+  <div class="tab-panel" id="tab-explorer">
+    <div class="filters">
+      <select id="f-source"><option value="">All Sources</option></select>
+      <select id="f-method"><option value="">All Methods</option></select>
+      <select id="f-family"><option value="">All Families</option></select>
+      <select id="f-split"><option value="">All Splits</option></select>
+      <select id="f-tier"><option value="">All Tiers</option></select>
+      <select id="f-label">
+        <option value="">All Labels</option>
+        <option value="0">Real</option>
+        <option value="1">Fake</option>
+      </select>
+      <input type="text" id="f-search" placeholder="Search sample ID, method, identity...">
+      <span id="filter-count" style="font-size:13px;color:var(--text2);"></span>
+    </div>
+    <div class="sample-grid" id="sample-grid"></div>
+    <button class="load-more" id="load-more" style="display:none;" onclick="loadMoreSamples()">
+      Load More Samples
+    </button>
+  </div>
+
+  <!-- ═══════════════ TAB 3: Data Health ═══════════════ -->
+  <div class="tab-panel" id="tab-analysis">
+
+    <!-- Summary row -->
+    <div class="card-grid" style="margin-bottom:16px;">
+      <div class="highlight">
+        <h3>Target Domain Focus Score</h3>
+        <div class="big-number" id="focus-score">--</div>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">
+          Share of effective training signal going to Teams-domain families
+        </p>
+      </div>
+      <div class="highlight" id="health-summary-box">
+        <h3>Method Health Summary</h3>
+        <div style="display:flex;gap:16px;align-items:center;margin-top:8px;">
+          <div><span class="health-dot green"></span> <span id="health-green-count">--</span> OK</div>
+          <div><span class="health-dot yellow"></span> <span id="health-yellow-count">--</span> Warning</div>
+          <div><span class="health-dot red"></span> <span id="health-red-count">--</span> Critical</div>
+        </div>
+      </div>
+      <div class="highlight warning" id="df40-box">
+        <h3>DF40 Suppression</h3>
+        <div class="big-number" id="df40-suppression">--</div>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">
+          DF40 raw count vs effective weight (weight = 0.15)
+        </p>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="health-toolbar">
+      <select id="health-filter-source">
+        <option value="">All Sources</option>
+      </select>
+      <select id="health-filter-health">
+        <option value="">All Health</option>
+        <option value="red">Critical</option>
+        <option value="yellow">Warning</option>
+        <option value="green">OK</option>
+      </select>
+      <select id="health-filter-flag">
+        <option value="">All Flags</option>
+        <option value="ok">Flagged OK</option>
+        <option value="warn">Flagged Attention</option>
+        <option value="bad">Flagged Problem</option>
+        <option value="none">No Flag</option>
+      </select>
+      <input type="text" id="health-search" placeholder="Search method...">
+      <button onclick="exportHealthCSV()" title="Download as CSV">Export CSV</button>
+      <button onclick="loadMethodHealth()" title="Refresh">Refresh</button>
+      <span class="count" id="health-method-count"></span>
+    </div>
+
+    <!-- Health table -->
+    <div class="health-table-wrapper">
+      <table class="health-table" id="health-table">
+        <thead>
+          <tr>
+            <th data-sort="health" style="width:30px;">
+              <span title="Health status">H</span>
+            </th>
+            <th data-sort="flag" style="width:30px;">
+              <span title="Your flag">F</span>
+            </th>
+            <th data-sort="method">Method</th>
+            <th data-sort="source">Source</th>
+            <th data-sort="family">Family</th>
+            <th data-sort="total">Total</th>
+            <th data-sort="balance" title="Real / Fake balance">Balance</th>
+            <th data-sort="n_identities" title="Unique identities">IDs</th>
+            <th data-sort="samples_per_identity" title="Samples per identity">S/ID</th>
+            <th data-sort="avg_frames" title="Avg frames per sample">Frames</th>
+            <th data-sort="tiers" style="min-width:80px;" title="Tier distribution">Tiers</th>
+            <th data-sort="issues">Issues</th>
+            <th style="width:30px;" title="Notes">N</th>
+          </tr>
+        </thead>
+        <tbody id="health-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Method preview panel -->
+    <div class="preview-panel" id="method-preview">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h3 id="preview-title">Select a method above</h3>
+          <div class="preview-meta" id="preview-meta"></div>
+        </div>
+        <div class="preview-actions">
+          <button onclick="if(selectedMethod) openGallery(selectedMethod)" style="background:var(--accent);color:#fff;font-weight:600;">Deep Dive</button>
+          <button onclick="refreshPreview()">Shuffle</button>
+          <button onclick="viewInExplorer()">View in Explorer</button>
+          <button onclick="closePreview()">Close</button>
+        </div>
+      </div>
+      <div class="preview-grid" id="preview-grid">
+        <div class="preview-col">
+          <h4>Real Samples</h4>
+          <div class="preview-thumbs" id="preview-real"></div>
+        </div>
+        <div class="preview-col">
+          <h4>Fake Samples</h4>
+          <div class="preview-thumbs" id="preview-fake"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row: swap model & enhancer (hidden when empty) -->
+    <div class="card-grid" style="margin-top:16px;" id="charts-row-swap-enhancer">
+      <div class="card" id="card-swap">
+        <h3>Fake Samples by Swap Model</h3>
+        <div class="chart-container"><canvas id="chart-swap"></canvas></div>
+      </div>
+      <div class="card" id="card-enhancer">
+        <h3>Enhanced Fakes by Enhancer</h3>
+        <div class="chart-container"><canvas id="chart-enhancer"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card-grid" id="charts-row-tier">
+      <div class="card" id="card-tier">
+        <h3>VisoMaster Quality Tiers</h3>
+        <div class="chart-container"><canvas id="chart-tier"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Unique Identities per Family</h3>
+        <div class="chart-container"><canvas id="chart-ids-per-family"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Weight configuration table -->
+    <div class="card">
+      <h3>Family Weight Configuration</h3>
+      <div class="table-wrapper">
+        <table class="data-table" id="weight-table">
+          <thead>
+            <tr>
+              <th>Family</th>
+              <th>Weight</th>
+              <th>Raw Train Count</th>
+              <th>Weighted Score</th>
+              <th>Effective %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pair viewer modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <span class="close" onclick="closeModal()">&times;</span>
+    <h3 id="modal-title">Sample Detail</h3>
+    <div id="modal-badges" style="margin:8px 0;"></div>
+    <dl class="modal-meta" id="modal-meta"></dl>
+    <div class="pair-view" id="pair-view">
+      <div class="pair-col">
+        <h4>Real Frames</h4>
+        <div class="frames" id="real-frames"></div>
+      </div>
+      <div class="pair-col">
+        <h4>Fake Frames</h4>
+        <div class="frames" id="fake-frames"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════ State ══════════════════
+let stats = null;
+let currentPage = 1;
+let currentFilters = {};
+const COLORS = [
+  '#58a6ff','#3fb950','#f85149','#d29922','#bc8cff','#f0883e',
+  '#79c0ff','#56d364','#ff7b72','#e3b341','#d2a8ff','#ffa657',
+  '#a5d6ff','#7ee787','#ffa198','#f0db4f','#c297eb','#ffb86c',
+];
+const SOURCE_LABELS = {
+  visomaster_hints: 'visomaster hints',
+  visomaster_hints_teams: 'visomaster hints (teams)',
+};
+
+function displaySource(source) {
+  return SOURCE_LABELS[source] || source;
+}
+
+// ══════════════════ Init ══════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  setupTabs();
+  pollDiscovery();
+  updateCacheSize();
+});
+
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ══════════════════ Discovery Polling ══════════════════
+async function pollDiscovery() {
+  // Check immediately on first call, then poll every 5s
+  async function check() {
+    try {
+      const resp = await fetch('/api/discovery-status');
+      const data = await resp.json();
+      
+      const overlay = document.getElementById('discovery-overlay');
+      const srcList = document.getElementById('discovery-sources');
+      
+      if (data.running) {
+        overlay.classList.remove('hidden');
+        let html = '';
+        for (const [src, [cur, tot]] of Object.entries(data.progress || {})) {
+          html += `<div class="source-item"><span>${src}</span><span>${cur}/${tot}</span></div>`;
+        }
+        srcList.innerHTML = html;
+      }
+      
+      if (data.done) {
+        overlay.classList.add('hidden');
+        document.getElementById('header-status').textContent = `${data.total_samples} samples loaded`;
+        clearInterval(interval);
+        loadDashboard();
+        return true;
+      }
+      
+      if (data.error) {
+        overlay.innerHTML = `<h2 style="color:var(--red)">Discovery Failed</h2><p>${data.error}</p>
+          <button onclick="refreshDiscovery()" style="margin-top:12px;">Retry</button>`;
+        clearInterval(interval);
+        return true;
+      }
+    } catch(e) {}
+    return false;
+  }
+  // Immediate first check
+  const done = await check();
+  if (done) return;
+  const interval = setInterval(check, 5000);
+}
+
+async function refreshDiscovery() {
+  await fetch('/api/discover', { method: 'POST',
+    headers: {'Content-Type':'application/json'}, body: JSON.stringify({force: true}) });
+  document.getElementById('discovery-overlay').classList.remove('hidden');
+  pollDiscovery();
+}
+
+async function clearCache() {
+  await fetch('/api/cache', { method: 'DELETE' });
+  updateCacheSize();
+}
+
+async function updateCacheSize() {
+  const resp = await fetch('/api/cache-size');
+  const data = await resp.json();
+  document.getElementById('cache-info').textContent = `Cache: ${data.human}`;
+}
+
+// ══════════════════ Dashboard Loading ══════════════════
+async function loadDashboard() {
+  const resp = await fetch('/api/stats');
+  stats = await resp.json();
+  
+  renderOverview();
+  renderAnalysis();
+  loadFilterOptions();
+  loadSamples();
+}
+
+// ══════════════════ Overview Tab ══════════════════
+function renderOverview() {
+  document.getElementById('total-count').textContent = stats.total.toLocaleString();
+  document.getElementById('target-pct').textContent = stats.target_domain_pct.toFixed(1) + '%';
+  document.getElementById('teams-coverage').textContent = stats.teams_coverage_pct.toFixed(1) + '%';
+  
+  // Highlight color based on target domain percentage
+  const tBox = document.getElementById('target-box');
+  if (stats.target_domain_pct < 20) tBox.classList.add('warning');
+
+  const policy = stats.visomaster_policy;
+  const policyCard = document.getElementById('policy-card');
+  if (policy?.active) {
+    policyCard.style.display = '';
+    const counts = policy.counts_unique_sample_ids || {};
+    const actions = policy.action_counts || {};
+    const baselineKeep = counts.keep_visomaster_hints ?? policy.label_counts?.['visomaster hints'] ?? 0;
+    const teamsKeep = counts.keep_visomaster_hints_teams ?? policy.label_counts?.['visomaster hints (teams)'] ?? 0;
+    const ignored = counts.ignore ?? actions.ignore ?? 0;
+    const deleted = actions.delete ?? counts.delete ?? 0;
+    document.getElementById('policy-keep-baseline').textContent = baselineKeep.toLocaleString();
+    document.getElementById('policy-keep-teams').textContent = teamsKeep.toLocaleString();
+    document.getElementById('policy-ignore').textContent = ignored.toLocaleString();
+    document.getElementById('policy-delete').textContent = deleted.toLocaleString();
+    const viewerBaseline = ((stats.by_source || {}).visomaster_hints || 0) / 2;
+    const viewerTeams = ((stats.by_source || {}).visomaster_hints_teams || 0) / 2;
+    document.getElementById('policy-summary-text').textContent =
+      `Policy ${policy.date_tag || ''}: historical bad visomaster_* data is no longer shown as method-faithful supervision. ` +
+      `The viewer now keeps ${viewerBaseline.toLocaleString()} baseline pairs as visomaster_hints, ` +
+      `${viewerTeams.toLocaleString()} Teams-played pairs as visomaster_hints_teams, ` +
+      `and excludes ${ignored.toLocaleString()} ignored plus ${deleted.toLocaleString()} delete rows from the future setup.`;
+  } else {
+    policyCard.style.display = 'none';
+  }
+  
+  // Source pie chart
+  createPieChart('chart-source', Object.fromEntries(
+    Object.entries(stats.by_source || {}).map(([k, v]) => [displaySource(k), v])
+  ));
+  
+  // Family pie chart
+  createPieChart('chart-family', stats.by_family);
+  
+  // Label pie chart
+  createPieChart('chart-label', stats.by_label, ['#3fb950', '#f85149']);
+  
+  // Effective distribution pie chart
+  createPieChart('chart-effective', stats.effective_pct);
+  
+  // Family × Split stacked bar
+  createFamilySplitChart();
+  
+  // Method table
+  renderMethodTable();
+}
+
+function createPieChart(canvasId, data, customColors) {
+  const canvas = document.getElementById(canvasId);
+  const labels = Object.keys(data);
+  const values = Object.values(data);
+  const colors = customColors || labels.map((_, i) => COLORS[i % COLORS.length]);
+  
+  new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: values, backgroundColor: colors, borderColor: 'transparent', borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#c9d1d9', font: { size: 11 }, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+              const pct = (ctx.raw / total * 100).toFixed(1);
+              const val = typeof ctx.raw === 'number' && ctx.raw % 1 !== 0 ? ctx.raw.toFixed(1) : ctx.raw;
+              return `${ctx.label}: ${val} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function createFamilySplitChart() {
+  const canvas = document.getElementById('chart-family-split');
+  const families = Object.keys(stats.by_family_split);
+  const splits = ['train', 'val_in_dist', 'test'];
+  const splitColors = { train: '#3fb950', val_in_dist: '#d29922', test: '#f85149' };
+  
+  const datasets = splits.map(sp => ({
+    label: sp,
+    data: families.map(f => (stats.by_family_split[f] || {})[sp] || 0),
+    backgroundColor: splitColors[sp],
+  }));
+  
+  new Chart(canvas, {
+    type: 'bar',
+    data: { labels: families, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: { color: '#8b949e', font: { size: 10 }, maxRotation: 45 },
+          grid: { color: '#21262d' } },
+        y: { stacked: true, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } }
+      },
+      plugins: { legend: { labels: { color: '#c9d1d9' } } }
+    }
+  });
+}
+
+function renderMethodTable() {
+  const tbody = document.querySelector('#method-table tbody');
+  const methodSplits = stats.by_method_split || {};
+  const methodMeta = stats.method_meta || {};
+  
+  // Build rows: for each method, find source & family
+  const rows = [];
+  for (const [method, splits] of Object.entries(methodSplits)) {
+    const total = Object.values(splits).reduce((a,b) => a+b, 0);
+    const meta = methodMeta[method] || {};
+    
+    rows.push({
+      method,
+      source: meta.source || 'unknown',
+      family: meta.family || '',
+      total,
+      train: splits.train || 0,
+      val: splits.val_in_dist || 0,
+      test: splits.test || 0,
+    });
+  }
+  
+  rows.sort((a,b) => b.total - a.total);
+  
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.method}</td>
+      <td><span class="badge badge-source">${displaySource(r.source)}</span></td>
+      <td>${r.family}</td>
+      <td>${r.total}</td>
+      <td>${r.train}</td>
+      <td>${r.val}</td>
+      <td>${r.test}</td>
+    </tr>
+  `).join('');
+  
+  // Sort on click
+  document.querySelectorAll('#method-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      const isNum = ['total','train','val','test'].includes(key);
+      rows.sort((a,b) => isNum ? b[key] - a[key] : a[key].localeCompare(b[key]));
+      renderMethodTableRows(rows);
+    });
+  });
+}
+
+function renderMethodTableRows(rows) {
+  const tbody = document.querySelector('#method-table tbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.method}</td>
+      <td><span class="badge badge-source">${displaySource(r.source)}</span></td>
+      <td>${r.family}</td>
+      <td>${r.total}</td>
+      <td>${r.train}</td>
+      <td>${r.val}</td>
+      <td>${r.test}</td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════ Analysis Tab (Data Health) ══════════════════
+let healthData = null;
+let healthSortKey = 'health';
+let healthSortAsc = true;
+let selectedMethod = null;
+let methodNotes = JSON.parse(localStorage.getItem('methodNotes') || '{}');
+let methodFlags = JSON.parse(localStorage.getItem('methodFlags') || '{}');
+
+function renderAnalysis() {
+  document.getElementById('focus-score').textContent = stats.target_domain_pct.toFixed(1) + '%';
+  
+  // DF40 suppression — only show when family_weights are actually configured
+  const df40TrainRaw = (stats.by_family_split?.df40_fake || {}).train || 0;
+  const hasWeights = Object.keys(stats.family_weights || {}).length > 0;
+  const df40Weight = hasWeights ? (stats.family_weights?.df40_fake || 1) : null;
+  const df40Box = document.getElementById('df40-box');
+  if (df40Weight !== null && df40Weight !== 1) {
+    document.getElementById('df40-suppression').textContent =
+      `${df40TrainRaw} → ~${(df40TrainRaw * df40Weight).toFixed(0)} effective`;
+  } else {
+    document.getElementById('df40-suppression').textContent = 'N/A';
+    df40Box.querySelector('p').textContent = 'No family_weights configured in this experiment';
+    df40Box.classList.remove('warning');
+  }
+  
+  // Swap model chart — hide card entirely when no data
+  const hasSwap = Object.keys(stats.swap_model_counts || {}).length > 0;
+  const hasEnhancer = Object.keys(stats.enhancer_counts || {}).length > 0;
+  const hasTier = Object.keys(stats.tier_counts || {}).length > 0;
+  
+  document.getElementById('card-swap').style.display = hasSwap ? '' : 'none';
+  document.getElementById('card-enhancer').style.display = hasEnhancer ? '' : 'none';
+  document.getElementById('card-tier').style.display = hasTier ? '' : 'none';
+  
+  // Hide entire row if both cards are empty
+  document.getElementById('charts-row-swap-enhancer').style.display =
+    (hasSwap || hasEnhancer) ? '' : 'none';
+  
+  if (hasSwap) createPieChart('chart-swap', stats.swap_model_counts);
+  if (hasEnhancer) createPieChart('chart-enhancer', stats.enhancer_counts);
+  if (hasTier) createTierChart();
+  
+  // Identity per family chart
+  createIdentityPerFamilyChart();
+  
+  // Weight table
+  renderWeightTable();
+  
+  // Load method health data
+  loadMethodHealth();
+}
+
+async function loadMethodHealth() {
+  try {
+    const resp = await fetch('/api/method-health');
+    healthData = await resp.json();
+    
+    // Populate source filter
+    const sources = [...new Set(healthData.methods.map(m => m.source))].sort();
+    const sel = document.getElementById('health-filter-source');
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    sources.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = displaySource(s);
+      sel.appendChild(opt);
+    });
+    
+    // Add filter listeners (only once)
+    if (!sel.dataset.listening) {
+      ['health-filter-source','health-filter-health','health-filter-flag'].forEach(id => {
+        document.getElementById(id).addEventListener('change', renderHealthTable);
+      });
+      let hst;
+      document.getElementById('health-search').addEventListener('input', () => {
+        clearTimeout(hst);
+        hst = setTimeout(renderHealthTable, 200);
+      });
+      sel.dataset.listening = '1';
+    }
+    
+    renderHealthTable();
+    updateHealthSummary();
+  } catch(e) {
+    console.error('Failed to load method health:', e);
+  }
+}
+
+function updateHealthSummary() {
+  if (!healthData) return;
+  const counts = { green: 0, yellow: 0, red: 0 };
+  healthData.methods.forEach(m => counts[m.health]++);
+  document.getElementById('health-green-count').textContent = counts.green;
+  document.getElementById('health-yellow-count').textContent = counts.yellow;
+  document.getElementById('health-red-count').textContent = counts.red;
+}
+
+function getFilteredHealthMethods() {
+  if (!healthData) return [];
+  let methods = healthData.methods;
+  
+  const sourceFilter = document.getElementById('health-filter-source').value;
+  const healthFilter = document.getElementById('health-filter-health').value;
+  const flagFilter = document.getElementById('health-filter-flag').value;
+  const searchVal = document.getElementById('health-search').value.toLowerCase();
+  
+  if (sourceFilter) methods = methods.filter(m => m.source === sourceFilter);
+  if (healthFilter) methods = methods.filter(m => m.health === healthFilter);
+  if (flagFilter) {
+    methods = methods.filter(m => {
+      const flag = methodFlags[m.method] || 'none';
+      return flag === flagFilter;
+    });
+  }
+  if (searchVal) methods = methods.filter(m => m.method.toLowerCase().includes(searchVal));
+  
+  return methods;
+}
+
+function renderHealthTable() {
+  const methods = getFilteredHealthMethods();
+  
+  // Sort
+  methods.sort((a, b) => {
+    let va, vb;
+    if (healthSortKey === 'health') {
+      const order = { red: 0, yellow: 1, green: 2 };
+      va = order[a.health]; vb = order[b.health];
+    } else if (healthSortKey === 'flag') {
+      const order = { bad: 0, warn: 1, ok: 2, none: 3 };
+      va = order[methodFlags[a.method] || 'none'];
+      vb = order[methodFlags[b.method] || 'none'];
+    } else if (healthSortKey === 'balance') {
+      va = a.balance_ratio; vb = b.balance_ratio;
+    } else if (healthSortKey === 'tiers') {
+      va = Object.values(a.tier_counts || {}).reduce((s,v) => s+v, 0);
+      vb = Object.values(b.tier_counts || {}).reduce((s,v) => s+v, 0);
+    } else if (healthSortKey === 'issues') {
+      va = a.issues.length; vb = b.issues.length;
+    } else {
+      va = a[healthSortKey]; vb = b[healthSortKey];
+    }
+    if (typeof va === 'string') return healthSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return healthSortAsc ? va - vb : vb - va;
+  });
+  
+  document.getElementById('health-method-count').textContent =
+    `${methods.length} / ${healthData.total_methods} methods`;
+  
+  const tbody = document.getElementById('health-tbody');
+  tbody.innerHTML = methods.map(m => {
+    const flag = methodFlags[m.method] || 'none';
+    const note = methodNotes[m.method] || '';
+    const isSelected = m.method === selectedMethod;
+    
+    // Balance bar
+    const realPct = m.total > 0 ? (m.real / m.total * 100) : 50;
+    const balanceBar = `<div class="balance-bar" title="Real: ${m.real} (${realPct.toFixed(0)}%) / Fake: ${m.fake} (${(100-realPct).toFixed(0)}%)">
+      <div class="real-part" style="width:${realPct}%"></div>
+      <div class="fake-part" style="width:${100-realPct}%"></div>
+    </div>`;
+    
+    // Tier bar
+    let tierBar = '';
+    const tierTotal = Object.values(m.tier_counts || {}).reduce((s,v) => s+v, 0);
+    if (tierTotal > 0) {
+      const tiers = ['MINIMAL','MODERATE','STRONG','ARTIFACT','UNKNOWN'];
+      const classes = {'MINIMAL':'t-minimal','MODERATE':'t-moderate','STRONG':'t-strong',
+        'ARTIFACT':'t-artifact','UNKNOWN':'t-unknown'};
+      const parts = tiers.map(t => {
+        const pct = ((m.tier_counts[t] || 0) / tierTotal * 100);
+        return pct > 0 ? `<div class="${classes[t]}" style="width:${pct}%" title="${t}: ${m.tier_counts[t]}"></div>` : '';
+      }).join('');
+      tierBar = `<div class="tier-bar">${parts}</div>`;
+    } else {
+      tierBar = '<span style="color:var(--text2);font-size:10px;">—</span>';
+    }
+    
+    // Issues pills
+    const criticalIssues = new Set(['severe_class_imbalance','very_few_samples',
+      'low_identity_diversity','high_artifact_rate']);
+    const issueHtml = m.issues.map(i => {
+      const cls = criticalIssues.has(i) ? 'critical' : 'warning';
+      const label = i.replace(/_/g, ' ');
+      return `<span class="issue-pill ${cls}">${label}</span>`;
+    }).join('');
+    
+    // Flag buttons
+    const flagHtml = `<div class="flag-selector" onclick="event.stopPropagation()">
+      <div class="flag-btn flag-ok ${flag==='ok'?'active':''}" onclick="setFlag('${m.method}','ok')" title="OK">✓</div>
+      <div class="flag-btn flag-warn ${flag==='warn'?'active':''}" onclick="setFlag('${m.method}','warn')" title="Needs attention">!</div>
+      <div class="flag-btn flag-bad ${flag==='bad'?'active':''}" onclick="setFlag('${m.method}','bad')" title="Problematic">✗</div>
+    </div>`;
+    
+    // Note icon
+    const noteIcon = `<span class="note-icon ${note?'has-note':''}" onclick="event.stopPropagation();toggleNote('${m.method}',this)" title="${note || 'Add note'}">📝</span>`;
+    
+    return `<tr class="${isSelected ? 'selected' : ''}" onclick="selectMethod('${m.method}')" ondblclick="openGallery('${m.method}')">
+      <td><span class="health-dot ${m.health}"></span></td>
+      <td>${flagHtml}</td>
+      <td style="font-weight:500;">${m.method}</td>
+      <td><span class="badge badge-source">${displaySource(m.source)}</span></td>
+      <td style="font-size:11px;color:var(--text2);">${m.family}</td>
+      <td>${m.total}</td>
+      <td>${balanceBar}</td>
+      <td>${m.n_identities}</td>
+      <td>${m.samples_per_identity}</td>
+      <td>${m.avg_frames || '—'}</td>
+      <td>${tierBar}</td>
+      <td>${issueHtml || '<span style="color:var(--text2);font-size:10px;">—</span>'}</td>
+      <td class="note-cell">${noteIcon}</td>
+    </tr>`;
+  }).join('');
+  
+  // Sort headers
+  document.querySelectorAll('#health-table th[data-sort]').forEach(th => {
+    th.classList.toggle('sorted', th.dataset.sort === healthSortKey);
+    // Remove old listeners by cloning
+    if (!th.dataset.listening) {
+      th.addEventListener('click', () => {
+        if (healthSortKey === th.dataset.sort) {
+          healthSortAsc = !healthSortAsc;
+        } else {
+          healthSortKey = th.dataset.sort;
+          healthSortAsc = true;
+        }
+        renderHealthTable();
+      });
+      th.dataset.listening = '1';
+    }
+  });
+}
+
+// ── Flag & Notes ──
+function setFlag(method, flag) {
+  const current = methodFlags[method];
+  if (current === flag) {
+    delete methodFlags[method]; // toggle off
+  } else {
+    methodFlags[method] = flag;
+  }
+  localStorage.setItem('methodFlags', JSON.stringify(methodFlags));
+  renderHealthTable();
+}
+
+function toggleNote(method, el) {
+  // Close any open popup
+  document.querySelectorAll('.note-popup').forEach(p => p.remove());
+  
+  const note = methodNotes[method] || '';
+  const popup = document.createElement('div');
+  popup.className = 'note-popup';
+  popup.innerHTML = `
+    <textarea id="note-text">${note}</textarea>
+    <div class="note-btns">
+      <button onclick="saveNote('${method}')">Save</button>
+      <button onclick="this.closest('.note-popup').remove()">Cancel</button>
+      <button onclick="deleteNote('${method}')" style="color:var(--red);">Delete</button>
+    </div>
+  `;
+  el.closest('.note-cell').appendChild(popup);
+  popup.querySelector('textarea').focus();
+}
+
+function saveNote(method) {
+  const text = document.getElementById('note-text').value.trim();
+  if (text) {
+    methodNotes[method] = text;
+  } else {
+    delete methodNotes[method];
+  }
+  localStorage.setItem('methodNotes', JSON.stringify(methodNotes));
+  document.querySelectorAll('.note-popup').forEach(p => p.remove());
+  renderHealthTable();
+}
+
+function deleteNote(method) {
+  delete methodNotes[method];
+  localStorage.setItem('methodNotes', JSON.stringify(methodNotes));
+  document.querySelectorAll('.note-popup').forEach(p => p.remove());
+  renderHealthTable();
+}
+
+// ── Method Preview ──
+async function selectMethod(method) {
+  selectedMethod = method;
+  renderHealthTable(); // update selected row highlight
+  
+  const panel = document.getElementById('method-preview');
+  panel.classList.add('active');
+  document.getElementById('preview-title').textContent = method;
+  document.getElementById('preview-meta').textContent = 'Loading...';
+  document.getElementById('preview-real').innerHTML = '<div class="spinner"></div>';
+  document.getElementById('preview-fake').innerHTML = '<div class="spinner"></div>';
+  
+  try {
+    const resp = await fetch(`/api/method-preview/${encodeURIComponent(method)}?n=6`);
+    const data = await resp.json();
+    
+    document.getElementById('preview-meta').textContent =
+      `${data.total_real} real + ${data.total_fake} fake samples · Showing ${data.real.length + data.fake.length} random`;
+    
+    renderPreviewThumbs('preview-real', data.real);
+    renderPreviewThumbs('preview-fake', data.fake);
+  } catch(e) {
+    document.getElementById('preview-meta').textContent = 'Failed to load preview';
+  }
+}
+
+function renderPreviewThumbs(containerId, samples) {
+  const container = document.getElementById(containerId);
+  if (!samples || samples.length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:12px;grid-column:1/-1;">No samples</div>';
+    return;
+  }
+  container.innerHTML = samples.map(s => `
+    <div>
+      ${s.frame_url ? `<img src="${s.frame_url}" loading="lazy" alt="${s.identity}">` :
+        '<div style="background:var(--bg3);aspect-ratio:1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text2);">No preview</div>'}
+      <div class="preview-thumb-info" title="${s.identity}">${s.identity}</div>
+      ${s.tier ? `<div style="text-align:center;"><span class="badge badge-tier-${s.tier.toLowerCase()}" style="font-size:9px;">${s.tier}</span></div>` : ''}
+    </div>
+  `).join('');
+}
+
+function refreshPreview() {
+  if (selectedMethod) selectMethod(selectedMethod);
+}
+
+function viewInExplorer() {
+  if (!selectedMethod) return;
+  // Switch to explorer tab and set method filter
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.tab[data-tab="explorer"]').classList.add('active');
+  document.getElementById('tab-explorer').classList.add('active');
+  document.getElementById('f-method').value = selectedMethod;
+  currentPage = 1;
+  loadSamples();
+}
+
+function closePreview() {
+  document.getElementById('method-preview').classList.remove('active');
+  selectedMethod = null;
+  renderHealthTable();
+}
+
+// ── CSV Export ──
+function exportHealthCSV() {
+  if (!healthData) return;
+  const methods = getFilteredHealthMethods();
+  
+  const headers = ['Method','Source','Family','Health','Flag','Total','Real','Fake',
+    'Train','Val','Test','Identities','Samples/ID','Avg Frames','Min Frames','Max Frames',
+    'Balance Ratio','Weight','Issues','Note',
+    'MINIMAL','MODERATE','STRONG','ARTIFACT','UNKNOWN'];
+  
+  const rows = methods.map(m => [
+    m.method, m.source, m.family, m.health, methodFlags[m.method] || '',
+    m.total, m.real, m.fake, m.train, m.val, m.test,
+    m.n_identities, m.samples_per_identity, m.avg_frames, m.min_frames, m.max_frames,
+    m.balance_ratio, m.weight, m.issues.join('; '), methodNotes[m.method] || '',
+    m.tier_counts?.MINIMAL || 0, m.tier_counts?.MODERATE || 0,
+    m.tier_counts?.STRONG || 0, m.tier_counts?.ARTIFACT || 0,
+    m.tier_counts?.UNKNOWN || 0,
+  ]);
+  
+  const csv = [headers, ...rows].map(r =>
+    r.map(v => typeof v === 'string' && (v.includes(',') || v.includes('"'))
+      ? `"${v.replace(/"/g, '""')}"` : v
+    ).join(',')
+  ).join('\n');
+  
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `method_health_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function createIdentityPerFamilyChart() {
+  const canvas = document.getElementById('chart-ids-per-family');
+  const data = stats.identities_per_family || {};
+  const families = Object.keys(data);
+  const counts = Object.values(data);
+  
+  new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: families,
+      datasets: [{ data: counts, backgroundColor: COLORS.slice(0, families.length) }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      scales: {
+        x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: '#21262d' } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function createTierChart() {
+  const canvas = document.getElementById('chart-tier');
+  const tierData = stats.tier_counts || {};
+  const tierOrder = ['MINIMAL', 'MODERATE', 'STRONG', 'ARTIFACT', 'UNKNOWN'];
+  const tierColors = {
+    'MINIMAL': '#238636',
+    'MODERATE': '#9e6a03',
+    'STRONG': '#da3633',
+    'ARTIFACT': '#6e7681',
+    'UNKNOWN': '#30363d',
+  };
+  
+  const labels = tierOrder.filter(t => tierData[t]);
+  const data = labels.map(t => tierData[t]);
+  const bgColors = labels.map(t => tierColors[t] || '#444');
+  
+  new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: bgColors }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#c9d1d9', padding: 12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+              const pct = (ctx.parsed / total * 100).toFixed(1);
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderWeightTable() {
+  const tbody = document.querySelector('#weight-table tbody');
+  const weights = stats.family_weights || {};
+  const aliases = stats.family_weight_aliases || {};
+  const trainCounts = {};
+  for (const [fam, splits] of Object.entries(stats.by_family_split || {})) {
+    trainCounts[fam] = splits.train || 0;
+  }
+  
+  const allFamilies = new Set([...Object.keys(weights), ...Object.keys(trainCounts)]);
+  const rows = [];
+  let totalWeighted = 0;
+  for (const fam of allFamilies) {
+    const alias = aliases[fam];
+    const w = (fam in weights) ? weights[fam] : ((alias && alias in weights) ? weights[alias] : 1.0);
+    const raw = trainCounts[fam] || 0;
+    const weighted = raw * w;
+    totalWeighted += weighted;
+    rows.push({ fam, w, raw, weighted, alias });
+  }
+  
+  rows.sort((a,b) => b.weighted - a.weighted);
+  
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.fam}</td>
+      <td>${r.w}</td>
+      <td>${r.raw}</td>
+      <td>${r.weighted.toFixed(0)}</td>
+      <td>${(r.weighted / totalWeighted * 100).toFixed(1)}%</td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════ Sample Explorer ══════════════════
+async function loadFilterOptions() {
+  const resp = await fetch('/api/filter-options');
+  const opts = await resp.json();
+  
+  populateSelect('f-source', opts.sources);
+  populateSelect('f-method', opts.methods);
+  populateSelect('f-family', opts.families);
+  populateSelect('f-split', opts.splits);
+  populateSelect('f-tier', opts.tiers || []);
+  
+  // Add event listeners
+  ['f-source','f-method','f-family','f-split','f-tier','f-label'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => { currentPage = 1; loadSamples(); });
+  });
+  
+  let searchTimeout;
+  document.getElementById('f-search').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => { currentPage = 1; loadSamples(); }, 300);
+  });
+}
+
+function populateSelect(id, values) {
+  const sel = document.getElementById(id);
+  const first = sel.options[0];
+  sel.innerHTML = '';
+  sel.appendChild(first);
+  for (const v of values) {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = id === 'f-source' ? displaySource(v) : v;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadSamples(append = false) {
+  if (!append) currentPage = 1;
+  
+  const params = new URLSearchParams({
+    page: currentPage,
+    per_page: 40,
+    source: document.getElementById('f-source').value,
+    method: document.getElementById('f-method').value,
+    family: document.getElementById('f-family').value,
+    split: document.getElementById('f-split').value,
+    tier: document.getElementById('f-tier').value,
+    label: document.getElementById('f-label').value,
+    search: document.getElementById('f-search').value,
+  });
+  
+  const resp = await fetch('/api/samples?' + params);
+  const data = await resp.json();
+  
+  const grid = document.getElementById('sample-grid');
+  if (!append) grid.innerHTML = '';
+  
+  document.getElementById('filter-count').textContent = `${data.total} samples`;
+  
+  for (const s of data.samples) {
+    const card = createSampleCard(s);
+    grid.appendChild(card);
+  }
+  
+  const btn = document.getElementById('load-more');
+  btn.style.display = data.has_more ? 'block' : 'none';
+  btn.textContent = `Load More (${data.total - currentPage * data.per_page} remaining)`;
+  
+  // Lazy load images
+  observeImages();
+}
+
+function loadMoreSamples() {
+  currentPage++;
+  loadSamples(true);
+}
+
+function createSampleCard(s) {
+  const card = document.createElement('div');
+  card.className = 'sample-card';
+  card.onclick = () => openModal(s);
+  
+  const splitBadgeClass = s.split === 'train' ? 'badge-train' :
+    s.split === 'val_in_dist' ? 'badge-val' : 'badge-test';
+  const labelBadgeClass = s.label === 0 ? 'badge-real' : 'badge-fake';
+  
+  // Use pre-computed frame_url from server
+  const frameUrl = (s.extra || {}).frame_url || '';
+  
+  const teamsIndicator = s.has_teams_counterpart ? '<span class="badge badge-teams">Teams</span>' : '';
+  const tierBadge = s.tier ? `<span class="badge badge-tier-${s.tier.toLowerCase()}">${s.tier}</span>` : '';
+  const policyBadge = (s.extra || {}).policy_label ? `<span class="badge badge-policy">${(s.extra || {}).policy_label}</span>` : '';
+  
+  card.innerHTML = `
+    <div class="thumb">
+      ${frameUrl ? `<img data-src="${frameUrl}" alt="${s.sample_id}" loading="lazy">` :
+        '<div class="placeholder">No preview</div>'}
+    </div>
+    <div class="info">
+      <div class="sid" title="${s.sample_id}">${s.sample_id}</div>
+      <div class="badges">
+        <span class="badge badge-source">${displaySource(s.source)}</span>
+        <span class="badge ${labelBadgeClass}">${s.label === 0 ? 'Real' : 'Fake'}</span>
+        <span class="badge ${splitBadgeClass}">${s.split}</span>
+        ${tierBadge}
+        ${teamsIndicator}
+        ${policyBadge}
+      </div>
+    </div>
+  `;
+  return card;
+}
+
+// Lazy-load images with IntersectionObserver
+let observer = null;
+function observeImages() {
+  if (observer) observer.disconnect();
+  observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        if (img.dataset.src) {
+          img.src = img.dataset.src;
+          delete img.dataset.src;
+          observer.unobserve(img);
+        }
+      }
+    });
+  }, { rootMargin: '200px' });
+  
+  document.querySelectorAll('.sample-card img[data-src]').forEach(img => observer.observe(img));
+}
+
+// ══════════════════ Modal ══════════════════
+function openModal(s) {
+  const modal = document.getElementById('modal');
+  modal.classList.add('active');
+  
+  document.getElementById('modal-title').textContent = s.sample_id;
+  
+  const splitBadgeClass = s.split === 'train' ? 'badge-train' :
+    s.split === 'val_in_dist' ? 'badge-val' : 'badge-test';
+  const labelBadgeClass = s.label === 0 ? 'badge-real' : 'badge-fake';
+  
+  document.getElementById('modal-badges').innerHTML = `
+    <span class="badge badge-source">${displaySource(s.source)}</span>
+    <span class="badge ${labelBadgeClass}">${s.label === 0 ? 'Real' : 'Fake'}</span>
+    <span class="badge ${splitBadgeClass}">${s.split}</span>
+    ${s.has_teams_counterpart ? '<span class="badge badge-teams">Teams Passthrough</span>' : ''}
+    ${s.tier ? `<span class="badge badge-tier-${s.tier.toLowerCase()}">${s.tier}</span>` : ''}
+    ${(s.extra || {}).policy_label ? `<span class="badge badge-policy">${(s.extra || {}).policy_label}</span>` : ''}
+  `;
+  
+  let metaHtml = '';
+  const fields = [
+    ['Identity', s.identity],
+    ['Method', s.method],
+    ['Source', displaySource(s.source)],
+    ['Bucket', s.bucket],
+    ['Frame Count', s.frame_count],
+    ['Strategy', s.strategy],
+    ['Swap Model', s.swap_model],
+    ['Enhancer', s.enhancer],
+    ['Tier', s.tier],
+    ['Video Name', s.original_video_name],
+    ['Family', (s.extra || {}).effective_family || ''],
+    ['Policy Label', (s.extra || {}).policy_label || ''],
+    ['Policy Lane', (s.extra || {}).policy_lane || ''],
+    ['Policy Action', (s.extra || {}).policy_action || ''],
+    ['Nominal Method', (s.extra || {}).policy_nominal_method || ''],
+  ];
+  for (const [key, val] of fields) {
+    if (val) metaHtml += `<dt>${key}</dt><dd>${val}</dd>`;
+  }
+  document.getElementById('modal-meta').innerHTML = metaHtml;
+  
+  // Load pair frames
+  const baseId = s.sample_id.replace(/__fake$/, '').replace(/__real$/, '');
+  const realFrames = document.getElementById('real-frames');
+  const fakeFrames = document.getElementById('fake-frames');
+  realFrames.innerHTML = '';
+  fakeFrames.innerHTML = '';
+  
+  if (s.source === 'df40') {
+    // DF40: paths are now blob-relative (stripped gs:// prefix), use first frame
+    const realPath = (s.extra || {}).real_path || '';
+    const fakePath = (s.extra || {}).fake_path || '';
+    const firstReal = (s.extra || {}).first_real_frame || '000.png';
+    const firstFake = (s.extra || {}).first_fake_frame || '000.png';
+    if (realPath) realFrames.innerHTML = `<img src="/api/frame/${s.bucket}/${realPath}${firstReal}?full=1" loading="lazy">`;
+    if (fakePath) fakeFrames.innerHTML = `<img src="/api/frame/${s.bucket}/${fakePath}${firstFake}?full=1" loading="lazy">`;
+  } else if (s.source !== 'external') {
+    const ext = ['deeplive_teams', 'visomaster_hints_teams'].includes(s.source) ? '.jpg' : '.png';
+    const frameCount = Math.min(s.frame_count || 8, 8);
+    for (let i = 0; i < frameCount; i += 2) {
+      realFrames.innerHTML += `<img src="/api/frame/${s.bucket}/samples/${baseId}/frames/real/frame_${String(i).padStart(4,'0')}${ext}" loading="lazy">`;
+      fakeFrames.innerHTML += `<img src="/api/frame/${s.bucket}/samples/${baseId}/frames/fake/frame_${String(i).padStart(4,'0')}${ext}" loading="lazy">`;
+    }
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+
+// Close modal on Escape or click outside
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.querySelector('.gallery-lightbox.open')) {
+      document.querySelector('.gallery-lightbox.open').classList.remove('open');
+    } else if (document.querySelector('.detail-panel.open')) {
+      closeSampleDetail();
+    } else if (document.querySelector('.gallery-overlay.open')) {
+      closeGallery();
+    } else {
+      closeModal();
+    }
+  }
+});
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const dp = document.getElementById('detail-panel');
+  if (dp) dp.addEventListener('click', e => {
+    if (e.target === dp) closeSampleDetail();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// ── METHOD GALLERY (DEEP DIVE) ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+
+let galleryState = {
+  method: null,
+  page: 1,
+  perPage: 24,
+  label: '',
+  split: '',
+  sort: 'random',
+  seed: 42,
+  totalPages: 0,
+  total: 0,
+  methods: [],      // ordered list of all method names
+  methodIdx: -1,     // current index in methods[]
+};
+
+async function openGallery(method) {
+  // Build method list from health table if not already loaded
+  if (galleryState.methods.length === 0) {
+    try {
+      const resp = await fetch('/api/method-health');
+      const data = await resp.json();
+      galleryState.methods = data.methods.map(m => m.method);
+    } catch(e) { galleryState.methods = [method]; }
+  }
+  galleryState.method = method;
+  galleryState.methodIdx = galleryState.methods.indexOf(method);
+  if (galleryState.methodIdx < 0) { galleryState.methodIdx = 0; }
+  galleryState.page = 1;
+  galleryState.seed = Math.floor(Math.random() * 100000);
+  document.getElementById('gallery-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  updateGalleryMethodNav();
+  await loadGalleryPage();
+}
+
+function updateGalleryMethodNav() {
+  const g = galleryState;
+  document.getElementById('gallery-title').textContent = g.method;
+  document.getElementById('gallery-method-counter').textContent =
+    `${g.methodIdx + 1} / ${g.methods.length} methods`;
+  document.getElementById('gallery-method-prev').disabled = g.methodIdx <= 0;
+  document.getElementById('gallery-method-next').disabled = g.methodIdx >= g.methods.length - 1;
+}
+
+async function galleryPrevMethod() {
+  const g = galleryState;
+  if (g.methodIdx <= 0) return;
+  g.methodIdx--;
+  g.method = g.methods[g.methodIdx];
+  g.page = 1;
+  g.seed = Math.floor(Math.random() * 100000);
+  updateGalleryMethodNav();
+  await loadGalleryPage();
+}
+
+async function galleryNextMethod() {
+  const g = galleryState;
+  if (g.methodIdx >= g.methods.length - 1) return;
+  g.methodIdx++;
+  g.method = g.methods[g.methodIdx];
+  g.page = 1;
+  g.seed = Math.floor(Math.random() * 100000);
+  updateGalleryMethodNav();
+  await loadGalleryPage();
+}
+
+function closeGallery() {
+  document.getElementById('gallery-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function loadGalleryPage() {
+  const g = galleryState;
+  const grid = document.getElementById('gallery-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text2);">Loading...</div>';
+  
+  const params = new URLSearchParams({
+    page: g.page,
+    per_page: g.perPage,
+    label: g.label,
+    split: g.split,
+    sort: g.sort,
+    seed: g.seed,
+    frames_per: 3,
+  });
+  
+  try {
+    const resp = await fetch(`/api/method-gallery/${encodeURIComponent(g.method)}?${params}`);
+    const data = await resp.json();
+    g.total = data.total;
+    g.totalPages = data.total_pages;
+    
+    document.getElementById('gallery-stats').textContent =
+      `${data.total} samples total`;
+    document.getElementById('gallery-page-info').textContent =
+      `Page ${g.page} / ${g.totalPages}`;
+    
+    // Enable/disable pager buttons
+    document.getElementById('gallery-prev').disabled = g.page <= 1;
+    document.getElementById('gallery-next').disabled = !data.has_more;
+    
+    if (data.samples.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text2);">No samples match filters</div>';
+      return;
+    }
+    
+    grid.innerHTML = data.samples.map(s => {
+      const frameImgs = s.frame_urls.map(url =>
+        `<img src="${url}" loading="lazy" alt="${s.identity}" onclick="event.stopPropagation();openLightbox(this.src)">`
+      ).join('');
+      
+      const badgeHtml = [
+        `<span class="badge badge-${s.label === 'real' ? 'real' : 'fake'}">${s.label}</span>`,
+        `<span class="badge badge-split">${s.split}</span>`,
+        s.tier ? `<span class="badge badge-tier-${s.tier.toLowerCase()}">${s.tier}</span>` : '',
+        s.enhancer ? `<span class="badge" style="background:#2d2045;color:#c9a0dc;">${s.enhancer}</span>` : '',
+        s.swap_model ? `<span class="badge" style="background:#1a3040;color:#7eb8da;">${s.swap_model}</span>` : '',
+        `<span style="font-size:10px;color:var(--text2);">${s.frame_count} frames</span>`,
+      ].filter(Boolean).join('');
+      
+      return `<div class="gallery-card label-${s.label}" onclick="openSampleDetail('${s.sample_id}')" style="cursor:pointer;">
+        <div class="gallery-frames">${frameImgs || '<div style="aspect-ratio:1;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text2);width:100%;">No preview</div>'}</div>
+        <div class="gallery-info">
+          <div class="gallery-identity" title="${s.identity}">${s.identity}</div>
+          <div class="gallery-badges">${badgeHtml}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red);">Failed to load gallery</div>';
+    console.error('Gallery error:', e);
+  }
+}
+
+function galleryPrev() {
+  if (galleryState.page > 1) { galleryState.page--; loadGalleryPage(); }
+}
+function galleryNext() {
+  if (galleryState.page < galleryState.totalPages) { galleryState.page++; loadGalleryPage(); }
+}
+function galleryReshuffle() {
+  galleryState.seed = Math.floor(Math.random() * 100000);
+  galleryState.page = 1;
+  loadGalleryPage();
+}
+function galleryFilterChanged() {
+  galleryState.label = document.getElementById('gallery-filter-label').value;
+  galleryState.split = document.getElementById('gallery-filter-split').value;
+  galleryState.sort = document.getElementById('gallery-sort').value;
+  galleryState.page = 1;
+  if (galleryState.sort === 'random') galleryState.seed = Math.floor(Math.random() * 100000);
+  loadGalleryPage();
+}
+
+function openLightbox(src) {
+  const lb = document.getElementById('gallery-lightbox');
+  lb.querySelector('img').src = src.replace(/\?.*/, '?full=1');
+  lb.classList.add('open');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const lb = document.getElementById('gallery-lightbox');
+  if (lb) lb.addEventListener('click', () => lb.classList.remove('open'));
+});
+
+async function openSampleDetail(sampleId) {
+  const panel = document.getElementById('detail-panel');
+  const body = document.getElementById('detail-body');
+  body.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner"></div><br>Loading sample details...</div>';
+  panel.classList.add('open');
+
+  try {
+    const resp = await fetch(`/api/sample-detail/${encodeURIComponent(sampleId)}?frames_per=8`);
+    const d = await resp.json();
+    if (d.error) { body.innerHTML = `<p style="color:var(--red)">${d.error}</p>`; return; }
+
+    document.getElementById('detail-title').textContent = d.identity;
+
+    const renderSection = (s, title) => {
+      const labelClass = s.label === 'real' ? 'real' : 'fake';
+      const imgs = s.frame_urls.map(url =>
+        `<img src="${url}" loading="lazy" alt="frame" onclick="event.stopPropagation();openLightbox(this.src)">`
+      ).join('');
+      const meta = [
+        displaySource(s.source), s.split, s.swap_model, s.enhancer, s.strategy,
+        s.policy_label, s.policy_nominal_method ? `nominal=${s.policy_nominal_method}` : '',
+        s.frame_count ? `${s.frame_count} frames` : '',
+      ].filter(Boolean).map(v => `<span>${v}</span>`).join('');
+      return `<div class="detail-section">
+        <div class="detail-section-title">${title}
+          <span class="badge badge-${labelClass}">${s.label}</span>
+          ${s.tier ? `<span class="badge badge-tier-${s.tier.toLowerCase()}">${s.tier}</span>` : ''}
+          ${s.policy_label ? `<span class="badge badge-policy">${s.policy_label}</span>` : ''}
+        </div>
+        <div class="detail-frames-grid">${imgs || '<div class="detail-no-pair">No frames available</div>'}</div>
+        <div class="detail-meta">${meta}</div>
+      </div>`;
+    };
+
+    let html = renderSection(d, d.label === 'fake' ? '🔴 Fake (selected)' : '🟢 Real (selected)');
+    html += '<hr class="detail-pair-divider">';
+    if (d.pair) {
+      html += renderSection(d.pair, d.pair.label === 'fake' ? '🔴 Fake (counterpart)' : '🟢 Real (counterpart)');
+    } else {
+      html += '<div class="detail-no-pair">No paired counterpart found</div>';
+    }
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<p style="color:var(--red)">Failed to load: ${e.message}</p>`;
+  }
+}
+
+function closeSampleDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+// Keyboard navigation for gallery
+document.addEventListener('keydown', e => {
+  if (!document.querySelector('.gallery-overlay.open')) return;
+  if (document.querySelector('.gallery-lightbox.open')) return; // lightbox handles its own
+  if (document.querySelector('.detail-panel.open')) return; // detail panel handles its own
+  if (e.shiftKey && e.key === 'ArrowLeft')  { e.preventDefault(); galleryPrevMethod(); }
+  else if (e.shiftKey && e.key === 'ArrowRight') { e.preventDefault(); galleryNextMethod(); }
+  else if (e.key === 'ArrowLeft')  { e.preventDefault(); galleryPrev(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); galleryNext(); }
+});
+</script>
+
+<!-- Method Gallery Overlay -->
+<div class="gallery-overlay" id="gallery-overlay">
+  <div class="gallery-header">
+    <div class="gallery-method-nav">
+      <button id="gallery-method-prev" onclick="galleryPrevMethod()" title="Previous method (Shift+Left)">&#9664;</button>
+      <h2 id="gallery-title">Method</h2>
+      <button id="gallery-method-next" onclick="galleryNextMethod()" title="Next method (Shift+Right)">&#9654;</button>
+    </div>
+    <span class="gallery-method-counter" id="gallery-method-counter"></span>
+    <span class="gallery-stats" id="gallery-stats"></span>
+    <button class="gallery-close" onclick="closeGallery()" title="Close (Esc)">&times;</button>
+  </div>
+  <div class="gallery-toolbar">
+    <select id="gallery-filter-label" onchange="galleryFilterChanged()">
+      <option value="">All (Real + Fake)</option>
+      <option value="real">Real only</option>
+      <option value="fake">Fake only</option>
+    </select>
+    <select id="gallery-filter-split" onchange="galleryFilterChanged()">
+      <option value="">All splits</option>
+      <option value="train">Train</option>
+      <option value="val">Val</option>
+      <option value="test">Test</option>
+    </select>
+    <select id="gallery-sort" onchange="galleryFilterChanged()">
+      <option value="random">Random order</option>
+      <option value="identity">By identity</option>
+      <option value="frames">By frame count</option>
+    </select>
+    <button onclick="galleryReshuffle()">Shuffle</button>
+    <div class="gallery-spacer"></div>
+    <span class="gallery-page-info" id="gallery-page-info"></span>
+  </div>
+  <div class="gallery-body">
+    <div class="gallery-grid" id="gallery-grid"></div>
+  </div>
+  <div class="gallery-pager">
+    <button id="gallery-prev" class="gallery-toolbar" onclick="galleryPrev()">&#9664; Previous</button>
+    <button id="gallery-next" class="gallery-toolbar" onclick="galleryNext()">Next &#9654;</button>
+  </div>
+</div>
+
+<!-- Sample detail panel -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-inner">
+    <div class="detail-header">
+      <h3 id="detail-title">Sample</h3>
+      <button class="detail-close" onclick="closeSampleDetail()">&times;</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+</div>
+
+<!-- Lightbox for full-size frame -->
+<div class="gallery-lightbox" id="gallery-lightbox">
+  <img src="" alt="Full-size frame">
+</div>
+
+</body>
+</html>

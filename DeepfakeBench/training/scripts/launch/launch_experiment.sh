@@ -119,12 +119,25 @@ else
     PARAM_CONFIG="/workspace/${PARAM_CONFIG_INPUT}"
 fi
 
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [[ -z "${PYTHON_BIN}" ]]; then
+    if command -v python >/dev/null 2>&1; then
+        PYTHON_BIN="python"
+    elif command -v python3 >/dev/null 2>&1; then
+        PYTHON_BIN="python3"
+    fi
+fi
+
 EXPECTED_GCS_BASE=""
-if [[ -f "${PARAM_CONFIG_INPUT}" ]]; then
+if [[ -f "${PARAM_CONFIG_INPUT}" && -n "${PYTHON_BIN}" ]]; then
     EXPECTED_GCS_BASE="$(
-        python - "${PARAM_CONFIG_INPUT}" <<'PY'
+        "${PYTHON_BIN}" - "${PARAM_CONFIG_INPUT}" <<'PY'
 import sys
-import yaml
+try:
+    import yaml
+except Exception:
+    print("")
+    raise SystemExit(0)
 
 path = sys.argv[1]
 try:
@@ -138,6 +151,8 @@ except Exception:
     print("")
 PY
     )"
+elif [[ -f "${PARAM_CONFIG_INPUT}" ]]; then
+    echo "WARN: python/python3 not found; skipping checkpoint prefix preview." >&2
 fi
 
 # ==============================================

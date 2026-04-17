@@ -9,7 +9,7 @@
 # Default behavior:
 # - uses the image built by ./dev.sh build-prod
 # - uses the packaged frozen Teams manifest + packaged checkpoint map
-# - evaluates the current FP32 baseline set only
+# - evaluates the current FP32 comparison set, including Track A
 # - writes reports and scorecards to gs://training-job-outputs/test_results/...
 #
 # Usage:
@@ -33,7 +33,7 @@ WANDB_PROJECT="${WANDB_PROJECT:-phase2-experiments}"
 
 SUITE_MANIFEST="arena/target_domain_suites.teams_manifest.frozen_2026-04-06.yaml"
 CHECKPOINT_MAP="arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml"
-CHECKPOINTS="R12_G_FP32,R13_FT1_FP32,R13_FT2_FP32,R13_FT3_FP32"
+CHECKPOINTS="R12_G_FP32,R13_FT1_FP32,R13_FT2_FP32,R13_FT3_FP32,TRACK_A_CANDIDATE"
 OUTPUT_GCS_ROOT="gs://training-job-outputs/test_results/teams_target_domain_scorecard"
 JOB_NAME=""
 DRY_RUN=""

@@ -7,9 +7,29 @@
 
 ### 0.1 Status Snapshot
 
-- `S0` baseline scorecard: **pending**
-  - Shared FP32 + INT8 baseline scorecard is not frozen yet.
-  - Current arena output is still FP32-only and not the final target-domain scorecard.
+- `S0` baseline scorecard: **in progress**
+  - First compact FP32 scorecard already finished on Vertex:
+    - display name: `td-scorecard-compact-20260408-124509`
+    - scorecards:
+      - `gs://training-job-outputs/test_results/teams_target_domain_scorecard/td-scorecard-compact-20260408-124509/scorecards/`
+  - Second compact FP32 Track A comparison also finished on Vertex:
+    - display name: `td-scorecard-compact-20260410-132025`
+    - scorecards:
+      - `gs://training-job-outputs/test_results/teams_target_domain_scorecard/td-scorecard-compact-20260410-132025/scorecards/`
+  - Current operator decision as of April 11, 2026:
+    - defer INT8 for now
+    - finish the current Track C close-out on the FP32 lane
+  - Current compact readout:
+    - `TRACK_A_CANDIDATE` improved overall target fake recall versus `R12_G`:
+      - `teams_fake_all_dev` recall `0.8896` vs `0.8510`
+      - `visomaster_enhanced_macro_dev` recall `0.7400` vs `0.4527`
+    - but `TRACK_A_CANDIDATE` regressed the primary real-Teams objective versus `R12_G`:
+      - `teams_real_all_dev` FPR `0.2355` vs `0.1980`
+      - `teams_real_poor_quality_dev` FPR `0.2319` vs `0.1679`
+      - `teams_real_all_lockbox` FPR `0.7252` vs `0.6334`
+  - Remaining close-out:
+    - freeze the current agreed FP32 finalist interpretation
+    - run the breakdown table only if family attribution is needed
 
 - `S1` enhanced bucket audit: **first full resolver pass completed**
   - Added `DeepfakeBench/training/tools/audit_enhanced_visomaster_resolver.py`.
@@ -41,7 +61,7 @@
     - `DeepfakeBench/training/arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json`
   - The remaining step is to turn this into the standard shared scorecard / comparison path.
 
-- Track A merged Teams-enhanced loader: **full-length Vertex run launched; awaiting first checkpoint + arena**
+- Track A merged Teams-enhanced loader: **full-length run finished; best arena candidate exists**
   - New resolver-driven `combined_paired.visomaster_teams_enhanced` path is now in code.
   - One unified sample is built per base `sample_id`, with fake-branch selection deferred to iteration time.
   - Companion handoff docs created from the implementation thread:
@@ -78,20 +98,43 @@
   - Important interpretation:
     - this smoke was an integration gate for the new data path, not a quality gate for the `100`-step checkpoint
     - the smoke metrics were weak / near-random, so the smoke checkpoint itself should not be treated as a model-quality result or sent to arena
-  - The first full-length Track A baseline was launched on Vertex on April 7, 2026:
-    - display name: `exp-R13_A_trackA_teams_enhanced-20260407-160710`
-    - Vertex job id: `7406731712530481152`
-    - full resource name: `projects/700371397073/locations/asia-southeast1/customJobs/7406731712530481152`
+  - The image was rebuilt to include the new Track A YAML and loader code, and the current full-length Track A baseline was launched on Vertex on April 7, 2026:
+    - display name: `exp-R13_A_trackA_teams_enhanced-20260407-165545`
+    - Vertex job id: `4166954730590830592`
+    - full resource name: `projects/700371397073/locations/asia-southeast1/customJobs/4166954730590830592`
     - region: `asia-southeast1`
-    - create time (UTC): `2026-04-07T14:07:17.673276Z`
-    - start time (UTC): `2026-04-07T14:07:17.834510Z`
-    - initial observed state: `JOB_STATE_PENDING`
-    - initial observed Vertex update time (UTC): `2026-04-07T14:07:26.861950Z`
+    - image: `us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.171`
+    - create time (UTC): `2026-04-07T14:55:49.609358Z`
+    - start time (UTC): `2026-04-07T15:03:06Z`
+    - final observed state as of April 10, 2026: `JOB_STATE_CANCELLED`
+    - W&B run id: `f04l917o`
+  - Current W&B summary snapshot from the live run:
+    - `epoch`: `5`
+    - `train/step`: `15499`
+    - `train/loss/overall`: `0.2705`
+    - latest reported `val_holdout/overall/auc`: `0.9852`
+    - latest reported `val_holdout/overall/eer`: `0.0388`
+    - latest reported `ood/overall/auc`: `0.9586`
+    - latest reported `ood/overall/eer`: `0.1138`
+    - latest reported `val_primary/ood_composite`: `0.9689`
+  - Best OOD-composite checkpoint from that run:
+    - step: `15500`
+    - holdout AUC: `0.9836`
+    - OOD AUC: `0.9682`
+    - OOD-composite: `0.9758`
+    - checkpoint:
+      - `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth`
+  - Current operational conclusion:
+    - the run is healthy enough to unblock arena now
+    - the step-`15500` checkpoint is the current best `TRACK_A_CANDIDATE`
+    - this is not yet a final `R12_G` replacement on the fairest cross-round lane
+    - the fairest cross-round comparison is still `ood/overall/auc` plus `val_primary/ood_composite`, not `val_holdout`
 
-- Track B Teams re-characterization: **first current-bucket matched-pair rerun completed**
+- Track B Teams re-characterization: **matched-pair rerun and first sidecar ablation completed**
   - Added:
     - `DeepfakeBench/training/tools/analyze_teams_matched_pairs.py`
     - `DeepfakeBench/training/docs/TRACK_B_MATCHED_PAIR_REPORT_2026-04-07.md`
+    - `DeepfakeBench/training/experiments/phase2_round13/R13_TB1_trackB_family_split_sidecar.yaml`
   - First local rerun artifacts written to:
     - `/tmp/teams_matched_pairs_2026-04-07.json`
     - `/tmp/teams_matched_pairs_2026-04-07.csv`
@@ -109,10 +152,31 @@
     - do not promote the old R9-era single-mode Teams simulator into active `phase2_round13` configs
   - Follow-on sidecar prototype comparison now favors:
     - `teams_codec_simulation.policy: "family_split"`
+  - First sidecar training ablation:
+    - display name: `exp-R13_TB1_trackB_family_split_sidecar-20260408-131653`
+    - Vertex job id: `4224940225060667392`
+    - checkpoint directory:
+      - `gs://training-job-outputs/phase2r13_experiments/duo9pxdi/`
+  - Best current `R13_TB1` checkpoint:
+    - step: `13500`
+    - holdout AUC: `0.9845`
+    - OOD AUC: `0.9514`
+    - OOD-composite: `0.9677`
+    - checkpoint:
+      - `gs://training-job-outputs/phase2r13_experiments/duo9pxdi/ood_composite_effort_20260411_step13500_auc0.9845_eer0.0350.pth`
+  - Training-side comparison versus the current Track A baseline:
+    - `R13_TB1` did **not** beat the Track A reference checkpoint
+    - holdout stayed roughly flat, but OOD-composite regressed by `0.0081`
+    - this makes `R13_TB1` not promotion-safe on training metrics
+  - Important comparison caveat:
+    - the in-training OOD monitor is a mixed set of Teams and non-Teams sources
+    - so this is not yet the final apples-to-apples target-domain verdict for the augmentation
   - Current next safe task:
-    - if Track B gets a training ablation, use the sidecar-only `family_split` policy first
+    - run the frozen Track C scorecard on the best `R13_TB1` checkpoint before any promotion decision
+    - if a follow-on Track B training run is still justified after that, prefer:
+      - `DeepfakeBench/training/experiments/phase2_round13/R13_TB2_trackB_family_split_realboost.yaml`
 
-- Track C target-domain + INT8 scorecard: **in progress**
+- Track C target-domain scorecard: **in progress (FP32 first; compact Track A comparison finished; merged diagnostic mega-eval rebuilt)**
   - Existing arena tooling now supports manifest-based split/slice evaluation.
   - Scorecard export is now wired in `DeepfakeBench/training/arena/run_target_domain_validation_sequential.py`.
   - Custom checkpoint aliases are now supported via `--checkpoint_map` and `--checkpoints ALL`.
@@ -125,8 +189,48 @@
     - `DeepfakeBench/training/arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml`
     - `DeepfakeBench/training/arena/run_teams_target_domain_scorecard.sh`
     - `DeepfakeBench/training/docs/TRACK_C_SCORECARD_RUNBOOK_2026-04-07.md`
-  - INT8 checkpoint export / comparison still depends on having the actual INT8 artifacts to score.
+  - The seeded checkpoint map is now runnable as-is for the current FP32-only path and includes the current best `TRACK_A_CANDIDATE`.
+  - One compact FP32 scorecard already ran and confirmed the old March FT checkpoints reduced real Teams false positives but lost fake recall versus `R12_G`.
+  - The April 10 compact Track A comparison now shows the opposite tradeoff:
+    - `TRACK_A_CANDIDATE` materially improves target fake recall, especially `visomaster_enhanced_macro`
+    - but worsens real Teams false-positive rate versus `R12_G`, including poor-quality and lockbox real slices
+  - Current safe interpretation:
+    - Track A is a real improvement on the known VisoMaster-enhanced gap
+    - Track A has not yet beaten `R12_G` on the primary real-Teams objective
+  - INT8 checkpoint export / comparison is explicitly deferred for the current close-out.
   - Per-enhancer VisoMaster rows are still not available from the current frozen manifest; that artifact only preserves `visomaster_enhanced_macro`.
+  - Broad diagnostic mega-eval repair close-out completed on April 17, 2026:
+    - original live mega-eval:
+      - display name: `r13-best-megaval-20260413-155050`
+      - Vertex job id: `2766548001978580992`
+      - final state: `JOB_STATE_CANCELLED`
+      - end time (UTC): `2026-04-16T13:57:47Z`
+      - reports written before cancellation: `92` video reports
+    - completed repair jobs:
+      - `r13-best-megaval-r13e-backfill-20260415-172655`
+      - Vertex job id: `1069077970552881152`
+      - final state: `JOB_STATE_SUCCEEDED`
+      - end time (UTC): `2026-04-16T03:51:52Z`
+      - reports written: `14` video reports
+      - `r13-best-megaval-visomaster-v2-tailfill-20260416-183105`
+      - Vertex job id: `2405661897463431168`
+      - final state: `JOB_STATE_SUCCEEDED`
+      - end time (UTC): `2026-04-16T23:01:05Z`
+      - reports written: `6` video reports
+    - merged staging root:
+      - `gs://training-job-outputs/test_results/r13_best_megaval_merged/r13-best-megaval-20260413-155050-plus-r13e-backfill-and-v2-tailfill-20260417-082655/`
+    - merged scorecards:
+      - `gs://training-job-outputs/test_results/r13_best_megaval_merged/r13-best-megaval-20260413-155050-plus-r13e-backfill-and-v2-tailfill-20260417-082655/scorecards/`
+    - merged rebuild facts:
+      - combined detailed reports now cover `112 / 112` expected suite-checkpoint rows on the live 16-suite by 7-checkpoint lane
+      - rebuilt scorecard outputs now contain `112` long-form rows and `7` wide rows
+      - FP32-vs-INT8 pair-delta export is intentionally empty because this repaired mega-eval lane is FP32-only
+    - repaired `R13_E_BESTSOFAR` checkpoint path used for the merged rebuild:
+      - `gs://training-job-outputs/phase2r13_experiments/14d5exx0/top_n_effort_20260412_step12000_auc0.9844_eer0.0369.pth`
+    - interpretation:
+      - this merged scorecard is post-hoc merged diagnostic evidence
+      - it is not a native output of the cancelled live mega-eval process
+      - it is not the calibrated promotion contract
 
 ### 0.1A Regrouped Next Tasks (April 7, 2026)
 
@@ -135,13 +239,14 @@ the April 7 regroup.
 
 Strict sequential dependencies:
 
-1. Freeze the shared `S0` baseline scorecard in FP32 + INT8.
+1. Freeze the shared `S0` scorecard on the current FP32 lane.
 2. Treat `S1` as complete and do **not** re-audit the enhanced bucket.
 3. Treat `S2` manifest tooling as implemented and use the frozen manifest artifact:
    - `DeepfakeBench/training/arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json`
-4. First full-length Track A baseline: **submitted on Vertex April 7, 2026**
+4. First full-length Track A baseline: **finished with a usable arena candidate**
    - `DeepfakeBench/training/experiments/phase2_round13/R13_A_trackA_teams_enhanced.yaml`
-5. Wait for the first real full-length checkpoint.
+5. First real full-length checkpoint already exists:
+   - `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth`
 6. Update:
    - `DeepfakeBench/training/arena/arena_config.track_a.yaml`
 7. Run arena on checkpoint alias `TRACK_A_CANDIDATE`.
@@ -150,10 +255,10 @@ Strict sequential dependencies:
 Parallel-safe work right now:
 
 - Track A:
-  - full-length launch + monitoring
-  - then arena once a real checkpoint exists
+  - arena on the current best step-`15500` checkpoint
 - Track B:
-  - matched-pair Teams re-characterization report
+  - freeze the TB1 training readout into docs
+  - score the best `R13_TB1` checkpoint on the frozen Track C suite
   - no edits to active `phase2_round13` configs unless the side-track earns promotion
 - Track C:
   - finish the reusable target-domain scorecard / comparison path
@@ -185,25 +290,36 @@ next regroup.
     - Track B augmentation code
     - active `phase2_round13` experiment YAML changes
   - immediate next task:
-    - fill the checkpoint map with real baseline INT8 aliases once those artifacts exist
-    - run the compact suite manifest for baseline freeze
-    - run the breakdown suite manifest when family/method attribution is needed
+    - keep the seeded checkpoint map FP32-runnable
+    - treat the compact Track A comparison as complete
+    - run the breakdown suite manifest only if family/method attribution is needed
+    - freeze the current FP32 interpretation into docs / promotion guidance
+    - leave INT8 as later follow-on work
 - `Agent A1` Track A runtime path: **in progress**
-  - live job:
-    - display name: `exp-R13_A_trackA_teams_enhanced-20260407-160710`
-    - Vertex job id: `7406731712530481152`
+  - completed job:
+    - display name: `exp-R13_A_trackA_teams_enhanced-20260407-165545`
+    - Vertex job id: `4166954730590830592`
+    - W&B run id: `f04l917o`
+  - current best candidate:
+    - step `15500`
+    - OOD-composite `0.9758`
+    - checkpoint `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth`
   - next safe task:
-    - monitor until the first full-length checkpoint lands
-    - then update arena config once the first checkpoint lands
+    - update arena config with the step-`15500` checkpoint
+    - run arena on `TRACK_A_CANDIDATE`
+    - no more runtime monitoring is needed unless the run is relaunched
 - `Agent B1` Track B augmentation analysis: **in progress**
   - completed:
     - first current-bucket matched-pair rerun
     - initial Track B report:
       - `DeepfakeBench/training/docs/TRACK_B_MATCHED_PAIR_REPORT_2026-04-07.md`
+    - first sidecar training ablation:
+      - `exp-R13_TB1_trackB_family_split_sidecar-20260408-131653`
   - next safe task:
-    - first choice for a sidecar ablation is now:
-      - `teams_codec_simulation.policy: "family_split"`
-    - keep all work sidecar
+    - do **not** promote `R13_TB1`; it lost to the Track A baseline on training-side OOD metrics
+    - score the best `R13_TB1` checkpoint on the frozen Track C target-domain suite
+    - if a follow-on sidecar is still justified, prefer:
+      - `DeepfakeBench/training/experiments/phase2_round13/R13_TB2_trackB_family_split_realboost.yaml`
 - `Agent D1` Track D / E experiment drafts: **wait / draft only**
   - may prepare YAML drafts, but should not finalize until A-C outputs stabilize
 
@@ -309,11 +425,11 @@ Result:
 Remaining Track A work:
 
 - decide whether the merged source should keep default sampling-family routing as `visomaster_enhanced_fake` or get its own reporting family later;
-- launch the first full-length Track A baseline:
-  - `DeepfakeBench/training/experiments/phase2_round13/R13_A_trackA_teams_enhanced.yaml`
-- once the first full-length checkpoint lands, update:
+- use the best real full-length candidate already produced by the finished run:
+  - `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth`
+- update:
   - `DeepfakeBench/training/arena/arena_config.track_a.yaml`
-- run arena on that real Track A checkpoint via the alias-based path in:
+- run arena on that Track A checkpoint via the alias-based path in:
   - `DeepfakeBench/training/docs/TRACK_A_RUNTIME_RUNBOOK_2026-04-06.md`
 - decide whether to promote the same source swap into additional Round 13 configs after the first full-length + arena readout.
 
@@ -496,12 +612,15 @@ Track A operational sequence after the smoke:
    - Vertex job `3841428920024956928` finished `JOB_STATE_SUCCEEDED`
    - the merged resolver-driven source loaded and wrote checkpoints under
      - `gs://training-job-outputs/phase2r13_experiments/2h0rhxun/`
-2. Launch the first full-length Track A run using:
-   - `DeepfakeBench/training/experiments/phase2_round13/R13_A_trackA_teams_enhanced.yaml`
-3. After the first full-length checkpoint lands, evaluate it through the normal arena path:
+2. Use the rebuilt-image full-length Track A run as the active main-line evidence source:
+   - Vertex job `4166954730590830592`
+   - W&B run `f04l917o`
+3. The first real full-length candidate already exists and should be treated as the current arena input:
+   - `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260409_step11500_auc0.9848_eer0.0369.pth`
+4. Evaluate that checkpoint through the normal arena path:
    - update `DeepfakeBench/training/arena/arena_config.track_a.yaml` with the real checkpoint URI;
    - `./launch_arena.sh --config arena_config.track_a.yaml --checkpoints TRACK_A_CANDIDATE`
-4. After the first full-length + arena readout, decide whether to fold the same source swap into additional Round 13 configs or keep a dedicated Track A branch.
+5. After the first full-length + arena readout, decide whether to fold the same source swap into additional Round 13 configs or keep a dedicated Track A branch.
 
 Recommended first config move:
 
@@ -557,6 +676,50 @@ Smoke gate outcome:
 - operational meaning:
   - the first full-length Track A launch is now unblocked
   - arena should wait for a real full-length Track A checkpoint, not the smoke checkpoint
+
+### 0.6 Track A Full-Length Interim Result (April 10, 2026)
+
+Current live run:
+
+- display name: `exp-R13_A_trackA_teams_enhanced-20260407-165545`
+- job id: `4166954730590830592`
+- region: `asia-southeast1`
+- image: `us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.171`
+- current observed state: `JOB_STATE_RUNNING`
+- W&B run id: `f04l917o`
+
+Current summary snapshot:
+
+- `epoch`: `5`
+- `train/step`: `15499`
+- `train/loss/overall`: `0.2705`
+- latest reported `val_holdout/overall/auc`: `0.9852`
+- latest reported `val_holdout/overall/eer`: `0.0388`
+- latest reported `ood/overall/auc`: `0.9586`
+- latest reported `ood/overall/eer`: `0.1138`
+- latest reported `val_primary/ood_composite`: `0.9689`
+
+Best checkpoint so far on the comparable OOD-selection lane:
+
+- step: `15500`
+- holdout AUC: `0.9836`
+- OOD AUC: `0.9682`
+- OOD-composite: `0.9758`
+- checkpoint:
+  - `gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth`
+
+Interim conclusions:
+
+- The Track A merged-source run is a real training result, not just a smoke.
+- The run is healthy enough that the program does not need to wait for full `30k` completion before continuing.
+- The step-`15500` checkpoint is the current best candidate to promote into the one-off arena path.
+- Cross-round comparison to `R12_G` should use `ood/overall/auc` and `val_primary/ood_composite`, not `val_holdout`, because the holdout population changed across rounds.
+- On that fairer OOD lane, Track A is still below final `R12_G`:
+  - Track A best OOD-composite so far: `0.9758`
+  - `R12_G` best OOD-composite: `0.9869`
+- Current safe interpretation:
+  - Track A has earned a first arena evaluation
+  - Track A has not yet earned a full “replace the old champion” conclusion
 
 ## 1. Objective
 
@@ -727,9 +890,9 @@ Guardrails:
 Recommended ranking order for candidates:
 1. `teams_real_poor_quality` FPR
 2. target fake macro recall
-3. INT8 retention
-4. overall Teams-real FPR
-5. holdout AUC as tie-breaker only
+3. overall Teams-real FPR
+4. holdout AUC as tie-breaker only
+5. INT8 retention later, once quantized artifacts actually exist
 
 ## 5. Sequential Gates
 
@@ -742,8 +905,8 @@ Goal:
 
 Deliverables:
 - Baseline evaluation report in FP32.
-- Baseline evaluation report in INT8.
-- Single agreed metric table for later comparisons.
+- Single agreed FP32 metric table for the current close-out.
+- INT8 follow-on comparison later if the promoted finalist remains worth quantizing.
 
 ### S1. Audit `enhanced-visomaster-cropped`
 

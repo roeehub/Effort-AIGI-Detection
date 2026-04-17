@@ -1,0 +1,59 @@
+{
+    // VS Code Launch Configuration for Effort Training Pipeline
+    // 
+    // Prerequisites:
+    // 1. Run: ./dev.sh debug  (starts container with debugpy listening)
+    // 2. Use one of these configurations to attach
+    
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Attach to Docker (debugpy)",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5678
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}/DeepfakeBench/training",
+                    "remoteRoot": "/workspace"
+                }
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "Python: Verify Refactoring (Local)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/DeepfakeBench/training/scripts/verify_refactoring.py",
+            "cwd": "${workspaceFolder}/DeepfakeBench/training",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/DeepfakeBench/training",
+                "DEBUG_MODE": "1",
+                "WANDB_MODE": "offline"
+            }
+        },
+        {
+            "name": "Python: Debug train_sweep.py (Dry Run)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/DeepfakeBench/training/train_sweep.py",
+            "cwd": "${workspaceFolder}/DeepfakeBench/training",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--param-config", "config/test_debug.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/DeepfakeBench/training",
+                "DEBUG_MODE": "1",
+                "WANDB_MODE": "offline",
+                "CUDA_VISIBLE_DEVICES": ""
+            }
+        }
+    ]
+}

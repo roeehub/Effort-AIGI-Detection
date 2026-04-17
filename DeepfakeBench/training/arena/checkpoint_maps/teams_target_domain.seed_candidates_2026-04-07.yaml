@@ -4,15 +4,16 @@
 # - `DeepfakeBench/training/arena/arena_config.yaml`
 #
 # This file is intended to accelerate the first real Track C scorecard runs.
-# Fill in the INT8 and Track A placeholder entries when those artifacts exist.
+# Current operator decision:
+# - continue the Track C close-out in FP32 only
+# - defer INT8 until later
+# - use the current best Track A checkpoint as `TRACK_A_CANDIDATE`
+#
+# This seeded map is therefore kept runnable as-is for the current FP32-only
+# scorecard path.
 
 R12_G_FP32: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"
 R13_FT1_FP32: "gs://training-job-outputs/phase2r13_experiments/p0kbskzl/ood_composite_effort_20260314_step1500_auc0.9933_eer0.0192.pth"
 R13_FT2_FP32: "gs://training-job-outputs/phase2r13_experiments/cdg741xx/ood_composite_effort_20260314_step1500_auc0.9933_eer0.0268.pth"
 R13_FT3_FP32: "gs://training-job-outputs/phase2r13_experiments/lz5al5qv/ood_composite_effort_20260314_step1500_auc0.9933_eer0.0192.pth"
-
-R12_G_INT8: "gs://replace-me/r12_g_int8.pth"
-R13_FT1_INT8: "gs://replace-me/r13_ft1_int8.pth"
-R13_FT2_INT8: "gs://replace-me/r13_ft2_int8.pth"
-R13_FT3_INT8: "gs://replace-me/r13_ft3_int8.pth"
-TRACK_A_CANDIDATE: "gs://replace-me/track_a_candidate.pth"
+TRACK_A_CANDIDATE: "gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth"

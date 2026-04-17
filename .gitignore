@@ -35,6 +35,8 @@ status.jsonl
 
 # logs
 *.log
+*.jsonl
+*_log.txt
 
 
 wandb/
@@ -61,3 +63,7 @@ experiments_configs/
 out_full/
 out_full_v2/
 out_full_v3/
+
+media/
+analysis_results/**/*.npz
+analysis_results/**/*.txt

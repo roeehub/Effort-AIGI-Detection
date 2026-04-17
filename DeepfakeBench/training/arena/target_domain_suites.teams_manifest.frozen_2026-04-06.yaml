@@ -39,6 +39,13 @@ suites:
     external_real_manifest_slices: "teams_real_all"
     external_real_deterministic: true
 
+  - name: teams_fake_all_lockbox
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"
+    external_fake_manifest_split: "lockbox"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+
   - name: visomaster_enhanced_macro_dev
     df40_mode: none
     external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json"

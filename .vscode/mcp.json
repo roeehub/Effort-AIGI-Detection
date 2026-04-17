@@ -1,0 +1,41 @@
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "wandb-api-key",
+      "description": "Weights & Biases API Key",
+      "password": true
+    }
+  ],
+  "servers": {
+    "wandb": {
+      "type": "stdio",
+      "command": "/Users/roeedar/.local/bin/uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/wandb/wandb-mcp-server",
+        "wandb_mcp_server"
+      ],
+      "env": {
+        "WANDB_API_KEY": "${input:wandb-api-key}",
+        "WANDB_ENTITY": "dtect-vision"
+      }
+    },
+    "training-data-viewer": {
+      "type": "stdio",
+      "command": "/Users/roeedar/anaconda3/bin/python3",
+      "args": [
+        "-m",
+        "viewer.mcp_server"
+      ],
+      "cwd": "${workspaceFolder}/DeepfakeBench/training"
+    },
+    "web-tools": {
+      "type": "stdio",
+      "command": "/Users/roeedar/anaconda3/bin/python3",
+      "args": [
+        "${workspaceFolder}/mcp/web-server/server.py"
+      ]
+    }
+  }
+}

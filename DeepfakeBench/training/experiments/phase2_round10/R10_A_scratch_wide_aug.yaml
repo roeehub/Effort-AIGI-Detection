@@ -58,8 +58,8 @@ lr_scheduler_warmup_steps: 1000
 dataloader_strategy: combined_paired
 frames_per_batch: 32
 frames_per_video: 8
-num_workers: 4
-prefetch_factor: 2
+num_workers: 8
+prefetch_factor: 4
 
 # No checkpoint — scratch from CLIP weights
 load_base_checkpoint: false
@@ -198,7 +198,7 @@ combined_paired:
         prefix: "real/VCD"
         method: "zoom_vcd_real"
         grouping: "per_image"
-        max_videos: 1200
+        max_videos: 300
         deterministic: true
     external_fake_sources:
       - bucket: "effort-collected-data"
@@ -209,7 +209,7 @@ combined_paired:
         deterministic: true
     expected_counts:
       external_youtube_avspeech: 200
-      zoom_vcd_real: 1200
+      zoom_vcd_real: 300
       wma_failure_fake: 1202
     strict_expected_counts: true
 
@@ -221,7 +221,7 @@ s_end: 14.0
 anneal_steps: 22000
 
 evaluate_every_steps: 500
-ood_monitoring_start_step: 500
+ood_monitoring_start_step: 5000
 ood_monitoring_every_steps: 1000
 test_batch_size: 32
 

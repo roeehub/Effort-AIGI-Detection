@@ -104,3 +104,59 @@ def test_build_suite_manifest_emits_real_fake_family_and_method_suites():
     viso_suite = next(suite for suite in suites if suite["name"] == "visomaster_enhanced_macro_dev")
     assert viso_suite["external_fake_manifest_slices"] == "visomaster_enhanced_macro"
     assert viso_suite["external_fake_method"] == "visomaster_enhanced_macro"
+
+
+def test_build_suite_manifest_can_emit_fake_lockbox_when_requested():
+    manifest = {
+        "videos": [
+            {
+                "label": "real",
+                "split": "dev",
+                "method": "teams_real",
+                "slices": ["teams_real_all"],
+            },
+            {
+                "label": "real",
+                "split": "lockbox",
+                "method": "teams_real",
+                "slices": ["teams_real_all"],
+            },
+            {
+                "label": "fake",
+                "split": "dev",
+                "method": "teams_capture_cam_test_s33",
+                "slices": ["teams_fake_all", "teams_capture_cam_test", "teams_capture_cam_test_s33"],
+            },
+            {
+                "label": "fake",
+                "split": "lockbox",
+                "method": "teams_capture_cam_test_s33",
+                "slices": ["teams_fake_all", "teams_capture_cam_test", "teams_capture_cam_test_s33"],
+            },
+        ]
+    }
+
+    payload = suite_builder.build_suite_manifest(
+        manifest=manifest,
+        manifest_path="arena/manifests/example_manifest.json",
+        fake_splits=["dev", "lockbox"],
+        include_fake_family_slices=False,
+        include_fake_method_slices=False,
+    )
+
+    suite_names = {suite["name"] for suite in payload["suites"]}
+    assert payload["fake_splits"] == ["dev", "lockbox"]
+    assert "teams_fake_all_dev" in suite_names
+    assert "teams_fake_all_lockbox" in suite_names
+
+
+def test_checked_in_promotion_manifests_include_fake_lockbox_suite():
+    manifest_paths = [
+        ROOT / "arena/target_domain_suites.teams_manifest.frozen_2026-04-06.yaml",
+        ROOT / "arena/target_domain_suites.r13_best_megaval_2026-04-13.yaml",
+        ROOT / "arena/target_domain_suites.teams_manifest.template.yaml",
+    ]
+
+    for path in manifest_paths:
+        text = path.read_text()
+        assert "name: teams_fake_all_lockbox" in text, path

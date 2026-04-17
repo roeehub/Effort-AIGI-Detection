@@ -1,0 +1,20 @@
+# Teams target-domain finalist checkpoint map.
+#
+# Purpose:
+# - compare the current best FT candidates against the practical R12 baseline
+# - keep the best historical Track A scratch checkpoint available as a bridge
+# - include the current best-so-far scratch follow-up (R13_E) without pulling in
+#   the clearly weaker F/H lanes
+#
+# Notes:
+# - `R12_G_FP32` intentionally matches the existing Track C scorecard baseline.
+# - `R13_E_BESTSOFAR` points at the best OOD-composite checkpoint available as of
+#   April 12, 2026 while that run is still live.
+
+R12_G_FP32: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"
+R13_A_STEP15500: "gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth"
+R13_FT7_FP32: "gs://training-job-outputs/phase2r13_experiments/w4n9ejic/ood_composite_effort_20260411_step6000_auc0.9901_eer0.0194.pth"
+R13_FT8_FP32: "gs://training-job-outputs/phase2r13_experiments/fpdcvzhf/ood_composite_effort_20260411_step6000_auc0.9901_eer0.0194.pth"
+R13_FT9_FP32: "gs://training-job-outputs/phase2r13_experiments/irzf5ymv/ood_composite_effort_20260412_step8000_auc0.9906_eer0.0194.pth"
+R13_FT10_FP32: "gs://training-job-outputs/phase2r13_experiments/ctcz09ko/ood_composite_effort_20260412_step8000_auc0.9906_eer0.0194.pth"
+R13_E_BESTSOFAR: "gs://training-job-outputs/phase2r13_experiments/14d5exx0/ood_composite_effort_20260412_step12000_auc0.9844_eer0.0369.pth"

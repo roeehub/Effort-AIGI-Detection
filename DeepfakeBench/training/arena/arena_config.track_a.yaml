@@ -14,9 +14,9 @@ output_gcs_folder: "gs://training-job-outputs/arena_results"
 
 checkpoints:
   TRACK_A_CANDIDATE:
-    path: "gs://REPLACE_ME_TRACK_A_CHECKPOINT.pth"
+    path: "gs://training-job-outputs/phase2r13_experiments/f04l917o/ood_composite_effort_20260410_step15500_auc0.9836_eer0.0272.pth"
     backbone: B16
-    notes: "Replace with the first Track A smoke/full-run checkpoint before launch"
+    notes: "Best known Track A checkpoint from run f04l917o (step 15500, saved on 2026-04-10)"
 
 data_sources:
   teams_test:
