@@ -1,0 +1,282 @@
+{
+  "artifact_name": "wt_a_policy_truth_2026-04-17",
+  "generated_on": "2026-04-17",
+  "scope_refinement": {
+    "tracked_source_gap": "The repo branch does not track DeepfakeBench/training/data/. The current runtime source files under training/data/sources are ignored local files, so this WT-A merge freezes policy truth and redesign semantics in tracked docs/artifacts instead of silently patching ignored local runtime code.",
+    "missing_policy_packet": "The raw April 17 bad-data policy CSV/JSON packet cited by the docs is not checked in. Exact corrected val/test split reconstruction is therefore not possible from the tracked tree alone."
+  },
+  "evidence": {
+    "docs": [
+      "DeepfakeBench/training/docs/TEAMS_EXPERIMENT_RELAUNCH_REPORT_2026-04-17.md",
+      "DeepfakeBench/training/docs/VISOMASTER_BAD_DATA_POLICY_PLAN_IMPACT_2026-04-17.md",
+      "DeepfakeBench/training/docs/research_2026-04-15/04_data_composition_and_curriculum_opportunities.md",
+      "DeepfakeBench/training/docs/research_2026-04-15/05_target_domain_gap_and_teams_enhanced_structural_findings.md",
+      "DeepfakeBench/training/docs/research_2026-04-15_round2/01_evaluation_contract_and_shortlist.md",
+      "DeepfakeBench/training/docs/research_2026-04-15_round2/02_target_domain_data_truth.md",
+      "DeepfakeBench/training/docs/research_2026-04-15_round2/03_sampler_curriculum_leverage.md",
+      "DeepfakeBench/training/docs/research_2026-04-15_round3/02_shortlist_implications_and_remaining_unknowns.md"
+    ],
+    "code_paths_reviewed": [
+      "DeepfakeBench/training/data/sources/combined_paired.py (ignored local runtime path)",
+      "DeepfakeBench/training/data/sources/visomaster.py (ignored local runtime path)",
+      "DeepfakeBench/training/viewer/discovery.py",
+      "DeepfakeBench/training/viewer/visomaster_policy.py"
+    ]
+  },
+  "policy_awareness": {
+    "current_training_policy_aware": false,
+    "proof_points": [
+      "The checked-in viewer path imports and applies visomaster_policy overlays, but the reviewed training loader path does not.",
+      "The checked-in training configs still reference combined_paired.visomaster, combined_paired.teams, and combined_paired.visomaster_teams_enhanced under old lane names.",
+      "visomaster_hints and visomaster_hints_teams exist today only as viewer-policy concepts, not as proven checked-in training-lane semantics."
+    ],
+    "same_day_labels": {
+      "current_checked_in_track_a_configs": "old-semantics",
+      "explicit_hint_lane_retrains_on_current_data": "weak-signal-only",
+      "policy_corrected_available_today": false
+    }
+  },
+  "lane_semantics": {
+    "visomaster_hints": {
+      "kind": "weak-signal lane",
+      "meaning": "Retained historical bad VisoMaster rows from the baseline cropped bucket. They are not method-faithful supervision and should not carry clean per-method claims."
+    },
+    "visomaster_hints_teams": {
+      "kind": "weak-signal lane",
+      "meaning": "Retained historical bad Teams-played VisoMaster rows from the pair-complete Teams bucket. Teams transport is real, but the fake-side provenance is weak-signal only and not clean target-domain truth."
+    },
+    "teams": {
+      "kind": "mixed lane",
+      "meaning": "Direct Teams remains deployment-relevant, but under the April 17 policy it is not a monolithic clean Teams lane because part of the old bucket is weak-signal bad VisoMaster-through-Teams data."
+    },
+    "visomaster_teams_enhanced": {
+      "kind": "mixed diagnostic lane",
+      "meaning": "Mostly clean_fallback companions plus a tiny teams_v2_companion subset that overlaps the weak-signal Teams hints. The loader still cannot emit Teams real plus Teams enhanced fake."
+    }
+  },
+  "classification_families": [
+    {
+      "family_id": "mixed_p050",
+      "kind": "promotion-relevant",
+      "classification": "old-semantics",
+      "p_original": 0.5,
+      "family_configs": [
+        "R13_A_trackA_teams_enhanced",
+        "R13_E_trackA_teams_enhanced_realboost",
+        "R13_FT7_trackA_merged_base",
+        "R13_FT8_trackA_merged_realboost",
+        "R13_FT11_trackA_scorecard_base",
+        "R13_FT12_trackA_scorecard_base_realboost"
+      ],
+      "promotion_relevant_configs": [
+        "R13_A_trackA_teams_enhanced",
+        "R13_E_trackA_teams_enhanced_realboost",
+        "R13_FT7_trackA_merged_base"
+      ],
+      "deprioritized_duplicates": [
+        "R13_FT8_trackA_merged_realboost"
+      ],
+      "old_semantics_counts": {
+        "rows_total": 31064,
+        "paired_objects_total": 15532,
+        "paired_objects_total_by_source": {
+          "visomaster": 5589,
+          "df40": 4698,
+          "deeplive": 2900,
+          "deeplive_teams": 1348,
+          "visomaster_teams_enhanced": 997
+        },
+        "train_pairs_total": 13294,
+        "train_pairs_by_source": {
+          "visomaster": 4735,
+          "df40": 4091,
+          "deeplive": 2496,
+          "deeplive_teams": 1135,
+          "visomaster_teams_enhanced": 837
+        }
+      },
+      "corrected_policy_reference_counts": {
+        "rows_total": 20776,
+        "paired_objects_total": 10388,
+        "paired_objects_total_by_source": {
+          "visomaster_hints": 480,
+          "df40": 4698,
+          "deeplive": 2900,
+          "teams_clean": 1111,
+          "visomaster_hints_teams": 202,
+          "visomaster_teams_enhanced": 997
+        },
+        "train_pairs_total": 8932,
+        "train_pairs_by_source": {
+          "visomaster_hints": 396,
+          "df40": 4091,
+          "deeplive": 2496,
+          "teams_clean": 937,
+          "visomaster_hints_teams": 175,
+          "visomaster_teams_enhanced": 837
+        },
+        "split_remainder_not_reconstructable_from_tracked_tree": {
+          "visomaster_hints_val_plus_test": 84,
+          "teams_clean_val_plus_test": 174,
+          "visomaster_hints_teams_val_plus_test": 27
+        }
+      },
+      "lane_contamination": {
+        "direct_teams_total": {
+          "pairs_total": 1348,
+          "bad_visomaster_before_policy": 237,
+          "retained_hint_after_policy": 202,
+          "removed_after_policy": 35,
+          "clean_teams_after_policy": 1111
+        },
+        "direct_teams_train": {
+          "pairs_total": 1135,
+          "bad_visomaster_before_policy": 198,
+          "retained_hint_after_policy": 175,
+          "removed_after_policy": 23,
+          "clean_teams_after_policy": 937
+        },
+        "visomaster_teams_enhanced_total": {
+          "pairs_total": 997,
+          "teams_v2_companion_overlap": 54,
+          "clean_fallback": 943,
+          "teams_v2_companion_is_subset_of_visomaster_hints_teams": true
+        },
+        "visomaster_teams_enhanced_train": {
+          "pairs_total": 837,
+          "teams_v2_companion_overlap": 42,
+          "clean_fallback": 795,
+          "teams_v2_companion_is_subset_of_visomaster_hints_teams_train": true
+        }
+      },
+      "vte_epoch_exposure": {
+        "expected_vte_selections_per_epoch": 812.29,
+        "expected_true_teams_companion_selections_per_epoch": 17.29,
+        "expected_clean_fallback_selections_per_epoch": 795.0,
+        "expected_branch_exposure_per_epoch": {
+          "teams_original_fake": 8.65,
+          "clean_original_fake": 397.5,
+          "clean_enhanced_fake": 406.15
+        }
+      }
+    },
+    {
+      "family_id": "mixed_p060",
+      "kind": "same-day-non-shortlist",
+      "classification": "old-semantics",
+      "p_original": 0.6,
+      "family_configs": [
+        "R13_FT13_trackA_scorecard_base_porig60",
+        "R13_FT14_trackA_scorecard_base_realboost_porig60"
+      ],
+      "source_truth_reference_family": "mixed_p050",
+      "vte_epoch_exposure": {
+        "expected_vte_selections_per_epoch": 812.29,
+        "expected_true_teams_companion_selections_per_epoch": 17.29,
+        "expected_clean_fallback_selections_per_epoch": 795.0,
+        "expected_branch_exposure_per_epoch": {
+          "teams_original_fake": 10.37,
+          "clean_original_fake": 477.0,
+          "clean_enhanced_fake": 324.92
+        }
+      }
+    },
+    {
+      "family_id": "mixed_p070",
+      "kind": "promotion-relevant",
+      "classification": "old-semantics",
+      "p_original": 0.7,
+      "family_configs": [
+        "R13_F_trackA_teams_enhanced_porig70",
+        "R13_H_trackA_teams_enhanced_realboost_porig70",
+        "R13_FT9_trackA_merged_porig70",
+        "R13_FT10_trackA_merged_realboost_porig70",
+        "R13_FT17_trackA_scorecard_base_realboost_porig70"
+      ],
+      "promotion_relevant_configs": [
+        "R13_FT9_trackA_merged_porig70"
+      ],
+      "deprioritized_duplicates": [
+        "R13_FT10_trackA_merged_realboost_porig70"
+      ],
+      "source_truth_reference_family": "mixed_p050",
+      "vte_epoch_exposure": {
+        "expected_vte_selections_per_epoch": 812.29,
+        "expected_true_teams_companion_selections_per_epoch": 17.29,
+        "expected_clean_fallback_selections_per_epoch": 795.0,
+        "expected_branch_exposure_per_epoch": {
+          "teams_original_fake": 12.11,
+          "clean_original_fake": 556.5,
+          "clean_enhanced_fake": 243.69
+        }
+      }
+    },
+    {
+      "family_id": "teamsonly_p050",
+      "kind": "same-day-non-shortlist",
+      "classification": "old-semantics",
+      "p_original": 0.5,
+      "family_configs": [
+        "R13_FT15_trackA_scorecard_base_teamsonly",
+        "R13_FT16_trackA_scorecard_base_teamsonly_realboost"
+      ],
+      "old_semantics_counts": {
+        "train_fake_candidates": 12490,
+        "train_identities": 5915,
+        "visomaster_teams_enhanced_pairs_total": 54,
+        "visomaster_teams_enhanced_train_pairs": 49,
+        "visomaster_teams_enhanced_val_pairs": 3,
+        "visomaster_teams_enhanced_test_pairs": 2
+      },
+      "corrected_policy_reference_counts": {
+        "status": "Exact corrected teamsonly split counts are not reconstructable from the tracked tree alone because the raw April 17 policy packet is missing and the retained subset inside the 54-row teams_v2_companion pool is not checked in."
+      },
+      "vte_epoch_exposure": {
+        "expected_vte_selections_per_epoch": 20.18,
+        "expected_true_teams_companion_selections_per_epoch": 20.18,
+        "expected_clean_fallback_selections_per_epoch": 0.0,
+        "expected_branch_exposure_per_epoch": {
+          "teams_original_fake": 10.09,
+          "clean_original_fake": 0.0,
+          "clean_enhanced_fake": 10.09
+        }
+      }
+    },
+    {
+      "family_id": "teamsonly_p070",
+      "kind": "same-day-non-shortlist",
+      "classification": "old-semantics",
+      "p_original": 0.7,
+      "family_configs": [
+        "R13_I_trackA_teamsonly_realboost_porig70"
+      ],
+      "source_truth_reference_family": "teamsonly_p050",
+      "vte_epoch_exposure": {
+        "expected_vte_selections_per_epoch": 20.18,
+        "expected_true_teams_companion_selections_per_epoch": 20.18,
+        "expected_clean_fallback_selections_per_epoch": 0.0,
+        "expected_branch_exposure_per_epoch": {
+          "teams_original_fake": 14.12,
+          "clean_original_fake": 0.0,
+          "clean_enhanced_fake": 6.05
+        }
+      }
+    }
+  ],
+  "loader_emission_truth": {
+    "can_emit": [
+      "Teams real + Teams original fake",
+      "Teams real + clean enhanced fake",
+      "clean real + clean enhanced fake"
+    ],
+    "cannot_emit": [
+      "Teams real + Teams enhanced fake",
+      "clean real + Teams enhanced fake"
+    ]
+  },
+  "future_classification_rules": {
+    "policy_corrected": "Reserve for a future config family that uses explicitly corrected lane names and no old-semantics visomaster lane. No same-day current-data retrain in the checked-in tree qualifies today.",
+    "weak_signal_only": "Use for a future config that trains only on explicit visomaster_hints and visomaster_hints_teams weak-signal lanes under corrected semantics.",
+    "old_semantics": "Use for every currently checked-in Track A / merged / teamsonly config because the checked-in training path has not been proved to consume the April 17 policy packet."
+  }
+}
