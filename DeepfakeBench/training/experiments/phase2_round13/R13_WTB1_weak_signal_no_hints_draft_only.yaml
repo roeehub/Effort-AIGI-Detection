@@ -1,0 +1,82 @@
+# ============================================================================
+# R13_WTB1_weak_signal_no_hints_draft_only
+# Draft-only weak-signal plan blocked on tracked source integration.
+#
+# This file is intentionally NOT a runnable training config.
+# The tracked Git tree does not currently prove training-side support for:
+#   - combined_paired.visomaster_hints
+#   - combined_paired.visomaster_hints_teams
+# The tracked WT-B worktree also does not contain:
+#   - DeepfakeBench/training/data/sources/combined_paired.py
+#   - DeepfakeBench/training/data/sources/visomaster.py
+#
+# Use this only as a future planning manifest after WT-A-owned source
+# integration lands in tracked code.
+# ============================================================================
+
+draft_only: true
+runtime_status: "blocked_on_tracked_source_integration"
+framing: "draft-only weak-signal plan blocked on source integration"
+package_id: "R13_WTB"
+plan_id: "R13_WTB1_weak_signal_no_hints_draft_only"
+
+intended_family_shape:
+  train_mode: "fine_tune"
+  label_if_future_runtime_exists: "weak-signal-only"
+  arm: "no_hints"
+  scientific_question: "What happens when the retained weak-signal hint lanes are removed entirely while direct Teams and the non-hint paired families stay constant?"
+
+planned_base_reference:
+  config: "R13_FT11_trackA_scorecard_base"
+  why_this_base: "Conservative scorecard-base fine-tune with no realboost, no teamsonly filter, and no p_original sweep."
+  keep_constant:
+    - "15 epochs"
+    - "10000 total_training_steps"
+    - "R12_G_FP32 scorecard-base checkpoint"
+    - "df40 + deeplive + teams enabled"
+
+frozen_truth_inputs:
+  - "DeepfakeBench/training/docs/POLICY_AWARE_SOURCE_REDESIGN_2026-04-17.md"
+  - "DeepfakeBench/training/docs/relaunch_handoffs/WT-A_2026-04-17.md"
+  - "DeepfakeBench/training/docs/relaunch_handoffs/WT-A_policy_truth_artifact_2026-04-17.json"
+  - "DeepfakeBench/training/docs/research_2026-04-15_round2/02_target_domain_data_truth.md"
+  - "DeepfakeBench/training/docs/research_2026-04-15_round2/03_sampler_curriculum_leverage.md"
+
+runtime_blockers:
+  - "combined_paired.visomaster_hints is not proved in tracked training code"
+  - "combined_paired.visomaster_hints_teams is not proved in tracked training code"
+  - "DeepfakeBench/training/data/sources/* is absent from this tracked worktree"
+  - "The host shell cannot run the repo dry-run path here because python3 lacks PyYAML"
+
+scope_refinement:
+  keep_enabled_sources:
+    - "df40"
+    - "deeplive"
+    - "teams"
+  disable_old_or_mixed_confounds:
+    - "visomaster"
+    - "visomaster_teams_enhanced"
+  exclude_for_honesty:
+    - "realboost"
+    - "teamsonly companion filtering"
+    - "p_original sweeps"
+
+planned_source_contract:
+  required_future_blocks:
+    - "combined_paired.visomaster_hints"
+    - "combined_paired.visomaster_hints_teams"
+  lane_semantics_are_frozen: true
+  training_side_key_contract_frozen: false
+  note: "WT-A froze the lane names and meanings, not the exact config-key surface for tracked training."
+
+planned_arm_deltas:
+  visomaster_hints:
+    enabled: false
+  visomaster_hints_teams:
+    enabled: false
+
+not_a_claim:
+  - "not policy-corrected"
+  - "not target-domain realism"
+  - "not a promotion candidate"
+  - "not executable in the current tracked tree"
