@@ -8,12 +8,59 @@ All transforms must be compatible with albumentations==0.4.6.
 import sys
 import os
 import importlib
+import types
 import numpy as np
 import pytest
+
+pytest.importorskip("albumentations")
+pytest.importorskip("cv2")
 
 # Ensure training/ is on sys.path for imports
 _TRAINING_DIR = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, _TRAINING_DIR)
+
+
+def _ensure_augmentations_package() -> None:
+    if "data" not in sys.modules:
+        data_pkg = types.ModuleType("data")
+        data_pkg.__path__ = [os.path.join(_TRAINING_DIR, "data")]
+        sys.modules["data"] = data_pkg
+    if "data.augmentations" not in sys.modules:
+        aug_pkg = types.ModuleType("data.augmentations")
+        aug_pkg.__path__ = [os.path.join(_TRAINING_DIR, "data", "augmentations")]
+        sys.modules["data.augmentations"] = aug_pkg
+
+
+def _ensure_utils_grouping_module() -> None:
+    if "utils" not in sys.modules:
+        utils_pkg = types.ModuleType("utils")
+        utils_pkg.__path__ = [os.path.join(_TRAINING_DIR, "utils")]
+        sys.modules["utils"] = utils_pkg
+    if "utils.grouping" not in sys.modules:
+        _load_module(
+            "utils.grouping",
+            os.path.join(_TRAINING_DIR, "utils", "grouping.py"),
+        )
+
+
+def _load_module(module_name: str, path: str):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_pipelines_module():
+    _ensure_augmentations_package()
+    _ensure_utils_grouping_module()
+    sys.modules["data.augmentations.transforms"] = _transforms_mod
+    return _load_module(
+        "data.augmentations.pipelines",
+        os.path.join(_TRAINING_DIR, "data", "augmentations", "pipelines.py"),
+    )
+
 
 # We must bypass data/__init__.py because it chains into torch-dependent
 # batching code.  Import the leaf module directly via importlib.
@@ -306,14 +353,7 @@ class TestContextVariationBlock:
         pytest.importorskip("cv2")
 
     def _build(self, p):
-        # Import pipelines module directly to avoid data/__init__.py → torch chain.
-        _spec = importlib.util.spec_from_file_location(
-            "data.augmentations.pipelines",
-            os.path.join(_TRAINING_DIR, "data", "augmentations", "pipelines.py"),
-        )
-        _pipelines_mod = importlib.util.module_from_spec(_spec)
-        _spec.loader.exec_module(_pipelines_mod)
-        return _pipelines_mod._build_context_variation_block(p)
+        return _load_pipelines_module()._build_context_variation_block(p)
 
     def test_disabled_returns_empty(self):
         result = self._build({"context_variation_enabled": False})
@@ -361,3 +401,31 @@ class TestContextVariationBlock:
         assert "GammaUp" in transform_types
         # Base transforms should still be there
         assert len(transforms) >= 6  # 3 base + CCT + shadow + gamma_up
+
+    def test_vcd_targeted_keeps_cct_live_but_gamma_up_off_by_default(self):
+        pipelines = _load_pipelines_module()
+        transforms = pipelines._build_context_variation_block(
+            pipelines._QUALITY_TARGETED_PRESETS["vcd_targeted"]
+        )
+        transform_types = [type(t).__name__ for t in transforms]
+
+        assert "ColorTemperatureShift" in transform_types
+        assert "GammaUp" not in transform_types
+
+
+class TestQualityTargetedPresetSurface:
+    def test_light_preset_exposes_optional_lighting_sidecar_keys(self):
+        pipelines = _load_pipelines_module()
+        light_keys = set(pipelines._QUALITY_TARGETED_PRESETS["light"].keys())
+
+        required_keys = {
+            "context_variation_cct_p",
+            "context_variation_cct_range",
+            "context_variation_shadow_p",
+            "context_variation_shadow_intensity",
+            "context_variation_shadow_softness",
+            "context_variation_gamma_up_p",
+            "context_variation_gamma_up_range",
+        }
+
+        assert required_keys.issubset(light_keys)

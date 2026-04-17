@@ -5,11 +5,11 @@ import sys
 import types
 from pathlib import Path
 
-import cv2
-import numpy as np
 import pytest
 
+cv2 = pytest.importorskip("cv2")
 pytest.importorskip("albumentations")
+import numpy as np
 
 
 _TRAINING_DIR = Path(__file__).resolve().parent.parent
@@ -84,6 +84,10 @@ def _make_detail_image(size: int = 224) -> np.ndarray:
 def _sharpness(img_rgb: np.ndarray) -> float:
     gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
     return float(np.var(cv2.Laplacian(gray, cv2.CV_64F)))
+
+
+def _transform_names(compose) -> list[str]:
+    return [transform.__class__.__name__ for transform in compose.transforms]
 
 
 def test_adaptive_transform_preserves_shape_and_dtype():
@@ -161,3 +165,29 @@ def test_router_supports_family_split_policy():
     )
 
     assert router._teams_sim.__class__.__name__ == "TeamsHybridCodecSimulation"
+
+
+def test_default_teams_passthrough_pipeline_is_minimal():
+    pipelines = _load_pipelines_module()
+
+    assert _transform_names(pipelines._build_teams_passthrough_pipeline()) == [
+        "HorizontalFlip",
+        "RandomBrightnessContrast",
+    ]
+
+
+def test_gammaup_sidecar_override_does_not_mutate_teams_passthrough_branch():
+    pipelines = _load_pipelines_module()
+    router = pipelines.create_quality_targeted_family_router(
+        strength="vcd_targeted",
+        preset_overrides={
+            "context_variation_gamma_up_p": 0.15,
+            "context_variation_gamma_up_range": (0.45, 0.85),
+        },
+    )
+
+    non_teams_names = _transform_names(router._pipelines["visomaster_enhanced_fake"])
+    teams_names = _transform_names(router._pipelines["deeplive_teams_real"])
+
+    assert "GammaUp" in non_teams_names
+    assert teams_names == ["HorizontalFlip", "RandomBrightnessContrast"]
