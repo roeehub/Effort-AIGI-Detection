@@ -11,6 +11,20 @@ Turn the frozen Teams target-domain manifest into a repeatable comparison table 
 - future `Track A` candidate evaluation
 - later FP32 vs INT8 retention checks
 
+## Status On April 17, 2026
+
+This runbook is now the **diagnostic-only** fixed-threshold scorecard path.
+
+Use:
+
+- `DeepfakeBench/training/docs/TRACK_C_PROMOTION_CONTRACT_RUNBOOK_2026-04-17.md`
+
+for the promotion-authoritative calibrated path.
+
+Practical rule:
+
+- do not promote checkpoints from the artifacts in this runbook alone because they stay at threshold `0.5`
+
 Current operator decision for the April 11, 2026 close-out:
 
 - continue Track C in FP32 only for now
