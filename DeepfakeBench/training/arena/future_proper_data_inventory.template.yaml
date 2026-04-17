@@ -1,0 +1,108 @@
+# Explicit inventory template for future proper data.
+#
+# This inventory is the source of truth. Do not infer exact condition from
+# directory prefixes, old hint lanes, or merged VTE aliases.
+#
+# Required rule:
+# - every clean / Teams-parallel variant that descends from the same base clip
+#   must share the same `base_capture_id` and `split_group_id`
+
+inventory_version: 1
+wave_id: proper_visomaster_wave_2026_04_17
+split_seed: 737
+lockbox_ratio: 0.20
+
+source_logs:
+  capture_plan_doc: COORDINATED_CAPTURE_PLAN.md
+  playlist_uri: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/playlist.json
+  sender_playback_log_uri: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/playback_log.jsonl
+  receiver_session_log_uri: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/session_log.json
+
+notes:
+  - Keep clean and Teams variants explicit.
+  - Do not reuse `visomaster hints`, `visomaster hints (teams)`, or `visomaster_teams_enhanced`.
+
+captures:
+  - base_capture_id: roy_d_bigface_0001
+    identity_id: roy_d
+    capture_session_id: clean_cam_s01
+    split_group_id: roy_d__clean_cam_s01
+    quality_band: medium
+    face_scale_band: big_face
+    variants:
+      - variant_id: roy_d_bigface_0001__real_clean
+        label: real
+        transport: clean
+        enhancement: none
+        playback_path: direct_capture
+        frame_root: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/roy_d_bigface_0001/proper_real_clean
+
+      - variant_id: roy_d_bigface_0001__real_teams
+        label: real
+        transport: teams
+        enhancement: none
+        playback_path: obs_virtual_cam_to_teams
+        frame_root: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/roy_d_bigface_0001/proper_real_teams
+
+      - variant_id: roy_d_bigface_0001__ghostface_v2_clean
+        label: fake
+        transport: clean
+        generator_family: visomaster
+        generator_method: GhostFace-v2
+        enhancement: none
+        playback_path: direct_capture
+        frame_root: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/roy_d_bigface_0001/proper_visomaster_clean/ghostface_v2
+
+      - variant_id: roy_d_bigface_0001__ghostface_v2_enhanced_clean
+        label: fake
+        transport: clean
+        generator_family: visomaster
+        generator_method: GhostFace-v2
+        enhancement: enhanced
+        playback_path: direct_capture
+        frame_root: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/roy_d_bigface_0001/proper_visomaster_enhanced_clean/ghostface_v2
+
+      - variant_id: roy_d_bigface_0001__ghostface_v2_teams
+        label: fake
+        transport: teams
+        generator_family: visomaster
+        generator_method: GhostFace-v2
+        enhancement: none
+        playback_path: obs_virtual_cam_to_teams
+        frame_root: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/roy_d_bigface_0001/proper_visomaster_teams/ghostface_v2
+
+      - variant_id: roy_d_bigface_0001__ghostface_v2_enhanced_teams
+        label: fake
+        transport: teams
+        generator_family: visomaster
+        generator_method: GhostFace-v2
+        enhancement: enhanced
+        playback_path: obs_virtual_cam_to_teams
+        frame_root: gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/roy_d_bigface_0001/proper_visomaster_enhanced_teams/ghostface_v2
+
+  - base_capture_id: dor_closeface_0002
+    identity_id: dor_shkedi
+    capture_session_id: clean_cam_s02
+    split_group_id: dor_shkedi__clean_cam_s02
+    quality_band: high
+    face_scale_band: standard
+    variants:
+      - variant_id: dor_closeface_0002__real_clean
+        label: real
+        transport: clean
+        enhancement: none
+        playback_path: direct_capture
+        frame_paths:
+          - gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/dor_closeface_0002/proper_real_clean/frame_0000.jpg
+          - gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/dor_closeface_0002/proper_real_clean/frame_0001.jpg
+
+      - variant_id: dor_closeface_0002__inswapper128_teams
+        label: fake
+        transport: teams
+        generator_family: visomaster
+        generator_method: Inswapper128
+        enhancement: none
+        playback_path: obs_virtual_cam_to_teams
+        frame_paths:
+          - gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/dor_closeface_0002/proper_visomaster_teams/inswapper128/frame_0000.jpg
+          - gs://<bucket>/proper_data/proper_visomaster_wave_2026_04_17/dor_closeface_0002/proper_visomaster_teams/inswapper128/frame_0001.jpg
