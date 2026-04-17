@@ -9,6 +9,7 @@ This file turns the relaunch report into ready-to-run worktree prompts.
 Source of truth:
 
 - `DeepfakeBench/training/docs/TEAMS_EXPERIMENT_RELAUNCH_REPORT_2026-04-17.md`
+- shared task board: `DeepfakeBench/training/docs/relaunch_handoffs/TASK_BOARD_2026-04-17.md`
 
 Recommended launch order right now:
 
@@ -21,6 +22,61 @@ Recommended launch order right now:
 Deferred until `WT-A` merges a lane-semantics freeze:
 
 - `WT-B`
+
+## Generic Dispatcher Prompt
+
+Use this when you want to launch multiple agents from the same root branch and let each one pick an unclaimed track.
+
+```text
+You are starting from the shared repo root:
+/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision
+
+Root branch:
+teams-relaunch-root-2026-04-17
+
+Read these coordination docs first:
+1. DeepfakeBench/training/docs/TEAMS_EXPERIMENT_RELAUNCH_REPORT_2026-04-17.md
+2. DeepfakeBench/training/docs/TEAMS_WORKTREE_AGENT_PROMPTS_2026-04-17.md
+3. DeepfakeBench/training/docs/relaunch_handoffs/TASK_BOARD_2026-04-17.md
+4. DeepfakeBench/training/docs/relaunch_handoffs/README.md
+
+Your job is to choose one free worktree track, claim it so the next agent sees it is taken, then execute that track in its own separate worktree.
+
+Claiming rules:
+- only choose a track whose status is `free`
+- do not choose `WT-B` unless the task board says WT-A has merged a lane-semantics freeze and WT-B is now `free`
+- once you choose a track, immediately update the task board and set:
+  - status: `claimed`
+  - owner: your agent name or identifier
+  - branch
+  - worktree path
+  - claim time
+- commit the task-board claim to `teams-relaunch-root-2026-04-17` before doing the track work so other agents can see it
+
+Execution rules:
+- after claiming, create or reuse the branch and worktree specified for that track in TEAMS_WORKTREE_AGENT_PROMPTS_2026-04-17.md
+- read the track-specific prompt in that file and follow it exactly
+- re-investigate the task before editing; refine the scope if the report is wrong or incomplete
+- stay inside the ownership boundary for the claimed track
+- commit your work on the track branch
+- if the work is complete and verified, rebase onto teams-relaunch-root-2026-04-17, merge back with --no-ff, and update the task board status to `merged`
+- if blocked, update the task board status to `blocked` with a short blocker note
+- if you finish analysis but not a mergeable change, update the task board status to `analysis-done`
+
+Selection priority:
+1. WT-A
+2. WT-E
+3. WT-D
+4. WT-C
+5. WT-F
+6. WT-B only after WT-A freeze is merged
+
+Important constraints:
+- do not edit another track's owned files
+- do not treat the baseline R13 YAML as a shared scratchpad
+- do not claim a target-domain win from old-semantics training
+- do not claim a promotion winner from fixed-threshold 0.5 tables alone
+```
 
 ## Shared Rules For Every Agent
 
