@@ -241,6 +241,10 @@ Note:
 
 All commands below are intended to be run from `DeepfakeBench/training`.
 
+For the smallest recommended pre-retrain packet, see:
+
+- [`WT_D_MINIMAL_BASELINE_PACKET_2026-04-17.md`](WT_D_MINIMAL_BASELINE_PACKET_2026-04-17.md)
+
 ### 1. Calibrated threshold + abstain analysis from video reports
 
 ```bash
