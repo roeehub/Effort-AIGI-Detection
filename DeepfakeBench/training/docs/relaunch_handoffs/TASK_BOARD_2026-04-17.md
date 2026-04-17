@@ -19,7 +19,7 @@ Dependency rule:
 | Track | Priority | Status | Owner | Branch | Worktree | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | WT-A | 1 | claimed | roeedar/codex-wt-a | wt-a-data-truth-2026-04-17 | ../wt-a-data-truth-2026-04-17 | Claimed 2026-04-17 18:53 CEST; re-investigating lane semantics and policy truth |
-| WT-E | 2 | claimed | roeedar/codex-wt-e | wt-e-promotion-contract-2026-04-17 | ../wt-e-promotion-contract-2026-04-17 | Claimed 2026-04-17 18:53:43 CEST; keep aligned with WT-A and WT-F |
+| WT-E | 2 | merged | roeedar/codex-wt-e | wt-e-promotion-contract-2026-04-17 | ../wt-e-promotion-contract-2026-04-17 | Merged 2026-04-17 19:05:04 CEST; authoritative calibrated promotion path added |
 | WT-D | 3 | claimed | roeedar/codex-wt-d | wt-d-decision-system-2026-04-17 | ../wt-d-decision-system-2026-04-17 | Claimed 2026-04-17 18:54:13 CEST; re-investigating low-FP decision-layer leverage and stability |
 | WT-C | 4 | claimed | roeedar/codex-wt-c | wt-c-nuisance-2026-04-17 | ../wt-c-nuisance-2026-04-17 | Claimed 2026-04-17 18:54:18 CEST; re-investigating runtime augmentation truth and narrow nuisance sidecars |
 | WT-F | 5 | claimed | roeedar/codex-wt-f | wt-f-proper-data-schema-2026-04-17 | ../wt-f-proper-data-schema-2026-04-17 | Claimed 2026-04-17 18:54:43 CEST; re-investigating proper-data schema, provenance, and future eval slices |
@@ -34,6 +34,7 @@ Append one line per state change.
 | 2026-04-17 18:53 CEST | WT-A | claimed | roeedar/codex-wt-a | Claimed WT-A; root commit before worktree creation |
 | 2026-04-17 | WT-B | blocked | root setup | Waiting for WT-A lane-semantics freeze |
 | 2026-04-17 18:53:43 CEST | WT-E | claimed | roeedar/codex-wt-e | Claimed WT-E; root commit before worktree creation |
+| 2026-04-17 19:05:04 CEST | WT-E | merged | roeedar/codex-wt-e | Merged authoritative promotion contract tooling and runbooks |
 | 2026-04-17 18:54:18 CEST | WT-C | claimed | roeedar/codex-wt-c | Claimed WT-C; root commit before worktree creation |
 | 2026-04-17 18:54:13 CEST | WT-D | claimed | roeedar/codex-wt-d | Claimed WT-D; root commit before worktree creation |
 | 2026-04-17 18:54:43 CEST | WT-F | claimed | roeedar/codex-wt-f | Claimed WT-F; root commit before worktree creation |
