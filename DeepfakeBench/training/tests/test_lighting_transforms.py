@@ -426,6 +426,22 @@ class TestQualityTargetedPresetSurface:
             "context_variation_shadow_softness",
             "context_variation_gamma_up_p",
             "context_variation_gamma_up_range",
+            "teams_passthrough_flip_p",
+            "teams_passthrough_brightness_contrast_p",
+            "teams_passthrough_brightness_limit",
+            "teams_passthrough_contrast_limit",
+            "teams_passthrough_special_aug_enabled",
+            "teams_passthrough_special_shift_p",
+            "teams_passthrough_special_shift",
+            "teams_passthrough_special_scale",
+            "teams_passthrough_special_rotate",
+            "teams_passthrough_special_cct_p",
+            "teams_passthrough_special_cct_range",
+            "teams_passthrough_special_shadow_p",
+            "teams_passthrough_special_shadow_intensity",
+            "teams_passthrough_special_shadow_softness",
+            "teams_passthrough_special_gamma_up_p",
+            "teams_passthrough_special_gamma_up_range",
         }
 
         assert required_keys.issubset(light_keys)
