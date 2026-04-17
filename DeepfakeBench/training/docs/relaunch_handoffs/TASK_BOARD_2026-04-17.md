@@ -18,7 +18,7 @@ Dependency rule:
 
 | Track | Priority | Status | Owner | Branch | Worktree | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| WT-A | 1 | free |  | wt-a-data-truth-2026-04-17 | ../wt-a-data-truth-2026-04-17 | Must go first; freezes lane semantics |
+| WT-A | 1 | claimed | roeedar/codex-wt-a | wt-a-data-truth-2026-04-17 | ../wt-a-data-truth-2026-04-17 | Claimed 2026-04-17 18:53 CEST; re-investigating lane semantics and policy truth |
 | WT-E | 2 | free |  | wt-e-promotion-contract-2026-04-17 | ../wt-e-promotion-contract-2026-04-17 | Keep aligned with WT-A and WT-F |
 | WT-D | 3 | free |  | wt-d-decision-system-2026-04-17 | ../wt-d-decision-system-2026-04-17 | Frozen-checkpoint and low-FP analysis |
 | WT-C | 4 | free |  | wt-c-nuisance-2026-04-17 | ../wt-c-nuisance-2026-04-17 | Coordinate measurement claims with WT-D |
@@ -31,4 +31,5 @@ Append one line per state change.
 
 | Time | Track | New Status | Owner | Summary |
 | --- | --- | --- | --- | --- |
+| 2026-04-17 18:53 CEST | WT-A | claimed | roeedar/codex-wt-a | Claimed WT-A; root commit before worktree creation |
 | 2026-04-17 | WT-B | blocked | root setup | Waiting for WT-A lane-semantics freeze |
