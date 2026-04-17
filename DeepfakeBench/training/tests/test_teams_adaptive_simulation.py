@@ -176,6 +176,39 @@ def test_default_teams_passthrough_pipeline_is_minimal():
     ]
 
 
+def test_teams_passthrough_special_aug_requires_explicit_enable():
+    pipelines = _load_pipelines_module()
+    pipeline = pipelines._build_teams_passthrough_pipeline(
+        {
+            "teams_passthrough_special_shadow_p": 0.15,
+            "teams_passthrough_special_gamma_up_p": 0.15,
+        }
+    )
+
+    assert _transform_names(pipeline) == [
+        "HorizontalFlip",
+        "RandomBrightnessContrast",
+    ]
+
+
+def test_teams_passthrough_special_aug_can_enable_multiple_optional_transforms():
+    pipelines = _load_pipelines_module()
+    pipeline = pipelines._build_teams_passthrough_pipeline(
+        {
+            "teams_passthrough_special_aug_enabled": True,
+            "teams_passthrough_special_shadow_p": 0.15,
+            "teams_passthrough_special_gamma_up_p": 0.15,
+        }
+    )
+
+    assert _transform_names(pipeline) == [
+        "HorizontalFlip",
+        "RandomBrightnessContrast",
+        "DirectionalShadow",
+        "GammaUp",
+    ]
+
+
 def test_gammaup_sidecar_override_does_not_mutate_teams_passthrough_branch():
     pipelines = _load_pipelines_module()
     router = pipelines.create_quality_targeted_family_router(
@@ -191,3 +224,24 @@ def test_gammaup_sidecar_override_does_not_mutate_teams_passthrough_branch():
 
     assert "GammaUp" in non_teams_names
     assert teams_names == ["HorizontalFlip", "RandomBrightnessContrast"]
+
+
+def test_teams_special_shadow_override_does_not_mutate_non_teams_branch():
+    pipelines = _load_pipelines_module()
+    router = pipelines.create_quality_targeted_family_router(
+        strength="vcd_targeted",
+        preset_overrides={
+            "teams_passthrough_special_aug_enabled": True,
+            "teams_passthrough_special_shadow_p": 0.15,
+        },
+    )
+
+    non_teams_names = _transform_names(router._pipelines["visomaster_enhanced_fake"])
+    teams_names = _transform_names(router._pipelines["deeplive_teams_real"])
+
+    assert "DirectionalShadow" not in non_teams_names
+    assert teams_names == [
+        "HorizontalFlip",
+        "RandomBrightnessContrast",
+        "DirectionalShadow",
+    ]

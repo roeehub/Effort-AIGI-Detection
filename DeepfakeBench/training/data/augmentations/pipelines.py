@@ -784,6 +784,27 @@ def create_webcam_codec_pipeline(
 #   router(image, landmarks=None, meta={label, source, method}) -> image
 # ==============================================================================
 
+_TEAMS_PASSTHROUGH_DEFAULTS = {
+    # Base Teams passthrough stays intentionally conservative by default.
+    "teams_passthrough_flip_p": 0.50,
+    "teams_passthrough_brightness_contrast_p": 0.30,
+    "teams_passthrough_brightness_limit": 0.08,
+    "teams_passthrough_contrast_limit": 0.08,
+    # Special Teams passthrough block: fully opt-in, off by default.
+    "teams_passthrough_special_aug_enabled": False,
+    "teams_passthrough_special_shift_p": 0.0,
+    "teams_passthrough_special_shift": 0.02,
+    "teams_passthrough_special_scale": 0.05,
+    "teams_passthrough_special_rotate": 3,
+    "teams_passthrough_special_cct_p": 0.0,
+    "teams_passthrough_special_cct_range": (2700, 8000),
+    "teams_passthrough_special_shadow_p": 0.0,
+    "teams_passthrough_special_shadow_intensity": (0.15, 0.45),
+    "teams_passthrough_special_shadow_softness": (0.20, 0.50),
+    "teams_passthrough_special_gamma_up_p": 0.0,
+    "teams_passthrough_special_gamma_up_range": (0.45, 0.85),
+}
+
 _QUALITY_TARGETED_PRESETS = {
     "light": {
         "jpeg_lower": 62,
@@ -828,6 +849,7 @@ _QUALITY_TARGETED_PRESETS = {
         "real_noise_var": (5.0, 20.0),
         "real_sharpen_p": 0.50,
         "fake_extra_degrade_p": 0.0,
+        **_TEAMS_PASSTHROUGH_DEFAULTS,
     },
     "moderate": {
         "jpeg_lower": 48,
@@ -868,6 +890,7 @@ _QUALITY_TARGETED_PRESETS = {
         "real_noise_var": (5.0, 20.0),
         "real_sharpen_p": 0.50,
         "fake_extra_degrade_p": 0.0,
+        **_TEAMS_PASSTHROUGH_DEFAULTS,
     },
     "strong": {
         "jpeg_lower": 40,
@@ -908,6 +931,7 @@ _QUALITY_TARGETED_PRESETS = {
         "real_noise_var": (5.0, 20.0),
         "real_sharpen_p": 0.50,
         "fake_extra_degrade_p": 0.0,
+        **_TEAMS_PASSTHROUGH_DEFAULTS,
     },
     # -----------------------------------------------------------------------
     # VCD-targeted preset: designed to break quality-label shortcuts.
@@ -967,6 +991,7 @@ _QUALITY_TARGETED_PRESETS = {
         "context_variation_gamma_up_p": 0.0,
         "context_variation_gamma_up_range": (0.45, 0.85),
         "hue_shift": 20,
+        **_TEAMS_PASSTHROUGH_DEFAULTS,
     },
 }
 
@@ -1045,6 +1070,68 @@ def _build_context_variation_block(p: dict) -> list:
         transforms.append(
             GammaUp(
                 gamma_range=p.get("context_variation_gamma_up_range", (0.45, 0.85)),
+                p=gamma_up_p,
+            )
+        )
+
+    return transforms
+
+
+def _build_teams_passthrough_special_block(p: dict | None) -> list:
+    """Build the fully opt-in special Teams passthrough augmentation block."""
+    if not p or not p.get("teams_passthrough_special_aug_enabled", False):
+        return []
+
+    transforms = []
+
+    shift_p = p.get("teams_passthrough_special_shift_p", 0.0)
+    if shift_p > 0:
+        transforms.append(
+            A.ShiftScaleRotate(
+                shift_limit=p.get("teams_passthrough_special_shift", 0.02),
+                scale_limit=p.get("teams_passthrough_special_scale", 0.05),
+                rotate_limit=p.get("teams_passthrough_special_rotate", 3),
+                border_mode=cv2.BORDER_REFLECT_101,
+                p=shift_p,
+            )
+        )
+
+    cct_p = p.get("teams_passthrough_special_cct_p", 0.0)
+    if cct_p > 0:
+        from .transforms import ColorTemperatureShift
+        transforms.append(
+            ColorTemperatureShift(
+                cct_range=p.get("teams_passthrough_special_cct_range", (2700, 8000)),
+                p=cct_p,
+            )
+        )
+
+    shadow_p = p.get("teams_passthrough_special_shadow_p", 0.0)
+    if shadow_p > 0:
+        from .transforms import DirectionalShadow
+        transforms.append(
+            DirectionalShadow(
+                intensity_range=p.get(
+                    "teams_passthrough_special_shadow_intensity",
+                    (0.15, 0.45),
+                ),
+                softness_range=p.get(
+                    "teams_passthrough_special_shadow_softness",
+                    (0.20, 0.50),
+                ),
+                p=shadow_p,
+            )
+        )
+
+    gamma_up_p = p.get("teams_passthrough_special_gamma_up_p", 0.0)
+    if gamma_up_p > 0:
+        from .transforms import GammaUp
+        transforms.append(
+            GammaUp(
+                gamma_range=p.get(
+                    "teams_passthrough_special_gamma_up_range",
+                    (0.45, 0.85),
+                ),
                 p=gamma_up_p,
             )
         )
@@ -1290,7 +1377,7 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
     return create_quality_robust_pipeline("moderate")
 
 
-def _build_teams_passthrough_pipeline() -> A.Compose:
+def _build_teams_passthrough_pipeline(p: dict | None = None) -> A.Compose:
     """
     Build a minimal augmentation pipeline for Teams-passthrough data.
 
@@ -1299,15 +1386,20 @@ def _build_teams_passthrough_pipeline() -> A.Compose:
     further degradation (blur, downscale, codec sim) would destroy the
     authentic codec fingerprint the model should learn.
 
-    Only spatial flip and very light colour jitter are applied.
+    By default, only spatial flip and very light colour jitter are applied.
+    An explicit opt-in special block exists for sidecar experiments that want
+    extra Teams-native nuisance robustness without affecting the default path.
     """
+    p = p or {}
+
     return A.Compose([
-        A.HorizontalFlip(p=0.5),
+        A.HorizontalFlip(p=p.get("teams_passthrough_flip_p", 0.5)),
         A.RandomBrightnessContrast(
-            brightness_limit=0.08,
-            contrast_limit=0.08,
-            p=0.3,
+            brightness_limit=p.get("teams_passthrough_brightness_limit", 0.08),
+            contrast_limit=p.get("teams_passthrough_contrast_limit", 0.08),
+            p=p.get("teams_passthrough_brightness_contrast_p", 0.3),
         ),
+        *_build_teams_passthrough_special_block(p),
     ])
 
 
@@ -1343,9 +1435,9 @@ class QualityTargetedFamilyRouter:
             "realpool_real": _build_family_quality_pipeline("realpool_real", self._preset),
             "external_real": _build_family_quality_pipeline("external_real", self._preset),
             # Teams passthrough data has already been through the codec pipeline.
-            # Only the lightest augmentation — preserve the real codec fingerprint.
-            "deeplive_teams_fake": _build_teams_passthrough_pipeline(),
-            "deeplive_teams_real": _build_teams_passthrough_pipeline(),
+            # Default path stays minimal; extra Teams nuisance knobs are opt-in.
+            "deeplive_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+            "deeplive_teams_real": _build_teams_passthrough_pipeline(self._preset),
         }
 
         # ── Teams codec simulation (optional post-pipeline step) ──────
