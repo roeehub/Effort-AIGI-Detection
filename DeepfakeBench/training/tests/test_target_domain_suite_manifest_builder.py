@@ -160,3 +160,24 @@ def test_checked_in_promotion_manifests_include_fake_lockbox_suite():
     for path in manifest_paths:
         text = path.read_text()
         assert "name: teams_fake_all_lockbox" in text, path
+
+
+def test_checked_in_authoritative_promotion_manifest_has_exact_contract_suite_set():
+    path = ROOT / "arena/target_domain_suites.teams_promotion_contract_2026-04-17.yaml"
+    suite_names = [
+        line.strip().split(": ", 1)[1]
+        for line in path.read_text().splitlines()
+        if line.lstrip().startswith("- name: ")
+    ]
+    assert suite_names == [
+        "teams_real_all_dev",
+        "teams_real_poor_quality_dev",
+        "teams_real_lighting_extreme_dev",
+        "teams_fake_all_dev",
+        "visomaster_enhanced_macro_dev",
+        "deeplive_enhanced_dev",
+        "teams_real_all_lockbox",
+        "teams_fake_all_lockbox",
+    ]
+    assert "teams_capture_cam_test_dev" not in suite_names
+    assert "deeplive_all_sources" not in suite_names

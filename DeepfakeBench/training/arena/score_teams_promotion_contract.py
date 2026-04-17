@@ -566,6 +566,40 @@ def score_promotion_contract(
     }
 
 
+def write_promotion_contract_outputs(output_root: str, payload: Dict[str, Any]) -> Dict[str, str]:
+    output_root = str(output_root).rstrip("/")
+    grid_csv = _join_path(output_root, "threshold_grid.csv")
+    scorecard_csv = _join_path(output_root, "selected_threshold_scorecard.csv")
+    summary_csv = _join_path(output_root, "checkpoint_summary.csv")
+    payload_json = _join_path(output_root, "promotion_contract.json")
+    winner_json = _join_path(output_root, "promotion_winner.json")
+
+    _write_dict_rows_to_csv(grid_csv, payload["threshold_grid_rows"])
+    _write_dict_rows_to_csv(scorecard_csv, payload["selected_threshold_scorecard_rows"])
+    _write_dict_rows_to_csv(summary_csv, payload["checkpoint_summary_rows"])
+    _write_text_to_path(payload_json, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    _write_text_to_path(
+        winner_json,
+        json.dumps(
+            {
+                "contract": payload["contract"],
+                "winner": payload["winner"],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+
+    return {
+        "threshold_grid_csv": grid_csv,
+        "selected_threshold_scorecard_csv": scorecard_csv,
+        "checkpoint_summary_csv": summary_csv,
+        "promotion_contract_json": payload_json,
+        "promotion_winner_json": winner_json,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Score the calibrated low-FP Teams promotion contract from video reports"
@@ -613,37 +647,18 @@ def main() -> None:
         contract=contract,
     )
 
-    output_root = str(args.output_dir).rstrip("/")
-    grid_csv = _join_path(output_root, "threshold_grid.csv")
-    scorecard_csv = _join_path(output_root, "selected_threshold_scorecard.csv")
-    summary_csv = _join_path(output_root, "checkpoint_summary.csv")
-    payload_json = _join_path(output_root, "promotion_contract.json")
-    winner_json = _join_path(output_root, "promotion_winner.json")
-
-    _write_dict_rows_to_csv(grid_csv, payload["threshold_grid_rows"])
-    _write_dict_rows_to_csv(scorecard_csv, payload["selected_threshold_scorecard_rows"])
-    _write_dict_rows_to_csv(summary_csv, payload["checkpoint_summary_rows"])
-    _write_text_to_path(payload_json, json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    _write_text_to_path(
-        winner_json,
-        json.dumps(
-            {
-                "contract": payload["contract"],
-                "winner": payload["winner"],
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-    )
+    output_paths = write_promotion_contract_outputs(str(args.output_dir).strip(), payload)
 
     winner = payload["winner"]
     print("Teams promotion contract scored.")
-    print(f"  threshold_grid.csv            : {grid_csv}")
-    print(f"  selected_threshold_scorecard.csv : {scorecard_csv}")
-    print(f"  checkpoint_summary.csv        : {summary_csv}")
-    print(f"  promotion_contract.json       : {payload_json}")
-    print(f"  promotion_winner.json         : {winner_json}")
+    print(f"  threshold_grid.csv            : {output_paths['threshold_grid_csv']}")
+    print(
+        "  selected_threshold_scorecard.csv : "
+        f"{output_paths['selected_threshold_scorecard_csv']}"
+    )
+    print(f"  checkpoint_summary.csv        : {output_paths['checkpoint_summary_csv']}")
+    print(f"  promotion_contract.json       : {output_paths['promotion_contract_json']}")
+    print(f"  promotion_winner.json         : {output_paths['promotion_winner_json']}")
     if winner:
         print(
             "  winner                        : "

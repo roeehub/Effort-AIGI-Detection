@@ -1,26 +1,15 @@
 #!/bin/bash
 # ============================================================================
-# launch_target_domain_scorecard.sh
-# Launch the Teams target-domain scorecard on Vertex AI.
+# launch_teams_promotion_contract.sh
+# Launch the authoritative calibrated Teams promotion contract on Vertex AI.
 #
-# This mirrors the arena launch flow, but runs the sequential target-domain
-# validation runner directly so the scorecard artifacts can be written to GCS.
-#
-# Important:
-# - these scorecard artifacts are diagnostic-only because they use threshold 0.5
-# - promotion decisions should use arena/launch_teams_promotion_contract.sh instead
-#
-# Default behavior:
-# - uses the image built by ./dev.sh build-prod
-# - uses the packaged frozen Teams manifest + packaged checkpoint map
-# - evaluates the current FP32 comparison set, including Track A
-# - writes reports and scorecards to gs://training-job-outputs/test_results/...
+# This runs the promotion-authoritative suite manifest, writes the usual
+# fixed-threshold scorecards as diagnostic sidecars, and emits the calibrated
+# promotion-contract artifacts that should decide promotion.
 #
 # Usage:
-#   ./arena/launch_target_domain_scorecard.sh
-#   ./arena/launch_target_domain_scorecard.sh --breakdown
-#   ./arena/launch_target_domain_scorecard.sh --checkpoints ALL --checkpoint-map arena/checkpoint_maps/...
-#   ./arena/launch_target_domain_scorecard.sh --dry-run
+#   ./arena/launch_teams_promotion_contract.sh
+#   ./arena/launch_teams_promotion_contract.sh --checkpoints ALL --dry-run
 # ============================================================================
 
 set -euo pipefail
@@ -35,10 +24,10 @@ GPU_TYPE="${GPU_TYPE:-NVIDIA_TESLA_A100}"
 GPU_COUNT="${GPU_COUNT:-1}"
 WANDB_PROJECT="${WANDB_PROJECT:-phase2-experiments}"
 
-SUITE_MANIFEST="arena/target_domain_suites.teams_manifest.frozen_2026-04-06.yaml"
-CHECKPOINT_MAP="arena/checkpoint_maps/teams_target_domain.seed_candidates_2026-04-07.yaml"
-CHECKPOINTS="R12_G_FP32,R13_FT1_FP32,R13_FT2_FP32,R13_FT3_FP32,TRACK_A_CANDIDATE"
-OUTPUT_GCS_ROOT="gs://training-job-outputs/test_results/teams_target_domain_scorecard"
+SUITE_MANIFEST="arena/target_domain_suites.teams_promotion_contract_2026-04-17.yaml"
+CHECKPOINT_MAP="arena/checkpoint_maps/teams_target_domain.promotion_shortlist_2026-04-17.yaml"
+CHECKPOINTS="ALL"
+OUTPUT_GCS_ROOT="gs://training-job-outputs/test_results/teams_promotion_contract"
 JOB_NAME=""
 DRY_RUN=""
 
@@ -48,11 +37,10 @@ Usage:
   $(basename "$0") [options]
 
 Options:
-  --breakdown                 Use the breakdown suite manifest instead of the compact one.
-  --suite-manifest PATH       Repo-relative or /workspace path to the suite manifest baked into the image.
-  --checkpoint-map PATH       Repo-relative or /workspace path to the checkpoint map baked into the image.
+  --suite-manifest PATH       Repo-relative or /workspace path to the baked-in suite manifest.
+  --checkpoint-map PATH       Repo-relative or /workspace path to the baked-in checkpoint map.
   --checkpoints CSV           Comma-separated checkpoint aliases (default: ${CHECKPOINTS})
-  --output-gcs-root URI       GCS root for reports + scorecards (default: ${OUTPUT_GCS_ROOT})
+  --output-gcs-root URI       GCS root for reports + artifacts (default: ${OUTPUT_GCS_ROOT})
   --wandb-project NAME        W&B project name (default: ${WANDB_PROJECT})
   --job-name NAME             Override Vertex display name / output suffix.
   --region REGION             Vertex region (default: ${REGION})
@@ -61,13 +49,13 @@ Options:
   --gpu-count N               Accelerator count passed to the shared launcher.
   --dry-run                   Print the launch plan without submitting a Vertex job.
 
-Notes:
-  - The suite manifest and checkpoint map are loaded locally inside the container,
-    so they must be present in the built image.
-  - Reports go to:
+Artifacts:
+  - reports:
       <output-gcs-root>/<job-name>/reports/
-  - Scorecards go to:
-      <output-gcs-root>/<job-name>/scorecards/
+  - diagnostic fixed-threshold scorecards:
+      <output-gcs-root>/<job-name>/diagnostic_scorecard/
+  - calibrated promotion-contract outputs:
+      <output-gcs-root>/<job-name>/promotion_contract/
 EOF
 }
 
@@ -97,9 +85,6 @@ print_cmd() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --breakdown)
-            SUITE_MANIFEST="arena/target_domain_suites.teams_manifest.breakdown_2026-04-07.yaml"
-            shift ;;
         --suite-manifest)
             SUITE_MANIFEST="$2"; shift 2 ;;
         --checkpoint-map)
@@ -135,20 +120,14 @@ SUITE_MANIFEST="$(normalize_container_local_path "${SUITE_MANIFEST}")"
 CHECKPOINT_MAP="$(normalize_container_local_path "${CHECKPOINT_MAP}")"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-SUITE_TAG="compact"
-case "$(basename "${SUITE_MANIFEST}")" in
-    *breakdown*) SUITE_TAG="breakdown" ;;
-    *frozen*) SUITE_TAG="compact" ;;
-    *) SUITE_TAG="custom" ;;
-esac
-
 if [[ -z "${JOB_NAME}" ]]; then
-    JOB_NAME="td-scorecard-${SUITE_TAG}-${TIMESTAMP}"
+    JOB_NAME="teams-promotion-contract-${TIMESTAMP}"
 fi
 
 RUN_ROOT="${OUTPUT_GCS_ROOT%/}/${JOB_NAME}"
 REPORTS_GCS_FOLDER="${RUN_ROOT}/reports"
-SCORECARD_GCS_DIR="${RUN_ROOT}/scorecards"
+DIAGNOSTIC_GCS_DIR="${RUN_ROOT}/diagnostic_scorecard"
+CONTRACT_GCS_DIR="${RUN_ROOT}/promotion_contract"
 
 RUNNER_ARGS=(
     --checkpoints "${CHECKPOINTS}"
@@ -156,10 +135,11 @@ RUNNER_ARGS=(
     --suite_manifest "${SUITE_MANIFEST}"
     --output_gcs_folder "${REPORTS_GCS_FOLDER}"
     --wandb_project "${WANDB_PROJECT}"
-    --scorecard_csv "${SCORECARD_GCS_DIR}/scorecard.csv"
-    --scorecard_wide_csv "${SCORECARD_GCS_DIR}/scorecard.wide.csv"
-    --scorecard_delta_csv "${SCORECARD_GCS_DIR}/scorecard.int8_delta.csv"
-    --scorecard_json "${SCORECARD_GCS_DIR}/scorecard.json"
+    --scorecard_csv "${DIAGNOSTIC_GCS_DIR}/scorecard.csv"
+    --scorecard_wide_csv "${DIAGNOSTIC_GCS_DIR}/scorecard.wide.csv"
+    --scorecard_delta_csv "${DIAGNOSTIC_GCS_DIR}/scorecard.int8_delta.csv"
+    --scorecard_json "${DIAGNOSTIC_GCS_DIR}/scorecard.json"
+    --promotion_contract_dir "${CONTRACT_GCS_DIR}"
 )
 
 LAUNCH_CMD=(
@@ -177,20 +157,22 @@ LAUNCH_CMD=(
 )
 
 echo "============================================================"
-echo "Teams Target-Domain Scorecard (Diagnostic Only) — Vertex AI Launch"
+echo "Teams Promotion Contract — Vertex AI Launch"
 echo "============================================================"
-echo "Image:              ${IMAGE_URI}"
-echo "Project:            ${PROJECT}"
-echo "Region:             ${REGION}"
-echo "Job Name:           ${JOB_NAME}"
-echo "Suite Manifest:     ${SUITE_MANIFEST}"
-echo "Checkpoint Map:     ${CHECKPOINT_MAP}"
-echo "Checkpoints:        ${CHECKPOINTS}"
-echo "W&B Project:        ${WANDB_PROJECT}"
-echo "Vertex Output:      gs://training-job-outputs/vertex-output/${JOB_NAME}/"
-echo "Detailed Reports:   ${REPORTS_GCS_FOLDER}/"
-echo "Scorecards:         ${SCORECARD_GCS_DIR}/"
-echo "Promotion path:     arena/launch_teams_promotion_contract.sh"
+echo "Image:                   ${IMAGE_URI}"
+echo "Project:                 ${PROJECT}"
+echo "Region:                  ${REGION}"
+echo "Job Name:                ${JOB_NAME}"
+echo "Suite Manifest:          ${SUITE_MANIFEST}"
+echo "Checkpoint Map:          ${CHECKPOINT_MAP}"
+echo "Checkpoints:             ${CHECKPOINTS}"
+echo "W&B Project:             ${WANDB_PROJECT}"
+echo "Vertex Output:           gs://training-job-outputs/vertex-output/${JOB_NAME}/"
+echo "Detailed Reports:        ${REPORTS_GCS_FOLDER}/"
+echo "Diagnostic Scorecards:   ${DIAGNOSTIC_GCS_DIR}/"
+echo "Promotion Contract:      ${CONTRACT_GCS_DIR}/"
+echo "Promotion authority:     calibrated contract"
+echo "Diagnostic-only sidecar: fixed-threshold 0.5 scorecard"
 echo "============================================================"
 print_cmd "${LAUNCH_CMD[@]}"
 
@@ -203,14 +185,20 @@ fi
 
 echo ""
 echo "============================================================"
-echo "Scorecard job submitted!"
+echo "Promotion contract job submitted!"
 echo "Vertex system output:"
 echo "  gs://training-job-outputs/vertex-output/${JOB_NAME}/"
 echo "Detailed validation reports:"
 echo "  ${REPORTS_GCS_FOLDER}/"
-echo "Scorecard artifacts:"
-echo "  ${SCORECARD_GCS_DIR}/scorecard.csv"
-echo "  ${SCORECARD_GCS_DIR}/scorecard.wide.csv"
-echo "  ${SCORECARD_GCS_DIR}/scorecard.int8_delta.csv"
-echo "  ${SCORECARD_GCS_DIR}/scorecard.json"
+echo "Diagnostic scorecard artifacts:"
+echo "  ${DIAGNOSTIC_GCS_DIR}/scorecard.csv"
+echo "  ${DIAGNOSTIC_GCS_DIR}/scorecard.wide.csv"
+echo "  ${DIAGNOSTIC_GCS_DIR}/scorecard.int8_delta.csv"
+echo "  ${DIAGNOSTIC_GCS_DIR}/scorecard.json"
+echo "Promotion contract artifacts:"
+echo "  ${CONTRACT_GCS_DIR}/threshold_grid.csv"
+echo "  ${CONTRACT_GCS_DIR}/selected_threshold_scorecard.csv"
+echo "  ${CONTRACT_GCS_DIR}/checkpoint_summary.csv"
+echo "  ${CONTRACT_GCS_DIR}/promotion_contract.json"
+echo "  ${CONTRACT_GCS_DIR}/promotion_winner.json"
 echo "============================================================"

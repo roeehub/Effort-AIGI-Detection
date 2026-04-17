@@ -4,6 +4,10 @@
 #
 # One-command wrapper for the frozen Teams target-domain scorecard.
 #
+# Important:
+# - these scorecard artifacts are diagnostic-only because they use threshold 0.5
+# - promotion decisions should use arena/run_teams_promotion_contract.sh instead
+#
 # Usage:
 #   bash arena/run_teams_target_domain_scorecard.sh \
 #     --checkpoint-map arena/checkpoint_maps/teams_target_domain.template.yaml \
@@ -15,6 +19,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRAINING_DIR="$(dirname "$SCRIPT_DIR")"
+PYTHON_BIN="${PYTHON_BIN:-}"
+
+if [[ -z "${PYTHON_BIN}" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_BIN="python3"
+    else
+        PYTHON_BIN="python"
+    fi
+fi
 
 CHECKPOINT_MAP=""
 CHECKPOINTS="ALL"
@@ -63,7 +76,7 @@ JSON_OUT="${LOCAL_SCORECARD_DIR}/scorecard.json"
 cd "${TRAINING_DIR}"
 
 CMD=(
-    python arena/run_target_domain_validation_sequential.py
+    "${PYTHON_BIN}" arena/run_target_domain_validation_sequential.py
     --checkpoints "${CHECKPOINTS}"
     --checkpoint_map "${CHECKPOINT_MAP}"
     --suite_manifest "${SUITE_MANIFEST}"
@@ -80,7 +93,7 @@ if [[ -n "${DRY_RUN}" ]]; then
 fi
 
 echo "============================================================"
-echo "Teams Target-Domain Scorecard"
+echo "Teams Target-Domain Scorecard (Diagnostic Only)"
 echo "============================================================"
 echo "Checkpoint map:   ${CHECKPOINT_MAP}"
 echo "Checkpoints:      ${CHECKPOINTS}"
@@ -88,6 +101,7 @@ echo "Suite manifest:   ${SUITE_MANIFEST}"
 echo "Output GCS:       ${OUTPUT_GCS_FOLDER}"
 echo "Local scorecards: ${LOCAL_SCORECARD_DIR}"
 echo "W&B project:      ${WANDB_PROJECT}"
+echo "Promotion path:   use arena/run_teams_promotion_contract.sh"
 if [[ -n "${DRY_RUN}" ]]; then
     echo "Mode:             DRY RUN"
 fi

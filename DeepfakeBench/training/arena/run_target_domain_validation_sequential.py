@@ -4,6 +4,10 @@ Sequential target-domain validation runner.
 Runs validate_custom_sources.py for selected checkpoints across a configurable
 set of target-domain suites (Zoom-like real/fake buckets, stress variants, etc).
 
+The optional scorecard exports from this runner are fixed-threshold (`0.5`)
+diagnostic artifacts. Promotion decisions should use the calibrated contract
+implemented in ``arena/score_teams_promotion_contract.py``.
+
 Suite manifest format (JSON or YAML):
 
 suites:
@@ -28,6 +32,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import importlib.util
 import json
 import math
 import os
@@ -94,6 +99,88 @@ def _join_present(values: List[Any]) -> str:
             continue
         ordered.append(text)
     return "|".join(ordered)
+
+
+def _parse_scalar_text(value: str) -> Any:
+    text = str(value).strip()
+    if not text:
+        return ""
+    if text.startswith('"') and text.endswith('"'):
+        return text[1:-1]
+    if text.startswith("'") and text.endswith("'"):
+        return text[1:-1]
+
+    lowered = text.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered in {"null", "~"}:
+        return None
+
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    return text
+
+
+def _parse_flat_key_value_mapping(text: str) -> Dict[str, str]:
+    result: Dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key_text = key.strip()
+        value_text = str(_parse_scalar_text(value)).strip()
+        if key_text and value_text:
+            result[key_text] = value_text
+    return result
+
+
+def _parse_simple_suite_manifest_yaml(text: str) -> Dict[str, Any]:
+    suites: List[Dict[str, Any]] = []
+    current_suite: Dict[str, Any] | None = None
+    in_suites = False
+
+    for raw_line in text.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+
+        stripped = raw_line.strip()
+        if not in_suites:
+            if stripped == "suites:":
+                in_suites = True
+            continue
+
+        if raw_line.lstrip().startswith("- "):
+            current_suite = {}
+            suites.append(current_suite)
+            payload = raw_line.lstrip()[2:].strip()
+            if payload:
+                if ":" not in payload:
+                    raise ValueError(f"Unsupported suite item line: {raw_line}")
+                key, value = payload.split(":", 1)
+                current_suite[key.strip()] = _parse_scalar_text(value)
+            continue
+
+        if current_suite is None:
+            continue
+        if ":" not in stripped:
+            raise ValueError(f"Unsupported suite manifest line: {raw_line}")
+        key, value = stripped.split(":", 1)
+        current_suite[key.strip()] = _parse_scalar_text(value)
+
+    if not suites:
+        raise ValueError("Suite manifest contains no suites.")
+    return {"suites": suites}
 
 
 def _suite_label_mode(suite: Dict[str, Any]) -> str:
@@ -327,6 +414,12 @@ def _load_scorecard_row(
     )
 
 
+def _csv_list(value: str | None) -> List[str]:
+    if value is None:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
 def _scorecard_requested(args: argparse.Namespace) -> bool:
     return bool(
         args.scorecard_csv
@@ -334,6 +427,65 @@ def _scorecard_requested(args: argparse.Namespace) -> bool:
         or args.scorecard_delta_csv
         or args.scorecard_json
     )
+
+
+def _promotion_contract_requested(args: argparse.Namespace) -> bool:
+    return bool(args.promotion_contract_dir)
+
+
+def _load_promotion_contract_module():
+    module_name = "teams_promotion_contract_runtime"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    module_path = RUNNER_DIR / "score_teams_promotion_contract.py"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load promotion contract module from {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_promotion_contract_outputs(
+    args: argparse.Namespace,
+    selected_checkpoint_keys: List[str],
+) -> None:
+    promotion = _load_promotion_contract_module()
+    contract = promotion.ContractConfig(
+        dev_real_suite=str(args.promotion_dev_real_suite).strip(),
+        dev_real_stress_suites=tuple(_csv_list(args.promotion_dev_real_stress_suites)),
+        dev_fake_suites=tuple(_csv_list(args.promotion_dev_fake_suites)),
+        lockbox_real_suite=str(args.promotion_lockbox_real_suite).strip(),
+        lockbox_fake_suite=str(args.promotion_lockbox_fake_suite).strip(),
+    )
+    payload = promotion.score_promotion_contract(
+        report_root=str(args.output_gcs_folder).strip(),
+        checkpoint_map_path=str(args.checkpoint_map).strip(),
+        checkpoints_arg=",".join(selected_checkpoint_keys),
+        contract=contract,
+    )
+    output_paths = promotion.write_promotion_contract_outputs(
+        str(args.promotion_contract_dir).strip(),
+        payload,
+    )
+    winner = payload.get("winner")
+    print("Promotion contract artifacts written to:")
+    print(f"  {output_paths['threshold_grid_csv']}")
+    print(f"  {output_paths['selected_threshold_scorecard_csv']}")
+    print(f"  {output_paths['checkpoint_summary_csv']}")
+    print(f"  {output_paths['promotion_contract_json']}")
+    print(f"  {output_paths['promotion_winner_json']}")
+    if winner:
+        print(
+            "Promotion winner: "
+            f"{winner['checkpoint_key']} "
+            f"(lockbox_real_fpr={winner['lockbox_real_fpr']}, "
+            f"lockbox_fake_recall={winner['lockbox_fake_recall']}, "
+            f"threshold={winner['selected_threshold']})"
+        )
 
 
 def _build_wide_scorecard_rows(scorecard_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -521,9 +673,12 @@ def _load_checkpoint_map(path: str) -> Dict[str, str]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        import yaml  # noqa
-
-        data = yaml.safe_load(text) or {}
+        try:
+            import yaml  # noqa
+        except ImportError:
+            data = _parse_flat_key_value_mapping(text)
+        else:
+            data = yaml.safe_load(text) or {}
 
     result: Dict[str, str] = {}
     if isinstance(data, dict):
@@ -603,9 +758,12 @@ def _load_suites(path: str) -> List[Dict[str, Any]]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        import yaml  # noqa
-
-        data = yaml.safe_load(text)
+        try:
+            import yaml  # noqa
+        except ImportError:
+            data = _parse_simple_suite_manifest_yaml(text)
+        else:
+            data = yaml.safe_load(text)
 
     if isinstance(data, dict):
         suites = data.get("suites", [])
@@ -742,7 +900,12 @@ def _run_job(index: int, total: int, job_name: str, cmd: List[str], dry_run: boo
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sequential target-domain validation runner")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Sequential target-domain validation runner with diagnostic fixed-threshold "
+            "scorecards and optional calibrated promotion-contract exports"
+        )
+    )
     parser.add_argument(
         "--checkpoints",
         type=str,
@@ -768,26 +931,60 @@ def main() -> None:
         "--scorecard_csv",
         type=str,
         default=None,
-        help="Optional long-form scorecard CSV output path (local or gs://).",
+        help=(
+            "Optional long-form diagnostic scorecard CSV output path "
+            "(fixed threshold 0.5; local or gs://)."
+        ),
     )
     parser.add_argument(
         "--scorecard_wide_csv",
         type=str,
         default=None,
-        help="Optional checkpoint-by-suite comparison CSV output path (local or gs://).",
+        help=(
+            "Optional checkpoint-by-suite diagnostic scorecard CSV output path "
+            "(fixed threshold 0.5; local or gs://)."
+        ),
     )
     parser.add_argument(
         "--scorecard_json",
         type=str,
         default=None,
-        help="Optional JSON payload containing the long, wide, and pair-delta scorecard tables.",
+        help=(
+            "Optional JSON payload containing the diagnostic long, wide, and "
+            "pair-delta scorecard tables."
+        ),
     )
     parser.add_argument(
         "--scorecard_delta_csv",
         type=str,
         default=None,
-        help="Optional FP32-vs-INT8 pair-delta CSV output path (local or gs://).",
+        help=(
+            "Optional diagnostic FP32-vs-INT8 pair-delta CSV output path "
+            "(local or gs://)."
+        ),
     )
+    parser.add_argument(
+        "--promotion_contract_dir",
+        type=str,
+        default=None,
+        help=(
+            "Optional calibrated promotion-contract output directory. "
+            "Requires --checkpoint_map and detailed reports."
+        ),
+    )
+    parser.add_argument("--promotion_dev_real_suite", type=str, default="teams_real_all_dev")
+    parser.add_argument(
+        "--promotion_dev_real_stress_suites",
+        type=str,
+        default="teams_real_poor_quality_dev,teams_real_lighting_extreme_dev",
+    )
+    parser.add_argument(
+        "--promotion_dev_fake_suites",
+        type=str,
+        default="teams_fake_all_dev,visomaster_enhanced_macro_dev,deeplive_enhanced_dev",
+    )
+    parser.add_argument("--promotion_lockbox_real_suite", type=str, default="teams_real_all_lockbox")
+    parser.add_argument("--promotion_lockbox_fake_suite", type=str, default="teams_fake_all_lockbox")
 
     # Defaults for optional suite keys
     parser.add_argument("--df40_mode", type=str, default="none",
@@ -801,8 +998,15 @@ def main() -> None:
         checkpoints_arg=args.checkpoints,
         checkpoint_map_path=args.checkpoint_map,
     )
-    if _scorecard_requested(args) and not args.detailed_reports:
-        raise ValueError("Scorecard export requires detailed reports to stay enabled.")
+    if (_scorecard_requested(args) or _promotion_contract_requested(args)) and not args.detailed_reports:
+        raise ValueError(
+            "Scorecard or promotion-contract export requires detailed reports to stay enabled."
+        )
+    if _promotion_contract_requested(args) and not args.checkpoint_map:
+        raise ValueError(
+            "Promotion contract export requires --checkpoint_map so checkpoint aliases "
+            "resolve reproducibly."
+        )
 
     checkpoints = _resolve_checkpoints(selected, args.checkpoint_map)
     suites = _load_suites(args.suite_manifest)
@@ -835,6 +1039,10 @@ def main() -> None:
     print(f"Suites: {[s['name'] for s in suites]}")
     print(f"Output folder: {args.output_gcs_folder}")
     print(f"W&B project: {args.wandb_project}")
+    if _scorecard_requested(args):
+        print("Diagnostic scorecards: enabled (fixed threshold 0.5)")
+    if _promotion_contract_requested(args):
+        print(f"Promotion contract dir: {args.promotion_contract_dir}")
     print("=" * 88)
 
     results = []
@@ -879,6 +1087,8 @@ def main() -> None:
 
     if _scorecard_requested(args) and not args.dry_run and scorecard_rows:
         _write_scorecard_outputs(args, scorecard_rows)
+    if _promotion_contract_requested(args) and not args.dry_run:
+        _write_promotion_contract_outputs(args, selected)
 
     if failed:
         print(f"\nFailed jobs: {failed}")

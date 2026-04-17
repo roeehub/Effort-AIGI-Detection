@@ -53,14 +53,15 @@ These are the suites that should decide promotion, in this order of importance.
 | `visomaster_enhanced_macro_dev` | 550 fake | Recall/TPR | Enhanced clean fake stress lane |
 | `deeplive_enhanced_dev` | 545 fake | Recall/TPR | Enhanced DeepLive stress lane |
 
-### Missing but required addition
+### Fake lockbox status
 
-`teams_fake_all_lockbox` exists in the frozen manifest with `253` fake videos, but it is not present in the current frozen suite YAML. That omission matters.
+`teams_fake_all_lockbox` exists in the frozen manifest with `253` fake videos
+and is now present in the checked-in frozen and promotion-contract suite YAMLs.
 
-Round 2 contract recommendation:
+Current recommendation:
 
-- add `teams_fake_all_lockbox` before the next decisive scorecard rerun
-- until that rerun exists, treat the current contract as incomplete on the fake-side lockbox axis
+- keep `teams_fake_all_lockbox` in the authoritative promotion suite set
+- treat older scorecards or docs that omitted it as incomplete on the fake-side lockbox axis
 
 ### Diagnostic-only suites
 

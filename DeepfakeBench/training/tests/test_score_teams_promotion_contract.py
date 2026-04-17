@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -127,3 +128,54 @@ def test_score_promotion_contract_freezes_dev_threshold_and_ranks_lockbox(tmp_pa
     }
     assert scorecard_rows[("R12_G_FP32", "teams_fake_all_lockbox")]["fake_recall"] == 0.5
     assert scorecard_rows[("R13_FT7_FP32", "teams_fake_all_lockbox")]["fake_recall"] == 1.0
+
+
+def test_write_promotion_contract_outputs_persists_expected_files(tmp_path):
+    checkpoint_map_path = tmp_path / "checkpoint_map.yaml"
+    report_root = tmp_path / "reports"
+
+    checkpoint_map_path.write_text('r12_g_fp32: "gs://bucket/r12_g_fp32.pth"\n')
+
+    fixtures = {
+        "teams_real_all_dev": [(0, 0.10), (0, 0.15), (0, 0.20)],
+        "teams_real_poor_quality_dev": [(0, 0.18), (0, 0.22)],
+        "teams_real_lighting_extreme_dev": [(0, 0.23), (0, 0.25)],
+        "teams_fake_all_dev": [(1, 0.55), (1, 0.60)],
+        "visomaster_enhanced_macro_dev": [(1, 0.58)],
+        "deeplive_enhanced_dev": [(1, 0.57)],
+        "teams_real_all_lockbox": [(0, 0.30), (0, 0.40)],
+        "teams_fake_all_lockbox": [(1, 0.52), (1, 0.60)],
+    }
+    for suite_name, rows in fixtures.items():
+        _write_report(report_root, suite_name, "R12_G_FP32", rows)
+
+    payload = promotion.score_promotion_contract(
+        report_root=str(report_root),
+        checkpoint_map_path=str(checkpoint_map_path),
+        checkpoints_arg="R12_G_FP32",
+        contract=promotion.ContractConfig(
+            dev_real_suite="teams_real_all_dev",
+            dev_real_stress_suites=("teams_real_poor_quality_dev", "teams_real_lighting_extreme_dev"),
+            dev_fake_suites=("teams_fake_all_dev", "visomaster_enhanced_macro_dev", "deeplive_enhanced_dev"),
+            lockbox_real_suite="teams_real_all_lockbox",
+            lockbox_fake_suite="teams_fake_all_lockbox",
+        ),
+    )
+
+    output_paths = promotion.write_promotion_contract_outputs(
+        str(tmp_path / "promotion_contract"),
+        payload,
+    )
+
+    summary_path = Path(output_paths["checkpoint_summary_csv"])
+    winner_path = Path(output_paths["promotion_winner_json"])
+    assert summary_path.exists()
+    assert winner_path.exists()
+
+    summary_rows = list(csv.DictReader(summary_path.open()))
+    assert len(summary_rows) == 1
+    assert summary_rows[0]["checkpoint_key"] == "R12_G_FP32"
+    assert summary_rows[0]["promotion_rank"] == "1"
+
+    winner_payload = json.loads(winner_path.read_text())
+    assert winner_payload["winner"]["checkpoint_key"] == "R12_G_FP32"
