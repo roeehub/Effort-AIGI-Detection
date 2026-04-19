@@ -7,7 +7,7 @@ the first proper experiment packet that will include incoming new data buckets.
 
 The goal is to make the next steps explicit:
 
-- finish the WT-B smoke through the normal launcher path
+- finish the WT-B two-smoke gate through the normal launcher path
 - define and integrate the new buckets
 - run the first real experiment family only after those gates are clean
 
@@ -24,26 +24,42 @@ The goal is to make the next steps explicit:
   - `R13_WTB1_weak_signal_no_hints.yaml`
   - `R13_WTB2_weak_signal_hints_only.yaml`
   - `R13_WTB3_weak_signal_hints_plus_teams_hints.yaml`
-- a dedicated launcher smoke config exists:
+- dedicated launcher smoke configs exist:
+  - `R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
   - `R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
 - discovery-cache wiring now exists for:
   - DeepLive
   - VisoMaster hints
   - Teams passthrough
+  - external VCD training reals
 
-## Smoke Path
+## Two-Smoke Path
 
-Smoke for this upgrade should use the normal launcher only:
+Smoke for this upgrade should use the normal launcher only, in this order:
 
 ```bash
+cd DeepfakeBench/training
+./launch_experiment.sh -y phase2r13-experiments asia-southeast1 \
+  experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml
+
 cd DeepfakeBench/training
 ./launch_experiment.sh -y phase2r13-experiments asia-southeast1 \
   experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml
 ```
 
-That smoke should be treated as an integration gate, not a quality result.
+The startup smoke is the fast loader/policy preflight. The 100-step smoke is the
+integration gate. Neither smoke is a quality result.
 
-Current smoke pass criteria:
+Current startup-smoke pass criteria:
+
+- nonzero `visomaster_hints_samples`
+- nonzero `visomaster_hints_teams_samples`
+- nonzero clean direct Teams samples after policy filtering
+- training reaches `max_train_steps: 2`
+- first validation runs
+- checkpoint write succeeds
+
+Current integration-smoke pass criteria:
 
 - nonzero `visomaster_hints_samples`
 - nonzero `visomaster_hints_teams_samples`
@@ -92,9 +108,10 @@ For each new loader or bucket extension:
 Operationally, proper experiments should wait for:
 
 1. the current committed tree to be built into the training image
-2. the WT-B smoke to pass remotely
-3. the new bucket loader to land with tests
-4. one follow-up smoke showing the new bucket actually loads nonzero samples
+2. the WT-B startup smoke to pass remotely
+3. the WT-B integration smoke to pass remotely
+4. the new bucket loader to land with tests
+5. one follow-up smoke showing the new bucket actually loads nonzero samples
 
 ## Readiness Summary
 
@@ -104,7 +121,8 @@ We are now close to launch-ready for WT-B itself, but not yet for the full
 Current state:
 
 - WT-B code and configs: ready
-- WT-B remote smoke: not yet run
+- WT-B remote startup smoke: not yet run
+- WT-B remote integration smoke: not yet run
 - new-bucket loader design: waiting on bucket structure
 - proper-experiment matrix: should be finalized only after the first remote
-  smoke and the first new-bucket integration are both clean
+  two-smoke gate and the first new-bucket integration are both clean

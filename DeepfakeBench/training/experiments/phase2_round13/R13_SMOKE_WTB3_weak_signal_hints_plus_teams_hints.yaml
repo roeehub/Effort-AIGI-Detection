@@ -3,7 +3,7 @@
 # Phase 2, Round 13 - WT-B smoke for the full explicit-hint path
 #
 # Purpose:
-#   Exercise the full WT-B runtime contract in the cheapest honest way:
+#   Exercise the full WT-B runtime contract in a short integration run:
 #   policy-aware Teams partitioning plus both explicit weak-signal hint lanes.
 #
 # Differences vs WTB3:
@@ -11,10 +11,12 @@
 #   - reduced DeepLive + external real caps
 #   - OOD monitoring disabled
 #   - dedicated smoke DeepLive cache path for faster reruns
+#   - smoke-only cache reuse for VisoMaster hints + Teams passthrough
+#   - external-real listing cache so the follow-up WT-B arms can reuse it
 # ============================================================================
 
 name: "R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints"
-description: "100-step smoke — WT-B full explicit-hint path with policy-aware Teams filtering"
+description: "100-step integration smoke — WT-B full explicit-hint path with policy-aware Teams filtering"
 seed: 737
 
 wandb:
@@ -149,7 +151,7 @@ combined_paired:
     frames_bucket: "live-deepfake-methods-real-and-fake-frames"
     cache_manifest_uri: "gs://training-job-outputs/cache/visomaster/r13_wtb_hints_discovery_2026-04-19.json"
     cache_max_age_hours: 12.0
-    cache_validate_listing: true
+    cache_validate_listing: false
     cache_revision: "2026-04-19-r13-wtb-hints-v1"
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
 
@@ -179,7 +181,7 @@ combined_paired:
     gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
     cache_manifest_uri: "gs://training-job-outputs/cache/teams/r13_wtb_teams_passthrough_discovery_2026-04-19.json"
     cache_max_age_hours: 12.0
-    cache_validate_listing: true
+    cache_validate_listing: false
     cache_revision: "2026-04-19-r13-wtb-teams-v1"
     require_pair_complete: true
     apply_bad_data_policy: true
@@ -196,6 +198,7 @@ combined_paired:
       prefix: "real/VCD"
       method: "external_vcd_real"
       grouping: "per_image"
+      cache_manifest_path: "gs://training-job-outputs/cache/external/r13_wtb_vcd_train_reals_frames_2026-04-19.json"
       identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
       identity_train_fraction: 0.40
       identity_split_seed: 737

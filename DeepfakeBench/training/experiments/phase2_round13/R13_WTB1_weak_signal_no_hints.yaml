@@ -190,6 +190,7 @@ combined_paired:
       prefix: "real/VCD"
       method: "external_vcd_real"
       grouping: "per_image"
+      cache_manifest_path: "gs://training-job-outputs/cache/external/r13_wtb_vcd_train_reals_frames_2026-04-19.json"
       identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
       identity_train_fraction: 0.40
       identity_split_seed: 737

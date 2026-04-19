@@ -1,25 +1,27 @@
 # ============================================================================
-# R13_WTB3_weak_signal_hints_plus_teams_hints
-# Phase 2, Round 13 - WT-B full explicit-hints arm
+# R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints
+# Phase 2, Round 13 - WT-B fast-start smoke for the full explicit-hint path
 #
 # Purpose:
-#   Same FT11-derived shape as WTB1/WTB2, but keep both explicit
-#   `visomaster_hints` and `visomaster_hints_teams` lanes. This isolates the
-#   incremental effect of the retained Teams-played hint rows.
+#   Get the fastest honest remote feedback on the new WT-B surfaces:
+#   policy-aware Teams partitioning plus both explicit weak-signal hint lanes.
 #
-# Notes:
-#   - Uses the tracked April 17 policy bundle under
-#     training/policy/visomaster_bad_data/.
+# Differences vs the 100-step integration smoke:
+#   - 2-step budget via max_train_steps for the first remote signal
+#   - no base-checkpoint restore; the integration smoke covers that
+#   - smaller DeepLive caps and no external-training-reals lane
+#   - OOD monitoring disabled
+#   - smoke-only cache reuse for VisoMaster hints + Teams passthrough
 # ============================================================================
 
-name: "R13_WTB3_weak_signal_hints_plus_teams_hints"
-description: "WT-B full hint-lane arm — add visomaster_hints plus visomaster_hints_teams on top of the no-hints control"
+name: "R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints"
+description: "2-step startup smoke — WT-B loader and policy preflight for the full explicit-hint path"
 seed: 737
 
 wandb:
-  tags: ["phase2-round13", "fine-tune", "vit-b-16", "wt-b", "weak-signal",
-         "hints-plus-teams-hints", "explicit-hint-lanes", "policy-aware-teams",
-         "r12g-fp32-base", "ft-scorecard-base", "seed-737", "compound-aug", "gamma-up"]
+  tags: ["phase2-round13", "fine-tune", "smoke-test", "startup-smoke", "vit-b-16", "wt-b",
+         "weak-signal", "hints-plus-teams-hints", "explicit-hint-lanes",
+         "policy-aware-teams", "seed-737", "compound-aug", "gamma-up"]
 
 data_source: combined_paired
 
@@ -40,19 +42,18 @@ lambda_reg: 0.01
 rank: 736
 gradient_clip_val: 1.0
 
-nEpochs: 15
-total_training_steps: 10000
+nEpochs: 1
+total_training_steps: 8
 lr_scheduler: "cosine_with_warmup"
-lr_scheduler_warmup_steps: 400
+lr_scheduler_warmup_steps: 1
 
 dataloader_strategy: combined_paired
 frames_per_batch: 32
 frames_per_video: 8
-num_workers: 8
-prefetch_factor: 4
+num_workers: 4
+prefetch_factor: 2
 
-load_base_checkpoint: true
-gcs_base_checkpoint: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"
+load_base_checkpoint: false
 
 label_smoothing: 0.0
 stability_lambda: 0.0
@@ -105,12 +106,13 @@ combined_paired:
   deeplive:
     enabled: true
     gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
-    cache_manifest_uri: "gs://training-job-outputs/cache/deeplive/r13_wtb_full_deeplive_discovery_2026-04-19.json"
+    cache_manifest_uri: "gs://training-job-outputs/cache/deeplive/r13_wtb_smoke_deeplive_discovery_2026-04-19.json"
     cache_max_age_hours: 12.0
-    cache_revision: "2026-04-19-r13-wtb-full-v1"
+    cache_revision: "2026-04-19-r13-wtb-smoke-v1"
     use_landmarks: false
     sampling_mode: "sparse"
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    max_samples_per_strategy: 48
     include_strategies:
       - "edge_cases"
       - "minimal_processing"
@@ -121,8 +123,8 @@ combined_paired:
     strategy_expectations:
       mode: "withenhanced"
       min_counts:
-        edge_cases_enhanced: 400
-        minimal_processing_enhanced: 390
+        edge_cases_enhanced: 16
+        minimal_processing_enhanced: 16
 
   visomaster:
     enabled: false
@@ -147,7 +149,7 @@ combined_paired:
     frames_bucket: "live-deepfake-methods-real-and-fake-frames"
     cache_manifest_uri: "gs://training-job-outputs/cache/visomaster/r13_wtb_hints_discovery_2026-04-19.json"
     cache_max_age_hours: 12.0
-    cache_validate_listing: true
+    cache_validate_listing: false
     cache_revision: "2026-04-19-r13-wtb-hints-v1"
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
 
@@ -177,7 +179,7 @@ combined_paired:
     gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
     cache_manifest_uri: "gs://training-job-outputs/cache/teams/r13_wtb_teams_passthrough_discovery_2026-04-19.json"
     cache_max_age_hours: 12.0
-    cache_validate_listing: true
+    cache_validate_listing: false
     cache_revision: "2026-04-19-r13-wtb-teams-v1"
     require_pair_complete: true
     apply_bad_data_policy: true
@@ -188,19 +190,6 @@ combined_paired:
     gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
     require_pair_complete: true
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
-
-  external_training_reals:
-    - bucket: "effort-collected-data"
-      prefix: "real/VCD"
-      method: "external_vcd_real"
-      grouping: "per_image"
-      cache_manifest_path: "gs://training-job-outputs/cache/external/r13_wtb_vcd_train_reals_frames_2026-04-19.json"
-      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
-      identity_train_fraction: 0.40
-      identity_split_seed: 737
-      max_frames_per_identity: 15
-      max_total_samples: 1200
-      deterministic: true
 
   sampling:
     strategy: "identity_resample_weighted"
@@ -214,7 +203,6 @@ combined_paired:
       deeplive_teams_real: 4.0
       df40_real: 0.4
       realpool_real: 2.5
-      external_real: 2.5
 
   train_split: 0.85
   val_split: 0.10
@@ -225,64 +213,23 @@ combined_paired:
     max_samples_per_method: 300
 
   ood_monitoring:
-    enabled: true
-    exclude_training_identities: true
-    external_real_sources:
-      - bucket: "effort-collected-data"
-        prefix: "real/external_youtube_avspeech"
-        method: "external_youtube_avspeech"
-        grouping: "by_folder"
-        max_videos: 200
-        deterministic: true
-      - bucket: "effort-collected-data"
-        prefix: "real/VCD"
-        method: "zoom_vcd_real"
-        grouping: "per_image"
-        max_videos: 300
-        deterministic: true
-      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
-        prefix: "samples"
-        method: "teams_ood_real"
-        grouping: "by_folder"
-        path_contains: "/frames/real/"
-        video_id_depth: -4
-        max_videos: 300
-        deterministic: true
-    external_fake_sources:
-      - bucket: "effort-collected-data"
-        prefix: "wma_validation/enhanced_fake"
-        method: "wma_failure_fake"
-        grouping: "per_image"
-        max_videos: 1202
-        deterministic: true
-      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
-        prefix: "samples"
-        method: "teams_ood_fake"
-        grouping: "by_folder"
-        path_contains: "/frames/fake/"
-        video_id_depth: -4
-        max_videos: 300
-        deterministic: true
-    expected_counts:
-      external_youtube_avspeech: 200
-      zoom_vcd_real: 300
-      wma_failure_fake: 1202
-    strict_expected_counts: false
+    enabled: false
 
 use_arcface_head: true
 arcface_m: 0.0
 arcface_s: 6.0
 s_start: 6.0
 s_end: 12.0
-anneal_steps: 15000
+anneal_steps: 8
 
-evaluate_every_steps: 500
-ood_monitoring_start_step: 5000
-ood_monitoring_every_steps: 1000
+evaluate_every_steps: 2
+ood_monitoring_enabled: false
+ood_monitoring_start_step: 2
+ood_monitoring_every_steps: 2
 test_batch_size: 32
 
 early_stopping_enabled: true
-early_stopping_patience: 10
+early_stopping_patience: 1
 
 gcs_assets:
   clip_backbone:
@@ -294,7 +241,8 @@ gcs_assets:
 
 checkpointing:
   gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
-  save_every_steps: 2000
-  keep_last_n: 3
-  ood_composite_enabled: true
-  ood_composite_top_n_size: 3
+  save_every_steps: 2
+  keep_last_n: 2
+  ood_composite_enabled: false
+
+max_train_steps: 2

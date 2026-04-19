@@ -5,14 +5,16 @@
 WT-B now has:
 
 - a runnable three-arm family
-- a dedicated smoke config for the highest-coverage hint path
-- shared discovery-cache wiring for DeepLive, VisoMaster hints, and Teams passthrough
+- a fast startup smoke for the first remote loader/policy signal
+- a dedicated integration smoke config for the highest-coverage hint path
+- shared discovery-cache wiring for DeepLive, VisoMaster hints, Teams passthrough, and external VCD reals
 
 Configs:
 
 - `DeepfakeBench/training/experiments/phase2_round13/R13_WTB1_weak_signal_no_hints.yaml`
 - `DeepfakeBench/training/experiments/phase2_round13/R13_WTB2_weak_signal_hints_only.yaml`
 - `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_weak_signal_hints_plus_teams_hints.yaml`
+- `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
 - `DeepfakeBench/training/experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
 
 ## Family Shape
@@ -53,11 +55,11 @@ The policy report and upload audit live alongside that bundle in the same
 tracked directory. `viewer/visomaster_policy.py` prefers this tracked location
 before falling back to legacy local copies.
 
-## Smoke Gate
+## Two-Smoke Gate
 
-Use the smoke config first:
+Run the startup smoke first:
 
-- `DeepfakeBench/training/experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
+- `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
 
 `WTB3` is the right smoke target because it exercises the full WT-B runtime
 surface in one launch:
@@ -72,6 +74,30 @@ Smoke for this path should go through the standard launcher, not a local
 ```bash
 cd DeepfakeBench/training
 ./launch_experiment.sh -y phase2r13-experiments asia-southeast1 \
+  experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml
+```
+
+Startup-smoke intent:
+
+- fastest remote feedback on `visomaster_hints`, `visomaster_hints_teams`, and `teams.apply_bad_data_policy`
+- shared cache priming for VisoMaster hints and Teams passthrough
+- one short training/validation cycle with checkpoint save
+- no base-checkpoint restore and no external-training-reals lane
+
+Startup-smoke pass criteria:
+
+- nonzero `visomaster_hints_samples` in logs
+- nonzero `visomaster_hints_teams_samples` in logs
+- nonzero clean direct Teams samples after policy filtering
+- training reaches `max_train_steps: 2`
+- first validation runs
+- checkpoint write succeeds under `gs://training-job-outputs/phase2r13_experiments/`
+
+Then run the integration smoke:
+
+```bash
+cd DeepfakeBench/training
+./launch_experiment.sh -y phase2r13-experiments asia-southeast1 \
   experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml
 ```
 
@@ -79,7 +105,14 @@ Launch only after rebuilding or otherwise publishing an image that contains
 this committed WT-B runtime package and the new YAMLs. The remote job uses the
 published image; it does not sync the current working tree.
 
-Smoke pass criteria:
+Integration-smoke intent:
+
+- confirm the published image can restore the FT base checkpoint
+- reuse the startup smoke caches without relisting VisoMaster hints or Teams manifests
+- prime the shared external-real listing cache for the follow-up WT-B arms
+- run the honest 100-step WT-B preflight before the real family
+
+Integration-smoke pass criteria:
 
 - nonzero `visomaster_hints_samples` in logs
 - nonzero `visomaster_hints_teams_samples` in logs
@@ -104,8 +137,9 @@ Current proof boundary:
 ## Launch Sequence
 
 1. Build and publish the training image from the current committed tree, or use another launch path that definitely includes current local code.
-2. Run the smoke config above via `./launch_experiment.sh`.
-3. If the smoke passes, launch the real family:
+2. Run the startup smoke via `./launch_experiment.sh`.
+3. If the startup smoke passes, run the 100-step integration smoke.
+4. If the integration smoke passes, launch the real family:
 
 ```bash
 cd DeepfakeBench/training
@@ -121,5 +155,6 @@ cd DeepfakeBench/training
   experiments/phase2_round13/R13_WTB3_weak_signal_hints_plus_teams_hints.yaml
 ```
 
-The shared discovery-cache paths are intended to let the smoke prime the Teams
-and hint discovery state before the real launches.
+The shared discovery-cache paths are intended to let the two smoke launches
+prime the Teams, hint, and external-real discovery state before the real
+launches.
