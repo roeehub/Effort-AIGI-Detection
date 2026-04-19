@@ -1,0 +1,694 @@
+{
+  "schema_name": "visomaster_proper_bucket_census_v1",
+  "generated_at": "2026-04-19T14:34:52.819781+00:00",
+  "candidate_keys": [
+    "real_id",
+    "target_video_name",
+    "clip_stem",
+    "sample_id"
+  ],
+  "sources": [
+    {
+      "source_root": "gs://hdtf_visomaster_cropped_frames_teams",
+      "source_label": "hdtf_visomaster_cropped_frames_teams",
+      "manifest_count": 835,
+      "sample_count": 835,
+      "load_error_count": 0,
+      "load_errors": [],
+      "examples": [
+        {
+          "sample_id": "HDTF20260416_00000",
+          "real_id": "RD_Radio14_000__rank01__clip01__s0022.00__d12.0__9bb1330e2164",
+          "dataset_key": "hdtf_20260416",
+          "swap_model": "CSCS",
+          "enhancer": "None",
+          "target_video_name": "RD_Radio14_000__rank01__clip01__s0022.00__d12.0"
+        },
+        {
+          "sample_id": "HDTF20260416_00001",
+          "real_id": "RD_Radio27_000__rank01__clip01__s0000.00__d10.0__5305a9fd9f77",
+          "dataset_key": "hdtf_20260416",
+          "swap_model": "CSCS",
+          "enhancer": "None",
+          "target_video_name": "RD_Radio27_000__rank01__clip01__s0000.00__d10.0"
+        },
+        {
+          "sample_id": "HDTF20260416_00002",
+          "real_id": "RD_Radio33_000__rank01__clip01__s0006.00__d10.0__3cd43a496808",
+          "dataset_key": "hdtf_20260416",
+          "swap_model": "CSCS",
+          "enhancer": "None",
+          "target_video_name": "RD_Radio33_000__rank01__clip01__s0006.00__d10.0"
+        }
+      ],
+      "counts": {
+        "dataset_keys": {
+          "hdtf_20260416": 835
+        },
+        "strategies": {
+          "hdtf_20260416": 835
+        },
+        "task_strategies": {
+          "visomaster_hdtf_20260416": 835
+        },
+        "swap_models": {
+          "CSCS": 85,
+          "GhostFace-v1": 51,
+          "GhostFace-v2": 10,
+          "GhostFace-v3": 15,
+          "InStyleSwapper256-A": 87,
+          "InStyleSwapper256-B": 147,
+          "InStyleSwapper256-C": 147,
+          "Inswapper128": 146,
+          "SimSwap512": 147
+        },
+        "enhancers": {
+          "CodeFormer": 72,
+          "GFPGAN-v1.4": 91,
+          "GPEN-1024": 88,
+          "GPEN-2048": 75,
+          "GPEN-256": 92,
+          "GPEN-512": 84,
+          "None": 251,
+          "RestoreFormer++": 82
+        },
+        "combo_keys": {
+          "CSCS|CodeFormer": 10,
+          "CSCS|GFPGAN-v1.4": 15,
+          "CSCS|GPEN-1024": 9,
+          "CSCS|GPEN-256": 12,
+          "CSCS|GPEN-512": 10,
+          "CSCS|None": 29,
+          "GhostFace-v1|GFPGAN-v1.4": 12,
+          "GhostFace-v1|GPEN-256": 2,
+          "GhostFace-v1|GPEN-512": 1,
+          "GhostFace-v1|None": 36,
+          "GhostFace-v2|GPEN-1024": 1,
+          "GhostFace-v2|GPEN-256": 3,
+          "GhostFace-v2|None": 1,
+          "GhostFace-v2|RestoreFormer++": 5,
+          "GhostFace-v3|GFPGAN-v1.4": 1,
+          "GhostFace-v3|GPEN-1024": 4,
+          "GhostFace-v3|GPEN-2048": 1,
+          "GhostFace-v3|GPEN-256": 2,
+          "GhostFace-v3|None": 3,
+          "GhostFace-v3|RestoreFormer++": 4,
+          "InStyleSwapper256-A|CodeFormer": 4,
+          "InStyleSwapper256-A|GFPGAN-v1.4": 5,
+          "InStyleSwapper256-A|GPEN-1024": 15,
+          "InStyleSwapper256-A|GPEN-2048": 15,
+          "InStyleSwapper256-A|GPEN-256": 15,
+          "InStyleSwapper256-A|GPEN-512": 14,
+          "InStyleSwapper256-A|None": 4,
+          "InStyleSwapper256-A|RestoreFormer++": 15,
+          "InStyleSwapper256-B|CodeFormer": 14,
+          "InStyleSwapper256-B|GFPGAN-v1.4": 14,
+          "InStyleSwapper256-B|GPEN-1024": 15,
+          "InStyleSwapper256-B|GPEN-2048": 15,
+          "InStyleSwapper256-B|GPEN-256": 14,
+          "InStyleSwapper256-B|GPEN-512": 15,
+          "InStyleSwapper256-B|None": 45,
+          "InStyleSwapper256-B|RestoreFormer++": 15,
+          "InStyleSwapper256-C|CodeFormer": 15,
+          "InStyleSwapper256-C|GFPGAN-v1.4": 15,
+          "InStyleSwapper256-C|GPEN-1024": 15,
+          "InStyleSwapper256-C|GPEN-2048": 14,
+          "InStyleSwapper256-C|GPEN-256": 15,
+          "InStyleSwapper256-C|GPEN-512": 15,
+          "InStyleSwapper256-C|None": 44,
+          "InStyleSwapper256-C|RestoreFormer++": 14,
+          "Inswapper128|CodeFormer": 15,
+          "Inswapper128|GFPGAN-v1.4": 15,
+          "Inswapper128|GPEN-1024": 14,
+          "Inswapper128|GPEN-2048": 15,
+          "Inswapper128|GPEN-256": 14,
+          "Inswapper128|GPEN-512": 14,
+          "Inswapper128|None": 45,
+          "Inswapper128|RestoreFormer++": 14,
+          "SimSwap512|CodeFormer": 14,
+          "SimSwap512|GFPGAN-v1.4": 14,
+          "SimSwap512|GPEN-1024": 15,
+          "SimSwap512|GPEN-2048": 15,
+          "SimSwap512|GPEN-256": 15,
+          "SimSwap512|GPEN-512": 15,
+          "SimSwap512|None": 44,
+          "SimSwap512|RestoreFormer++": 15
+        },
+        "sample_prefixes": {
+          "HDTF20260416": 835
+        },
+        "real_frame_extensions": {
+          ".png": 835
+        },
+        "fake_frame_extensions": {
+          ".png": 835
+        },
+        "real_frame_counts": {
+          "1": 2,
+          "10": 8,
+          "11": 8,
+          "12": 7,
+          "13": 8,
+          "14": 8,
+          "15": 12,
+          "16": 767,
+          "2": 1,
+          "3": 2,
+          "5": 1,
+          "6": 3,
+          "7": 1,
+          "8": 2,
+          "9": 5
+        },
+        "fake_frame_counts": {
+          "10": 7,
+          "11": 4,
+          "12": 6,
+          "13": 9,
+          "14": 7,
+          "15": 14,
+          "16": 760,
+          "4": 1,
+          "5": 4,
+          "6": 7,
+          "7": 6,
+          "8": 2,
+          "9": 8
+        }
+      },
+      "frame_layout": {
+        "real_fake_count_equal": 739,
+        "real_fake_count_mismatch": 96,
+        "expected_total_matches_both": 735,
+        "expected_total_mismatch": 100
+      },
+      "missing_field_counts": {},
+      "join_key_candidates": {
+        "real_id": {
+          "present_count": 835,
+          "missing_count": 0,
+          "unique_key_count": 612,
+          "duplicate_key_count": 215,
+          "max_samples_per_key": 4,
+          "stable_one_to_one": false,
+          "duplicate_examples": [
+            {
+              "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0__a33476a90229",
+              "count": 4,
+              "sample_ids": [
+                "HDTF20260416_00742",
+                "HDTF20260416_00889",
+                "HDTF20260416_01034",
+                "HDTF20260416_01181"
+              ]
+            },
+            {
+              "key": "WRA_GeoffDavis_000__rank01__clip01__s0000.00__d10.0__a88553dafce2",
+              "count": 4,
+              "sample_ids": [
+                "HDTF20260416_00478",
+                "HDTF20260416_00692",
+                "HDTF20260416_00852",
+                "HDTF20260416_01015"
+              ]
+            },
+            {
+              "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0__2ab038555c0c",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00078",
+                "HDTF20260416_01042",
+                "HDTF20260416_01272"
+              ]
+            },
+            {
+              "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0__4ac87e3a6d5b",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00066",
+                "HDTF20260416_00849",
+                "HDTF20260416_01318"
+              ]
+            },
+            {
+              "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0__18e5170ee4bf",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00081",
+                "HDTF20260416_01053",
+                "HDTF20260416_01275"
+              ]
+            }
+          ],
+          "missing_sample_ids": []
+        },
+        "target_video_name": {
+          "present_count": 835,
+          "missing_count": 0,
+          "unique_key_count": 612,
+          "duplicate_key_count": 215,
+          "max_samples_per_key": 4,
+          "stable_one_to_one": false,
+          "duplicate_examples": [
+            {
+              "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0",
+              "count": 4,
+              "sample_ids": [
+                "HDTF20260416_00742",
+                "HDTF20260416_00889",
+                "HDTF20260416_01034",
+                "HDTF20260416_01181"
+              ]
+            },
+            {
+              "key": "WRA_GeoffDavis_000__rank01__clip01__s0000.00__d10.0",
+              "count": 4,
+              "sample_ids": [
+                "HDTF20260416_00478",
+                "HDTF20260416_00692",
+                "HDTF20260416_00852",
+                "HDTF20260416_01015"
+              ]
+            },
+            {
+              "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00078",
+                "HDTF20260416_01042",
+                "HDTF20260416_01272"
+              ]
+            },
+            {
+              "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00066",
+                "HDTF20260416_00849",
+                "HDTF20260416_01318"
+              ]
+            },
+            {
+              "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00081",
+                "HDTF20260416_01053",
+                "HDTF20260416_01275"
+              ]
+            }
+          ],
+          "missing_sample_ids": []
+        },
+        "clip_stem": {
+          "present_count": 835,
+          "missing_count": 0,
+          "unique_key_count": 612,
+          "duplicate_key_count": 215,
+          "max_samples_per_key": 4,
+          "stable_one_to_one": false,
+          "duplicate_examples": [
+            {
+              "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0",
+              "count": 4,
+              "sample_ids": [
+                "HDTF20260416_00742",
+                "HDTF20260416_00889",
+                "HDTF20260416_01034",
+                "HDTF20260416_01181"
+              ]
+            },
+            {
+              "key": "WRA_GeoffDavis_000__rank01__clip01__s0000.00__d10.0",
+              "count": 4,
+              "sample_ids": [
+                "HDTF20260416_00478",
+                "HDTF20260416_00692",
+                "HDTF20260416_00852",
+                "HDTF20260416_01015"
+              ]
+            },
+            {
+              "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00078",
+                "HDTF20260416_01042",
+                "HDTF20260416_01272"
+              ]
+            },
+            {
+              "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00066",
+                "HDTF20260416_00849",
+                "HDTF20260416_01318"
+              ]
+            },
+            {
+              "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0",
+              "count": 3,
+              "sample_ids": [
+                "HDTF20260416_00081",
+                "HDTF20260416_01053",
+                "HDTF20260416_01275"
+              ]
+            }
+          ],
+          "missing_sample_ids": []
+        },
+        "sample_id": {
+          "present_count": 835,
+          "missing_count": 0,
+          "unique_key_count": 835,
+          "duplicate_key_count": 0,
+          "max_samples_per_key": 1,
+          "stable_one_to_one": true,
+          "duplicate_examples": [],
+          "missing_sample_ids": []
+        }
+      }
+    },
+    {
+      "source_root": "gs://quickclips_visomaster_cropped_frames_teams",
+      "source_label": "quickclips_visomaster_cropped_frames_teams",
+      "manifest_count": 520,
+      "sample_count": 520,
+      "load_error_count": 0,
+      "load_errors": [],
+      "examples": [
+        {
+          "sample_id": "QCLIP20260417R2_00000",
+          "real_id": "322__-jlI8ntZrEY__rank01__s0210.98__d06.0__77e5c51a73b1",
+          "dataset_key": "quickclips_20260417_20260418_combined",
+          "swap_model": "GhostFace-v1",
+          "enhancer": "GFPGAN-v1.4",
+          "target_video_name": "322__-jlI8ntZrEY__rank01__s0210.98__d06.0"
+        },
+        {
+          "sample_id": "QCLIP20260417R2_00001",
+          "real_id": "3265__ScWbRwd5UB4__rank01__s0128.90__d06.0__fd66807b5a55",
+          "dataset_key": "quickclips_20260417_20260418_combined",
+          "swap_model": "GhostFace-v1",
+          "enhancer": "GFPGAN-v1.4",
+          "target_video_name": "3265__ScWbRwd5UB4__rank01__s0128.90__d06.0"
+        },
+        {
+          "sample_id": "QCLIP20260417R2_00002",
+          "real_id": "3741__5h9r-XK9_j0__rank01__s0513.25__d06.0__0b320c7cdcaa",
+          "dataset_key": "quickclips_20260417_20260418_combined",
+          "swap_model": "GhostFace-v1",
+          "enhancer": "GFPGAN-v1.4",
+          "target_video_name": "3741__5h9r-XK9_j0__rank01__s0513.25__d06.0"
+        }
+      ],
+      "counts": {
+        "dataset_keys": {
+          "quickclips_20260417_20260418_combined": 520
+        },
+        "strategies": {
+          "quickclips_20260417_20260418_combined": 520
+        },
+        "task_strategies": {
+          "visomaster_quickclips_20260417_restored_no_cscs_2perid": 520
+        },
+        "swap_models": {
+          "GhostFace-v1": 65,
+          "GhostFace-v2": 65,
+          "GhostFace-v3": 66,
+          "InStyleSwapper256-A": 66,
+          "InStyleSwapper256-B": 65,
+          "InStyleSwapper256-C": 65,
+          "Inswapper128": 63,
+          "SimSwap512": 65
+        },
+        "enhancers": {
+          "CodeFormer": 75,
+          "GFPGAN-v1.4": 74,
+          "GPEN-1024": 75,
+          "GPEN-2048": 75,
+          "GPEN-256": 75,
+          "GPEN-512": 75,
+          "RestoreFormer++": 71
+        },
+        "combo_keys": {
+          "GhostFace-v1|CodeFormer": 10,
+          "GhostFace-v1|GFPGAN-v1.4": 10,
+          "GhostFace-v1|GPEN-1024": 9,
+          "GhostFace-v1|GPEN-2048": 9,
+          "GhostFace-v1|GPEN-256": 10,
+          "GhostFace-v1|GPEN-512": 9,
+          "GhostFace-v1|RestoreFormer++": 8,
+          "GhostFace-v2|CodeFormer": 9,
+          "GhostFace-v2|GFPGAN-v1.4": 8,
+          "GhostFace-v2|GPEN-1024": 10,
+          "GhostFace-v2|GPEN-2048": 10,
+          "GhostFace-v2|GPEN-256": 9,
+          "GhostFace-v2|GPEN-512": 10,
+          "GhostFace-v2|RestoreFormer++": 9,
+          "GhostFace-v3|CodeFormer": 10,
+          "GhostFace-v3|GFPGAN-v1.4": 10,
+          "GhostFace-v3|GPEN-1024": 9,
+          "GhostFace-v3|GPEN-2048": 9,
+          "GhostFace-v3|GPEN-256": 10,
+          "GhostFace-v3|GPEN-512": 9,
+          "GhostFace-v3|RestoreFormer++": 9,
+          "InStyleSwapper256-A|CodeFormer": 9,
+          "InStyleSwapper256-A|GFPGAN-v1.4": 9,
+          "InStyleSwapper256-A|GPEN-1024": 10,
+          "InStyleSwapper256-A|GPEN-2048": 10,
+          "InStyleSwapper256-A|GPEN-256": 9,
+          "InStyleSwapper256-A|GPEN-512": 10,
+          "InStyleSwapper256-A|RestoreFormer++": 9,
+          "InStyleSwapper256-B|CodeFormer": 9,
+          "InStyleSwapper256-B|GFPGAN-v1.4": 10,
+          "InStyleSwapper256-B|GPEN-1024": 9,
+          "InStyleSwapper256-B|GPEN-2048": 9,
+          "InStyleSwapper256-B|GPEN-256": 9,
+          "InStyleSwapper256-B|GPEN-512": 9,
+          "InStyleSwapper256-B|RestoreFormer++": 10,
+          "InStyleSwapper256-C|CodeFormer": 10,
+          "InStyleSwapper256-C|GFPGAN-v1.4": 9,
+          "InStyleSwapper256-C|GPEN-1024": 9,
+          "InStyleSwapper256-C|GPEN-2048": 9,
+          "InStyleSwapper256-C|GPEN-256": 10,
+          "InStyleSwapper256-C|GPEN-512": 9,
+          "InStyleSwapper256-C|RestoreFormer++": 9,
+          "Inswapper128|CodeFormer": 9,
+          "Inswapper128|GFPGAN-v1.4": 9,
+          "Inswapper128|GPEN-1024": 10,
+          "Inswapper128|GPEN-2048": 9,
+          "Inswapper128|GPEN-256": 9,
+          "Inswapper128|GPEN-512": 10,
+          "Inswapper128|RestoreFormer++": 7,
+          "SimSwap512|CodeFormer": 9,
+          "SimSwap512|GFPGAN-v1.4": 9,
+          "SimSwap512|GPEN-1024": 9,
+          "SimSwap512|GPEN-2048": 10,
+          "SimSwap512|GPEN-256": 9,
+          "SimSwap512|GPEN-512": 9,
+          "SimSwap512|RestoreFormer++": 10
+        },
+        "sample_prefixes": {
+          "QCLIP20260417R2": 520
+        },
+        "real_frame_extensions": {
+          ".png": 520
+        },
+        "fake_frame_extensions": {
+          ".png": 520
+        },
+        "real_frame_counts": {
+          "10": 1,
+          "12": 2,
+          "15": 1,
+          "16": 516
+        },
+        "fake_frame_counts": {
+          "10": 1,
+          "11": 1,
+          "12": 1,
+          "13": 2,
+          "14": 1,
+          "16": 511,
+          "6": 1,
+          "7": 1,
+          "9": 1
+        }
+      },
+      "frame_layout": {
+        "real_fake_count_equal": 507,
+        "real_fake_count_mismatch": 13,
+        "expected_total_matches_both": 507,
+        "expected_total_mismatch": 13
+      },
+      "missing_field_counts": {},
+      "join_key_candidates": {
+        "real_id": {
+          "present_count": 520,
+          "missing_count": 0,
+          "unique_key_count": 261,
+          "duplicate_key_count": 259,
+          "max_samples_per_key": 2,
+          "stable_one_to_one": false,
+          "duplicate_examples": [
+            {
+              "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0__e1fc60a1f588",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00162",
+                "QCLIP20260417R2_00235"
+              ]
+            },
+            {
+              "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0__9c2dab7dad3f",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00412",
+                "QCLIP20260417R2_00486"
+              ]
+            },
+            {
+              "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0__aa137a70a1bc",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00010",
+                "QCLIP20260417R2_00084"
+              ]
+            },
+            {
+              "key": "1078__KzvK_4-lOII__rank01__s0156.83__d05.0__0fb5a3c95383",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00020",
+                "QCLIP20260417R2_00093"
+              ]
+            },
+            {
+              "key": "1164__YCljpH4PH-s__rank01__s0636.54__d05.0__2fe6bf95bee0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00301",
+                "QCLIP20260417R2_00376"
+              ]
+            }
+          ],
+          "missing_sample_ids": []
+        },
+        "target_video_name": {
+          "present_count": 520,
+          "missing_count": 0,
+          "unique_key_count": 261,
+          "duplicate_key_count": 259,
+          "max_samples_per_key": 2,
+          "stable_one_to_one": false,
+          "duplicate_examples": [
+            {
+              "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00162",
+                "QCLIP20260417R2_00235"
+              ]
+            },
+            {
+              "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00412",
+                "QCLIP20260417R2_00486"
+              ]
+            },
+            {
+              "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00010",
+                "QCLIP20260417R2_00084"
+              ]
+            },
+            {
+              "key": "1078__KzvK_4-lOII__rank01__s0156.83__d05.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00020",
+                "QCLIP20260417R2_00093"
+              ]
+            },
+            {
+              "key": "1164__YCljpH4PH-s__rank01__s0636.54__d05.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00301",
+                "QCLIP20260417R2_00376"
+              ]
+            }
+          ],
+          "missing_sample_ids": []
+        },
+        "clip_stem": {
+          "present_count": 520,
+          "missing_count": 0,
+          "unique_key_count": 261,
+          "duplicate_key_count": 259,
+          "max_samples_per_key": 2,
+          "stable_one_to_one": false,
+          "duplicate_examples": [
+            {
+              "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00162",
+                "QCLIP20260417R2_00235"
+              ]
+            },
+            {
+              "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00412",
+                "QCLIP20260417R2_00486"
+              ]
+            },
+            {
+              "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00010",
+                "QCLIP20260417R2_00084"
+              ]
+            },
+            {
+              "key": "1078__KzvK_4-lOII__rank01__s0156.83__d05.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00020",
+                "QCLIP20260417R2_00093"
+              ]
+            },
+            {
+              "key": "1164__YCljpH4PH-s__rank01__s0636.54__d05.0",
+              "count": 2,
+              "sample_ids": [
+                "QCLIP20260417R2_00301",
+                "QCLIP20260417R2_00376"
+              ]
+            }
+          ],
+          "missing_sample_ids": []
+        },
+        "sample_id": {
+          "present_count": 520,
+          "missing_count": 0,
+          "unique_key_count": 520,
+          "duplicate_key_count": 0,
+          "max_samples_per_key": 1,
+          "stable_one_to_one": true,
+          "duplicate_examples": [],
+          "missing_sample_ids": []
+        }
+      }
+    }
+  ]
+}

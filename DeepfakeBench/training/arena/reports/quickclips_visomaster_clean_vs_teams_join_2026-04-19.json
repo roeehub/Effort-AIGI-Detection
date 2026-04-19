@@ -1,0 +1,431 @@
+{
+  "schema_name": "visomaster_proper_bucket_join_validation_v1",
+  "generated_at": "2026-04-19T14:34:52.700403+00:00",
+  "candidate_keys": [
+    "real_id",
+    "target_video_name",
+    "clip_stem",
+    "sample_id"
+  ],
+  "left_source": {
+    "source_root": "gs://quickclips_visomaster_cropped_frames",
+    "source_label": "quickclips_visomaster_cropped_frames",
+    "manifest_count": 767,
+    "sample_count": 767,
+    "load_error_count": 0,
+    "load_errors": []
+  },
+  "right_source": {
+    "source_root": "gs://quickclips_visomaster_cropped_frames_teams",
+    "source_label": "quickclips_visomaster_cropped_frames_teams",
+    "manifest_count": 520,
+    "sample_count": 520,
+    "load_error_count": 0,
+    "load_errors": []
+  },
+  "candidate_reports": [
+    {
+      "candidate": "real_id",
+      "left_present_count": 767,
+      "right_present_count": 520,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 386,
+      "right_unique_key_count": 261,
+      "left_duplicate_key_count": 381,
+      "right_duplicate_key_count": 259,
+      "left_stable_one_to_one": false,
+      "right_stable_one_to_one": false,
+      "overlap_key_count": 261,
+      "one_to_one_overlap_key_count": 1,
+      "ambiguous_overlap_key_count": 260,
+      "left_only_key_count": 125,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 0.0038314176245210726,
+      "sample_overlap_keys": [
+        "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0__e1fc60a1f588",
+        "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0__9c2dab7dad3f",
+        "1066__AotWF44XdTw__rank01__s0537.95__d06.0__aa137a70a1bc",
+        "1078__KzvK_4-lOII__rank01__s0156.83__d05.0__0fb5a3c95383",
+        "1164__YCljpH4PH-s__rank01__s0636.54__d05.0__2fe6bf95bee0"
+      ],
+      "sample_left_only_keys": [
+        "0Hn3GMnjzAM__rank01__s0754.50__d06.0__e430e8fb79a9",
+        "1075__RQVuY56AqiI__rank01__s0264.50__d06.0__d6e700ab5f52",
+        "139JznBeH-8__rank01__s0323.90__d06.0__3ccbeb104325",
+        "1Ixt43Mkg-o__rank01__s0026.83__d05.0__ff38c4d3ec08",
+        "2c1gN-g3YDo__rank01__s0290.43__d06.0__b9a4f2f00c65"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [
+        {
+          "key": "0Hn3GMnjzAM__rank01__s0754.50__d06.0__e430e8fb79a9",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260418R2X_00208",
+            "QCLIP20260418R2X_00242"
+          ]
+        },
+        {
+          "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0__e1fc60a1f588",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00162",
+            "QCLIP20260417R2_00235"
+          ]
+        },
+        {
+          "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0__9c2dab7dad3f",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00412",
+            "QCLIP20260417R2_00486"
+          ]
+        },
+        {
+          "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0__aa137a70a1bc",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00010",
+            "QCLIP20260417R2_00084"
+          ]
+        },
+        {
+          "key": "1075__RQVuY56AqiI__rank01__s0264.50__d06.0__d6e700ab5f52",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00057",
+            "QCLIP20260417R2_00066"
+          ]
+        }
+      ],
+      "right_duplicate_examples": [
+        {
+          "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0__e1fc60a1f588",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00162",
+            "QCLIP20260417R2_00235"
+          ]
+        },
+        {
+          "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0__9c2dab7dad3f",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00412",
+            "QCLIP20260417R2_00486"
+          ]
+        },
+        {
+          "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0__aa137a70a1bc",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00010",
+            "QCLIP20260417R2_00084"
+          ]
+        },
+        {
+          "key": "1078__KzvK_4-lOII__rank01__s0156.83__d05.0__0fb5a3c95383",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00020",
+            "QCLIP20260417R2_00093"
+          ]
+        },
+        {
+          "key": "1164__YCljpH4PH-s__rank01__s0636.54__d05.0__2fe6bf95bee0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00301",
+            "QCLIP20260417R2_00376"
+          ]
+        }
+      ],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    },
+    {
+      "candidate": "target_video_name",
+      "left_present_count": 767,
+      "right_present_count": 520,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 386,
+      "right_unique_key_count": 261,
+      "left_duplicate_key_count": 381,
+      "right_duplicate_key_count": 259,
+      "left_stable_one_to_one": false,
+      "right_stable_one_to_one": false,
+      "overlap_key_count": 261,
+      "one_to_one_overlap_key_count": 1,
+      "ambiguous_overlap_key_count": 260,
+      "left_only_key_count": 125,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 0.0038314176245210726,
+      "sample_overlap_keys": [
+        "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+        "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+        "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+        "1078__KzvK_4-lOII__rank01__s0156.83__d05.0",
+        "1164__YCljpH4PH-s__rank01__s0636.54__d05.0"
+      ],
+      "sample_left_only_keys": [
+        "-QR1vtnCEUY__rank01__s0003.68__d05.0",
+        "0Hn3GMnjzAM__rank01__s0754.50__d06.0",
+        "1075__RQVuY56AqiI__rank01__s0264.50__d06.0",
+        "139JznBeH-8__rank01__s0323.90__d06.0",
+        "1Ixt43Mkg-o__rank01__s0026.83__d05.0"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [
+        {
+          "key": "-QR1vtnCEUY__rank01__s0003.68__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260418R2X_00030",
+            "QCLIP20260418R2X_00034"
+          ]
+        },
+        {
+          "key": "0Hn3GMnjzAM__rank01__s0754.50__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260418R2X_00208",
+            "QCLIP20260418R2X_00242"
+          ]
+        },
+        {
+          "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00162",
+            "QCLIP20260417R2_00235"
+          ]
+        },
+        {
+          "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00412",
+            "QCLIP20260417R2_00486"
+          ]
+        },
+        {
+          "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00010",
+            "QCLIP20260417R2_00084"
+          ]
+        }
+      ],
+      "right_duplicate_examples": [
+        {
+          "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00162",
+            "QCLIP20260417R2_00235"
+          ]
+        },
+        {
+          "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00412",
+            "QCLIP20260417R2_00486"
+          ]
+        },
+        {
+          "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00010",
+            "QCLIP20260417R2_00084"
+          ]
+        },
+        {
+          "key": "1078__KzvK_4-lOII__rank01__s0156.83__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00020",
+            "QCLIP20260417R2_00093"
+          ]
+        },
+        {
+          "key": "1164__YCljpH4PH-s__rank01__s0636.54__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00301",
+            "QCLIP20260417R2_00376"
+          ]
+        }
+      ],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    },
+    {
+      "candidate": "clip_stem",
+      "left_present_count": 767,
+      "right_present_count": 520,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 386,
+      "right_unique_key_count": 261,
+      "left_duplicate_key_count": 381,
+      "right_duplicate_key_count": 259,
+      "left_stable_one_to_one": false,
+      "right_stable_one_to_one": false,
+      "overlap_key_count": 261,
+      "one_to_one_overlap_key_count": 1,
+      "ambiguous_overlap_key_count": 260,
+      "left_only_key_count": 125,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 0.0038314176245210726,
+      "sample_overlap_keys": [
+        "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+        "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+        "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+        "1078__KzvK_4-lOII__rank01__s0156.83__d05.0",
+        "1164__YCljpH4PH-s__rank01__s0636.54__d05.0"
+      ],
+      "sample_left_only_keys": [
+        "-QR1vtnCEUY__rank01__s0003.68__d05.0",
+        "0Hn3GMnjzAM__rank01__s0754.50__d06.0",
+        "1075__RQVuY56AqiI__rank01__s0264.50__d06.0",
+        "139JznBeH-8__rank01__s0323.90__d06.0",
+        "1Ixt43Mkg-o__rank01__s0026.83__d05.0"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [
+        {
+          "key": "-QR1vtnCEUY__rank01__s0003.68__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260418R2X_00030",
+            "QCLIP20260418R2X_00034"
+          ]
+        },
+        {
+          "key": "0Hn3GMnjzAM__rank01__s0754.50__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260418R2X_00208",
+            "QCLIP20260418R2X_00242"
+          ]
+        },
+        {
+          "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00162",
+            "QCLIP20260417R2_00235"
+          ]
+        },
+        {
+          "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00412",
+            "QCLIP20260417R2_00486"
+          ]
+        },
+        {
+          "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00010",
+            "QCLIP20260417R2_00084"
+          ]
+        }
+      ],
+      "right_duplicate_examples": [
+        {
+          "key": "1057__cLZ_2fxJRF8__rank01__s0418.80__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00162",
+            "QCLIP20260417R2_00235"
+          ]
+        },
+        {
+          "key": "1064__Cj4gpms0t5o__rank01__s0006.00__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00412",
+            "QCLIP20260417R2_00486"
+          ]
+        },
+        {
+          "key": "1066__AotWF44XdTw__rank01__s0537.95__d06.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00010",
+            "QCLIP20260417R2_00084"
+          ]
+        },
+        {
+          "key": "1078__KzvK_4-lOII__rank01__s0156.83__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00020",
+            "QCLIP20260417R2_00093"
+          ]
+        },
+        {
+          "key": "1164__YCljpH4PH-s__rank01__s0636.54__d05.0",
+          "count": 2,
+          "sample_ids": [
+            "QCLIP20260417R2_00301",
+            "QCLIP20260417R2_00376"
+          ]
+        }
+      ],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    },
+    {
+      "candidate": "sample_id",
+      "left_present_count": 767,
+      "right_present_count": 520,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 767,
+      "right_unique_key_count": 520,
+      "left_duplicate_key_count": 0,
+      "right_duplicate_key_count": 0,
+      "left_stable_one_to_one": true,
+      "right_stable_one_to_one": true,
+      "overlap_key_count": 520,
+      "one_to_one_overlap_key_count": 520,
+      "ambiguous_overlap_key_count": 0,
+      "left_only_key_count": 247,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 1.0,
+      "sample_overlap_keys": [
+        "QCLIP20260417R2_00000",
+        "QCLIP20260417R2_00001",
+        "QCLIP20260417R2_00002",
+        "QCLIP20260417R2_00003",
+        "QCLIP20260417R2_00004"
+      ],
+      "sample_left_only_keys": [
+        "QCLIP20260417R2_00057",
+        "QCLIP20260417R2_00066",
+        "QCLIP20260417R2_00458",
+        "QCLIP20260418R2X_00000",
+        "QCLIP20260418R2X_00001"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [],
+      "right_duplicate_examples": [],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    }
+  ],
+  "recommended_candidate": {
+    "candidate": "sample_id",
+    "confidence": "strong",
+    "reason": "Candidate is one-to-one inside both sources and has the strongest cross-source overlap."
+  }
+}

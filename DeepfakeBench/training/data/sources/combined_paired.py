@@ -74,6 +74,10 @@ QUALITY_DOMAIN_MAP = {
     "visomaster_res_variant": 2,  # studio_capture — resolution variants, same real source
     "visomaster_teams_enhanced": 1,  # mixed source; iterator overrides per-item domains
     "deeplive_teams": 1, # Teams-passthrough — sharpened, codec noise, like webcam
+    "proper_visomaster_clean": 2,
+    "proper_visomaster_enhanced_clean": 2,
+    "proper_visomaster_teams": 1,
+    "proper_visomaster_enhanced_teams": 1,
     "youtube": 3,        # social_media — heavier compression, variable resolution
 }
 
@@ -305,6 +309,48 @@ def create_unified_samples_from_visomaster(
     logger.info(f"  - Per-model: {dict(model_counts)}")
     logger.info(f"  - Per-tier: {dict(tier_counts)}")
     
+    return unified
+
+
+def create_unified_samples_from_proper_data(
+    proper_data_samples: List[Any],
+    logger: logging.Logger,
+) -> List[UnifiedPairedSample]:
+    """Wrap explicit proper-data inventory samples for the combined pipeline."""
+    unified: List[UnifiedPairedSample] = []
+    identity_counts = defaultdict(int)
+    source_counts = defaultdict(int)
+    quality_band_counts = defaultdict(int)
+    face_scale_band_counts = defaultdict(int)
+
+    for sample in proper_data_samples:
+        identity = f"realpool_{sample.identity_id}"
+        identity_counts[identity] += 1
+        source_counts[sample.source] += 1
+        quality_band_counts[sample.quality_band] += 1
+        face_scale_band_counts[sample.face_scale_band] += 1
+
+        unified.append(
+            UnifiedPairedSample(
+                identity=identity,
+                source=sample.source,
+                original_sample=sample,
+                method=sample.method,
+                has_landmarks=False,
+                sample_id=sample.sample_id,
+            )
+        )
+
+    unique_identities = len(identity_counts)
+    avg_per_id = len(unified) / unique_identities if unique_identities > 0 else 0
+
+    logger.info(f"Created {len(unified)} unified samples from proper-data inventory")
+    logger.info(f"  - Unique identities: {unique_identities}")
+    logger.info(f"  - Avg samples per identity: {avg_per_id:.2f}")
+    logger.info(f"  - Per-lane: {dict(source_counts)}")
+    logger.info(f"  - Quality bands: {dict(quality_band_counts)}")
+    logger.info(f"  - Face-scale bands: {dict(face_scale_band_counts)}")
+
     return unified
 
 
@@ -2135,6 +2181,10 @@ class CombinedBatchingConfig:
     # VisoMaster Resolution-Variant-specific (same defaults)
     visomaster_res_variant_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
 
+    # Proper-data inventory-backed lanes
+    proper_data_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
+    proper_data_parallel_download_workers: int = DEFAULT_PARALLEL_GCS_DOWNLOAD_WORKERS
+
     # Teams passthrough-specific
     teams_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
 
@@ -2255,6 +2305,8 @@ class CombinedPairedIterableDataset(IterableDataset):
                     yield from self._iterate_visomaster_teams_enhanced_sample(unified_sample, rng)
                 elif unified_sample.source == 'visomaster_res_variant':
                     yield from self._iterate_visomaster_res_variant_sample(unified_sample, rng)
+                elif unified_sample.source.startswith('proper_visomaster_'):
+                    yield from self._iterate_proper_data_sample(unified_sample, rng)
                 elif unified_sample.source in {'visomaster', 'visomaster_hints'}:
                     yield from self._iterate_visomaster_sample(unified_sample, rng)
                 elif unified_sample.source in {'deeplive_teams', 'visomaster_hints_teams'}:
@@ -2274,6 +2326,11 @@ class CombinedPairedIterableDataset(IterableDataset):
         if not hasattr(self, '_teams_gcs_client'):
             self._teams_gcs_client = storage.Client()
         return self._teams_gcs_client
+
+    def _get_proper_data_gcs_client(self):
+        if not hasattr(self, '_proper_data_gcs_client'):
+            self._proper_data_gcs_client = storage.Client()
+        return self._proper_data_gcs_client
 
     def _get_visomaster_download_executor(self):
         max_workers = max(
@@ -2312,6 +2369,24 @@ class CombinedPairedIterableDataset(IterableDataset):
             )
             self._teams_download_executor_workers = max_workers
         return self._teams_download_executor
+
+    def _get_proper_data_download_executor(self):
+        max_workers = max(
+            1,
+            int(getattr(self.config, "proper_data_parallel_download_workers", 1) or 1),
+        )
+        if max_workers <= 1:
+            return None
+
+        executor = getattr(self, "_proper_data_download_executor", None)
+        executor_workers = getattr(self, "_proper_data_download_executor_workers", None)
+        if executor is None or executor_workers != max_workers:
+            self._proper_data_download_executor = ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="proper-data-gcs",
+            )
+            self._proper_data_download_executor_workers = max_workers
+        return self._proper_data_download_executor
     
     def _get_identity_balanced_samples(
         self,
@@ -2823,6 +2898,86 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'quality_domain': _quality_domain_for_source(src),
             }
 
+    def _iterate_proper_data_sample(
+        self,
+        unified_sample: UnifiedPairedSample,
+        rng: random.Random,
+    ) -> Iterator[Dict[str, Any]]:
+        """Load and yield frames from an explicit proper-data inventory sample."""
+        from .proper_data import load_proper_data_frames
+
+        sample = unified_sample.original_sample
+        src = unified_sample.source
+        frame_indices = self.config.proper_data_sparse_indices
+        uses_gcs = any(
+            str(path).startswith('gs://')
+            for path in [*sample.real_frame_paths, *sample.fake_frame_paths]
+        )
+        client = self._get_proper_data_gcs_client() if uses_gcs else None
+        executor = self._get_proper_data_download_executor() if uses_gcs else None
+
+        real_frames, fake_frames = load_proper_data_frames(
+            sample,
+            frame_indices,
+            as_array=True,
+            client=client,
+            executor=executor,
+            parallel_download_workers=self.config.proper_data_parallel_download_workers,
+        )
+
+        for i, frame_idx in enumerate(frame_indices):
+            if i >= len(real_frames) or i >= len(fake_frames):
+                continue
+            if real_frames[i] is None or fake_frames[i] is None:
+                continue
+
+            real_img = real_frames[i]
+            if self.transform:
+                real_img = self._apply_transform(
+                    real_img,
+                    None,
+                    {'label': 0, 'source': src, 'method': unified_sample.method},
+                )
+
+            shared_meta = {
+                'identity': unified_sample.identity,
+                'source': src,
+                'method': unified_sample.method,
+                'method_id': self.method_mapping.get(unified_sample.method, -1),
+                'sample_id': unified_sample.sample_id,
+                'base_capture_id': sample.base_capture_id,
+                'capture_session_id': sample.capture_session_id,
+                'split_group_id': sample.split_group_id,
+                'quality_band': sample.quality_band,
+                'face_scale_band': sample.face_scale_band,
+                'transport': sample.transport,
+                'enhancement': sample.enhancement,
+                'generator_family': sample.generator_family,
+                'generator_method': sample.generator_method,
+                'frame_idx': frame_idx,
+                'quality_domain': _quality_domain_for_source(src),
+            }
+
+            yield {
+                'image': real_img,
+                'label': 0,
+                **shared_meta,
+            }
+
+            fake_img = fake_frames[i]
+            if self.transform:
+                fake_img = self._apply_transform(
+                    fake_img,
+                    None,
+                    {'label': 1, 'source': src, 'method': unified_sample.method},
+                )
+
+            yield {
+                'image': fake_img,
+                'label': 1,
+                **shared_meta,
+            }
+
     def _iterate_teams_sample(
         self,
         unified_sample: UnifiedPairedSample,
@@ -3139,6 +3294,7 @@ def create_combined_paired_pipeline(
     visomaster_hints_config = combined_config.get('visomaster_hints', {})
     teams_config = combined_config.get('teams', {})
     visomaster_hints_teams_config = combined_config.get('visomaster_hints_teams', {})
+    proper_data_config = combined_config.get('proper_data', {})
 
     visomaster_enabled = bool(visomaster_config.get('enabled', False))
     visomaster_hints_enabled = bool(visomaster_hints_config.get('enabled', False))
@@ -3146,6 +3302,7 @@ def create_combined_paired_pipeline(
     visomaster_hints_teams_enabled = bool(
         visomaster_hints_teams_config.get('enabled', False)
     )
+    proper_data_enabled = bool(proper_data_config.get('enabled', False))
     teams_policy_filter_enabled = bool(teams_config.get('apply_bad_data_policy', False))
 
     if visomaster_enabled and visomaster_hints_enabled:
@@ -3548,6 +3705,64 @@ def create_combined_paired_pipeline(
         logger.info("VisoMaster Teams hints dataset: DISABLED")
 
     # ==========================================================================
+    # Load Proper-Data Inventory Lanes (WT-F provisional contract)
+    # ==========================================================================
+    proper_data_samples: List[UnifiedPairedSample] = []
+    proper_data_discovery_summary: Dict[str, Any] = {}
+
+    if proper_data_enabled:
+        from .proper_data import discover_proper_data_samples
+
+        proper_inventory_uri = (
+            proper_data_config.get('inventory_uri')
+            or proper_data_config.get('inventory_path')
+        )
+        proper_manifest_uri = (
+            proper_data_config.get('manifest_uri')
+            or proper_data_config.get('manifest_path')
+        )
+        proper_include_lanes = proper_data_config.get('include_lanes')
+        proper_max_samples_per_lane = proper_data_config.get('max_samples_per_lane')
+        proper_max_samples_total = proper_data_config.get('max_samples_total')
+
+        if not proper_inventory_uri:
+            raise ValueError(
+                "combined_paired.proper_data.enabled=true requires "
+                "combined_paired.proper_data.inventory_path or inventory_uri."
+            )
+
+        logger.info("Loading proper-data inventory lanes:")
+        logger.info(f"  - Inventory: {proper_inventory_uri}")
+        logger.info(f"  - Manifest: {proper_manifest_uri or 'NONE'}")
+        logger.info(f"  - Include lanes: {proper_include_lanes or 'ALL'}")
+        logger.info(
+            "  - Caps: per_lane=%s total=%s",
+            proper_max_samples_per_lane if proper_max_samples_per_lane is not None else "NONE",
+            proper_max_samples_total if proper_max_samples_total is not None else "NONE",
+        )
+
+        raw_proper_data_samples, proper_data_discovery_summary = discover_proper_data_samples(
+            inventory_uri=str(proper_inventory_uri),
+            manifest_uri=str(proper_manifest_uri) if proper_manifest_uri else None,
+            include_lanes=proper_include_lanes,
+            max_samples_per_lane=proper_max_samples_per_lane,
+            max_samples_total=proper_max_samples_total,
+            log=logger,
+        )
+        if len(raw_proper_data_samples) == 0:
+            logger.warning(
+                "Proper-data inventory is ENABLED but 0 paired samples were discovered "
+                "from %s. Check the inventory path and lane filters.",
+                proper_inventory_uri,
+            )
+        proper_data_samples = create_unified_samples_from_proper_data(
+            raw_proper_data_samples,
+            logger,
+        )
+    else:
+        logger.info("Proper-data inventory lanes: DISABLED")
+
+    # ==========================================================================
     # Load VisoMaster Teams-Enhanced merged dataset (resolver-driven)
     # ==========================================================================
     viso_teams_enhanced_config = combined_config.get('visomaster_teams_enhanced', {})
@@ -3747,6 +3962,7 @@ def create_combined_paired_pipeline(
     # ==========================================================================
     all_samples = (
         df40_samples + deeplive_samples + visomaster_samples + visomaster_hint_samples
+        + proper_data_samples
         + visomaster_teams_enhanced_samples + visomaster_enhanced_samples
         + visomaster_res_variant_samples
         + teams_samples + visomaster_hint_teams_samples + external_real_samples
@@ -3760,6 +3976,7 @@ def create_combined_paired_pipeline(
     logger.info(f"  - DeepLive: {len(deeplive_samples)}")
     logger.info(f"  - VisoMaster: {len(visomaster_samples)}")
     logger.info(f"  - VisoMaster hints: {len(visomaster_hint_samples)}")
+    logger.info(f"  - Proper-data: {len(proper_data_samples)}")
     logger.info(f"  - VisoMaster Teams-Enhanced: {len(visomaster_teams_enhanced_samples)}")
     logger.info(f"  - VisoMaster Enhanced: {len(visomaster_enhanced_samples)}")
     logger.info(f"  - VisoMaster Res-Variant: {len(visomaster_res_variant_samples)}")
@@ -3881,6 +4098,11 @@ def create_combined_paired_pipeline(
         visomaster_enhanced_sparse_indices=combined_config.get('visomaster_enhanced', {}).get('anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]),
         visomaster_teams_enhanced_sparse_indices=combined_config.get('visomaster_teams_enhanced', {}).get('anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]),
         visomaster_teams_enhanced_p_original=float(combined_config.get('visomaster_teams_enhanced', {}).get('p_original', 0.5)),
+        proper_data_sparse_indices=combined_config.get('proper_data', {}).get('anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]),
+        proper_data_parallel_download_workers=combined_config.get(
+            'proper_data_parallel_download_workers',
+            DEFAULT_PARALLEL_GCS_DOWNLOAD_WORKERS,
+        ),
         teams_sparse_indices=combined_config.get('teams', {}).get('anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]),
     )
     
@@ -4013,6 +4235,18 @@ def create_combined_paired_pipeline(
     train_identities = set(s.identity for s in train_samples)
     overall_counts = _count_strategy_and_family(all_samples, enhanced_strategy_names)
     train_counts = _count_strategy_and_family(train_samples, enhanced_strategy_names)
+    source_counts = Counter(s.source for s in all_samples)
+    train_source_counts = Counter(s.source for s in train_samples)
+    proper_data_lane_counts = {
+        key: int(value)
+        for key, value in sorted(source_counts.items())
+        if str(key).startswith('proper_')
+    }
+    train_proper_data_lane_counts = {
+        key: int(value)
+        for key, value in sorted(train_source_counts.items())
+        if str(key).startswith('proper_')
+    }
 
     # Estimate frames per sample (DF40 has 8 frames, DeepLive has sparse indices)
     frames_per_sample = batching_config.frames_per_sample * 2  # real + fake
@@ -4025,6 +4259,11 @@ def create_combined_paired_pipeline(
         'deeplive_samples': len(deeplive_samples),
         'visomaster_samples': len(visomaster_samples),
         'visomaster_hints_samples': len(visomaster_hint_samples),
+        'proper_data_samples': len(proper_data_samples),
+        'proper_visomaster_clean_samples': int(source_counts.get('proper_visomaster_clean', 0)),
+        'proper_visomaster_enhanced_clean_samples': int(source_counts.get('proper_visomaster_enhanced_clean', 0)),
+        'proper_visomaster_teams_samples': int(source_counts.get('proper_visomaster_teams', 0)),
+        'proper_visomaster_enhanced_teams_samples': int(source_counts.get('proper_visomaster_enhanced_teams', 0)),
         'visomaster_teams_enhanced_samples': len(visomaster_teams_enhanced_samples),
         'visomaster_enhanced_samples': len(visomaster_enhanced_samples),
         'teams_samples': len(teams_samples),
@@ -4056,8 +4295,10 @@ def create_combined_paired_pipeline(
         'methods': list(unique_methods),
         'strategy_counts': overall_counts['strategy_counts'],
         'family_counts': overall_counts['family_counts'],
+        'source_counts': dict(sorted(source_counts.items())),
         'train_strategy_counts': train_counts['strategy_counts'],
         'train_family_counts': train_counts['family_counts'],
+        'train_source_counts': dict(sorted(train_source_counts.items())),
         'enhanced_strategy_names': list(enhanced_strategy_names),
         'sampling_strategy': sampling_strategy,
         'sampling_family_weights': family_weights,
@@ -4078,6 +4319,9 @@ def create_combined_paired_pipeline(
         ),
         'ood_video_count': len(ood_videos),
         'ood_method_count': len({v.method for v in ood_videos}) if ood_videos else 0,
+        'proper_data_discovery': proper_data_discovery_summary,
+        'proper_data_lane_counts': proper_data_lane_counts,
+        'train_proper_data_lane_counts': train_proper_data_lane_counts,
         # Group DRO method mapping (method_name → int ID)
         'method_mapping': method_mapping,
     }

@@ -1434,9 +1434,12 @@ class QualityTargetedFamilyRouter:
             # while remaining visible as separate families in reporting/sampling.
             "visomaster_hints_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
             "visomaster_enhanced_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
+            "proper_visomaster_clean_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
+            "proper_visomaster_enhanced_clean_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
             "df40_real": _build_family_quality_pipeline("df40_real", self._preset),
             "realpool_real": _build_family_quality_pipeline("realpool_real", self._preset),
             "visomaster_hints_real": _build_family_quality_pipeline("realpool_real", self._preset),
+            "proper_real_clean": _build_family_quality_pipeline("realpool_real", self._preset),
             "external_real": _build_family_quality_pipeline("external_real", self._preset),
             # Teams passthrough data has already been through the codec pipeline.
             # Default path stays minimal; extra Teams nuisance knobs are opt-in.
@@ -1444,6 +1447,9 @@ class QualityTargetedFamilyRouter:
             "deeplive_teams_real": _build_teams_passthrough_pipeline(self._preset),
             "visomaster_hints_teams_fake": _build_teams_passthrough_pipeline(self._preset),
             "visomaster_hints_teams_real": _build_teams_passthrough_pipeline(self._preset),
+            "proper_visomaster_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+            "proper_visomaster_enhanced_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+            "proper_real_teams": _build_teams_passthrough_pipeline(self._preset),
         }
 
         # ── Teams codec simulation (optional post-pipeline step) ──────
@@ -1472,7 +1478,12 @@ class QualityTargetedFamilyRouter:
                     p=1.0,
                     enhanced_families=tuple(
                         tcs_cfg.get("enhanced_families")
-                        or ("visomaster_enhanced_fake", "deeplive_enhanced_fake")
+                        or (
+                            "visomaster_enhanced_fake",
+                            "deeplive_enhanced_fake",
+                            "proper_visomaster_enhanced_clean_fake",
+                            "proper_visomaster_enhanced_teams_fake",
+                        )
                     ),
                     ordinary_mode_probability_non_enhanced=float(
                         tcs_cfg.get("ordinary_mode_probability_non_enhanced", 0.75)
@@ -1487,7 +1498,12 @@ class QualityTargetedFamilyRouter:
                     p=1.0,
                     enhanced_families=tuple(
                         tcs_cfg.get("enhanced_families")
-                        or ("visomaster_enhanced_fake", "deeplive_enhanced_fake")
+                        or (
+                            "visomaster_enhanced_fake",
+                            "deeplive_enhanced_fake",
+                            "proper_visomaster_enhanced_clean_fake",
+                            "proper_visomaster_enhanced_teams_fake",
+                        )
                     ),
                     ordinary_mode_probability_non_enhanced=float(
                         tcs_cfg.get("ordinary_mode_probability_non_enhanced", 0.75)

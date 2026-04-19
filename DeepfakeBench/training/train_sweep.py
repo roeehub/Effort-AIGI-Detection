@@ -3,7 +3,7 @@ from venv import logger
 # =============================================================================
 # CODE VERSION STAMP - Update this when making changes to verify deployment
 # =============================================================================
-CODE_VERSION = "2026-01-02-COMBINED-PAIRED-FIX-V1"  # Fix: pass combined_paired config to data pipeline
+CODE_VERSION = "2026-04-19-PROPER-DATA-WTF-V1"
 # =============================================================================
 
 import yaml  # noqa
@@ -481,11 +481,17 @@ def main():
         df40_en = cp_cfg.get('df40', {}).get('enabled', True)
         dl_en = cp_cfg.get('deeplive', {}).get('enabled', True)
         vm_en = cp_cfg.get('visomaster', {}).get('enabled', False)
+        proper_en = cp_cfg.get('proper_data', {}).get('enabled', False)
 
         df40_n = data_split_stats.get('df40_samples', -1)
         dl_n = data_split_stats.get('deeplive_samples', -1)
         vm_n = data_split_stats.get('visomaster_samples', -1)
+        proper_n = data_split_stats.get('proper_data_samples', -1)
         total_n = data_split_stats.get('total_samples', -1)
+        detailed_source_counts = data_split_stats.get('source_counts', {})
+        train_source_counts = data_split_stats.get('train_source_counts', {})
+        proper_data_lane_counts = data_split_stats.get('proper_data_lane_counts', {})
+        train_proper_data_lane_counts = data_split_stats.get('train_proper_data_lane_counts', {})
 
         # Log to console/file with highly visible formatting
         logger.info("=" * 70)
@@ -494,8 +500,17 @@ def main():
         logger.info(f"  DF40:        enabled={str(df40_en):5s}  →  {df40_n:,} samples")
         logger.info(f"  DeepLive:    enabled={str(dl_en):5s}  →  {dl_n:,} samples")
         logger.info(f"  VisoMaster:  enabled={str(vm_en):5s}  →  {vm_n:,} samples")
+        logger.info(f"  ProperData:  enabled={str(proper_en):5s}  →  {proper_n:,} samples")
         logger.info(f"  TOTAL:                           {total_n:,} samples")
         logger.info(f"  Methods: {data_split_stats.get('methods', [])}")
+        if detailed_source_counts:
+            logger.info(f"  Source counts (all): {detailed_source_counts}")
+        if train_source_counts:
+            logger.info(f"  Source counts (train): {train_source_counts}")
+        if proper_data_lane_counts:
+            logger.info(f"  Proper-data lane counts (all): {proper_data_lane_counts}")
+        if train_proper_data_lane_counts:
+            logger.info(f"  Proper-data lane counts (train): {train_proper_data_lane_counts}")
         logger.info("=" * 70)
 
         # Sanity checks — fail fast if config doesn't match reality
@@ -505,20 +520,39 @@ def main():
             raise RuntimeError(f"DATA INTEGRITY ERROR: DeepLive is DISABLED but got {dl_n} samples!")
         if not vm_en and vm_n > 0:
             raise RuntimeError(f"DATA INTEGRITY ERROR: VisoMaster is DISABLED but got {vm_n} samples!")
+        if not proper_en and proper_n > 0:
+            raise RuntimeError(f"DATA INTEGRITY ERROR: ProperData is DISABLED but got {proper_n} samples!")
         if df40_en and df40_n == 0:
             logger.warning("⚠️ DF40 is ENABLED but produced 0 samples!")
         if dl_en and dl_n == 0:
             logger.warning("⚠️ DeepLive is ENABLED but produced 0 samples!")
         if vm_en and vm_n == 0:
             logger.warning("⚠️ VisoMaster is ENABLED but produced 0 samples!")
+        if proper_en and proper_n == 0:
+            logger.warning("⚠️ ProperData is ENABLED but produced 0 samples!")
 
         # Persist to W&B summary for easy querying across runs
         wandb.run.summary["data/sources_enabled"] = {
-            "df40": df40_en, "deeplive": dl_en, "visomaster": vm_en
+            "df40": df40_en,
+            "deeplive": dl_en,
+            "visomaster": vm_en,
+            "proper_data": proper_en,
         }
         wandb.run.summary["data/source_counts"] = {
-            "df40": df40_n, "deeplive": dl_n, "visomaster": vm_n, "total": total_n
+            "df40": df40_n,
+            "deeplive": dl_n,
+            "visomaster": vm_n,
+            "proper_data": proper_n,
+            "total": total_n,
         }
+        if detailed_source_counts:
+            wandb.run.summary["data/source_counts_detailed"] = detailed_source_counts
+        if train_source_counts:
+            wandb.run.summary["data/train_source_counts"] = train_source_counts
+        if proper_data_lane_counts:
+            wandb.run.summary["data/proper_data_lane_counts"] = proper_data_lane_counts
+        if train_proper_data_lane_counts:
+            wandb.run.summary["data/train_proper_data_lane_counts"] = train_proper_data_lane_counts
         vm_models = cp_cfg.get('visomaster', {}).get('swap_models', [])
         if vm_models:
             wandb.run.summary["data/visomaster_swap_models"] = vm_models
@@ -526,6 +560,7 @@ def main():
             "data/df40_samples": df40_n,
             "data/deeplive_samples": dl_n,
             "data/visomaster_samples": vm_n,
+            "data/proper_data_samples": proper_n,
         })
 
         strategy_counts = data_split_stats.get('strategy_counts', {})
@@ -535,6 +570,7 @@ def main():
         deeplive_raw_strategy_counts = data_split_stats.get('deeplive_raw_strategy_counts', {})
         deeplive_effective_strategy_counts = data_split_stats.get('deeplive_effective_strategy_counts', {})
         deeplive_strategy_preflight = data_split_stats.get('deeplive_strategy_preflight', {})
+        proper_data_discovery = data_split_stats.get('proper_data_discovery', {})
         sampling_strategy = data_split_stats.get('sampling_strategy')
         sampling_family_weights = data_split_stats.get('sampling_family_weights', {})
         holdout_mode = data_split_stats.get('holdout_mode')
@@ -554,6 +590,8 @@ def main():
         wandb.run.summary["data/deeplive_raw_strategy_counts"] = deeplive_raw_strategy_counts
         wandb.run.summary["data/deeplive_effective_strategy_counts"] = deeplive_effective_strategy_counts
         wandb.run.summary["data/deeplive_strategy_preflight"] = deeplive_strategy_preflight
+        if proper_data_discovery:
+            wandb.run.summary["data/proper_data_discovery"] = proper_data_discovery
         if sampling_strategy:
             wandb.run.summary["data/sampling_strategy"] = sampling_strategy
         if sampling_family_weights:
@@ -578,6 +616,8 @@ def main():
         logger.info(f"DeepLive raw strategy counts: {deeplive_raw_strategy_counts}")
         logger.info(f"DeepLive effective strategy counts: {deeplive_effective_strategy_counts}")
         logger.info(f"DeepLive strategy preflight: {deeplive_strategy_preflight}")
+        if proper_data_discovery:
+            logger.info(f"Proper-data discovery summary: {proper_data_discovery}")
         if sampling_strategy:
             logger.info(f"Sampling strategy: {sampling_strategy}")
         if sampling_family_weights:

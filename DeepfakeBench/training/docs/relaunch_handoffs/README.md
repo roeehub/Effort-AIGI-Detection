@@ -2,6 +2,10 @@
 
 Each parallel worktree should write a unique handoff file here before or during merge-back to `teams-relaunch-root-2026-04-17`.
 
+Start here for the current consolidated review state:
+
+- `DeepfakeBench/training/docs/relaunch_handoffs/RELAUNCH_UPGRADE_REVIEW_PACKET_2026-04-19.md`
+
 Suggested naming:
 
 - `WT-A_2026-04-17.md`

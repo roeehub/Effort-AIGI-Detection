@@ -1,0 +1,482 @@
+{
+  "schema_name": "visomaster_proper_bucket_join_validation_v1",
+  "generated_at": "2026-04-19T14:35:22.676409+00:00",
+  "candidate_keys": [
+    "real_id",
+    "target_video_name",
+    "clip_stem",
+    "sample_id"
+  ],
+  "left_source": {
+    "source_root": "gs://hdtf_visomaster_cropped_frames",
+    "source_label": "hdtf_visomaster_cropped_frames",
+    "manifest_count": 1322,
+    "sample_count": 1322,
+    "load_error_count": 0,
+    "load_errors": []
+  },
+  "right_source": {
+    "source_root": "gs://hdtf_visomaster_cropped_frames_teams",
+    "source_label": "hdtf_visomaster_cropped_frames_teams",
+    "manifest_count": 835,
+    "sample_count": 835,
+    "load_error_count": 0,
+    "load_errors": []
+  },
+  "candidate_reports": [
+    {
+      "candidate": "real_id",
+      "left_present_count": 1322,
+      "right_present_count": 835,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 721,
+      "right_unique_key_count": 612,
+      "left_duplicate_key_count": 585,
+      "right_duplicate_key_count": 215,
+      "left_stable_one_to_one": false,
+      "right_stable_one_to_one": false,
+      "overlap_key_count": 612,
+      "one_to_one_overlap_key_count": 89,
+      "ambiguous_overlap_key_count": 523,
+      "left_only_key_count": 109,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 0.1454248366013072,
+      "sample_overlap_keys": [
+        "RD_Radio10_000__rank01__clip01__s0048.00__d10.0__c6d0d8c94607",
+        "RD_Radio10_000__rank01__clip02__s0098.00__d12.0__8ce03218ba76",
+        "RD_Radio11_000__rank02__clip01__s0000.00__d10.0__2fc6d73962bf",
+        "RD_Radio11_000__rank02__clip02__s0018.00__d10.0__51f54a0f99ca",
+        "RD_Radio12_000__rank01__clip01__s0010.00__d10.0__ada408858ac4"
+      ],
+      "sample_left_only_keys": [
+        "RD_Radio11_001__rank01__clip01__s0050.00__d10.0__dfb48ba052f0",
+        "RD_Radio11_001__rank01__clip02__s0036.00__d10.0__63915296c7b8",
+        "RD_Radio14_000__rank01__clip02__s0002.00__d10.0__df6d4b8ca29b",
+        "RD_Radio17_000__rank01__clip01__s0000.00__d10.0__83c1e9fed046",
+        "RD_Radio27_000__rank01__clip02__s0012.00__d10.0__330bf744a9d0"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [
+        {
+          "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0__a33476a90229",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00742",
+            "HDTF20260416_00889",
+            "HDTF20260416_01034",
+            "HDTF20260416_01181"
+          ]
+        },
+        {
+          "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0__2ab038555c0c",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00078",
+            "HDTF20260416_00549",
+            "HDTF20260416_01042",
+            "HDTF20260416_01272"
+          ]
+        },
+        {
+          "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0__4ac87e3a6d5b",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00066",
+            "HDTF20260416_00466",
+            "HDTF20260416_00849",
+            "HDTF20260416_01318"
+          ]
+        },
+        {
+          "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0__18e5170ee4bf",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00081",
+            "HDTF20260416_00555",
+            "HDTF20260416_01053",
+            "HDTF20260416_01275"
+          ]
+        },
+        {
+          "key": "WRA_DianeBlack1_000__rank01__clip01__s0000.00__d10.0__deda141d4815",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00055",
+            "HDTF20260416_00330",
+            "HDTF20260416_01014",
+            "HDTF20260416_01176"
+          ]
+        }
+      ],
+      "right_duplicate_examples": [
+        {
+          "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0__a33476a90229",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00742",
+            "HDTF20260416_00889",
+            "HDTF20260416_01034",
+            "HDTF20260416_01181"
+          ]
+        },
+        {
+          "key": "WRA_GeoffDavis_000__rank01__clip01__s0000.00__d10.0__a88553dafce2",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00478",
+            "HDTF20260416_00692",
+            "HDTF20260416_00852",
+            "HDTF20260416_01015"
+          ]
+        },
+        {
+          "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0__2ab038555c0c",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00078",
+            "HDTF20260416_01042",
+            "HDTF20260416_01272"
+          ]
+        },
+        {
+          "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0__4ac87e3a6d5b",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00066",
+            "HDTF20260416_00849",
+            "HDTF20260416_01318"
+          ]
+        },
+        {
+          "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0__18e5170ee4bf",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00081",
+            "HDTF20260416_01053",
+            "HDTF20260416_01275"
+          ]
+        }
+      ],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    },
+    {
+      "candidate": "target_video_name",
+      "left_present_count": 1322,
+      "right_present_count": 835,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 721,
+      "right_unique_key_count": 612,
+      "left_duplicate_key_count": 585,
+      "right_duplicate_key_count": 215,
+      "left_stable_one_to_one": false,
+      "right_stable_one_to_one": false,
+      "overlap_key_count": 612,
+      "one_to_one_overlap_key_count": 89,
+      "ambiguous_overlap_key_count": 523,
+      "left_only_key_count": 109,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 0.1454248366013072,
+      "sample_overlap_keys": [
+        "RD_Radio10_000__rank01__clip01__s0048.00__d10.0",
+        "RD_Radio10_000__rank01__clip02__s0098.00__d12.0",
+        "RD_Radio11_000__rank02__clip01__s0000.00__d10.0",
+        "RD_Radio11_000__rank02__clip02__s0018.00__d10.0",
+        "RD_Radio12_000__rank01__clip01__s0010.00__d10.0"
+      ],
+      "sample_left_only_keys": [
+        "RD_Radio11_001__rank01__clip01__s0050.00__d10.0",
+        "RD_Radio11_001__rank01__clip02__s0036.00__d10.0",
+        "RD_Radio14_000__rank01__clip02__s0002.00__d10.0",
+        "RD_Radio17_000__rank01__clip01__s0000.00__d10.0",
+        "RD_Radio27_000__rank01__clip02__s0012.00__d10.0"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [
+        {
+          "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00742",
+            "HDTF20260416_00889",
+            "HDTF20260416_01034",
+            "HDTF20260416_01181"
+          ]
+        },
+        {
+          "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00078",
+            "HDTF20260416_00549",
+            "HDTF20260416_01042",
+            "HDTF20260416_01272"
+          ]
+        },
+        {
+          "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00066",
+            "HDTF20260416_00466",
+            "HDTF20260416_00849",
+            "HDTF20260416_01318"
+          ]
+        },
+        {
+          "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00081",
+            "HDTF20260416_00555",
+            "HDTF20260416_01053",
+            "HDTF20260416_01275"
+          ]
+        },
+        {
+          "key": "WRA_DianeBlack1_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00055",
+            "HDTF20260416_00330",
+            "HDTF20260416_01014",
+            "HDTF20260416_01176"
+          ]
+        }
+      ],
+      "right_duplicate_examples": [
+        {
+          "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00742",
+            "HDTF20260416_00889",
+            "HDTF20260416_01034",
+            "HDTF20260416_01181"
+          ]
+        },
+        {
+          "key": "WRA_GeoffDavis_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00478",
+            "HDTF20260416_00692",
+            "HDTF20260416_00852",
+            "HDTF20260416_01015"
+          ]
+        },
+        {
+          "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00078",
+            "HDTF20260416_01042",
+            "HDTF20260416_01272"
+          ]
+        },
+        {
+          "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00066",
+            "HDTF20260416_00849",
+            "HDTF20260416_01318"
+          ]
+        },
+        {
+          "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00081",
+            "HDTF20260416_01053",
+            "HDTF20260416_01275"
+          ]
+        }
+      ],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    },
+    {
+      "candidate": "clip_stem",
+      "left_present_count": 1322,
+      "right_present_count": 835,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 721,
+      "right_unique_key_count": 612,
+      "left_duplicate_key_count": 585,
+      "right_duplicate_key_count": 215,
+      "left_stable_one_to_one": false,
+      "right_stable_one_to_one": false,
+      "overlap_key_count": 612,
+      "one_to_one_overlap_key_count": 89,
+      "ambiguous_overlap_key_count": 523,
+      "left_only_key_count": 109,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 0.1454248366013072,
+      "sample_overlap_keys": [
+        "RD_Radio10_000__rank01__clip01__s0048.00__d10.0",
+        "RD_Radio10_000__rank01__clip02__s0098.00__d12.0",
+        "RD_Radio11_000__rank02__clip01__s0000.00__d10.0",
+        "RD_Radio11_000__rank02__clip02__s0018.00__d10.0",
+        "RD_Radio12_000__rank01__clip01__s0010.00__d10.0"
+      ],
+      "sample_left_only_keys": [
+        "RD_Radio11_001__rank01__clip01__s0050.00__d10.0",
+        "RD_Radio11_001__rank01__clip02__s0036.00__d10.0",
+        "RD_Radio14_000__rank01__clip02__s0002.00__d10.0",
+        "RD_Radio17_000__rank01__clip01__s0000.00__d10.0",
+        "RD_Radio27_000__rank01__clip02__s0012.00__d10.0"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [
+        {
+          "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00742",
+            "HDTF20260416_00889",
+            "HDTF20260416_01034",
+            "HDTF20260416_01181"
+          ]
+        },
+        {
+          "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00078",
+            "HDTF20260416_00549",
+            "HDTF20260416_01042",
+            "HDTF20260416_01272"
+          ]
+        },
+        {
+          "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00066",
+            "HDTF20260416_00466",
+            "HDTF20260416_00849",
+            "HDTF20260416_01318"
+          ]
+        },
+        {
+          "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00081",
+            "HDTF20260416_00555",
+            "HDTF20260416_01053",
+            "HDTF20260416_01275"
+          ]
+        },
+        {
+          "key": "WRA_DianeBlack1_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00055",
+            "HDTF20260416_00330",
+            "HDTF20260416_01014",
+            "HDTF20260416_01176"
+          ]
+        }
+      ],
+      "right_duplicate_examples": [
+        {
+          "key": "RD_Radio20_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00742",
+            "HDTF20260416_00889",
+            "HDTF20260416_01034",
+            "HDTF20260416_01181"
+          ]
+        },
+        {
+          "key": "WRA_GeoffDavis_000__rank01__clip01__s0000.00__d10.0",
+          "count": 4,
+          "sample_ids": [
+            "HDTF20260416_00478",
+            "HDTF20260416_00692",
+            "HDTF20260416_00852",
+            "HDTF20260416_01015"
+          ]
+        },
+        {
+          "key": "WDA_BobCasey1_000__rank01__clip01__s0000.00__d10.0",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00078",
+            "HDTF20260416_01042",
+            "HDTF20260416_01272"
+          ]
+        },
+        {
+          "key": "WDA_JohnLewis0_000__rank01__clip01__s0232.00__d06.0",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00066",
+            "HDTF20260416_00849",
+            "HDTF20260416_01318"
+          ]
+        },
+        {
+          "key": "WDA_MarkWarner2_000__rank01__clip01__s0002.00__d10.0",
+          "count": 3,
+          "sample_ids": [
+            "HDTF20260416_00081",
+            "HDTF20260416_01053",
+            "HDTF20260416_01275"
+          ]
+        }
+      ],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    },
+    {
+      "candidate": "sample_id",
+      "left_present_count": 1322,
+      "right_present_count": 835,
+      "left_missing_count": 0,
+      "right_missing_count": 0,
+      "left_unique_key_count": 1322,
+      "right_unique_key_count": 835,
+      "left_duplicate_key_count": 0,
+      "right_duplicate_key_count": 0,
+      "left_stable_one_to_one": true,
+      "right_stable_one_to_one": true,
+      "overlap_key_count": 835,
+      "one_to_one_overlap_key_count": 835,
+      "ambiguous_overlap_key_count": 0,
+      "left_only_key_count": 487,
+      "right_only_key_count": 0,
+      "match_rate_vs_smaller_unique_set": 1.0,
+      "sample_overlap_keys": [
+        "HDTF20260416_00000",
+        "HDTF20260416_00001",
+        "HDTF20260416_00002",
+        "HDTF20260416_00003",
+        "HDTF20260416_00004"
+      ],
+      "sample_left_only_keys": [
+        "HDTF20260416_00009",
+        "HDTF20260416_00015",
+        "HDTF20260416_00016",
+        "HDTF20260416_00017",
+        "HDTF20260416_00019"
+      ],
+      "sample_right_only_keys": [],
+      "left_duplicate_examples": [],
+      "right_duplicate_examples": [],
+      "left_missing_sample_ids": [],
+      "right_missing_sample_ids": []
+    }
+  ],
+  "recommended_candidate": {
+    "candidate": "sample_id",
+    "confidence": "strong",
+    "reason": "Candidate is one-to-one inside both sources and has the strongest cross-source overlap."
+  }
+}

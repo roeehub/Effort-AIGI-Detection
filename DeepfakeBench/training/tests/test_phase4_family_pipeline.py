@@ -17,6 +17,17 @@ import numpy as np
 import pytest
 
 
+def _require_real_torch():
+    existing = sys.modules.get("torch")
+    if existing is not None and getattr(existing, "__spec__", None) is None:
+        pytest.skip("real torch is not installed in this test environment")
+    if importlib.util.find_spec("torch") is None:
+        pytest.skip("real torch is not installed in this test environment")
+    import torch
+
+    return torch
+
+
 def _load_grouping_module():
     module_path = Path(__file__).resolve().parents[1] / "utils" / "grouping.py"
     spec = importlib.util.spec_from_file_location("grouping_module", module_path)
@@ -38,6 +49,9 @@ def test_group_key_mapping_representative_cases():
         (1, "visomaster_hints", "visomaster_hints", "visomaster_hints_fake", "visomaster_hints_fake"),
         (1, "visomaster_hints_teams", "visomaster_hints_teams", "visomaster_hints_teams_fake", "visomaster_hints_teams_fake"),
         (0, "visomaster_hints_teams", "visomaster_hints_teams", "visomaster_hints_teams_real", "visomaster_hints_teams_real"),
+        (1, "proper_visomaster_clean__cscs", "proper_visomaster_clean", "proper_visomaster_clean_fake", "proper_visomaster_clean_fake"),
+        (0, "proper_visomaster_teams__cscs", "proper_visomaster_teams", "proper_real_teams", "proper_real_teams"),
+        (1, "proper_visomaster_enhanced_teams__ghostface_v1_gfpgan_v1_4", "proper_visomaster_enhanced_teams", "proper_visomaster_enhanced_teams_fake", "proper_visomaster_enhanced_teams_fake"),
         # VisoMaster enhanced (post-hoc face enhancement) — source-based routing
         (1, "visomaster_enhanced_gfpgan", "visomaster_enhanced", "visomaster_enhanced_fake", "visomaster_enhanced_fake"),
         (1, "visomaster_enhanced_codeformer", "visomaster_enhanced", "visomaster_enhanced_fake", "visomaster_enhanced_fake"),
@@ -81,6 +95,12 @@ def test_quality_targeted_family_router_registers_hint_families():
     assert "visomaster_hints_real" in router._pipelines
     assert "visomaster_hints_teams_fake" in router._pipelines
     assert "visomaster_hints_teams_real" in router._pipelines
+    assert "proper_visomaster_clean_fake" in router._pipelines
+    assert "proper_visomaster_enhanced_clean_fake" in router._pipelines
+    assert "proper_visomaster_teams_fake" in router._pipelines
+    assert "proper_visomaster_enhanced_teams_fake" in router._pipelines
+    assert "proper_real_clean" in router._pipelines
+    assert "proper_real_teams" in router._pipelines
 
 
 def _load_pipelines_module():
@@ -193,10 +213,27 @@ def _load_visomaster_source_module():
     return module
 
 
+def _load_proper_data_source_module():
+    _ensure_source_package_stubs()
+
+    module_name = "data.sources.proper_data"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    module_path = Path(__file__).resolve().parents[1] / "data" / "sources" / "proper_data.py"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_combined_paired_source_module():
     _ensure_torch_stub()
     _ensure_source_package_stubs()
     _load_visomaster_source_module()
+    _load_proper_data_source_module()
 
     module_name = "data.sources.combined_paired"
     if module_name in sys.modules:
@@ -225,6 +262,171 @@ def _make_policy_bundle(rows_by_sample_id):
         summary_path=None,
         date_tag="2026-04-17",
     )
+
+
+def _write_test_image(path: Path, value: int) -> None:
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((8, 8, 3), value, dtype=np.uint8)).save(path)
+
+
+def _make_inventory_variant(
+    *,
+    variant_id: str,
+    label: str,
+    transport: str,
+    enhancement: str,
+    frame_paths: list[str],
+    generator_method: str | None = None,
+) -> dict:
+    payload = {
+        "variant_id": variant_id,
+        "label": label,
+        "transport": transport,
+        "enhancement": enhancement,
+        "playback_path": "obs_virtual_cam_to_teams" if transport == "teams" else "direct_capture",
+        "frame_paths": frame_paths,
+    }
+    if label == "fake":
+        payload["generator_family"] = "visomaster"
+        payload["generator_method"] = generator_method or "CSCS"
+    return payload
+
+
+def _write_proper_data_inventory(tmp_path: Path) -> tuple[Path, Path]:
+    wave_id = "proper_wave_test"
+
+    clean_real_a = [str(tmp_path / f"a/real_clean/frame_{idx:04d}.png") for idx in range(3)]
+    teams_real_a = [str(tmp_path / f"a/real_teams/frame_{idx:04d}.jpg") for idx in range(3)]
+    clean_fake_a = [str(tmp_path / f"a/fake_clean/frame_{idx:04d}.png") for idx in range(3)]
+    teams_fake_a = [str(tmp_path / f"a/fake_teams/frame_{idx:04d}.jpg") for idx in range(3)]
+
+    clean_real_b = [str(tmp_path / f"b/real_clean/frame_{idx:04d}.png") for idx in range(3)]
+    teams_real_b = [str(tmp_path / f"b/real_teams/frame_{idx:04d}.jpg") for idx in range(3)]
+    clean_fake_b = [str(tmp_path / f"b/fake_clean/frame_{idx:04d}.png") for idx in range(3)]
+    teams_fake_b = [str(tmp_path / f"b/fake_teams/frame_{idx:04d}.jpg") for idx in range(3)]
+
+    for index, frame_path in enumerate(
+        clean_real_a + teams_real_a + clean_fake_a + teams_fake_a
+        + clean_real_b + teams_real_b + clean_fake_b + teams_fake_b
+    ):
+        _write_test_image(Path(frame_path), 30 + index)
+
+    inventory = {
+        "inventory_version": 1,
+        "wave_id": wave_id,
+        "split_seed": 737,
+        "lockbox_ratio": 0.20,
+        "source_logs": {"handoff_doc": "docs/relaunch_handoffs/NEW_DATA_LOADER_AND_EXPERIMENT_HANDOFF_2026-04-19.md"},
+        "captures": [
+            {
+                "base_capture_id": "capture_a",
+                "identity_id": "roy_d",
+                "capture_session_id": "session_a",
+                "split_group_id": "roy_d__session_a",
+                "quality_band": "high",
+                "face_scale_band": "big_face",
+                "variants": [
+                    _make_inventory_variant(
+                        variant_id="capture_a__real_clean",
+                        label="real",
+                        transport="clean",
+                        enhancement="none",
+                        frame_paths=clean_real_a,
+                    ),
+                    _make_inventory_variant(
+                        variant_id="capture_a__real_teams",
+                        label="real",
+                        transport="teams",
+                        enhancement="none",
+                        frame_paths=teams_real_a,
+                    ),
+                    _make_inventory_variant(
+                        variant_id="capture_a__cscs__clean",
+                        label="fake",
+                        transport="clean",
+                        enhancement="none",
+                        frame_paths=clean_fake_a,
+                        generator_method="CSCS",
+                    ),
+                    _make_inventory_variant(
+                        variant_id="capture_a__cscs__teams",
+                        label="fake",
+                        transport="teams",
+                        enhancement="none",
+                        frame_paths=teams_fake_a,
+                        generator_method="CSCS",
+                    ),
+                ],
+            },
+            {
+                "base_capture_id": "capture_b",
+                "identity_id": "dor_s",
+                "capture_session_id": "session_b",
+                "split_group_id": "dor_s__session_b",
+                "quality_band": "medium",
+                "face_scale_band": "standard",
+                "variants": [
+                    _make_inventory_variant(
+                        variant_id="capture_b__real_clean",
+                        label="real",
+                        transport="clean",
+                        enhancement="none",
+                        frame_paths=clean_real_b,
+                    ),
+                    _make_inventory_variant(
+                        variant_id="capture_b__real_teams",
+                        label="real",
+                        transport="teams",
+                        enhancement="none",
+                        frame_paths=teams_real_b,
+                    ),
+                    _make_inventory_variant(
+                        variant_id="capture_b__ghostface_v1__gfpgan_clean",
+                        label="fake",
+                        transport="clean",
+                        enhancement="enhanced",
+                        frame_paths=clean_fake_b,
+                        generator_method="GhostFace-v1__GFPGAN-v1.4",
+                    ),
+                    _make_inventory_variant(
+                        variant_id="capture_b__ghostface_v1__gfpgan_teams",
+                        label="fake",
+                        transport="teams",
+                        enhancement="enhanced",
+                        frame_paths=teams_fake_b,
+                        generator_method="GhostFace-v1__GFPGAN-v1.4",
+                    ),
+                ],
+            },
+        ],
+    }
+    inventory_path = tmp_path / "proper_inventory.yaml"
+    inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
+
+    manifest_path = tmp_path / "proper_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "manifest_version": 1,
+                "schema_name": "future_proper_target_domain_manifest_v1",
+                "source_inventory": str(inventory_path),
+                "wave_id": wave_id,
+                "summary": {
+                    "lane_counts": {
+                        "proper_visomaster_clean": 1,
+                        "proper_visomaster_teams": 1,
+                        "proper_visomaster_enhanced_clean": 1,
+                        "proper_visomaster_enhanced_teams": 1,
+                    },
+                    "split_counts": {"dev": 4},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return inventory_path, manifest_path
 
 
 def test_context_variation_disabled_by_default_for_non_vcd_presets():
@@ -262,7 +464,7 @@ def test_context_variation_block_produces_transforms():
     disabled_p = {"context_variation_enabled": False}
     empty_p = {}
 
-    assert len(_build_context_variation_block(enabled_p)) == 1  # OneOf wrapper
+    assert len(_build_context_variation_block(enabled_p)) == 3  # independent transforms
     assert len(_build_context_variation_block(disabled_p)) == 0
     assert len(_build_context_variation_block(empty_p)) == 0
 
@@ -281,7 +483,9 @@ def test_context_variation_forward_pass_all_families():
     families = [
         "df40_fake", "deeplive_non_enhanced_fake", "deeplive_enhanced_fake",
         "visomaster_fake", "visomaster_enhanced_fake",
-        "df40_real", "realpool_real", "external_real",
+        "proper_visomaster_clean_fake", "proper_visomaster_enhanced_clean_fake",
+        "proper_visomaster_teams_fake", "proper_visomaster_enhanced_teams_fake",
+        "df40_real", "realpool_real", "proper_real_clean", "proper_real_teams", "external_real",
     ]
     for family in families:
         pipeline = _build_family_quality_pipeline(family, preset)
@@ -594,6 +798,122 @@ def test_combined_paired_pipeline_uses_top_level_num_workers_and_persistent_work
     assert _loader_option(result.val_holdout_loader._dataloader, "persistent_workers") is True
 
 
+def test_discover_proper_data_samples_builds_lane_specific_pairs(tmp_path):
+    proper_data_module = _load_proper_data_source_module()
+    inventory_path, manifest_path = _write_proper_data_inventory(tmp_path)
+
+    samples, summary = proper_data_module.discover_proper_data_samples(
+        inventory_uri=str(inventory_path),
+        manifest_uri=str(manifest_path),
+    )
+
+    assert len(samples) == 4
+    assert summary["lane_counts"] == {
+        "proper_visomaster_clean": 1,
+        "proper_visomaster_enhanced_clean": 1,
+        "proper_visomaster_enhanced_teams": 1,
+        "proper_visomaster_teams": 1,
+    }
+    assert summary["manifest_summary"]["lane_counts"]["proper_visomaster_clean"] == 1
+    assert {sample.source for sample in samples} == set(summary["lane_counts"])
+    assert {sample.transport for sample in samples} == {"clean", "teams"}
+    assert {sample.enhancement for sample in samples} == {"none", "enhanced"}
+    assert all(sample.inventory_path == str(inventory_path) for sample in samples)
+    assert all(sample.wave_id == "proper_wave_test" for sample in samples)
+
+
+def test_validate_manifest_reference_accepts_workspace_equivalent_inventory_paths():
+    proper_data_module = _load_proper_data_source_module()
+
+    summary = proper_data_module._validate_manifest_reference(
+        {
+            "wave_id": "proper_wave_test",
+            "source_inventory": (
+                "DeepfakeBench/training/arena/inventories/"
+                "proper_visomaster_wave_2026_04_19_provisional.yaml"
+            ),
+            "summary": {"lane_counts": {"proper_visomaster_clean": 1}},
+        },
+        inventory={"wave_id": "proper_wave_test"},
+        inventory_path="/workspace/arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml",
+        manifest_path="arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json",
+    )
+
+    assert summary["lane_counts"]["proper_visomaster_clean"] == 1
+
+    with pytest.raises(ValueError, match="source_inventory mismatch"):
+        proper_data_module._validate_manifest_reference(
+            {
+                "wave_id": "proper_wave_test",
+                "source_inventory": (
+                    "DeepfakeBench/training/arena/inventories/"
+                    "different_inventory_snapshot.yaml"
+                ),
+            },
+            inventory={"wave_id": "proper_wave_test"},
+            inventory_path="/workspace/arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml",
+            manifest_path="arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json",
+        )
+
+
+def test_combined_paired_pipeline_counts_proper_data_lanes(tmp_path):
+    combined_paired_module = _load_combined_paired_source_module()
+    create_combined_paired_pipeline = combined_paired_module.create_combined_paired_pipeline
+    inventory_path, manifest_path = _write_proper_data_inventory(tmp_path)
+
+    config = {
+        "manualSeed": 737,
+        "frames_per_batch": 2,
+        "frames_per_video": 1,
+    }
+    data_config = {
+        "data_source": "combined_paired",
+        "combined_paired": {
+            "split_seed": 123,
+            "identity_balanced_sampling": True,
+            "df40": {"enabled": False},
+            "deeplive": {"enabled": False},
+            "visomaster": {"enabled": False},
+            "visomaster_hints": {"enabled": False},
+            "teams": {"enabled": False},
+            "visomaster_hints_teams": {"enabled": False},
+            "visomaster_enhanced": {"enabled": False},
+            "visomaster_teams_enhanced": {"enabled": False},
+            "visomaster_res_variant": {"enabled": False},
+            "proper_data": {
+                "enabled": True,
+                "inventory_path": str(inventory_path),
+                "manifest_path": str(manifest_path),
+                "anchor_indices": [0],
+            },
+            "train_split": 0.8,
+            "val_split": 0.1,
+        },
+    }
+
+    result = create_combined_paired_pipeline(
+        config,
+        data_config,
+        logging.getLogger("test"),
+        transform=lambda image, landmarks, meta=None: image,
+    )
+
+    assert result.data_stats["proper_data_samples"] == 4
+    assert result.data_stats["proper_visomaster_clean_samples"] == 1
+    assert result.data_stats["proper_visomaster_teams_samples"] == 1
+    assert result.data_stats["proper_visomaster_enhanced_clean_samples"] == 1
+    assert result.data_stats["proper_visomaster_enhanced_teams_samples"] == 1
+    assert result.data_stats["proper_data_lane_counts"] == {
+        "proper_visomaster_clean": 1,
+        "proper_visomaster_enhanced_clean": 1,
+        "proper_visomaster_enhanced_teams": 1,
+        "proper_visomaster_teams": 1,
+    }
+    assert result.data_stats["source_counts"]["proper_visomaster_clean"] == 1
+    assert result.data_stats["proper_data_discovery"]["paired_sample_count"] == 4
+    assert result.data_stats["split_seed"] == 123
+
+
 class _MiniDF40Dataset:
     def load_sample_frames(self, sample, frame_indices, as_array=True):
         frames = [np.zeros((8, 8, 3), dtype=np.uint8) for _ in frame_indices]
@@ -639,6 +959,68 @@ def test_transform_backward_compatibility_two_arg_signature():
     next(it)
     next(it)
     assert transform_calls["count"] == 2
+
+
+def test_proper_data_iteration_uses_explicit_frame_paths_and_ragged_intersection(tmp_path):
+    combined_paired_module = _load_combined_paired_source_module()
+    proper_data_module = _load_proper_data_source_module()
+    CombinedBatchingConfig = combined_paired_module.CombinedBatchingConfig
+    CombinedPairedIterableDataset = combined_paired_module.CombinedPairedIterableDataset
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+
+    real_paths = [tmp_path / f"ragged/real/frame_{idx:04d}.png" for idx in range(3)]
+    fake_paths = [tmp_path / f"ragged/fake/frame_{idx:04d}.png" for idx in range(2)]
+    for index, frame_path in enumerate([*real_paths, *fake_paths]):
+        _write_test_image(frame_path, 60 + index)
+
+    sample = proper_data_module.ProperDataPairedSample(
+        sample_id="capture_ragged__cscs__clean",
+        base_capture_id="capture_ragged",
+        identity_id="ragged_identity",
+        capture_session_id="session_ragged",
+        split_group_id="ragged_identity__session_ragged",
+        source="proper_visomaster_clean",
+        method="proper_visomaster_clean__cscs",
+        transport="clean",
+        enhancement="none",
+        generator_family="visomaster",
+        generator_method="CSCS",
+        quality_band="high",
+        face_scale_band="big_face",
+        real_frame_paths=tuple(str(path) for path in real_paths),
+        fake_frame_paths=tuple(str(path) for path in fake_paths),
+    )
+    unified_sample = UnifiedPairedSample(
+        identity="realpool_ragged_identity",
+        source=sample.source,
+        original_sample=sample,
+        method=sample.method,
+        has_landmarks=False,
+        sample_id=sample.sample_id,
+    )
+
+    ds = CombinedPairedIterableDataset(
+        samples=[unified_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(
+            proper_data_sparse_indices=[0, 1, 2],
+            proper_data_parallel_download_workers=1,
+        ),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={sample.method: 7},
+    )
+
+    items = list(ds._iterate_proper_data_sample(unified_sample, random.Random(1)))
+
+    assert len(items) == 4
+    assert [item["label"] for item in items] == [0, 1, 0, 1]
+    assert {item["frame_idx"] for item in items} == {0, 1}
+    assert all(item["source"] == "proper_visomaster_clean" for item in items)
+    assert all(item["method_id"] == 7 for item in items)
+    assert all(item["base_capture_id"] == "capture_ragged" for item in items)
 
 
 def test_weighted_identity_sampler_shifts_family_distribution():
@@ -739,7 +1121,7 @@ def test_weighted_identity_sampler_shifts_family_distribution():
 
 
 def test_combined_validation_uses_method_id_mapping_for_per_method_metrics():
-    torch = pytest.importorskip("torch")
+    torch = _require_real_torch()
     from trainer.trainer import Trainer
 
     class _DummyModel:
@@ -810,7 +1192,7 @@ def test_combined_validation_uses_method_id_mapping_for_per_method_metrics():
 
 
 def test_report_generation_emits_group_metrics_and_group_summary(tmp_path):
-    pytest.importorskip("torch")
+    _require_real_torch()
     from trainer.trainer import Trainer
 
     trainer = Trainer.__new__(Trainer)
@@ -914,6 +1296,14 @@ def test_visomaster_enhanced_quality_domain_map():
     src = Path(__file__).resolve().parents[1] / "data" / "sources" / "combined_paired.py"
     text = src.read_text()
     assert '"visomaster_enhanced"' in text or "'visomaster_enhanced'" in text
+
+
+def test_proper_data_quality_domain_map():
+    """Proper-data clean/Teams lanes should be explicitly mapped in QUALITY_DOMAIN_MAP."""
+    src = Path(__file__).resolve().parents[1] / "data" / "sources" / "combined_paired.py"
+    text = src.read_text()
+    assert '"proper_visomaster_clean"' in text or "'proper_visomaster_clean'" in text
+    assert '"proper_visomaster_teams"' in text or "'proper_visomaster_teams'" in text
 
 
 def test_visomaster_enhanced_router_registered():

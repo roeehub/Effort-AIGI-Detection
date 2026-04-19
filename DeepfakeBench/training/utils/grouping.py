@@ -92,6 +92,22 @@ def _extract_deeplive_strategy(method_norm: str, source_norm: str) -> Optional[s
     return None
 
 
+def _extract_proper_lane(method_norm: str, source_norm: str) -> Optional[str]:
+    for lane in (
+        "proper_real_clean",
+        "proper_real_teams",
+        "proper_visomaster_clean",
+        "proper_visomaster_enhanced_clean",
+        "proper_visomaster_teams",
+        "proper_visomaster_enhanced_teams",
+    ):
+        if source_norm == lane:
+            return lane
+        if method_norm == lane or method_norm.startswith(f"{lane}__"):
+            return lane
+    return None
+
+
 def infer_group_key(
     label: Union[str, int, float, bool, None],
     method: Optional[str] = None,
@@ -107,6 +123,13 @@ def infer_group_key(
     enhanced = _normalize_strategy_set(enhanced_strategy_names)
     if not enhanced:
         enhanced = _normalize_strategy_set(DEFAULT_ENHANCED_STRATEGIES)
+
+    proper_lane = _extract_proper_lane(method_norm, source_norm)
+    if proper_lane is not None:
+        if label_id == 0:
+            return "proper_real_teams" if proper_lane.endswith("_teams") else "proper_real_clean"
+        if label_id == 1 and proper_lane.startswith("proper_visomaster_"):
+            return f"{proper_lane}_fake"
 
     # Teams passthrough groups — must be checked BEFORE generic DeepLive
     # routing because method strings start with "deeplive_teams_".
@@ -283,6 +306,16 @@ def infer_family_key(
 
     if group_key == "visomaster_fake":
         return "visomaster_fake"
+
+    if group_key in {
+        "proper_visomaster_clean_fake",
+        "proper_visomaster_enhanced_clean_fake",
+        "proper_visomaster_teams_fake",
+        "proper_visomaster_enhanced_teams_fake",
+        "proper_real_clean",
+        "proper_real_teams",
+    }:
+        return group_key
 
     if group_key == "visomaster_hints_real":
         return "visomaster_hints_real"
