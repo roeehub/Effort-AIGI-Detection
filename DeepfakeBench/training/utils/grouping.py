@@ -151,6 +151,20 @@ def infer_group_key(
         if label_id == 1:
             return "visomaster_res_variant_fake"
 
+    # Explicit WT-B hint lanes — must be checked BEFORE generic VisoMaster
+    # routing because the method strings still share the "visomaster_" prefix.
+    if source_norm == "visomaster_hints" or method_norm == "visomaster_hints":
+        if label_id == 0:
+            return "visomaster_hints_real"
+        if label_id == 1:
+            return "visomaster_hints_fake"
+
+    if source_norm == "visomaster_hints_teams" or method_norm == "visomaster_hints_teams":
+        if label_id == 0:
+            return "visomaster_hints_teams_real"
+        if label_id == 1:
+            return "visomaster_hints_teams_fake"
+
     # VisoMaster groups.
     is_visomaster_method = (
         method_norm == "visomaster_real"
@@ -261,8 +275,20 @@ def infer_family_key(
     if group_key == "visomaster_res_variant_fake":
         return "visomaster_res_variant_fake"
 
+    if group_key == "visomaster_hints_fake":
+        return "visomaster_hints_fake"
+
+    if group_key == "visomaster_hints_teams_fake":
+        return "visomaster_hints_teams_fake"
+
     if group_key == "visomaster_fake":
         return "visomaster_fake"
+
+    if group_key == "visomaster_hints_real":
+        return "visomaster_hints_real"
+
+    if group_key == "visomaster_hints_teams_real":
+        return "visomaster_hints_teams_real"
 
     if group_key in {
         "visomaster_enhanced_real",

@@ -23,7 +23,7 @@ Dependency rule:
 | WT-D | 3 | merged | roeedar/codex-wt-d | wt-d-decision-system-2026-04-17 | ../wt-d-decision-system-2026-04-17 | Merged 2026-04-17 19:09:08 CEST; report-driven threshold, abstain, temporal, and hysteresis tooling landed |
 | WT-C | 4 | merged | roeedar/codex-wt-c | wt-c-nuisance-2026-04-17 | ../wt-c-nuisance-2026-04-17 | Merged 2026-04-17 19:07:22 CEST; GammaUp runtime truth, sidecars, and tests landed; WT-D owns measurement |
 | WT-F | 5 | merged | roeedar/codex-wt-f | wt-f-proper-data-schema-2026-04-17 | ../wt-f-proper-data-schema-2026-04-17 | Merged 2026-04-17 19:06:14 CEST; proper-data schema, inventory template, and future eval slice contract landed |
-| WT-B | 6 | blocked | roeedar/codex-wt-b | wt-b-weak-signal-ablations-2026-04-17 | ../wt-b-weak-signal-ablations-2026-04-17 | Blocked 2026-04-17 20:41:39 CEST after merge `5533985`; draft-only package landed, but tracked training-side visomaster_hints integration is still missing |
+| WT-B | 6 | merged | roeedar/codex-wt-b | wt-b-weak-signal-ablations-2026-04-17 | ../wt-b-weak-signal-ablations-2026-04-17 | Merged 2026-04-19 12:31:21 CEST; WT-B runtime package, tracked policy bundle, runnable WTB1/2/3 configs, launcher-oriented smoke config, and Teams discovery-cache support are committed on `teams-relaunch-root-2026-04-17`. Remaining ops are image publication, remote smoke via `./launch_experiment.sh`, and incoming new-bucket loader integration outside WT-B |
 
 ## Claim Log
 
@@ -45,3 +45,5 @@ Append one line per state change.
 | 2026-04-17 19:09:08 CEST | WT-D | merged | roeedar/codex-wt-d | Merged decision-system analysis tooling, stability docs, and WT-D handoff |
 | 2026-04-17 20:36:32 CEST | WT-B | claimed | roeedar/codex-wt-b | Claimed WT-B; verifying whether the tracked tree can honestly express explicit weak-signal hint lanes |
 | 2026-04-17 20:41:39 CEST | WT-B | blocked | roeedar/codex-wt-b | Merged draft-only weak-signal package; tracked `visomaster_hints` / `visomaster_hints_teams` source integration is still missing |
+| 2026-04-18 22:49:11 CEST | WT-B | analysis-done | roeedar/codex-wt-b | Local WT-B implementation landed: explicit hint-lane runtime, clean Teams policy filter, runnable WTB1/2/3 configs, and updated handoff/runbook. Remaining gaps are portability, not local logic |
+| 2026-04-19 12:31:21 CEST | WT-B | merged | roeedar/codex-wt-b | Committed WT-B runtime package plus launcher smoke config and Teams discovery-cache support on `teams-relaunch-root-2026-04-17`; next steps are image rebuild, remote smoke, and new-data loader follow-up |

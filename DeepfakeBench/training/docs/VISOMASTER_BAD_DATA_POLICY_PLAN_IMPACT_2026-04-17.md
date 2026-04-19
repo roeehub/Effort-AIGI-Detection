@@ -19,10 +19,10 @@ composition unless the run is explicitly rebuilt under the new policy.
 
 ## Source Of Truth
 
-- `DeepfakeBench/training/debug/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv`
-- `DeepfakeBench/training/debug/VISOMASTER_BAD_DATA_POLICY_SUMMARY_2026-04-17.json`
-- `DeepfakeBench/training/debug/VISOMASTER_BAD_DATA_POLICY_REPORT_2026-04-17.md`
-- `DeepfakeBench/training/debug/VISOMASTER_BAD_DATA_UPLOAD_AUDIT.md`
+- `DeepfakeBench/training/policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv`
+- `DeepfakeBench/training/policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_SUMMARY_2026-04-17.json`
+- `DeepfakeBench/training/policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_REPORT_2026-04-17.md`
+- `DeepfakeBench/training/policy/visomaster_bad_data/VISOMASTER_BAD_DATA_UPLOAD_AUDIT.md`
 - `DeepfakeBench/training/docs/research_2026-04-15/04_data_composition_and_curriculum_opportunities.md`
 - `DeepfakeBench/training/docs/research_2026-04-15/05_target_domain_gap_and_teams_enhanced_structural_findings.md`
 - `DeepfakeBench/training/docs/research_2026-04-15_round2/01_evaluation_contract_and_shortlist.md`

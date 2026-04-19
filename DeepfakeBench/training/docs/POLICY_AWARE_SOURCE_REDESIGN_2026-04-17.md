@@ -9,6 +9,27 @@ described honestly.
 This document is intentionally stricter than the older Track A docs. It treats
 lane naming as part of model truth, not just a viewer convenience.
 
+Update 2026-04-18:
+
+- at that point, the local WT-B runtime had explicit `combined_paired.visomaster_hints`
+  and `combined_paired.visomaster_hints_teams` support plus a clean Teams
+  policy filter in `training/data/sources/combined_paired.py`
+- at that point, that implementation still lived in the ignored local `training/data/sources/`
+  tree and still depends on the local April 17 policy packet under
+  `training/debug/`
+- so the tracked-tree warning below remains relevant for merge / portability
+  questions even though the local workspace is no longer blocked in the same way
+
+Update 2026-04-19:
+
+- the April 17 manifest / summary / report / upload-audit packet now has a
+  tracked canonical home under `training/policy/visomaster_bad_data/`
+- the repo-level `data/` ignore rule now makes an explicit exception for
+  `DeepfakeBench/training/data/**/*.py`, so the runtime package is visible to
+  Git instead of being trapped in an ignored subtree
+- the remaining portability gap is now commit / merge follow-through plus a
+  real smoke run, not missing raw policy artifacts
+
 ## What The Re-Investigation Changed
 
 ### 1. Current checked-in training is still not proved policy-aware
@@ -29,31 +50,31 @@ Conclusion:
 - any currently checked-in Track A / merged / teamsonly retrain is still
   `old-semantics`
 
-### 2. The repo-tracked tree does not currently carry `training/data/`
+### 2. The repo-tracked tree still does not carry most of `training/data/`
 
 The runtime source files reviewed under
-`DeepfakeBench/training/data/sources/{combined_paired,visomaster}.py` live under
-an ignored local `data/` tree in this repo layout. They are not part of the Git
-tree on `teams-relaunch-root-2026-04-17`.
+`DeepfakeBench/training/data/sources/{combined_paired,visomaster}.py` no longer
+sit behind an ignore-rule wall in this repo layout, but they still are not part
+of the Git tree on `teams-relaunch-root-2026-04-17` until the now-visible
+runtime package is committed.
 
 Implication:
 
 - WT-A can merge back authoritative truth artifacts and redesign docs now
-- a merge-safe tracked source integration requires either:
-  - bringing `training/data/` under version control, or
-  - agreeing to force-add just the runtime source subset in a follow-up
+- a merge-safe tracked source integration still requires committing the runtime
+  package now that the ignore-rule blocker is gone
 
-### 3. The raw April 17 policy packet is missing from the tracked repo
+### 3. The raw April 17 policy packet now has a tracked canonical copy
 
-The docs cite the policy CSV/JSON packet, but those files are not checked in.
-That means exact corrected `val` / `test` split reconstruction cannot be
-recomputed from the tracked tree alone.
+A canonical copy of the April 17 packet now lives under
+`DeepfakeBench/training/policy/visomaster_bad_data/`, including the manifest,
+summary, policy report, and upload audit.
 
 Implication:
 
-- exact corrected `train` and global paired-object counts are still freezeable
-- exact corrected `val` / `test` hint-split counts remain blocked on the raw
-  policy packet
+- the missing-packet blocker is gone for exact corrected count reconstruction
+- full reproducibility still depends on getting the runtime package committed
+  alongside those tracked policy artifacts
 
 ## Frozen Lane Semantics
 
@@ -181,9 +202,10 @@ That tool validates:
 
 ## Remaining Follow-Up
 
-1. Decide whether the ignored local `training/data/` runtime tree should become
-   mergeable tracked code.
-2. Check in the raw April 17 policy CSV/JSON packet if exact corrected
-   `val` / `test` hint split counts are still needed.
-3. Only after those two steps, add the explicit training-side
-   `visomaster_hints` / `visomaster_hints_teams` loader path.
+1. Commit the now-visible `training/data/**/*.py` runtime tree, or the minimum
+   agreed subset, so the explicit hint-lane loader path becomes tracked code.
+2. Run a real config-load or short training smoke with the tracked policy
+   bundle.
+3. After those two steps, call the package `weak-signal-only` or
+   `policy-corrected` only where the tracked runtime path really matches that
+   claim.

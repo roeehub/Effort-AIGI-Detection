@@ -1,0 +1,192 @@
+{
+  "action_counts": {
+    "delete": 3,
+    "ignore": 4904,
+    "keep": 682
+  },
+  "baseline_selection_group_counts": {
+    "GhostFace-v1|MODERATE": {
+      "available": 274,
+      "kept": 40
+    },
+    "GhostFace-v1|STRONG": {
+      "available": 48,
+      "kept": 40
+    },
+    "GhostFace-v2|MODERATE": {
+      "available": 316,
+      "kept": 40
+    },
+    "GhostFace-v2|STRONG": {
+      "available": 57,
+      "kept": 40
+    },
+    "GhostFace-v3|MODERATE": {
+      "available": 317,
+      "kept": 40
+    },
+    "GhostFace-v3|STRONG": {
+      "available": 66,
+      "kept": 40
+    },
+    "InStyleSwapper256-A|MODERATE": {
+      "available": 168,
+      "kept": 40
+    },
+    "InStyleSwapper256-A|STRONG": {
+      "available": 41,
+      "kept": 40
+    },
+    "InStyleSwapper256-B|MODERATE": {
+      "available": 209,
+      "kept": 40
+    },
+    "InStyleSwapper256-B|STRONG": {
+      "available": 67,
+      "kept": 40
+    },
+    "Inswapper128|MODERATE": {
+      "available": 218,
+      "kept": 40
+    },
+    "Inswapper128|STRONG": {
+      "available": 102,
+      "kept": 40
+    }
+  },
+  "bucket_sources": {
+    "cropped_bucket": "live-deepfake-methods-real-and-fake-frames-cropped",
+    "frames_bucket": "live-deepfake-methods-real-and-fake-frames",
+    "teams_bucket": "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+  },
+  "counts_unique_sample_ids": {
+    "delete": 3,
+    "ignore": 4904,
+    "keep_total": 682,
+    "keep_visomaster_hints": 480,
+    "keep_visomaster_hints_teams": 202,
+    "total_bad_cropped_samples": 5589
+  },
+  "date_tag": "2026-04-17",
+  "explicit_delete_bucket_presence": {
+    "visomaster_GhostFace-v2_04004": {
+      "in_cropped_bucket": true,
+      "in_frames_bucket": true,
+      "in_teams_pair_complete": false,
+      "swap_model": "GhostFace-v2",
+      "tier": "STRONG"
+    },
+    "visomaster_InStyleSwapper256-B_12029": {
+      "in_cropped_bucket": true,
+      "in_frames_bucket": true,
+      "in_teams_pair_complete": true,
+      "swap_model": "InStyleSwapper256-B",
+      "tier": "STRONG"
+    },
+    "visomaster_InStyleSwapper256-B_12395": {
+      "in_cropped_bucket": true,
+      "in_frames_bucket": true,
+      "in_teams_pair_complete": false,
+      "swap_model": "InStyleSwapper256-B",
+      "tier": "STRONG"
+    }
+  },
+  "explicit_delete_ids": [
+    "visomaster_GhostFace-v2_04004",
+    "visomaster_InStyleSwapper256-B_12029",
+    "visomaster_InStyleSwapper256-B_12395"
+  ],
+  "global_reason_counts": {
+    "cscs_excluded": 567,
+    "explicit_named_bad_datapoint": 3,
+    "minimal_tier_excluded": 1541,
+    "missing_tier_metadata_companion": 1359,
+    "not_selected_in_deterministic_random_subset": 1403,
+    "retain_as_weak_signal_after_teams": 202,
+    "retain_as_weak_signal_baseline_subset": 480,
+    "teams_pair_complete_cscs_excluded": 34
+  },
+  "label_counts": {
+    "visomaster hints": 480,
+    "visomaster hints (teams)": 202
+  },
+  "labels": {
+    "visomaster hints": "Weak-signal auxiliary label for bad baseline VisoMaster samples. These should not be treated as correct method-faithful examples.",
+    "visomaster hints (teams)": "Weak-signal auxiliary label for bad VisoMaster samples after Teams playback. These carry both bad-VisoMaster signal and Teams-processing signal."
+  },
+  "non_cscs_methods": [
+    "GhostFace-v1",
+    "GhostFace-v2",
+    "GhostFace-v3",
+    "InStyleSwapper256-A",
+    "InStyleSwapper256-B",
+    "Inswapper128"
+  ],
+  "notes": [
+    "Ignore all remaining bad VisoMaster data in training manifests and configs.",
+    "Delete only the explicitly named bad datapoints.",
+    "Retained data is auxiliary weak-signal data only, not method-faithful supervision.",
+    "More actually correct VisoMaster data is expected to arrive soon and should replace this stopgap policy."
+  ],
+  "per_method_tier_quota": 40,
+  "percentages_unique_sample_ids": {
+    "delete": "0.05%",
+    "ignore": "87.74%",
+    "keep_total": "12.20%",
+    "keep_visomaster_hints": "8.59%",
+    "keep_visomaster_hints_teams": "3.61%"
+  },
+  "policy_name": "visomaster_bad_data_relabel_policy",
+  "selection_seed": 20260417,
+  "target_tiers": [
+    "MODERATE",
+    "STRONG"
+  ],
+  "teams_policy_breakdown": {
+    "deleted_named_bad_datapoint": 1,
+    "ignored_cscs": 34,
+    "kept_as_visomaster_hints_teams": 202,
+    "model_counts_keep": {
+      "GhostFace-v1": 36,
+      "GhostFace-v2": 32,
+      "GhostFace-v3": 35,
+      "InStyleSwapper256-A": 35,
+      "InStyleSwapper256-B": 35,
+      "Inswapper128": 29
+    },
+    "model_counts_total": {
+      "CSCS": 34,
+      "GhostFace-v1": 36,
+      "GhostFace-v2": 32,
+      "GhostFace-v3": 35,
+      "InStyleSwapper256-A": 35,
+      "InStyleSwapper256-B": 36,
+      "Inswapper128": 29
+    },
+    "tier_counts_keep": {
+      "MINIMAL": 63,
+      "MODERATE": 108,
+      "STRONG": 31
+    },
+    "tier_counts_total": {
+      "MINIMAL": 78,
+      "MODERATE": 123,
+      "STRONG": 36
+    },
+    "total_pair_complete_samples": 237
+  },
+  "training_rows_if_baseline_and_teams_are_separate_lanes": {
+    "baseline_delete_rows": 3,
+    "baseline_ignore_rows": 5106,
+    "baseline_keep_rows": 480,
+    "baseline_total_rows": 5589,
+    "teams_delete_rows": 1,
+    "teams_ignore_rows": 34,
+    "teams_keep_rows": 202,
+    "teams_total_rows": 237,
+    "total_candidate_rows": 5826,
+    "total_delete_rows": 4,
+    "total_ignore_rows": 5140,
+    "total_keep_rows": 682
+  }
+}

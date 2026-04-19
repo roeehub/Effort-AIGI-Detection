@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import random
 import sys
+import time
 import types
 import importlib.util
 import json
@@ -34,6 +35,9 @@ def test_group_key_mapping_representative_cases():
         (0, "deeplive_edge_cases", None, "deeplive_edge_cases_real", "realpool_real"),
         (1, "deeplive_edge_cases_enhanced", None, "deeplive_edge_cases_enhanced_fake", "deeplive_enhanced_fake"),
         (1, "visomaster_CSCS", None, "visomaster_fake", "visomaster_fake"),
+        (1, "visomaster_hints", "visomaster_hints", "visomaster_hints_fake", "visomaster_hints_fake"),
+        (1, "visomaster_hints_teams", "visomaster_hints_teams", "visomaster_hints_teams_fake", "visomaster_hints_teams_fake"),
+        (0, "visomaster_hints_teams", "visomaster_hints_teams", "visomaster_hints_teams_real", "visomaster_hints_teams_real"),
         # VisoMaster enhanced (post-hoc face enhancement) — source-based routing
         (1, "visomaster_enhanced_gfpgan", "visomaster_enhanced", "visomaster_enhanced_fake", "visomaster_enhanced_fake"),
         (1, "visomaster_enhanced_codeformer", "visomaster_enhanced", "visomaster_enhanced_fake", "visomaster_enhanced_fake"),
@@ -52,9 +56,9 @@ def test_group_key_mapping_representative_cases():
 
 def test_quality_targeted_family_router_forward_pass():
     pytest.importorskip("albumentations")
-    from data.augmentations.pipelines import create_quality_targeted_family_router
-
-    router = create_quality_targeted_family_router(strength="light")
+    _ensure_source_package_stubs()
+    mod = _load_pipelines_module()
+    router = mod.create_quality_targeted_family_router(strength="light")
     image = np.full((64, 64, 3), 127, dtype=np.uint8)
 
     out = router(
@@ -65,6 +69,18 @@ def test_quality_targeted_family_router_forward_pass():
 
     assert isinstance(out, np.ndarray)
     assert out.shape == image.shape
+
+
+def test_quality_targeted_family_router_registers_hint_families():
+    pytest.importorskip("albumentations")
+    _ensure_source_package_stubs()
+    mod = _load_pipelines_module()
+    router = mod.create_quality_targeted_family_router(strength="light")
+
+    assert "visomaster_hints_fake" in router._pipelines
+    assert "visomaster_hints_real" in router._pipelines
+    assert "visomaster_hints_teams_fake" in router._pipelines
+    assert "visomaster_hints_teams_real" in router._pipelines
 
 
 def _load_pipelines_module():
@@ -109,6 +125,7 @@ def _ensure_torch_stub():
 
     torch_utils_data_module.DataLoader = _StubDataLoader
     torch_utils_data_module.IterableDataset = _StubIterableDataset
+    torch_utils_data_module.get_worker_info = lambda: None
     torch_utils_module.data = torch_utils_data_module
     torch_module.utils = torch_utils_module
     torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
@@ -198,6 +215,16 @@ def _loader_option(loader, name):
     if hasattr(loader, "kwargs"):
         return loader.kwargs[name]
     return getattr(loader, name)
+
+
+def _make_policy_bundle(rows_by_sample_id):
+    return types.SimpleNamespace(
+        row_for=lambda sample_id: rows_by_sample_id.get(sample_id),
+        rows_by_sample_id=rows_by_sample_id,
+        manifest_path=Path("/tmp/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv"),
+        summary_path=None,
+        date_tag="2026-04-17",
+    )
 
 
 def test_context_variation_disabled_by_default_for_non_vcd_presets():
@@ -1254,6 +1281,158 @@ def test_load_visomaster_frames_parallel_preserves_anchor_order(monkeypatch):
     assert [int(frame[0, 0, 0]) for frame in fake_frames] == [100, 102, 104]
 
 
+def test_wt_b_policy_partition_helpers_split_clean_and_hint_lanes():
+    combined_paired_module = _load_combined_paired_source_module()
+    visomaster_module = _load_visomaster_source_module()
+
+    policy_module = combined_paired_module._load_visomaster_policy_runtime()
+    VisoMasterSample = visomaster_module.VisoMasterSample
+    TeamsSample = combined_paired_module.TeamsSample
+
+    hint_row = types.SimpleNamespace(
+        sample_id="visomaster_CSCS_00007",
+        policy_action=policy_module.KEEP_ACTION,
+        policy_label=policy_module.BASELINE_LABEL,
+        policy_lane="baseline_cropped",
+        swap_model="CSCS",
+        tier="MINIMAL",
+        identity_delta=0.42,
+        original_video_name="cropped_policy_viso.mp4",
+        in_teams_pair_complete=False,
+    )
+    teams_hint_row = types.SimpleNamespace(
+        sample_id="visomaster_CSCS_00077",
+        policy_action=policy_module.KEEP_ACTION,
+        policy_label=policy_module.TEAMS_LABEL,
+        policy_lane="teams_pair_complete",
+        swap_model="CSCS",
+        tier="MINIMAL",
+        identity_delta=0.24,
+        original_video_name="cropped_policy_teams.mp4",
+        in_teams_pair_complete=True,
+    )
+    policy_bundle = _make_policy_bundle(
+        {
+            hint_row.sample_id: hint_row,
+            teams_hint_row.sample_id: teams_hint_row,
+        }
+    )
+
+    raw_visomaster_samples = [
+        VisoMasterSample(
+            sample_id="visomaster_CSCS_00007",
+            swap_model="OLD",
+            frame_count=16,
+            tier="UNKNOWN",
+            identity_delta=-1.0,
+            bucket_name="bucket",
+            manifest={"original_video_name": "cropped_old.mp4"},
+        ),
+        VisoMasterSample(
+            sample_id="visomaster_CSCS_00008",
+            swap_model="OLD",
+            frame_count=16,
+            tier="UNKNOWN",
+            identity_delta=-1.0,
+            bucket_name="bucket",
+            manifest={"original_video_name": "cropped_skip.mp4"},
+        ),
+    ]
+    selected_viso = combined_paired_module._select_visomaster_hints_samples(
+        raw_visomaster_samples,
+        policy_bundle,
+        logging.getLogger("test"),
+    )
+
+    assert [sample.sample_id for sample in selected_viso] == ["visomaster_CSCS_00007"]
+    assert selected_viso[0].swap_model == "CSCS"
+    assert selected_viso[0].tier == "MINIMAL"
+    assert selected_viso[0].identity_delta == pytest.approx(0.42)
+    assert selected_viso[0].manifest["original_video_name"] == "cropped_policy_viso.mp4"
+
+    raw_teams_samples = [
+        TeamsSample(
+            sample_id="visomaster_CSCS_00077",
+            strategy="minimal_processing",
+            original_video_name="cropped_old_teams.mp4",
+            frame_count=16,
+            gcs_bucket="teams-bucket",
+            real_prefix="samples/visomaster_CSCS_00077/frames/real/",
+            fake_prefix="samples/visomaster_CSCS_00077/frames/fake/",
+        ),
+        TeamsSample(
+            sample_id="teams_direct_00001",
+            strategy="quality_enhancement",
+            original_video_name="cropped_clean_teams.mp4",
+            frame_count=16,
+            gcs_bucket="teams-bucket",
+            real_prefix="samples/teams_direct_00001/frames/real/",
+            fake_prefix="samples/teams_direct_00001/frames/fake/",
+        ),
+    ]
+
+    clean_teams = combined_paired_module._select_clean_teams_samples(
+        raw_teams_samples,
+        policy_bundle,
+        logging.getLogger("test"),
+    )
+    hint_teams = combined_paired_module._select_hint_teams_samples(
+        raw_teams_samples,
+        policy_bundle,
+        logging.getLogger("test"),
+    )
+
+    assert [sample.sample_id for sample in clean_teams] == ["teams_direct_00001"]
+    assert [sample.sample_id for sample in hint_teams] == ["visomaster_CSCS_00077"]
+    assert hint_teams[0].original_video_name == "cropped_policy_teams.mp4"
+
+
+def test_discover_teams_passthrough_samples_uses_fresh_cache_without_gcs(tmp_path, monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+
+    cache_path = tmp_path / "teams_discovery_cache.json"
+    cache_payload = {
+        "version": 1,
+        "timestamp": time.time(),
+        "config": {
+            "gcs_bucket": "teams-bucket",
+            "require_pair_complete": True,
+            "cache_revision": "wtb-cache-v1",
+        },
+        "samples": [
+            {
+                "sample_id": "teams_direct_00001",
+                "strategy": "quality_enhancement",
+                "original_video_name": "cropped_vid_a.mp4",
+                "frame_count": 16,
+                "gcs_bucket": "teams-bucket",
+                "real_prefix": "samples/teams_direct_00001/frames/real/",
+                "fake_prefix": "samples/teams_direct_00001/frames/fake/",
+            }
+        ],
+    }
+    cache_path.write_text(json.dumps(cache_payload), encoding="utf-8")
+
+    class _FailClient:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("fresh cache should bypass GCS discovery")
+
+    monkeypatch.setattr(combined_paired_module.storage, "Client", _FailClient)
+
+    samples = combined_paired_module.discover_teams_passthrough_samples(
+        gcs_bucket="teams-bucket",
+        require_pair_complete=True,
+        cache_manifest_uri=str(cache_path),
+        cache_validate_listing=False,
+        cache_revision="wtb-cache-v1",
+        logger=logging.getLogger("test"),
+    )
+
+    assert [sample.sample_id for sample in samples] == ["teams_direct_00001"]
+    assert samples[0].real_prefix == "samples/teams_direct_00001/frames/real/"
+    assert samples[0].fake_prefix == "samples/teams_direct_00001/frames/fake/"
+
+
 def test_iterate_visomaster_sample_skips_missing_positions_without_misalignment(monkeypatch):
     combined_paired_module = _load_combined_paired_source_module()
     visomaster_module = _load_visomaster_source_module()
@@ -1326,6 +1505,98 @@ def test_iterate_visomaster_sample_skips_missing_positions_without_misalignment(
     assert [item["frame_idx"] for item in items] == [0, 0, 4, 4]
     assert [item["label"] for item in items] == [0, 1, 0, 1]
     assert [int(item["image"][0, 0, 0]) for item in items] == [10, 20, 40, 50]
+
+
+def test_iterate_wt_b_hint_lane_samples_keep_explicit_source_names(monkeypatch):
+    combined_paired_module = _load_combined_paired_source_module()
+    visomaster_module = _load_visomaster_source_module()
+    CombinedBatchingConfig = combined_paired_module.CombinedBatchingConfig
+    CombinedPairedIterableDataset = combined_paired_module.CombinedPairedIterableDataset
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+    VisoMasterSample = visomaster_module.VisoMasterSample
+    TeamsSample = combined_paired_module.TeamsSample
+
+    monkeypatch.setattr(combined_paired_module.storage, "Client", lambda: types.SimpleNamespace(bucket=lambda _name: object()))
+
+    def _fake_load_visomaster(
+        sample,
+        anchor_indices,
+        as_array=True,
+        client=None,
+        executor=None,
+        parallel_download_workers=4,
+    ):
+        real = [np.full((8, 8, 3), 10, dtype=np.uint8) for _ in anchor_indices]
+        fake = [np.full((8, 8, 3), 20, dtype=np.uint8) for _ in anchor_indices]
+        return real, fake
+
+    monkeypatch.setattr(visomaster_module, "load_visomaster_frames", _fake_load_visomaster)
+    monkeypatch.setattr(
+        combined_paired_module,
+        "_load_teams_frame_map",
+        lambda bucket, prefix, frame_indices, executor=None, parallel_download_workers=4: {
+            idx: np.full((8, 8, 3), 30 if "real" in prefix else 40, dtype=np.uint8)
+            for idx in frame_indices
+        },
+    )
+
+    viso_sample = UnifiedPairedSample(
+        identity="realpool_vid_a",
+        source="visomaster_hints",
+        original_sample=VisoMasterSample(
+            sample_id="visomaster_CSCS_00007",
+            swap_model="CSCS",
+            frame_count=16,
+            tier="MINIMAL",
+            identity_delta=0.0,
+            bucket_name="bucket",
+            manifest={"original_video_name": "cropped_vid_a.mp4"},
+        ),
+        method="visomaster_hints",
+        has_landmarks=False,
+        sample_id="visomaster_CSCS_00007",
+    )
+    teams_sample = UnifiedPairedSample(
+        identity="realpool_vid_b",
+        source="visomaster_hints_teams",
+        original_sample=TeamsSample(
+            sample_id="visomaster_CSCS_00077",
+            strategy="minimal_processing",
+            original_video_name="cropped_vid_b.mp4",
+            frame_count=16,
+            gcs_bucket="teams-bucket",
+            real_prefix="samples/visomaster_CSCS_00077/frames/real/",
+            fake_prefix="samples/visomaster_CSCS_00077/frames/fake/",
+        ),
+        method="visomaster_hints_teams",
+        has_landmarks=False,
+        sample_id="visomaster_CSCS_00077",
+    )
+
+    ds = CombinedPairedIterableDataset(
+        samples=[viso_sample, teams_sample],
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=CombinedBatchingConfig(
+            visomaster_sparse_indices=[0],
+            teams_sparse_indices=[0],
+        ),
+        transform=None,
+        shuffle=False,
+        seed=1,
+        method_mapping={
+            "visomaster_hints": 0,
+            "visomaster_hints_teams": 1,
+        },
+    )
+
+    viso_items = list(ds._iterate_visomaster_sample(viso_sample, random.Random(1)))
+    teams_items = list(ds._iterate_teams_sample(teams_sample, random.Random(1)))
+
+    assert {item["source"] for item in viso_items} == {"visomaster_hints"}
+    assert {item["quality_domain"] for item in viso_items} == {2}
+    assert {item["source"] for item in teams_items} == {"visomaster_hints_teams"}
+    assert {item["quality_domain"] for item in teams_items} == {1}
 
 
 def test_standalone_visomaster_dataset_skips_missing_positions_without_misalignment(monkeypatch):

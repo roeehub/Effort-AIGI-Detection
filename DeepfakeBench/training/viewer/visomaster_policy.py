@@ -39,6 +39,7 @@ TEAMS_WEIGHT_ALIAS = "deeplive_teams_fake"
 
 TRAINING_DIR = Path(__file__).resolve().parent.parent
 DEBUG_DIR = TRAINING_DIR / "debug"
+POLICY_DIR = TRAINING_DIR / "policy" / "visomaster_bad_data"
 
 MANIFEST_RE = re.compile(r"^VISOMASTER_BAD_DATA_POLICY_MANIFEST_(\d{4}-\d{2}-\d{2})\.csv$")
 SUMMARY_RE = re.compile(r"^VISOMASTER_BAD_DATA_POLICY_SUMMARY_(\d{4}-\d{2}-\d{2})\.json$")
@@ -130,7 +131,7 @@ def _resolve_manifest_path(config: Optional[Dict[str, Any]]) -> Optional[Path]:
     )
     if explicit:
         return _resolve_path(str(explicit))
-    return _find_latest(DEBUG_DIR, MANIFEST_RE)
+    return _find_latest(POLICY_DIR, MANIFEST_RE) or _find_latest(DEBUG_DIR, MANIFEST_RE)
 
 
 def _resolve_summary_path(config: Optional[Dict[str, Any]], date_tag: str) -> Optional[Path]:
@@ -145,10 +146,11 @@ def _resolve_summary_path(config: Optional[Dict[str, Any]], date_tag: str) -> Op
     if explicit:
         return _resolve_path(str(explicit))
 
-    candidate = DEBUG_DIR / f"VISOMASTER_BAD_DATA_POLICY_SUMMARY_{date_tag}.json"
-    if candidate.exists():
-        return candidate
-    return _find_latest(DEBUG_DIR, SUMMARY_RE)
+    for base_dir in (POLICY_DIR, DEBUG_DIR):
+        candidate = base_dir / f"VISOMASTER_BAD_DATA_POLICY_SUMMARY_{date_tag}.json"
+        if candidate.exists():
+            return candidate
+    return _find_latest(POLICY_DIR, SUMMARY_RE) or _find_latest(DEBUG_DIR, SUMMARY_RE)
 
 
 def _extract_date_tag(path: Path) -> str:

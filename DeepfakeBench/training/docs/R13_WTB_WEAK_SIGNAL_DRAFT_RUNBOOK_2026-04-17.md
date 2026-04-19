@@ -1,5 +1,10 @@
 # WT-B Weak-Signal Draft Runbook
 
+Superseded by `DeepfakeBench/training/docs/R13_WTB_WEAK_SIGNAL_RUNBOOK_2026-04-18.md`.
+
+The content below is preserved as the original blocked-state note from
+2026-04-17.
+
 ## Status
 
 This package is a `draft-only weak-signal plan blocked on source integration`.

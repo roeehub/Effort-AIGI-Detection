@@ -1430,14 +1430,20 @@ class QualityTargetedFamilyRouter:
             "deeplive_non_enhanced_fake": _build_family_quality_pipeline("deeplive_non_enhanced_fake", self._preset),
             "deeplive_enhanced_fake": _build_family_quality_pipeline("deeplive_enhanced_fake", self._preset),
             "visomaster_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
+            # WT-B explicit weak-signal lanes keep source-specific augmentation truth
+            # while remaining visible as separate families in reporting/sampling.
+            "visomaster_hints_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
             "visomaster_enhanced_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
             "df40_real": _build_family_quality_pipeline("df40_real", self._preset),
             "realpool_real": _build_family_quality_pipeline("realpool_real", self._preset),
+            "visomaster_hints_real": _build_family_quality_pipeline("realpool_real", self._preset),
             "external_real": _build_family_quality_pipeline("external_real", self._preset),
             # Teams passthrough data has already been through the codec pipeline.
             # Default path stays minimal; extra Teams nuisance knobs are opt-in.
             "deeplive_teams_fake": _build_teams_passthrough_pipeline(self._preset),
             "deeplive_teams_real": _build_teams_passthrough_pipeline(self._preset),
+            "visomaster_hints_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+            "visomaster_hints_teams_real": _build_teams_passthrough_pipeline(self._preset),
         }
 
         # ── Teams codec simulation (optional post-pipeline step) ──────
