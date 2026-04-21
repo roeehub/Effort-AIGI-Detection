@@ -322,10 +322,13 @@ def create_unified_samples_from_proper_data(
     source_counts = defaultdict(int)
     quality_band_counts = defaultdict(int)
     face_scale_band_counts = defaultdict(int)
+    split_group_counts = defaultdict(int)
 
     for sample in proper_data_samples:
-        identity = f"realpool_{sample.identity_id}"
+        # WT-F split hygiene is defined at the split_group level, not raw identity.
+        identity = f"realpool_splitgroup_{sample.split_group_id}"
         identity_counts[identity] += 1
+        split_group_counts[sample.split_group_id] += 1
         source_counts[sample.source] += 1
         quality_band_counts[sample.quality_band] += 1
         face_scale_band_counts[sample.face_scale_band] += 1
@@ -346,6 +349,7 @@ def create_unified_samples_from_proper_data(
 
     logger.info(f"Created {len(unified)} unified samples from proper-data inventory")
     logger.info(f"  - Unique identities: {unique_identities}")
+    logger.info(f"  - Unique split groups: {len(split_group_counts)}")
     logger.info(f"  - Avg samples per identity: {avg_per_id:.2f}")
     logger.info(f"  - Per-lane: {dict(source_counts)}")
     logger.info(f"  - Quality bands: {dict(quality_band_counts)}")
@@ -1184,7 +1188,8 @@ def split_samples_by_identity(
     train_split: float,
     val_split: float,
     seed: int,
-    logger: logging.Logger
+    logger: logging.Logger,
+    split_mode: str = "shuffle",
 ) -> Tuple[List[UnifiedPairedSample], List[UnifiedPairedSample], List[UnifiedPairedSample]]:
     """
     Split samples into train/val/test sets BY IDENTITY.
@@ -1198,10 +1203,20 @@ def split_samples_by_identity(
         val_split: Proportion for validation
         seed: Random seed
         logger: Logger
+        split_mode: `shuffle` reproduces the legacy global shuffle behavior.
+            `hash_stable` assigns identities independently by hash threshold so
+            existing identities do not move when new identities are added.
         
     Returns:
         Tuple of (train_samples, val_samples, test_samples)
     """
+    split_mode = normalize_method_name(split_mode or "shuffle")
+    if split_mode not in {"shuffle", "hash_stable"}:
+        raise ValueError(
+            f"Unsupported identity split mode '{split_mode}'. "
+            "Expected one of: shuffle, hash_stable."
+        )
+
     rng = random.Random(seed)
     
     # Group samples by identity
@@ -1215,21 +1230,56 @@ def split_samples_by_identity(
     
     # Count identities by source for logging
     df40_identities = [i for i in identities if i.startswith('df40_')]
-    # DeepLive and VisoMaster share 'realpool_' prefix to prevent identity leakage
-    realpool_identities = [i for i in identities if i.startswith('realpool_')]
+    proper_splitgroup_identities = [
+        i for i in identities if i.startswith('realpool_splitgroup_')
+    ]
+    # DeepLive / VisoMaster share the legacy realpool_ prefix. Proper-data stays
+    # in the same broad pool but is keyed by WT-F split group.
+    realpool_identities = [
+        i
+        for i in identities
+        if i.startswith('realpool_') and not i.startswith('realpool_splitgroup_')
+    ]
     
     logger.info(f"Total unique identities: {len(identities)}")
     logger.info(f"  - DF40 identities: {len(df40_identities)}")
-    logger.info(f"  - Real pool identities (DeepLive + VisoMaster merged): {len(realpool_identities)}")
+    logger.info(
+        f"  - Real pool identities (DeepLive + VisoMaster merged): {len(realpool_identities)}"
+    )
+    if proper_splitgroup_identities:
+        logger.info(
+            "  - Proper-data split-group identities: %d",
+            len(proper_splitgroup_identities),
+        )
     
-    # Split identities (not samples!)
     n_identities = len(identities)
-    n_train_ids = int(n_identities * train_split)
-    n_val_ids = int(n_identities * val_split)
-    
-    train_identities = set(identities[:n_train_ids])
-    val_identities = set(identities[n_train_ids:n_train_ids + n_val_ids])
-    test_identities = set(identities[n_train_ids + n_val_ids:])
+    if n_identities == 0:
+        logger.warning("split_samples_by_identity received 0 identities.")
+        return [], [], []
+
+    if split_mode == "hash_stable":
+        train_identities = set()
+        val_identities = set()
+        test_identities = set()
+        val_cutoff = train_split + val_split
+
+        for identity in identities:
+            frac = _identity_hash_fraction(identity, seed)
+            if frac < train_split:
+                train_identities.add(identity)
+            elif frac < val_cutoff:
+                val_identities.add(identity)
+            else:
+                test_identities.add(identity)
+    else:
+        # Legacy global-shuffle split. This preserves historical behavior, but
+        # identities can move when later experiments add more samples.
+        n_train_ids = int(n_identities * train_split)
+        n_val_ids = int(n_identities * val_split)
+
+        train_identities = set(identities[:n_train_ids])
+        val_identities = set(identities[n_train_ids:n_train_ids + n_val_ids])
+        test_identities = set(identities[n_train_ids + n_val_ids:])
     
     # Assign ALL samples for each identity to that identity's split
     train_samples = []
@@ -1251,7 +1301,7 @@ def split_samples_by_identity(
     
     # Log split statistics
     n_total = len(samples)
-    logger.info(f"Data split BY IDENTITY (seed={seed}):")
+    logger.info(f"Data split BY IDENTITY (seed={seed}, mode={split_mode}):")
     logger.info(f"  - Train identities: {len(train_identities)} ({len(train_identities)/n_identities*100:.1f}%)")
     logger.info(f"  - Val identities: {len(val_identities)} ({len(val_identities)/n_identities*100:.1f}%)")
     logger.info(f"  - Test identities: {len(test_identities)} ({len(test_identities)/n_identities*100:.1f}%)")
@@ -1401,6 +1451,7 @@ def split_samples_by_method_holdout(
     val_split: float,
     seed: int,
     logger: logging.Logger,
+    split_mode: str = "shuffle",
     max_samples_per_method: Optional[int] = None,
     per_method_caps: Optional[Dict[str, int]] = None,
 ) -> Tuple[List[UnifiedPairedSample], List[UnifiedPairedSample], List[UnifiedPairedSample]]:
@@ -1458,6 +1509,7 @@ def split_samples_by_method_holdout(
         val_split=val_ratio_seen,
         seed=seed,
         logger=logger,
+        split_mode=split_mode,
     )
     seen_val = seen_val_a + seen_val_b
 
@@ -1753,6 +1805,81 @@ def _discover_external_training_reals(
     return all_samples, all_training_identities
 
 
+def _partition_ood_videos_heldout(
+    videos: List[Any],
+    heldout_fraction: float,
+    logger: logging.Logger,
+    hash_rule: str = "blake2b_lo10",
+) -> Tuple[List[Any], List[Any]]:
+    """Deterministic video-id-level partition (A10 in R13 Packet 3 plan).
+
+    Uses blake2b(video_id, digest_size=8). Videos whose 8-byte big-endian hash
+    value falls in the lowest `heldout_fraction` of the 2**64 range are moved to
+    the held-out slice; the remainder is monitored during training.
+
+    The partition is reproducible across runs that share the same video_ids and
+    the same hash_rule, so retroactive application (A2b) gives byte-for-byte
+    matched splits.
+
+    Args:
+        videos: flat list of OOD video objects, each with a ``video_id``
+            attribute (fall back to ``sample_id`` or str(id(v))).
+        heldout_fraction: target fraction in [0, 1] for the held-out slice.
+            0 → no partition (all monitored), 1 → everything held out.
+        logger: python logger.
+        hash_rule: tag recorded in logs / data_stats for audit / reproduction.
+
+    Returns:
+        ``(monitored_videos, heldout_videos)``
+    """
+    if heldout_fraction <= 0.0 or not videos:
+        return list(videos), []
+    if heldout_fraction >= 1.0:
+        return [], list(videos)
+
+    cutoff = int(round(heldout_fraction * float(2 ** 64)))
+    if cutoff <= 0:
+        return list(videos), []
+    if cutoff >= 2 ** 64:
+        return [], list(videos)
+
+    monitored: List[Any] = []
+    heldout: List[Any] = []
+    per_method_heldout: Counter = Counter()
+    per_method_total: Counter = Counter()
+
+    for v in videos:
+        vid = getattr(v, "video_id", None) or getattr(v, "sample_id", None) or str(id(v))
+        key = str(vid).encode("utf-8")
+        digest = hashlib.blake2b(key, digest_size=8).digest()
+        val = int.from_bytes(digest, byteorder="big", signed=False)
+        method = getattr(v, "method", "unknown")
+        per_method_total[method] += 1
+        if val < cutoff:
+            heldout.append(v)
+            per_method_heldout[method] += 1
+        else:
+            monitored.append(v)
+
+    logger.info(
+        "OOD held-out partition (rule=%s, fraction=%.3f): monitored=%d heldout=%d",
+        hash_rule,
+        heldout_fraction,
+        len(monitored),
+        len(heldout),
+    )
+    for method, total in sorted(per_method_total.items()):
+        logger.info(
+            "  method=%s total=%d heldout=%d monitored=%d",
+            method,
+            total,
+            per_method_heldout.get(method, 0),
+            total - per_method_heldout.get(method, 0),
+        )
+
+    return monitored, heldout
+
+
 def _build_external_ood_videos(
     combined_config: Dict[str, Any],
     frames_per_video: int,
@@ -1904,6 +2031,114 @@ def _build_external_ood_videos(
         )
         videos.extend(source_videos)
 
+    # A3 / A3b: deterministic eval-time stress OOD lanes. Each list entry has
+    # the same schema as external_real_sources / external_fake_sources plus an
+    # ``eval_augmentation`` field naming a preset in
+    # ``data.augmentations.pipelines.EVAL_STRESS_PRESETS``. The preset is
+    # stamped onto ``VideoInfo.eval_aug_preset`` so ``load_and_process_video``
+    # applies it at load time. A ``label`` field ('real' | 'fake') selects the
+    # underlying loader; default is 'real'.
+    try:
+        from data.augmentations.pipelines import EVAL_STRESS_PRESETS
+    except Exception:
+        EVAL_STRESS_PRESETS = set()
+
+    stress_block_names = (
+        ("lighting_stress_sources", "ood_lighting_stress"),
+        ("spatial_stress_sources", "ood_spatial_stress"),
+    )
+    for block_key, default_prefix in stress_block_names:
+        stress_sources = ood_cfg.get(block_key) or []
+        for source_cfg in stress_sources:
+            eval_aug = str(source_cfg.get("eval_augmentation") or "").strip()
+            if not eval_aug:
+                raise ValueError(
+                    f"OOD stress source in `{block_key}` is missing required "
+                    "`eval_augmentation` (preset name)."
+                )
+            if EVAL_STRESS_PRESETS and eval_aug not in EVAL_STRESS_PRESETS:
+                logger.warning(
+                    "OOD stress source in `%s` uses unknown preset %r "
+                    "(known presets: %s). The load will fail at eval time.",
+                    block_key, eval_aug, sorted(EVAL_STRESS_PRESETS),
+                )
+            label_str = str(source_cfg.get("label", "real")).strip().lower()
+            if label_str not in ("real", "fake"):
+                raise ValueError(
+                    f"OOD stress source in `{block_key}` has invalid "
+                    f"`label`={label_str!r}; must be 'real' or 'fake'."
+                )
+
+            bucket_arg = str(source_cfg.get("bucket", "")).strip()
+            if not bucket_arg:
+                raise ValueError(
+                    f"OOD stress source in `{block_key}` is missing required `bucket`."
+                )
+            default_prefix_str = (
+                "real/external_youtube_avspeech" if label_str == "real"
+                else "wma_validation/enhanced_fake"
+            )
+            bucket_name, prefix = _parse_bucket_and_prefix(
+                bucket_arg,
+                str(source_cfg.get("prefix", default_prefix_str)),
+            )
+            grouping = str(source_cfg.get("grouping", "by_folder"))
+            deterministic_frames = _effective_deterministic_frames(
+                grouping=grouping,
+                deterministic=bool(source_cfg.get("deterministic", False)),
+            )
+            method_name = str(
+                source_cfg.get("method")
+                or f"{default_prefix}_{eval_aug}_{label_str}"
+            )
+            loader_fn = load_external_real_videos if label_str == "real" else load_external_fake_videos
+            stress_videos = loader_fn(
+                bucket_name=bucket_name,
+                prefix=prefix,
+                method_name=method_name,
+                cache_manifest_path=source_cfg.get("cache_manifest_path"),
+                max_videos=source_cfg.get("max_videos"),
+                seed=int(source_cfg.get("seed") or 737),
+                grouping=grouping,
+                deterministic_frame_count=deterministic_frames,
+                path_contains=source_cfg.get("path_contains"),
+                video_id_depth=int(
+                    source_cfg.get("video_id_depth")
+                    if source_cfg.get("video_id_depth") is not None
+                    else -2
+                ),
+            )
+            # Stamp the eval preset onto every loaded VideoInfo.
+            for v in stress_videos:
+                try:
+                    v.eval_aug_preset = eval_aug
+                except AttributeError:
+                    pass
+
+            # Reuse the training-identity exclusion for real lanes (mirrors the
+            # non-stress real path above).
+            if label_str == "real" and exclude_identities:
+                import re
+                id_regex = re.compile(r"real__VCD__(?P<md5>[a-f0-9]{32})_")
+                filtered = []
+                for v in stress_videos:
+                    identity = None
+                    for fp in (v.frame_paths or []):
+                        m = id_regex.search(fp)
+                        if m:
+                            identity = m.group(1)
+                            break
+                    if identity is None:
+                        identity = getattr(v, "video_id", "")
+                    if identity not in exclude_identities:
+                        filtered.append(v)
+                stress_videos = filtered
+            logger.info(
+                "Stress OOD source (%s, preset=%s, label=%s, method=%s): %d videos",
+                block_key, eval_aug, label_str, method_name, len(stress_videos),
+            )
+            videos.extend(stress_videos)
+
     method_counts = Counter(v.method for v in videos)
     logger.info(
         "External OOD monitoring set assembled: videos=%d methods=%d method_counts=%s",
@@ -2016,6 +2251,53 @@ def _sample_possible_methods(sample: UnifiedPairedSample) -> List[str]:
     return methods
 
 
+def _build_overview_method_lists(
+    samples: List[UnifiedPairedSample],
+) -> Dict[str, List[str]]:
+    """
+    Build real/fake method lists for run-overview reporting.
+
+    Paired samples expose only the fake-side method name, so their real side is
+    represented by the synthetic `paired_real` label. Unpaired real samples
+    keep their explicit method names.
+    """
+    real_methods = set()
+    fake_methods = set()
+    has_paired_samples = False
+
+    for sample in samples:
+        if getattr(sample, "is_unpaired_real", False):
+            method_norm = normalize_method_name(sample.method)
+            if method_norm:
+                real_methods.add(method_norm)
+            continue
+
+        has_paired_samples = True
+        method_norm = normalize_method_name(sample.method)
+        if method_norm:
+            fake_methods.add(method_norm)
+
+    if has_paired_samples:
+        real_methods.add("paired_real")
+
+    return {
+        "real_methods": sorted(real_methods),
+        "fake_methods": sorted(fake_methods),
+    }
+
+
+def _identity_hash_fraction(identity: str, seed: int) -> float:
+    """
+    Map `(identity, seed)` to a deterministic fraction in [0, 1).
+
+    Unlike the legacy global shuffle split, this keeps existing identities in
+    the same partition even when later experiments add new identities.
+    """
+    digest = hashlib.sha256(f"{seed}:{identity}".encode("utf-8")).digest()
+    numerator = int.from_bytes(digest[:8], "big")
+    return numerator / float(1 << 64)
+
+
 def _count_deeplive_strategies(
     samples: List[Any],
 ) -> Dict[str, Dict[str, int]]:
@@ -2125,9 +2407,12 @@ def _count_strategy_and_family(
         if strategy:
             strategy_counts[strategy] += 1
 
-        # Each paired sample contributes one real and one fake example.
+        # Unpaired external reals contribute only a real example. Paired samples
+        # contribute one real and one fake example.
         family_counts[infer_family_key(0, method=sample.method, source=sample.source,
                                        enhanced_strategy_names=enhanced_strategy_names)] += 1
+        if getattr(sample, "is_unpaired_real", False):
+            continue
         fake_family = normalize_method_name(getattr(sample, "sampling_family_key", None)) or infer_family_key(
             1,
             method=sample.method,
@@ -3277,12 +3562,21 @@ def create_combined_paired_pipeline(
     if run_seed is None:
         run_seed = combined_config.get('seed', 737)
     split_seed = combined_config.get('split_seed', run_seed)
+    identity_split_mode = normalize_method_name(
+        combined_config.get('identity_split_mode', 'shuffle')
+    ) or 'shuffle'
     combined_config['split_seed'] = split_seed
+    combined_config['identity_split_mode'] = identity_split_mode
 
     logger.info("=" * 70)
     logger.info("Combined Paired Data Source: Initializing")
     logger.info("=" * 70)
-    logger.info(f"Seed configuration: run_seed={run_seed}, split_seed={split_seed}")
+    logger.info(
+        "Seed configuration: run_seed=%s, split_seed=%s, identity_split_mode=%s",
+        run_seed,
+        split_seed,
+        identity_split_mode,
+    )
 
     aug_config = config.get('augmentation') or (data_config or {}).get('augmentation') or {}
     enhanced_strategy_names = tuple(
@@ -4015,6 +4309,7 @@ def create_combined_paired_pipeline(
             val_split=val_split,
             seed=split_seed,
             logger=logger,
+            split_mode=identity_split_mode,
             max_samples_per_method=holdout_max_per_method,
             per_method_caps=holdout_per_method_caps,
         )
@@ -4039,7 +4334,8 @@ def create_combined_paired_pipeline(
             )
     else:
         train_samples, val_samples, test_samples = split_samples_by_identity(
-            all_samples, train_split, val_split, split_seed, logger
+            all_samples, train_split, val_split, split_seed, logger,
+            split_mode=identity_split_mode,
         )
         resolved_holdout_methods = []
         holdout_mode = "identity"
@@ -4205,8 +4501,15 @@ def create_combined_paired_pipeline(
         else None
     )
     build_ood_loader_at_startup = bool(ood_cfg.get("build_loader_at_startup", True))
+    # A10: held-out 10% partition (blake2b hash on video_id). Off by default so
+    # pre-A10 configs keep their full monitored pool.
+    ood_heldout_fraction = float(ood_cfg.get("heldout_fraction", 0.0) or 0.0)
+    ood_hash_rule = str(ood_cfg.get("heldout_hash_rule", "blake2b_lo10"))
     ood_loader = None
+    ood_heldout_loader = None
     ood_videos: List[Any] = []
+    ood_monitored_videos: List[Any] = []
+    ood_heldout_videos: List[Any] = []
     if build_ood_loader_at_startup:
         ood_videos = _build_external_ood_videos(
             combined_config=combined_config,
@@ -4217,12 +4520,34 @@ def create_combined_paired_pipeline(
         if ood_videos:
             from dataset.dataloaders import create_ood_loader
 
-            ood_loader = create_ood_loader(ood_videos, config, data_config)
+            if ood_heldout_fraction > 0.0:
+                ood_monitored_videos, ood_heldout_videos = _partition_ood_videos_heldout(
+                    videos=ood_videos,
+                    heldout_fraction=ood_heldout_fraction,
+                    logger=logger,
+                    hash_rule=ood_hash_rule,
+                )
+            else:
+                ood_monitored_videos = list(ood_videos)
+                ood_heldout_videos = []
+
+            ood_loader = create_ood_loader(ood_monitored_videos, config, data_config)
             logger.info(
-                "Created OOD monitoring loader from external sources: videos=%d methods=%d",
-                len(ood_videos),
-                len({v.method for v in ood_videos}),
+                "Created OOD monitoring loader from external sources: "
+                "videos=%d methods=%d (monitored partition)",
+                len(ood_monitored_videos),
+                len({v.method for v in ood_monitored_videos}) if ood_monitored_videos else 0,
             )
+            if ood_heldout_videos:
+                ood_heldout_loader = create_ood_loader(
+                    ood_heldout_videos, config, data_config
+                )
+                logger.info(
+                    "Created OOD held-out loader (A10): videos=%d methods=%d "
+                    "(never seen during training-time OOD eval; consumed only by final_eval)",
+                    len(ood_heldout_videos),
+                    len({v.method for v in ood_heldout_videos}),
+                )
     else:
         logger.info(
             "Skipping OOD loader build at startup (ood_monitoring.build_loader_at_startup=false)."
@@ -4235,6 +4560,7 @@ def create_combined_paired_pipeline(
     train_identities = set(s.identity for s in train_samples)
     overall_counts = _count_strategy_and_family(all_samples, enhanced_strategy_names)
     train_counts = _count_strategy_and_family(train_samples, enhanced_strategy_names)
+    overview_methods = _build_overview_method_lists(all_samples)
     source_counts = Counter(s.source for s in all_samples)
     train_source_counts = Counter(s.source for s in train_samples)
     proper_data_lane_counts = {
@@ -4279,6 +4605,7 @@ def create_combined_paired_pipeline(
         'has_landmarks': deeplive_enabled,
         'run_seed': run_seed,
         'split_seed': split_seed,
+        'identity_split_mode': identity_split_mode,
         'deeplive_raw_strategy_counts': deeplive_strategy_counts['raw'],
         'deeplive_effective_strategy_counts': deeplive_strategy_counts['effective'],
         'deeplive_strategy_preflight': deeplive_preflight,
@@ -4311,6 +4638,8 @@ def create_combined_paired_pipeline(
         'holdout_method_counts': dict(
             sorted(Counter(normalize_method_name(s.method) for s in test_samples).items())
         ),
+        'overview_real_methods': overview_methods['real_methods'],
+        'overview_fake_methods': overview_methods['fake_methods'],
         'train_df40_methods': sorted(
             {normalize_method_name(s.method) for s in train_samples if s.source == 'df40'}
         ),
@@ -4319,7 +4648,12 @@ def create_combined_paired_pipeline(
         ),
         'ood_video_count': len(ood_videos),
         'ood_method_count': len({v.method for v in ood_videos}) if ood_videos else 0,
+        'ood_monitored_video_count': len(ood_monitored_videos),
+        'ood_heldout_video_count': len(ood_heldout_videos),
+        'ood_heldout_fraction_target': ood_heldout_fraction,
+        'ood_heldout_hash_rule': ood_hash_rule,
         'proper_data_discovery': proper_data_discovery_summary,
+        'proper_data_build_id': str(proper_data_discovery_summary.get('wave_id', '') or ''),
         'proper_data_lane_counts': proper_data_lane_counts,
         'train_proper_data_lane_counts': train_proper_data_lane_counts,
         # Group DRO method mapping (method_name → int ID)
@@ -4340,6 +4674,8 @@ def create_combined_paired_pipeline(
         train_samples=train_samples,
         data_stats=data_stats,
         ood_loader=ood_loader,
+        test_loader=test_loader,
+        ood_heldout_loader=ood_heldout_loader,
     )
 
 

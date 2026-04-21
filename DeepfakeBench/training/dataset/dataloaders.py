@@ -466,6 +466,30 @@ def load_and_process_video(video_info: VideoInfo, config: dict, mode: str, frame
         # These strategies don't have properties, so they use the general augmentation
         images = [data_aug_v2(img, config, augmentation_seed=aug_seed) for img in images]
 
+    # A3 / A3b: deterministic eval-time stress preset. Applied for ANY mode
+    # when video_info.eval_aug_preset is set — this is how OOD stress lanes
+    # work. Never invoked during training because training videos don't carry
+    # this attribute.
+    eval_aug_preset = getattr(video_info, "eval_aug_preset", None)
+    if eval_aug_preset:
+        try:
+            from data.augmentations.pipelines import apply_eval_stress_preset
+            images = [
+                Image.fromarray(
+                    apply_eval_stress_preset(np.array(img), eval_aug_preset, seed=42)
+                )
+                for img in images
+            ]
+        except Exception as eval_stress_err:
+            # Do not silently degrade to un-stressed eval — that would make the
+            # stress pool meaningless. Log and return None so the video is
+            # dropped.
+            print(
+                f"[A3/A3b] Eval stress preset '{eval_aug_preset}' failed on "
+                f"{video_info.method}/{video_info.video_id}: {eval_stress_err}"
+            )
+            return None
+
     normalize_transform = T.Compose([
         T.ToTensor(),
         T.Normalize(mean=config['mean'], std=config['std'])

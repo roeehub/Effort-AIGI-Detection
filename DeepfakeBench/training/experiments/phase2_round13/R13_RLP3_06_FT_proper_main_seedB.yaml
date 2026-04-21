@@ -1,25 +1,20 @@
 # ============================================================================
-# R13_WTB1_weak_signal_no_hints
-# Phase 2, Round 13 - WT-B weak-signal control with explicit hint lanes disabled
-#
-# Purpose:
-#   Honest WT-B control after the April 17 lane freeze. Keep the FT11
-#   scorecard-base fine-tune shape, disable old visomaster and mixed VTE
-#   semantics, and train only on df40 + deeplive + clean direct Teams.
-#
-# Notes:
-#   - Uses the tracked April 17 policy bundle under
-#     training/policy/visomaster_bad_data/.
+# R13_RLP3_06_FT_proper_main_seedB
+# Phase 2, Round 13 - relaunch packet 3 / second-seed twin of slot 02.
+# Identical to slot 02 except training seed=239 (data split_seed stays 737
+# so the train/val/test partition is frozen across seeds).
 # ============================================================================
 
-name: "R13_WTB1_weak_signal_no_hints"
-description: "WT-B no-hints control — clean Teams plus df40/deeplive, with explicit weak-signal hint lanes disabled"
-seed: 737
+name: "R13_RLP3_06_FT_proper_main_seedB"
+description: "Relaunch packet 3 FT seed-B - proper-data main recipe, training seed=239 with frozen split_seed=737."
+seed: 239
 
 wandb:
-  tags: ["phase2-round13", "fine-tune", "vit-b-16", "wt-b", "weak-signal",
-         "no-hints", "explicit-hint-lanes", "policy-aware-teams", "r12g-fp32-base",
-         "ft-scorecard-base", "seed-737", "compound-aug", "gamma-up"]
+  tags: ["phase2-round13", "rlp3", "fine-tune", "vit-b-16", "wt-b", "wt-f",
+         "data-composition", "no-hints", "proper-data", "proper-unenhanced",
+         "policy-aware-teams", "live-discovery", "cacheless-sources",
+         "r12g-fp32-base", "ft-scorecard-base", "seed-239",
+         "truthful-aug-baseline", "rlp3-instrumented", "seed-variance"]
 
 data_source: combined_paired
 
@@ -77,14 +72,14 @@ augmentation:
   context_variation_cct_p: 0.15
   context_variation_cct_range: [2700, 8000]
   hue_shift: 20
-  gamma_up_p: 0.15
-  gamma_up_range: [0.45, 0.85]
+  context_variation_gamma_up_p: 0.0
+  context_variation_gamma_up_range: [0.45, 0.85]
 
 combined_paired:
   identity_balanced_sampling: true
   split_seed: 737
   identity_split_mode: "hash_stable"
-  seed: 737
+  seed: 239
   bad_data_policy_manifest: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv"
   bad_data_policy_summary: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_SUMMARY_2026-04-17.json"
 
@@ -106,9 +101,6 @@ combined_paired:
   deeplive:
     enabled: true
     gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
-    cache_manifest_uri: "gs://training-job-outputs/cache/deeplive/r13_wtb_full_deeplive_discovery_2026-04-19.json"
-    cache_max_age_hours: 12.0
-    cache_revision: "2026-04-19-r13-wtb-full-v1"
     use_landmarks: false
     sampling_mode: "sparse"
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
@@ -166,16 +158,10 @@ combined_paired:
     gcs_project: "train-cvit2"
     exclude_tiers: ["ARTIFACT"]
     enhancers: null
-    cache_manifest_uri: "gs://visomaster-enhanced-face-cropped/cache/discovery_manifest.json"
-    cache_max_age_hours: 12.0
 
   teams:
     enabled: true
     gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
-    cache_manifest_uri: "gs://training-job-outputs/cache/teams/r13_wtb_teams_passthrough_discovery_2026-04-19.json"
-    cache_max_age_hours: 12.0
-    cache_validate_listing: true
-    cache_revision: "2026-04-19-r13-wtb-teams-v1"
     require_pair_complete: true
     apply_bad_data_policy: true
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
@@ -186,12 +172,20 @@ combined_paired:
     require_pair_complete: true
     anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
 
+  proper_data:
+    enabled: true
+    inventory_path: "arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml"
+    manifest_path: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    include_lanes:
+      - "proper_visomaster_clean"
+      - "proper_visomaster_teams"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
   external_training_reals:
     - bucket: "effort-collected-data"
       prefix: "real/VCD"
       method: "external_vcd_real"
       grouping: "per_image"
-      cache_manifest_path: "gs://training-job-outputs/cache/external/r13_wtb_vcd_train_reals_frames_2026-04-19.json"
       identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
       identity_train_fraction: 0.40
       identity_split_seed: 737
@@ -206,6 +200,8 @@ combined_paired:
       deeplive_non_enhanced_fake: 2.5
       deeplive_enhanced_fake: 3.0
       deeplive_teams_fake: 5.0
+      proper_visomaster_clean_fake: 1.0
+      proper_visomaster_teams_fake: 1.0
       deeplive_teams_real: 4.0
       df40_real: 0.4
       realpool_real: 2.5
@@ -222,6 +218,15 @@ combined_paired:
   ood_monitoring:
     enabled: true
     exclude_training_identities: true
+
+    # A8: bring first OOD eval forward for FT runs (warmup=400, +600 LR stabilization).
+    first_ood_step: 1000
+    ood_cadence: 500
+
+    # A10: video-id-level 10% held-out partition. Never flows into selection.
+    heldout_fraction: 0.1
+    heldout_hash_rule: blake2b_lo10
+
     external_real_sources:
       - bucket: "effort-collected-data"
         prefix: "real/external_youtube_avspeech"
@@ -258,6 +263,61 @@ combined_paired:
         video_id_depth: -4
         max_videos: 300
         deterministic: true
+
+    # A3: three deterministic lighting-stress OOD lanes on external_youtube_avspeech.
+    lighting_stress_sources:
+      - label: real
+        method: ood_lighting_stress_general
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: vcd_targeted_stress
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_lighting_stress_backlight_dim
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: backlight_dim_stress
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_lighting_stress_warm_harsh
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: warm_harsh_stress
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+
+    # A3b: three deterministic spatial-stress OOD lanes on the same source.
+    spatial_stress_sources:
+      - label: real
+        method: ood_spatial_stress_crop_shift
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: crop_shift
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_spatial_stress_scale
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: scale
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_spatial_stress_rotation
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: rotation
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+
     expected_counts:
       external_youtube_avspeech: 200
       zoom_vcd_real: 300
@@ -272,8 +332,6 @@ s_end: 12.0
 anneal_steps: 15000
 
 evaluate_every_steps: 500
-ood_monitoring_start_step: 5000
-ood_monitoring_every_steps: 1000
 test_batch_size: 32
 
 early_stopping_enabled: true

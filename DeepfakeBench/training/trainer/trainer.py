@@ -51,6 +51,249 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Trainer Is Using device: {device}")
 
 
+def _per_video_jitter_stats(frame_probs_np):
+    """A1 helper — per-video frame-to-frame score jitter.
+
+    Mirrors ``tools/teams_frame_policy_analysis.py`` (per-video ``mean_jitter``
+    and ``max_jitter``) so training-time and post-hoc numbers agree.
+
+    Args:
+        frame_probs_np: numpy array of shape ``[B, T]``.
+
+    Returns:
+        List of dicts (one per video) with keys ``mean``, ``max`` and the raw
+        ``diffs`` list. Videos with <2 frames are skipped.
+    """
+    out = []
+    if frame_probs_np is None or frame_probs_np.ndim != 2:
+        return out
+    B = frame_probs_np.shape[0]
+    for b in range(B):
+        fp = frame_probs_np[b]
+        if len(fp) < 2:
+            continue
+        diffs = np.abs(np.diff(fp))
+        out.append({
+            "mean": float(np.mean(diffs)),
+            "max": float(np.max(diffs)),
+            "diffs": diffs.astype(float),
+        })
+    return out
+
+
+def _aggregate_jitter_across_videos(per_video_list, spike_threshold=0.3):
+    """A1 helper — aggregate per-video jitter stats for one method.
+
+    Returns dict with ``mean``, ``max``, ``p95``, ``spike_rate_{threshold}``,
+    ``n_diffs`` and ``all_diffs`` (np.ndarray, concatenated across videos —
+    used for the gated W&B histogram).
+    """
+    if not per_video_list:
+        return {}
+    per_video_mean = [v["mean"] for v in per_video_list]
+    per_video_max = [v["max"] for v in per_video_list]
+    diffs_arrays = [v["diffs"] for v in per_video_list if v["diffs"].size > 0]
+    if not diffs_arrays:
+        return {}
+    all_diffs = np.concatenate(diffs_arrays)
+    spike_count = int(np.sum(all_diffs > float(spike_threshold)))
+    return {
+        "mean": float(np.mean(per_video_mean)),
+        "max": float(np.max(per_video_max)),
+        "p95": float(np.percentile(all_diffs, 95)),
+        f"spike_rate_{str(spike_threshold).replace('.', 'p')}": float(
+            spike_count / max(1, all_diffs.size)
+        ),
+        "n_diffs": int(all_diffs.size),
+        "all_diffs": all_diffs,
+    }
+
+
+# A9: value_composite — deployment-hierarchy-aligned readout metric.
+# Real pools for the FPR operating point (§1.4 of the R13 Packet 3 plan).
+_VALUE_COMPOSITE_REAL_POOLS = (
+    "df40_real",
+    "external_youtube_avspeech_real",
+    "zoom_vcd_real",
+    "teams_ood_real",
+    "proper_clean_real",
+    "proper_teams_real",
+)
+# df40 training-distribution methods — excluded from "other fakes" TPR (§8.5).
+_VALUE_COMPOSITE_DF40_TRAINING_FAKES = frozenset(
+    {
+        "simswap", "facedancer", "blendface", "e4s",
+        "inswap", "mobileswap", "uniface",
+    }
+)
+# Method names used in stability term.
+_VALUE_COMPOSITE_STABILITY_JITTER_METHODS = (
+    "teams_ood_fake",
+    "teams_ood_real",
+    "external_youtube_avspeech",
+)
+
+
+def _fpr_at_threshold(preds, labels, thresh):
+    """FPR for a single real pool: (#preds>=thresh among negatives) / #negatives."""
+    preds = np.asarray(preds)
+    labels = np.asarray(labels)
+    mask_negative = labels == 0
+    n_neg = int(mask_negative.sum())
+    if n_neg == 0:
+        return None
+    flagged = int(np.sum(preds[mask_negative] >= thresh))
+    return float(flagged) / float(n_neg)
+
+
+def _tpr_at_threshold(preds, labels, thresh):
+    """TPR for a single fake pool: (#preds>=thresh among positives) / #positives."""
+    preds = np.asarray(preds)
+    labels = np.asarray(labels)
+    mask_positive = labels == 1
+    n_pos = int(mask_positive.sum())
+    if n_pos == 0:
+        return None
+    flagged = int(np.sum(preds[mask_positive] >= thresh))
+    return float(flagged) / float(n_pos)
+
+
+def _find_threshold_for_mean_fpr(
+    real_pools,
+    target_mean_fpr=0.02,
+    max_pool_fpr=0.04,
+    tol=1e-4,
+    max_iter=50,
+):
+    """Bisection on ``τ`` for A9 step 1 — mean_FPR == target AND max_FPR ≤ ceiling.
+
+    Args:
+        real_pools: dict ``{pool_name: {'preds': np.array, 'labels': np.array}}``.
+        target_mean_fpr: target mean false-positive rate across pools.
+        max_pool_fpr: per-pool worst-case ceiling.
+        tol: tolerance on mean FPR for bisection convergence.
+        max_iter: maximum bisection iterations.
+
+    Returns:
+        ``(tau, mean_fpr_at_tau, max_fpr_at_tau, per_pool_fpr_at_tau)``; if no τ
+        satisfies both constraints, returns ``(None, mean, max, per_pool)`` with
+        observed values at the best-effort τ (used only for diagnostic logging).
+    """
+    usable = {k: v for k, v in real_pools.items()
+              if v and len(v.get("labels", [])) > 0 and int(np.sum(np.asarray(v["labels"]) == 0)) > 0}
+    if not usable:
+        return None, None, None, {}
+
+    def _mean_and_max(tau):
+        fprs = {}
+        for name, pool in usable.items():
+            fpr = _fpr_at_threshold(pool["preds"], pool["labels"], tau)
+            if fpr is not None:
+                fprs[name] = fpr
+        if not fprs:
+            return None, None, {}
+        return float(np.mean(list(fprs.values()))), float(np.max(list(fprs.values()))), fprs
+
+    lo, hi = 0.0, 1.0
+    best = None
+    for _ in range(max_iter):
+        mid = 0.5 * (lo + hi)
+        mean_fpr, max_fpr, per_pool = _mean_and_max(mid)
+        if mean_fpr is None:
+            return None, None, None, {}
+        best = (mid, mean_fpr, max_fpr, per_pool)
+        if abs(mean_fpr - target_mean_fpr) < tol:
+            break
+        # FPR is monotonically non-increasing in τ. If observed mean > target,
+        # raise τ (move lo up); if observed mean < target, lower τ (move hi down).
+        if mean_fpr > target_mean_fpr:
+            lo = mid
+        else:
+            hi = mid
+    tau, mean_fpr, max_fpr, per_pool = best
+    if max_fpr is not None and max_fpr > max_pool_fpr:
+        return None, mean_fpr, max_fpr, per_pool
+    return tau, mean_fpr, max_fpr, per_pool
+
+
+def _compute_value_composite(
+    real_pools,
+    teams_fake_pools,
+    other_fake_pools,
+    stability_jitter_max=0.0,
+    target_mean_fpr=0.02,
+    max_pool_fpr=0.04,
+):
+    """A9 — deployment-hierarchy-aligned value composite (readout only).
+
+    Returns a dict with ``value_composite`` (float or NaN), ``tau``,
+    ``mean_fpr``, ``max_fpr``, ``max_fpr_at_mean_02``, and per-sub-component
+    TPR / stability terms. When the max-FPR gate trips, ``value_composite`` is
+    NaN and ``value_composite_blocked_by = "worst_pool_fpr"`` (or
+    ``"insufficient_real_pools"`` if no τ could be found).
+    """
+    tau, mean_fpr, max_fpr, per_pool_fpr = _find_threshold_for_mean_fpr(
+        real_pools,
+        target_mean_fpr=target_mean_fpr,
+        max_pool_fpr=max_pool_fpr,
+    )
+    out = {
+        "tau": tau,
+        "mean_fpr": mean_fpr,
+        "max_fpr": max_fpr,
+        "max_fpr_at_mean_02": max_fpr,
+        "per_pool_fpr": per_pool_fpr,
+        "stability": float(max(0.0, 1.0 - max(0.0, min(1.0, stability_jitter_max)))),
+        "teams_fakes_tpr": None,
+        "other_fakes_tpr": None,
+        "value_composite": float("nan"),
+        "value_composite_blocked_by": None,
+    }
+
+    if tau is None:
+        if not per_pool_fpr:
+            out["value_composite_blocked_by"] = "insufficient_real_pools"
+        else:
+            out["value_composite_blocked_by"] = "worst_pool_fpr"
+        return out
+
+    teams_tprs = []
+    for name, pool in (teams_fake_pools or {}).items():
+        if not pool or not len(pool.get("labels", [])):
+            continue
+        tpr = _tpr_at_threshold(pool["preds"], pool["labels"], tau)
+        if tpr is not None:
+            teams_tprs.append(tpr)
+    other_tprs = []
+    for name, pool in (other_fake_pools or {}).items():
+        if not pool or not len(pool.get("labels", [])):
+            continue
+        if name in _VALUE_COMPOSITE_DF40_TRAINING_FAKES:
+            continue
+        tpr = _tpr_at_threshold(pool["preds"], pool["labels"], tau)
+        if tpr is not None:
+            other_tprs.append(tpr)
+
+    teams_mean = float(np.mean(teams_tprs)) if teams_tprs else None
+    other_mean = float(np.mean(other_tprs)) if other_tprs else None
+    out["teams_fakes_tpr"] = teams_mean
+    out["other_fakes_tpr"] = other_mean
+
+    if teams_mean is None and other_mean is None:
+        out["value_composite_blocked_by"] = "no_fake_pools"
+        return out
+
+    teams_component = 0.6 * (teams_mean if teams_mean is not None else 0.0)
+    other_component = 0.3 * (other_mean if other_mean is not None else 0.0)
+    stab_component = 0.1 * out["stability"]
+
+    active_weight = 0.1 + (0.6 if teams_mean is not None else 0.0) + (0.3 if other_mean is not None else 0.0)
+    out["value_composite"] = float(
+        (teams_component + other_component + stab_component) / active_weight
+    )
+    return out
+
+
 class Trainer(
     CheckpointingMixin,
     EarlyStoppingMixin,
@@ -85,6 +328,8 @@ class Trainer(
             metric_scoring='auc',
             wandb_run=None,
             ood_loader=None,
+            ood_heldout_loader=None,
+            test_loader=None,
             use_group_dro=False  # Argument to activate the feature
     ):
         if config is None or model is None or logger is None:
@@ -99,7 +344,9 @@ class Trainer(
         self.wandb_run = wandb_run
         self.val_in_dist_loader = val_in_dist_loader
         self.val_holdout_loader = val_holdout_loader
-        self.ood_loader = ood_loader  # Optional OOD loader
+        self.ood_loader = ood_loader  # Optional OOD loader (A10: monitored partition only)
+        self.ood_heldout_loader = ood_heldout_loader  # A10: held-out slice for final_eval only
+        self.test_loader = test_loader  # A2: 5% test slice for final_eval only
         self.unified_val_loader = None  # To cache the efficient loader
 
         # --- Initialize mixins ---
@@ -120,9 +367,29 @@ class Trainer(
 
         # --- OOD monitoring cadence controls ---
         # Defaults preserve prior behavior: run on every validation call.
+        # A8: prefer nested ood_monitoring.{first_ood_step, ood_cadence} when
+        # present (either at top level or under combined_paired), fall back to
+        # flat keys. Nested form makes FT vs scratch explicit in yaml.
         self.ood_monitoring_enabled = bool(self.config.get('ood_monitoring_enabled', True))
-        self.ood_monitoring_start_step = int(self.config.get('ood_monitoring_start_step', 0) or 0)
-        cfg_ood_every = self.config.get('ood_monitoring_every_steps')
+
+        def _nested_ood_knob(key_nested, key_flat, default):
+            """Resolve ood_monitoring.{key_nested} with sensible fallbacks."""
+            combined_cfg = (self.config.get('combined_paired') or {}) \
+                if isinstance(self.config.get('combined_paired'), dict) else {}
+            nested_cp = (combined_cfg.get('ood_monitoring') or {}) \
+                if isinstance(combined_cfg.get('ood_monitoring'), dict) else {}
+            top_ood = (self.config.get('ood_monitoring') or {}) \
+                if isinstance(self.config.get('ood_monitoring'), dict) else {}
+            for container in (top_ood, nested_cp):
+                if key_nested in container and container[key_nested] is not None:
+                    return container[key_nested]
+            flat_val = self.config.get(key_flat)
+            return flat_val if flat_val is not None else default
+
+        self.ood_monitoring_start_step = int(
+            _nested_ood_knob('first_ood_step', 'ood_monitoring_start_step', 0) or 0
+        )
+        cfg_ood_every = _nested_ood_knob('ood_cadence', 'ood_monitoring_every_steps', None)
         if cfg_ood_every is None:
             if self.evaluate_every_steps and self.evaluate_every_steps > 0:
                 self.ood_monitoring_every_steps = int(self.evaluate_every_steps)
@@ -135,7 +402,7 @@ class Trainer(
         self._last_ood_monitor_step = None
         self._ood_warmup_logged = False
         self.logger.info(
-            "OOD monitoring cadence: enabled=%s start_step=%d every_steps=%d",
+            "OOD monitoring cadence: enabled=%s first_ood_step=%d ood_cadence=%d",
             self.ood_monitoring_enabled,
             self.ood_monitoring_start_step,
             self.ood_monitoring_every_steps,
@@ -1676,6 +1943,8 @@ class Trainer(
                         'val_primary/ood_composite': composite,
                         'val_primary/ood_auc_for_composite': ood_auc,
                         'val_primary/holdout_auc_for_composite': holdout_auc,
+                        # A7 piece 1: headline summary/ duplicate.
+                        'summary/val_primary/ood_composite': composite,
                         'train/step': step_cnt,
                     })
 
@@ -1692,12 +1961,27 @@ class Trainer(
                     )
                     self.best_ood_composite = composite
                     self.best_ood_composite_step = step_cnt
+                    # A2: cache CPU state dict so final_eval can reload without
+                    # hitting GCS.
+                    try:
+                        self._best_ood_composite_state_dict_cpu = {
+                            k: v.detach().to('cpu').clone()
+                            for k, v in (
+                                self.model.module if self.config.get('ddp') else self.model
+                            ).state_dict().items()
+                        }
+                    except Exception as cache_err:
+                        self.logger.warning(
+                            f"Failed to cache best_ood_composite state dict: {cache_err}"
+                        )
 
                     if self.wandb_run:
                         self.wandb_run.summary['best_ood_composite/metric'] = composite
                         self.wandb_run.summary['best_ood_composite/holdout_auc'] = holdout_auc
                         self.wandb_run.summary['best_ood_composite/ood_auc'] = ood_auc
                         self.wandb_run.summary['best_ood_composite/step'] = step_cnt
+                        # A7 piece 1: headline best-checkpoint step.
+                        self.wandb_run.summary['summary/best_checkpoint/step'] = step_cnt
 
                     if self.config.get('save_ckpt', True):
                         is_top = (
@@ -1732,6 +2016,87 @@ class Trainer(
                                     self.wandb_run.summary['best_ood_composite/gcs_path'] = (
                                         self.ood_composite_top_n[0]['gcs_path']
                                     )
+
+        # Track locals for best_value_composite block (holdout_m is defined
+        # earlier in this same method).
+        all_val_metrics_snapshot = all_val_metrics
+
+        # A2: parallel tracking for best_value_composite. Readout-only — does
+        # NOT change packet-3 checkpoint selection (see §8.7). Guards: only run
+        # if A9 produced a non-NaN value_composite and value_composite_enabled.
+        vc_state = getattr(self, '_last_value_composite', None)
+        if (
+            self.value_composite_enabled
+            and vc_state is not None
+            and vc_state.get('value_composite') is not None
+            and vc_state['value_composite'] == vc_state['value_composite']  # not NaN
+        ):
+            vc_metric = float(vc_state['value_composite'])
+            is_vc_improvement = vc_metric > self.best_value_composite
+            if is_vc_improvement:
+                holdout_m_vc = all_val_metrics_snapshot.get('val_holdout') if all_val_metrics_snapshot else None
+                holdout_auc_vc = None
+                holdout_eer_vc = None
+                if holdout_m_vc and 'overall' in holdout_m_vc:
+                    holdout_auc_vc = holdout_m_vc['overall'].get('auc')
+                    holdout_eer_vc = holdout_m_vc['overall'].get('eer')
+
+                self.logger.info(
+                    f"🎯 VALUE COMPOSITE IMPROVED! {vc_metric:.4f} "
+                    f"(prev best: {self.best_value_composite:.4f})"
+                )
+                self.best_value_composite = vc_metric
+                self.best_value_composite_step = step_cnt
+                try:
+                    self._best_value_composite_state_dict_cpu = {
+                        k: v.detach().to('cpu').clone()
+                        for k, v in (
+                            self.model.module if self.config.get('ddp') else self.model
+                        ).state_dict().items()
+                    }
+                except Exception as cache_err:
+                    self.logger.warning(
+                        f"Failed to cache best_value_composite state dict: {cache_err}"
+                    )
+
+                if self.wandb_run:
+                    self.wandb_run.summary['best_value_composite/metric'] = vc_metric
+                    self.wandb_run.summary['best_value_composite/step'] = step_cnt
+                    if holdout_auc_vc is not None:
+                        self.wandb_run.summary['best_value_composite/holdout_auc'] = holdout_auc_vc
+                    self.wandb_run.summary['summary/best_value_composite/step'] = step_cnt
+
+                if self.config.get('save_ckpt', True) and holdout_auc_vc is not None:
+                    is_top_vc = (
+                        len(self.value_composite_top_n) < self.value_composite_top_n_size
+                        or vc_metric > self.value_composite_top_n[-1]['metric']
+                    )
+                    if is_top_vc:
+                        gcs_path_vc = self.save_ckpt(
+                            epoch=epoch + 1,
+                            auc=holdout_auc_vc,
+                            eer=holdout_eer_vc if holdout_eer_vc is not None else 0.0,
+                            ckpt_prefix='value_composite',
+                            step=step_cnt,
+                        )
+                        if gcs_path_vc:
+                            self.value_composite_top_n.append({
+                                'metric': vc_metric,
+                                'holdout_auc': holdout_auc_vc,
+                                'epoch': epoch + 1,
+                                'step': step_cnt,
+                                'gcs_path': gcs_path_vc,
+                            })
+                            self.value_composite_top_n.sort(
+                                key=lambda x: x['metric'], reverse=True
+                            )
+                            if len(self.value_composite_top_n) > self.value_composite_top_n_size:
+                                worst_vc = self.value_composite_top_n.pop()
+                                self._delete_from_gcs(worst_vc['gcs_path'])
+                            if self.wandb_run:
+                                self.wandb_run.summary['best_value_composite/gcs_path'] = (
+                                    self.value_composite_top_n[0]['gcs_path']
+                                )
 
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
@@ -1769,6 +2134,8 @@ class Trainer(
 
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
+        # A1 mirror: per-video jitter on val/holdout paths, same helper as OOD.
+        method_jitter_per_video_val = defaultdict(list)
         all_preds, all_labels = [], []
         all_losses = []
         method_id_to_name = getattr(validation_loader, "method_id_to_name", {}) or {}
@@ -1871,6 +2238,20 @@ class Trainer(
 
                 labels_np = data_dict['label'].cpu().numpy()
                 probs_np = video_probs.cpu().numpy()
+
+                # A1 mirror: per-video jitter — attribute each video to its
+                # per-sample method_name so sub-family splits stay separate.
+                try:
+                    frame_probs_np = predictions['prob'].view(B, T).detach().cpu().numpy()
+                    for idx, method_name in enumerate(batch_method_names):
+                        video_stats = _per_video_jitter_stats(
+                            frame_probs_np[idx:idx + 1]
+                        )
+                        method_jitter_per_video_val[method_name].extend(video_stats)
+                except Exception as jitter_err:
+                    self.logger.debug(
+                        f"val jitter compute failed for '{log_prefix}' method {method}: {jitter_err}"
+                    )
 
                 all_labels.extend(labels_np)
                 all_preds.extend(probs_np)
@@ -1997,7 +2378,39 @@ class Trainer(
                 wandb_log_dict[f'{log_prefix}/overall/{name}'] = value
                 self.logger.info(f"Overall {log_prefix} {name}: {value:.4f}")
 
+        # A7 piece 1: summary/ namespace — duplicate val_holdout headline AUC
+        # into the summary panel so the default filter view surfaces it.
+        if log_prefix == 'val_holdout' and 'auc' in overall_metrics:
+            wandb_log_dict[f'summary/val_holdout/auc'] = overall_metrics['auc']
+
         wandb_log_dict[f'{log_prefix}/probabilities'] = wandb.Histogram(np.array(all_preds))
+
+        # A1 mirror: emit per-method jitter family on val / val_holdout paths.
+        val_histogram_gate = (
+            step_cnt is not None
+            and step_cnt > 0
+            and int(step_cnt) % 2500 == 0
+            and self.wandb_run is not None
+        )
+        val_jitter_summary_cache = {}
+        for method_name, per_video_list in method_jitter_per_video_val.items():
+            agg_v = _aggregate_jitter_across_videos(per_video_list, spike_threshold=0.3)
+            if not agg_v:
+                continue
+            val_jitter_summary_cache[method_name] = agg_v
+            wandb_log_dict[f'{log_prefix}/score_jitter/{method_name}'] = agg_v['mean']
+            wandb_log_dict[f'{log_prefix}/score_jitter_max/{method_name}'] = agg_v['max']
+            wandb_log_dict[f'{log_prefix}/score_jitter_p95/{method_name}'] = agg_v['p95']
+            wandb_log_dict[f'{log_prefix}/score_jitter_spike_rate_0p3/{method_name}'] = \
+                agg_v.get('spike_rate_0p3', 0.0)
+            if val_histogram_gate and agg_v.get('all_diffs') is not None and agg_v['all_diffs'].size > 0:
+                try:
+                    wandb_log_dict[f'{log_prefix}/score_jitter_hist/{method_name}'] = \
+                        wandb.Histogram(np.clip(agg_v['all_diffs'], 0.0, 1.0))
+                except Exception as hist_err:
+                    self.logger.debug(f"val jitter histogram log failed for {method_name}: {hist_err}")
+        if val_jitter_summary_cache:
+            setattr(self, f"_last_{log_prefix}_jitter_summary", val_jitter_summary_cache)
 
         # --- THIS IS THE CRUCIAL CONTROL BLOCK ---
         # All checkpointing and early stopping logic is now conditional on this being the
@@ -2219,6 +2632,165 @@ class Trainer(
         self.logger.info(f"===> Evaluation for '{log_prefix}' Done!")
         return returned_metrics
 
+    def run_final_eval(self):
+        """A2: dual-checkpoint final evaluation at training end.
+
+        Reloads each cached "best" state dict in turn and evaluates it on:
+          - the 5% test slice (``self.test_loader``), if present
+          - the A10 held-out OOD slice (``self.ood_heldout_loader``), if present
+          - the val_holdout loader (for a frozen end-of-training readout)
+
+        Results are logged under ``final_eval/by_ood_composite/*`` and
+        ``final_eval/by_value_composite/*``. When only one cached checkpoint
+        exists (e.g. ``best_value_composite`` never improved), the other block
+        is skipped. ``final_eval/agree/same_step`` records whether the two
+        criteria picked the same training step — a strong signal they agree.
+
+        Readout-only: packet-3 selection is still ``best_ood_composite``. The
+        by_value_composite block exists so packet 4 can decide whether to
+        switch selection metrics without paying for a retroactive re-eval.
+        """
+        if self.config['local_rank'] != 0:
+            return
+        if self.wandb_run is None:
+            self.logger.info("run_final_eval skipped: no wandb_run.")
+            return
+
+        cached = []
+        if self._best_ood_composite_state_dict_cpu is not None:
+            cached.append(("ood_composite", self._best_ood_composite_state_dict_cpu,
+                            self.best_ood_composite_step, self.best_ood_composite))
+        if self._best_value_composite_state_dict_cpu is not None:
+            cached.append(("value_composite", self._best_value_composite_state_dict_cpu,
+                            self.best_value_composite_step, self.best_value_composite))
+
+        if not cached:
+            self.logger.info("run_final_eval skipped: no cached best checkpoints.")
+            return
+
+        self.logger.info("=" * 70)
+        self.logger.info(
+            "🏁 Running A2 final_eval over %d cached checkpoint(s): %s",
+            len(cached),
+            [c[0] for c in cached],
+        )
+        self.logger.info("=" * 70)
+
+        # Snapshot the current (last-step) state dict so we can restore it
+        # after final_eval mutates model weights.
+        inner_model = self.model.module if self.config.get('ddp') else self.model
+        try:
+            current_state = {k: v.detach().to('cpu').clone()
+                             for k, v in inner_model.state_dict().items()}
+        except Exception as snap_err:
+            self.logger.warning(f"run_final_eval: state snapshot failed, aborting: {snap_err}")
+            return
+
+        final_eval_summary = {}
+        try:
+            for crit_label, state_dict_cpu, best_step, best_metric in cached:
+                self.logger.info(
+                    f"--- final_eval(by_{crit_label}): reloading step={best_step} metric={best_metric:.4f}"
+                )
+                try:
+                    inner_model.load_state_dict(
+                        {k: v.to(self.model.device) for k, v in state_dict_cpu.items()},
+                        strict=True,
+                    )
+                except Exception as load_err:
+                    self.logger.warning(
+                        f"run_final_eval: failed to load by_{crit_label}: {load_err}"
+                    )
+                    continue
+
+                # A2 eval pass on val_holdout.
+                if self.val_holdout_loader is not None:
+                    try:
+                        m_holdout = self.test_epoch(
+                            epoch=-1,
+                            step_cnt=best_step if best_step and best_step > 0 else -1,
+                            validation_loader=self.val_holdout_loader,
+                            log_prefix=f"final_eval/by_{crit_label}/val_holdout",
+                            is_primary_metric=False,
+                        )
+                        if m_holdout and 'overall' in m_holdout:
+                            auc_v = m_holdout['overall'].get('auc')
+                            if auc_v is not None:
+                                final_eval_summary[f"final_eval/by_{crit_label}/val_holdout/auc"] = auc_v
+                    except Exception as ev_err:
+                        self.logger.warning(f"final_eval val_holdout({crit_label}) failed: {ev_err}")
+
+                # A2 eval pass on the 5% test slice.
+                if self.test_loader is not None:
+                    try:
+                        m_test = self.test_epoch(
+                            epoch=-1,
+                            step_cnt=best_step if best_step and best_step > 0 else -1,
+                            validation_loader=self.test_loader,
+                            log_prefix=f"final_eval/by_{crit_label}/test",
+                            is_primary_metric=False,
+                        )
+                        if m_test and 'overall' in m_test:
+                            auc_t = m_test['overall'].get('auc')
+                            if auc_t is not None:
+                                final_eval_summary[f"final_eval/by_{crit_label}/test/auc"] = auc_t
+                                if crit_label == "ood_composite":
+                                    # A7 piece 1 headline.
+                                    final_eval_summary["summary/final_eval/test/auc"] = auc_t
+                    except Exception as ev_err:
+                        self.logger.warning(f"final_eval test({crit_label}) failed: {ev_err}")
+
+                # A10 held-out OOD pass — temporarily swap ood_loader.
+                if self.ood_heldout_loader is not None:
+                    saved_ood = self.ood_loader
+                    self.ood_loader = self.ood_heldout_loader
+                    try:
+                        heldout_auc = self.ood_monitoring_epoch(
+                            epoch=-1,
+                            step_cnt=best_step if best_step and best_step > 0 else -1,
+                            indist_threshold=None,
+                        )
+                        if heldout_auc is not None:
+                            final_eval_summary[
+                                f"final_eval/by_{crit_label}/heldout_ood/auc"
+                            ] = heldout_auc
+                    except Exception as ev_err:
+                        self.logger.warning(f"final_eval heldout({crit_label}) failed: {ev_err}")
+                    finally:
+                        self.ood_loader = saved_ood
+
+            # agree/same_step flag — most informative when both criteria caught.
+            if len(cached) == 2:
+                same_step = bool(cached[0][2] == cached[1][2] and cached[0][2] > 0)
+                final_eval_summary["final_eval/agree/same_step"] = same_step
+                final_eval_summary["final_eval/agree/by_ood_composite_step"] = cached[0][2]
+                final_eval_summary["final_eval/agree/by_value_composite_step"] = cached[1][2]
+                self.logger.info(
+                    f"final_eval agreement: same_step={same_step} "
+                    f"ood_composite_step={cached[0][2]} value_composite_step={cached[1][2]}"
+                )
+
+            if self.wandb_run and final_eval_summary:
+                for k, v in final_eval_summary.items():
+                    try:
+                        self.wandb_run.summary[k] = v
+                    except Exception as summary_err:
+                        self.logger.debug(f"summary write failed for {k}: {summary_err}")
+        finally:
+            # Always restore the last-step state so downstream code doesn't
+            # silently operate on a reloaded checkpoint.
+            try:
+                inner_model.load_state_dict(
+                    {k: v.to(self.model.device) for k, v in current_state.items()},
+                    strict=True,
+                )
+                self.logger.info("run_final_eval: restored last-step model state.")
+            except Exception as rest_err:
+                self.logger.error(
+                    f"run_final_eval: FAILED to restore last-step state: {rest_err}. "
+                    "Model left on the last reloaded checkpoint."
+                )
+
     def _run_ood_monitoring(self, epoch, step_cnt, indist_threshold=None):
         """Helper to run the OOD monitoring loop.
 
@@ -2272,7 +2844,9 @@ class Trainer(
 
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
-        method_jitters = defaultdict(list)  # frame-to-frame score jitter per method
+        # A1: per-video jitter — store per-video dicts (mean/max/diffs) instead
+        # of a single scalar. Aggregation happens at log time.
+        method_jitter_per_video = defaultdict(list)
         all_preds, all_labels = [], []
 
         self.logger.info(f"Starting OOD Monitoring for {total_videos} videos...")
@@ -2291,12 +2865,11 @@ class Trainer(
                 predictions = self.model(data_dict, inference=True)
                 video_probs = predictions['prob'].view(B, T).mean(dim=1)
 
-                # Frame-to-frame score jitter per video
+                # A1: per-video frame-to-frame score jitter
                 frame_probs = predictions['prob'].view(B, T).detach().cpu().numpy()
-                for b in range(B):
-                    fp = frame_probs[b]
-                    if len(fp) >= 2:
-                        method_jitters[method].append(float(np.mean(np.abs(np.diff(fp)))))
+                method_jitter_per_video[method].extend(
+                    _per_video_jitter_stats(frame_probs)
+                )
 
                 labels_np = data_dict['label'].cpu().numpy()
                 probs_np = video_probs.cpu().numpy()
@@ -2327,6 +2900,10 @@ class Trainer(
                 wandb_log_dict[f'ood/overall/{name}'] = value
                 self.logger.info(f"OOD Overall {name}: {value:.4f}")
 
+        # A7 piece 1: summary/ namespace — headline OOD AUC.
+        if 'auc' in overall_metrics:
+            wandb_log_dict['summary/ood/overall/auc'] = overall_metrics['auc']
+
         # Log the probability distribution histogram
         wandb_log_dict['ood/probabilities'] = wandb.Histogram(np.array(all_preds))
 
@@ -2351,12 +2928,190 @@ class Trainer(
                 if name in ['acc', 'auc', 'eer']:
                     wandb_log_dict[f'ood/method/{method_key}/{name}'] = value
 
-        # Log per-method score jitter
-        for method, jitters in method_jitters.items():
-            if jitters:
-                mean_jitter = float(np.mean(jitters))
-                wandb_log_dict[f'ood/score_jitter/{method}'] = mean_jitter
-                self.logger.info(f"OOD score jitter for {method}: {mean_jitter:.4f}")
+        # A1: per-method score jitter — mean / max / p95 / spike_rate_0p3 + gated histogram.
+        histogram_gate = (
+            step_cnt is not None
+            and step_cnt > 0
+            and int(step_cnt) % 2500 == 0
+            and self.wandb_run is not None
+        )
+        ood_jitter_summary_cache = {}
+        for method, per_video_list in method_jitter_per_video.items():
+            agg = _aggregate_jitter_across_videos(per_video_list, spike_threshold=0.3)
+            if not agg:
+                continue
+            ood_jitter_summary_cache[method] = agg
+            wandb_log_dict[f'ood/score_jitter/{method}'] = agg['mean']
+            wandb_log_dict[f'ood/score_jitter_max/{method}'] = agg['max']
+            wandb_log_dict[f'ood/score_jitter_p95/{method}'] = agg['p95']
+            wandb_log_dict[f'ood/score_jitter_spike_rate_0p3/{method}'] = agg.get(
+                'spike_rate_0p3', 0.0
+            )
+            self.logger.info(
+                f"OOD jitter {method}: mean={agg['mean']:.4f} max={agg['max']:.4f} "
+                f"p95={agg['p95']:.4f} spike_rate_0p3={agg.get('spike_rate_0p3', 0.0):.4f} "
+                f"n={agg['n_diffs']}"
+            )
+            if histogram_gate and agg.get('all_diffs') is not None and agg['all_diffs'].size > 0:
+                try:
+                    wandb_log_dict[f'ood/score_jitter_hist/{method}'] = wandb.Histogram(
+                        np.clip(agg['all_diffs'], 0.0, 1.0)
+                    )
+                except Exception as hist_err:
+                    self.logger.debug(f"Histogram log failed for {method}: {hist_err}")
+            # A7: headline summary/ keys for the two most decision-driving
+            # jitter numbers (teams_ood_fake). Stays quiet for other methods.
+            if method == 'teams_ood_fake':
+                wandb_log_dict['summary/ood/score_jitter_max/teams_ood_fake'] = agg['max']
+                wandb_log_dict['summary/ood/score_jitter_spike_rate_0p3/teams_ood_fake'] = \
+                    agg.get('spike_rate_0p3', 0.0)
+        self._last_ood_jitter_summary = ood_jitter_summary_cache
+
+        # A3 / A3b: stress-family aggregate AUCs.
+        # Group methods by prefix: "ood_lighting_stress_*" -> lighting family,
+        # "ood_spatial_stress_*" -> spatial family. For each family, emit the
+        # per-preset AUC plus an overall aggregate for the summary/ panel.
+        stress_families = {
+            "ood_lighting_stress": "ood_lighting_stress_",
+            "ood_spatial_stress": "ood_spatial_stress_",
+        }
+        for family_log_key, family_prefix in stress_families.items():
+            family_methods = [
+                m for m in method_preds.keys() if str(m).startswith(family_prefix)
+            ]
+            if not family_methods:
+                continue
+            family_all_preds = []
+            family_all_labels = []
+            for m in family_methods:
+                if not method_labels[m]:
+                    continue
+                labels_arr = np.asarray(method_labels[m])
+                preds_arr = np.asarray(method_preds[m])
+                family_all_preds.append(preds_arr)
+                family_all_labels.append(labels_arr)
+                # Per-preset AUC when the method has both real and fake samples
+                # within it (or it's part of a paired real+fake stress set).
+                if len(np.unique(labels_arr)) > 1:
+                    try:
+                        m_metrics = get_test_metrics(preds_arr, labels_arr)
+                        if 'auc' in m_metrics:
+                            preset_token = str(m)[len(family_prefix):]
+                            wandb_log_dict[
+                                f"{family_log_key}/{preset_token}/auc"
+                            ] = m_metrics['auc']
+                    except Exception as preset_err:
+                        self.logger.debug(
+                            f"preset AUC failed for {m}: {preset_err}"
+                        )
+            if family_all_preds:
+                merged_preds = np.concatenate(family_all_preds)
+                merged_labels = np.concatenate(family_all_labels)
+                if len(np.unique(merged_labels)) > 1:
+                    try:
+                        fam_metrics = get_test_metrics(merged_preds, merged_labels)
+                        if 'auc' in fam_metrics:
+                            wandb_log_dict[f"{family_log_key}/overall/auc"] = fam_metrics['auc']
+                            # A7 piece 1 headline.
+                            wandb_log_dict[f"summary/{family_log_key}/auc"] = fam_metrics['auc']
+                    except Exception as fam_err:
+                        self.logger.debug(
+                            f"stress family AUC failed ({family_log_key}): {fam_err}"
+                        )
+
+        # A9: value_composite (deployment-aligned readout; does NOT drive
+        # checkpoint selection in packet 3). Assembled from whatever real/fake
+        # pools are present in the OOD loader. Missing pools (e.g. A6 enhanced-
+        # proper lanes, deferred) are logged once as a warning and skipped.
+        try:
+            real_pools_for_vc = {}
+            teams_fake_pools_for_vc = {}
+            other_fake_pools_for_vc = {}
+
+            for m, preds_list in method_preds.items():
+                labels_np = np.asarray(method_labels[m])
+                preds_np = np.asarray(preds_list)
+                if labels_np.size == 0:
+                    continue
+                is_real = int(labels_np[0]) == 0
+                pool_blob = {"preds": preds_np, "labels": labels_np}
+
+                # Real-pool routing. Method names follow the OOD yaml
+                # conventions. We accept common variants.
+                if is_real:
+                    m_norm = str(m).lower()
+                    if "teams_ood_real" in m_norm:
+                        real_pools_for_vc["teams_ood_real"] = pool_blob
+                    elif "external_youtube_avspeech" in m_norm:
+                        real_pools_for_vc["external_youtube_avspeech_real"] = pool_blob
+                    elif "zoom_vcd_real" in m_norm or "vcd_real" in m_norm:
+                        real_pools_for_vc["zoom_vcd_real"] = pool_blob
+                    elif "proper_clean_real" in m_norm or m_norm.endswith("proper_clean"):
+                        real_pools_for_vc["proper_clean_real"] = pool_blob
+                    elif "proper_teams_real" in m_norm or m_norm.endswith("proper_teams"):
+                        real_pools_for_vc["proper_teams_real"] = pool_blob
+                    elif "df40_real" in m_norm:
+                        real_pools_for_vc["df40_real"] = pool_blob
+                else:
+                    m_norm = str(m).lower()
+                    if "teams_ood_fake" in m_norm or "teams_fake" in m_norm or "visomaster_teams" in m_norm:
+                        teams_fake_pools_for_vc[m] = pool_blob
+                    elif "deeplive" in m_norm:
+                        teams_fake_pools_for_vc[m] = pool_blob
+                    else:
+                        other_fake_pools_for_vc[m] = pool_blob
+
+            stab_candidates = [
+                ood_jitter_summary_cache.get(k, {}).get("max", 0.0)
+                for k in _VALUE_COMPOSITE_STABILITY_JITTER_METHODS
+            ]
+            stab_max = max(stab_candidates) if stab_candidates else 0.0
+
+            vc = _compute_value_composite(
+                real_pools=real_pools_for_vc,
+                teams_fake_pools=teams_fake_pools_for_vc,
+                other_fake_pools=other_fake_pools_for_vc,
+                stability_jitter_max=float(stab_max),
+            )
+            wandb_log_dict["value_composite"] = vc["value_composite"] \
+                if vc["value_composite"] == vc["value_composite"] else float("nan")
+            if vc.get("tau") is not None:
+                wandb_log_dict["value_composite_tau"] = vc["tau"]
+            if vc.get("mean_fpr") is not None:
+                wandb_log_dict["value_composite_mean_fpr"] = vc["mean_fpr"]
+            if vc.get("max_fpr_at_mean_02") is not None:
+                wandb_log_dict["value_composite_max_fpr_at_mean_02"] = vc["max_fpr_at_mean_02"]
+            if vc.get("value_composite_blocked_by"):
+                wandb_log_dict["value_composite_blocked_by"] = vc["value_composite_blocked_by"]
+            if vc.get("teams_fakes_tpr") is not None:
+                wandb_log_dict["value_composite_teams_fakes_tpr"] = vc["teams_fakes_tpr"]
+            if vc.get("other_fakes_tpr") is not None:
+                wandb_log_dict["value_composite_other_fakes_tpr"] = vc["other_fakes_tpr"]
+            wandb_log_dict["value_composite_stability"] = vc["stability"]
+
+            # A7 piece 1: headline summary/ duplicate.
+            if vc["value_composite"] == vc["value_composite"]:
+                wandb_log_dict["summary/value_composite"] = vc["value_composite"]
+
+            self.logger.info(
+                "value_composite: val=%s blocked=%s tau=%s mean_fpr=%s max_fpr=%s "
+                "teams_tpr=%s other_tpr=%s stability=%.4f "
+                "(real_pools=%s teams_pools=%s other_pools=%s)",
+                vc["value_composite"],
+                vc.get("value_composite_blocked_by"),
+                vc.get("tau"),
+                vc.get("mean_fpr"),
+                vc.get("max_fpr"),
+                vc.get("teams_fakes_tpr"),
+                vc.get("other_fakes_tpr"),
+                vc["stability"],
+                sorted(real_pools_for_vc.keys()),
+                sorted(teams_fake_pools_for_vc.keys()),
+                sorted(other_fake_pools_for_vc.keys()),
+            )
+            self._last_value_composite = vc
+        except Exception as vc_err:
+            self.logger.warning(f"value_composite computation failed: {vc_err}")
 
         # --- At-indist-threshold metrics for OOD ---
         if indist_threshold is not None and indist_threshold > 0:
@@ -2379,7 +3134,7 @@ class Trainer(
         # composite checkpointing (R12+).
         ood_auc = overall_metrics.get('auc')
 
-        del all_preds, all_labels, method_labels, method_preds, method_jitters, overall_metrics
+        del all_preds, all_labels, method_labels, method_preds, method_jitter_per_video, overall_metrics
         gc.collect()
         torch.cuda.empty_cache()
         self.logger.info("===> OOD Monitoring Done!")

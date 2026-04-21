@@ -30,14 +30,19 @@ _DATA_SOURCE_REGISTRY: Dict[str, Callable] = {}
 @dataclass
 class DataPipelineResult:
     """Result from creating a data pipeline.
-    
+
     Attributes:
         train_loader: DataLoader for training data
         val_in_dist_loader: DataLoader for in-distribution validation
-        val_holdout_loader: DataLoader for holdout/OOD validation (can be same as val_in_dist)
+        val_holdout_loader: DataLoader for holdout validation (currently populated
+            from the 5% test split — kept for backward compatibility).
         train_samples: Raw training samples (for epoch length calculation, weighted sampling, etc.)
         data_stats: Dictionary with dataset statistics for logging
-        ood_loader: Optional OOD evaluation loader
+        ood_loader: Optional OOD evaluation loader (monitored partition after A10).
+        test_loader: Optional final-test DataLoader (5% test slice), exposed separately
+            from val_holdout_loader so A2 final_eval can run a frozen pass over it.
+        ood_heldout_loader: Optional held-out OOD slice (A10, ~10% by blake2b hash).
+            Never used during training; consumed only by A2 final_eval.
     """
     train_loader: DataLoader
     val_in_dist_loader: DataLoader
@@ -45,6 +50,8 @@ class DataPipelineResult:
     train_samples: List[Any]
     data_stats: Dict[str, Any]
     ood_loader: Optional[DataLoader] = None
+    test_loader: Optional[DataLoader] = None
+    ood_heldout_loader: Optional[DataLoader] = None
 
 
 def register_data_source(name: str):

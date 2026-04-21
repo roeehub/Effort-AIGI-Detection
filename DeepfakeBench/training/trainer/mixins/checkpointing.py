@@ -50,6 +50,19 @@ class CheckpointingMixin:
         self.ood_composite_top_n_size = ckpt_cfg.get('ood_composite_top_n_size', 3)
         self.best_ood_composite = -1.0
         self.best_ood_composite_step = -1
+
+        # --- A2: dual-checkpoint tracking for deployment-aligned readout ---
+        # best_value_composite is computed but does NOT drive packet-3 selection
+        # (see R13 Packet 3 plan §8.7). Tracked alongside best_ood_composite so
+        # A2 final_eval can compare the two choices. In-memory CPU snapshots
+        # avoid depending on GCS round-trips at training end.
+        self.value_composite_enabled = bool(ckpt_cfg.get('value_composite_enabled', True))
+        self.value_composite_top_n: List[Dict] = []
+        self.value_composite_top_n_size = ckpt_cfg.get('value_composite_top_n_size', 3)
+        self.best_value_composite = -1.0
+        self.best_value_composite_step = -1
+        self._best_ood_composite_state_dict_cpu = None
+        self._best_value_composite_state_dict_cpu = None
     
     def _upload_to_gcs(self, local_path: str, gcs_path: str) -> bool:
         """Uploads a local file to a GCS path."""

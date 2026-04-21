@@ -86,6 +86,7 @@ augmentation:
 combined_paired:
   identity_balanced_sampling: true
   split_seed: 737
+  identity_split_mode: "hash_stable"
   seed: 737
   bad_data_policy_manifest: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv"
   bad_data_policy_summary: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_SUMMARY_2026-04-17.json"

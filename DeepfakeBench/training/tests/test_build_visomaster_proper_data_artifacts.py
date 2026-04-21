@@ -253,6 +253,61 @@ def test_build_inventory_snapshot_preserves_enhanced_method_metadata(tmp_path):
     }
 
 
+def test_build_inventory_snapshot_filters_ragged_clean_by_default(tmp_path):
+    clean_root = tmp_path / "clean_bucket"
+    teams_root = tmp_path / "teams_bucket"
+
+    keep_clean = _clean_manifest(
+        sample_id="QCLIP20260417R2_00000",
+        real_id="322__-jlI8ntZrEY__rank01__s0210.98__d06.0__77e5c51a73b1",
+        dataset_key="quickclips_20260417_20260418_combined",
+        swap_model="GhostFace-v1",
+        enhancer="None",
+        clip_stem="322__-jlI8ntZrEY__rank01__s0210.98__d06.0",
+    )
+    ragged_clean = _clean_manifest(
+        sample_id="QCLIP20260417R2_00001",
+        real_id="323__-jlI8ntZrEY__rank01__s0211.98__d06.0__77e5c51a73b2",
+        dataset_key="quickclips_20260417_20260418_combined",
+        swap_model="GhostFace-v2",
+        enhancer="None",
+        clip_stem="323__-jlI8ntZrEY__rank01__s0211.98__d06.0",
+        fake_frame_count=14,
+    )
+
+    _write_manifest(clean_root, keep_clean["sample_id"], keep_clean)
+    _write_manifest(clean_root, ragged_clean["sample_id"], ragged_clean)
+    _write_manifest(
+        teams_root,
+        keep_clean["sample_id"],
+        _teams_manifest(keep_clean, selected_real=16, selected_fake=16),
+    )
+    _write_manifest(
+        teams_root,
+        ragged_clean["sample_id"],
+        _teams_manifest(ragged_clean, selected_real=16, selected_fake=16),
+    )
+
+    inventory, report = tool.build_inventory_snapshot(
+        [
+            tool.SourcePair(
+                name="quickclips",
+                clean_source=str(clean_root),
+                teams_source=str(teams_root),
+            )
+        ],
+        wave_id="proper_visomaster_wave_test",
+        source_logs={},
+    )
+
+    assert report["inventory_capture_count"] == 1
+    pair_report = report["source_pairs"][0]
+    assert pair_report["kept_sample_count"] == 1
+    assert pair_report["skipped_ragged_clean_count"] == 1
+    assert pair_report["skipped_ragged_teams_count"] == 0
+    assert inventory["captures"][0]["base_capture_id"] == "QCLIP20260417R2_00000"
+
+
 def test_render_suite_template_replaces_manifest_path_and_parses_yaml():
     rendered, parsed = tool.render_suite_template(
         "arena/manifests/proper_visomaster_manifest.json"
@@ -310,3 +365,20 @@ def test_build_inventory_snapshot_fails_fast_when_explicit_frame_files_are_missi
         assert "Missing explicit frame_files" in str(exc)
     else:
         raise AssertionError("Expected build_inventory_snapshot to fail without explicit frame_files")
+
+
+def test_default_output_paths_follow_runtime_artifact_names():
+    paths = tool._default_output_paths("proper_visomaster_wave_2026_04_19_provisional")
+
+    assert paths["inventory"].endswith(
+        "arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml"
+    )
+    assert paths["manifest"].endswith(
+        "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    )
+    assert paths["suite"].endswith(
+        "arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml"
+    )
+    assert paths["report"].endswith(
+        "arena/reports/proper_visomaster_wave_2026_04_19_provisional_build_report.json"
+    )

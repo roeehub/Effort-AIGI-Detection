@@ -6,14 +6,14 @@ a single video with its frames and metadata.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
 class VideoInfo:
     """
     Represents a single video with its metadata and frame paths.
-    
+
     Attributes:
         label: 'real' or 'fake'
         method: Generation/source method name
@@ -21,6 +21,10 @@ class VideoInfo:
         frame_paths: List of GCS paths to frame images
         identity: Target identity (numeric), used for identity-based splitting
         label_id: Numeric label (0 for real, 1 for fake)
+        eval_aug_preset: Optional deterministic eval-time stress preset name
+            (R13 Packet 3 plan A3/A3b). Applied at load time in
+            ``load_and_process_video``. None means no eval-time aug, which is
+            the default for every non-stress OOD lane. NOT used during training.
     """
     label: str  # 'real' | 'fake'
     method: str  # generation/source method
@@ -28,6 +32,7 @@ class VideoInfo:
     frame_paths: List[str]  # gs:// paths
     identity: int  # target identity (numeric)
     label_id: int = 0  # a numeric label ID
+    eval_aug_preset: Optional[str] = None
 
     def __post_init__(self):
         # 1) strict label check

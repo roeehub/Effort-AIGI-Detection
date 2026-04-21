@@ -175,6 +175,8 @@ def _ensure_source_package_stubs():
             train_samples: list
             data_stats: dict
             ood_loader: object = None
+            test_loader: object = None
+            ood_heldout_loader: object = None
 
         def _register_data_source(_name):
             def decorator(func):
@@ -912,6 +914,160 @@ def test_combined_paired_pipeline_counts_proper_data_lanes(tmp_path):
     assert result.data_stats["source_counts"]["proper_visomaster_clean"] == 1
     assert result.data_stats["proper_data_discovery"]["paired_sample_count"] == 4
     assert result.data_stats["split_seed"] == 123
+
+
+def test_create_unified_samples_from_proper_data_uses_split_group_identity():
+    combined_paired_module = _load_combined_paired_source_module()
+    proper_data_module = _load_proper_data_source_module()
+
+    sample_a = proper_data_module.ProperDataPairedSample(
+        sample_id="capture_a__cscs__clean",
+        base_capture_id="capture_a",
+        identity_id="barack_obama",
+        capture_session_id="session_a",
+        split_group_id="barack_obama__session_a",
+        source="proper_visomaster_clean",
+        method="proper_visomaster_clean__cscs",
+        transport="clean",
+        enhancement="none",
+        generator_family="visomaster",
+        generator_method="CSCS",
+        quality_band="high",
+        face_scale_band="big_face",
+        real_frame_paths=("real_a_0.png",),
+        fake_frame_paths=("fake_a_0.png",),
+    )
+    sample_b = proper_data_module.ProperDataPairedSample(
+        sample_id="capture_b__cscs__clean",
+        base_capture_id="capture_b",
+        identity_id="barack_obama",
+        capture_session_id="session_b",
+        split_group_id="barack_obama__session_b",
+        source="proper_visomaster_clean",
+        method="proper_visomaster_clean__cscs",
+        transport="clean",
+        enhancement="none",
+        generator_family="visomaster",
+        generator_method="CSCS",
+        quality_band="high",
+        face_scale_band="big_face",
+        real_frame_paths=("real_b_0.png",),
+        fake_frame_paths=("fake_b_0.png",),
+    )
+
+    unified = combined_paired_module.create_unified_samples_from_proper_data(
+        [sample_a, sample_b],
+        logging.getLogger("test"),
+    )
+
+    assert {sample.identity for sample in unified} == {
+        "realpool_splitgroup_barack_obama__session_a",
+        "realpool_splitgroup_barack_obama__session_b",
+    }
+
+    train_samples, _, test_samples = combined_paired_module.split_samples_by_identity(
+        unified,
+        train_split=0.5,
+        val_split=0.0,
+        seed=737,
+        logger=logging.getLogger("test"),
+    )
+    assert len({sample.identity for sample in [*train_samples, *test_samples]}) == 2
+
+
+def test_hash_stable_identity_split_keeps_existing_assignments_when_new_identities_are_added():
+    combined_paired_module = _load_combined_paired_source_module()
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+
+    def _make_samples(start: int, end: int):
+        return [
+            UnifiedPairedSample(
+                identity=f"df40_identity_{idx:03d}",
+                source="df40",
+                original_sample=object(),
+                method="blendface",
+                has_landmarks=False,
+                sample_id=f"df40_pair_{idx:03d}",
+            )
+            for idx in range(start, end)
+        ]
+
+    base_samples = _make_samples(0, 24)
+    expanded_samples = [*_make_samples(0, 24), *_make_samples(24, 48)]
+
+    def _assignment(samples):
+        train_samples, val_samples, test_samples = combined_paired_module.split_samples_by_identity(
+            samples,
+            train_split=0.6,
+            val_split=0.2,
+            seed=737,
+            logger=logging.getLogger("test"),
+            split_mode="hash_stable",
+        )
+        assignment = {}
+        for sample in train_samples:
+            assignment[sample.identity] = "train"
+        for sample in val_samples:
+            assignment[sample.identity] = "val"
+        for sample in test_samples:
+            assignment[sample.identity] = "test"
+        return assignment
+
+    base_assignment = _assignment(base_samples)
+    expanded_assignment = _assignment(expanded_samples)
+
+    assert base_assignment
+    assert {identity: expanded_assignment[identity] for identity in base_assignment} == base_assignment
+
+
+def test_count_strategy_and_family_does_not_add_unknown_fake_for_unpaired_external_real():
+    combined_paired_module = _load_combined_paired_source_module()
+    UnifiedUnpairedRealSample = combined_paired_module.UnifiedUnpairedRealSample
+
+    unpaired_real = UnifiedUnpairedRealSample(
+        identity="external_vcd_001",
+        source="external",
+        method="external_vcd_real",
+        gcs_bucket="effort-collected-data",
+        frame_paths=["gs://effort-collected-data/real/VCD/frame_0001.png"],
+        sample_id="ext_real_001",
+        original_sample=object(),
+    )
+
+    counts = combined_paired_module._count_strategy_and_family([unpaired_real], ())
+
+    assert counts["family_counts"] == {"external_real": 1}
+
+
+def test_overview_methods_keep_unpaired_reals_out_of_fake_method_list():
+    combined_paired_module = _load_combined_paired_source_module()
+    UnifiedPairedSample = combined_paired_module.UnifiedPairedSample
+    UnifiedUnpairedRealSample = combined_paired_module.UnifiedUnpairedRealSample
+
+    paired_fake = UnifiedPairedSample(
+        identity="df40_001",
+        source="df40",
+        original_sample=object(),
+        method="blendface",
+        has_landmarks=False,
+        sample_id="pair_001",
+    )
+    unpaired_real = UnifiedUnpairedRealSample(
+        identity="external_vcd_001",
+        source="external",
+        method="external_vcd_real",
+        gcs_bucket="effort-collected-data",
+        frame_paths=["gs://effort-collected-data/real/VCD/frame_0001.png"],
+        sample_id="ext_real_001",
+        original_sample=object(),
+    )
+
+    overview = combined_paired_module._build_overview_method_lists(
+        [paired_fake, unpaired_real]
+    )
+
+    assert overview["real_methods"] == ["external_vcd_real", "paired_real"]
+    assert overview["fake_methods"] == ["blendface"]
 
 
 class _MiniDF40Dataset:

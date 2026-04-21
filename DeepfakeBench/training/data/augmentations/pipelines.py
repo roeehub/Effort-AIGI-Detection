@@ -1582,3 +1582,171 @@ def create_quality_targeted_family_router(
         preset_overrides=preset_overrides,
         teams_codec_simulation=teams_codec_simulation,
     )
+
+
+# =============================================================================
+# A3 / A3b: deterministic eval-time stress presets (R13 Packet 3 plan)
+# =============================================================================
+#
+# These are NOT training-time augmentations. They are applied at eval time to
+# deterministically stress an input image so an OOD eval pool can measure
+# whether a model generalizes to conditions absent from the training data.
+#
+# Principles:
+#   - Fixed parameter values (no sampling ranges)
+#   - Every frame gets the distortion (p=1.0)
+#   - Same parameters across all runs (deterministic, byte-for-byte reproducible)
+#   - Implemented via albumentations.Compose for consistency with training aug
+#
+# Presets live in two families:
+#   - lighting: vcd_targeted_stress, backlight_dim_stress, warm_harsh_stress
+#   - spatial:  crop_shift, scale, rotation
+
+EVAL_STRESS_PRESETS = {
+    "vcd_targeted_stress",
+    "backlight_dim_stress",
+    "warm_harsh_stress",
+    "crop_shift",
+    "scale",
+    "rotation",
+}
+
+EVAL_STRESS_LIGHTING_PRESETS = {
+    "vcd_targeted_stress",
+    "backlight_dim_stress",
+    "warm_harsh_stress",
+}
+
+EVAL_STRESS_SPATIAL_PRESETS = {
+    "crop_shift",
+    "scale",
+    "rotation",
+}
+
+
+def _build_eval_stress_pipeline(preset_name: str) -> A.Compose:
+    """Return an albumentations Compose pipeline for a deterministic eval preset.
+
+    Parameters below were hand-picked to (a) sit in a plausible real-world
+    stress regime without fully destroying content, and (b) be distinct from
+    one another so the 3-preset lighting / 3-preset spatial batteries cover
+    breadth. They are a FIRST GUESS and §8.11 of the R13 Packet 3 plan says
+    they should be re-tuned from observed packet-3 results.
+    """
+    if preset_name == "vcd_targeted_stress":
+        return A.Compose([
+            A.RandomBrightnessContrast(
+                brightness_limit=(-0.15, -0.15),
+                contrast_limit=(0.15, 0.15),
+                p=1.0,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=(8, 8),
+                sat_shift_limit=(-10, -10),
+                val_shift_limit=(-10, -10),
+                p=1.0,
+            ),
+            A.ImageCompression(quality_lower=55, quality_upper=55, p=1.0),
+        ])
+    if preset_name == "backlight_dim_stress":
+        return A.Compose([
+            A.RandomBrightnessContrast(
+                brightness_limit=(-0.40, -0.40),
+                contrast_limit=(0.25, 0.25),
+                p=1.0,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=(0, 0),
+                sat_shift_limit=(-20, -20),
+                val_shift_limit=(-25, -25),
+                p=1.0,
+            ),
+        ])
+    if preset_name == "warm_harsh_stress":
+        return A.Compose([
+            A.HueSaturationValue(
+                hue_shift_limit=(15, 15),
+                sat_shift_limit=(30, 30),
+                val_shift_limit=(8, 8),
+                p=1.0,
+            ),
+            A.RandomBrightnessContrast(
+                brightness_limit=(0.10, 0.10),
+                contrast_limit=(0.30, 0.30),
+                p=1.0,
+            ),
+        ])
+    if preset_name == "crop_shift":
+        # albumentations 0.4.6 takes a single scalar shift_limit that applies
+        # symmetrically to x and y; asymmetric shift (x=±8%, y=±5%) was in the
+        # original plan but requires A.Affine (unavailable). Using ±7% as a
+        # compromise between the two magnitudes. Fixed-range (min==max) makes
+        # the sampling deterministic.
+        return A.Compose([
+            A.ShiftScaleRotate(
+                shift_limit=(0.07, 0.07),
+                scale_limit=(0.0, 0.0),
+                rotate_limit=(0, 0),
+                border_mode=cv2.BORDER_REFLECT_101,
+                p=1.0,
+            ),
+        ])
+    if preset_name == "scale":
+        # Fixed 0.9x scale (tighter crop / smaller face).
+        return A.Compose([
+            A.ShiftScaleRotate(
+                shift_limit=(0.0, 0.0),
+                scale_limit=(-0.10, -0.10),
+                rotate_limit=(0, 0),
+                border_mode=cv2.BORDER_REFLECT_101,
+                p=1.0,
+            ),
+        ])
+    if preset_name == "rotation":
+        # +6° rotation (head-tilt / camera-tilt).
+        return A.Compose([
+            A.ShiftScaleRotate(
+                shift_limit=(0.0, 0.0),
+                scale_limit=(0.0, 0.0),
+                rotate_limit=(6, 6),
+                border_mode=cv2.BORDER_REFLECT_101,
+                p=1.0,
+            ),
+        ])
+    raise ValueError(
+        f"Unknown eval_stress preset: {preset_name!r}. "
+        f"Valid presets: {sorted(EVAL_STRESS_PRESETS)}"
+    )
+
+
+_EVAL_STRESS_PIPELINE_CACHE = {}
+
+
+def apply_eval_stress_preset(img_np, preset_name: str, seed: int = 42):
+    """A3 / A3b: apply a deterministic eval-stress preset to a numpy image.
+
+    Args:
+        img_np: HxWx3 uint8 numpy array (RGB).
+        preset_name: One of ``EVAL_STRESS_PRESETS``.
+        seed: RNG seed — kept for determinism even though the pipelines above
+            have collapsed (min, max) ranges.
+
+    Returns:
+        HxWx3 uint8 numpy array with the preset applied.
+    """
+    pipeline = _EVAL_STRESS_PIPELINE_CACHE.get(preset_name)
+    if pipeline is None:
+        pipeline = _build_eval_stress_pipeline(preset_name)
+        _EVAL_STRESS_PIPELINE_CACHE[preset_name] = pipeline
+    # Temporarily seed RNGs so albumentations' internal sampling is
+    # deterministic even when the parameter ranges collapse.
+    prev_py_state = random.getstate()
+    prev_np_state = np.random.get_state()
+    try:
+        random.seed(int(seed))
+        np.random.seed(int(seed))
+        out = pipeline(image=img_np)
+    finally:
+        random.setstate(prev_py_state)
+        np.random.set_state(prev_np_state)
+    return out["image"]

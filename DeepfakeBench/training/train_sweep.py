@@ -441,6 +441,8 @@ def main():
     train_data = pipeline_result.train_samples
     data_split_stats = pipeline_result.data_stats
     ood_loader = pipeline_result.ood_loader
+    test_loader = pipeline_result.test_loader
+    ood_heldout_loader = pipeline_result.ood_heldout_loader
     
     # Handle Group DRO method mapping if it was set during pipeline creation
     if config.get('use_group_dro', False):
@@ -578,11 +580,14 @@ def main():
         holdout_method_counts = data_split_stats.get('holdout_method_counts', {})
         train_df40_methods = data_split_stats.get('train_df40_methods', [])
         holdout_df40_methods = data_split_stats.get('holdout_df40_methods', [])
+        identity_split_mode = data_split_stats.get('identity_split_mode')
         ood_video_count = data_split_stats.get('ood_video_count', 0)
         ood_method_count = data_split_stats.get('ood_method_count', 0)
 
         wandb.run.summary["data/run_seed"] = data_split_stats.get('run_seed', canonical_seed)
         wandb.run.summary["data/split_seed"] = data_split_stats.get('split_seed', canonical_seed)
+        if identity_split_mode:
+            wandb.run.summary["data/identity_split_mode"] = identity_split_mode
         wandb.run.summary["data/strategy_counts"] = strategy_counts
         wandb.run.summary["data/family_counts"] = family_counts
         wandb.run.summary["data/train_strategy_counts"] = train_strategy_counts
@@ -608,6 +613,16 @@ def main():
             wandb.run.summary["data/holdout_df40_methods"] = holdout_df40_methods
         wandb.run.summary["data/ood_video_count"] = ood_video_count
         wandb.run.summary["data/ood_method_count"] = ood_method_count
+        proper_data_build_id = data_split_stats.get('proper_data_build_id') or ''
+        if proper_data_build_id:
+            wandb.run.summary["data/proper_data_build_id"] = proper_data_build_id
+            try:
+                wandb.config.update(
+                    {"data_proper_data_build_id": proper_data_build_id},
+                    allow_val_change=True,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to push proper_data_build_id to wandb.config: {e}")
 
         logger.info(f"Strategy counts (all): {strategy_counts}")
         logger.info(f"Family counts (all): {family_counts}")
@@ -624,6 +639,8 @@ def main():
             logger.info(f"Sampling family weights: {sampling_family_weights}")
         if holdout_mode:
             logger.info(f"Holdout mode: {holdout_mode}")
+        if identity_split_mode:
+            logger.info(f"Identity split mode: {identity_split_mode}")
         if holdout_methods:
             logger.info(f"Holdout methods: {holdout_methods}")
         if holdout_method_counts:
@@ -659,8 +676,15 @@ def main():
     elif current_data_source == 'combined_paired':
         # Combined Paired: Get methods from data_stats
         methods = data_split_stats.get('methods', [])
-        real_methods = ['paired_real']  # Combined paired always has paired real frames
-        all_fake_methods_used = sorted(list(methods)) if isinstance(methods, (list, set)) else sorted(list(methods.keys()))
+        real_methods = data_split_stats.get('overview_real_methods') or ['paired_real']
+        all_fake_methods_used = (
+            data_split_stats.get('overview_fake_methods')
+            or (
+                sorted(list(methods))
+                if isinstance(methods, (list, set))
+                else sorted(list(methods.keys()))
+            )
+        )
     elif current_data_source == 'visomaster':
         # VisoMaster standalone: Get swap_models from data_stats
         methods = data_split_stats.get('methods', [])
@@ -885,6 +909,8 @@ def main():
         metric_scoring=metric_scoring,
         wandb_run=wandb_run,
         ood_loader=ood_loader,
+        ood_heldout_loader=ood_heldout_loader,
+        test_loader=test_loader,
         # ood_loader=None,
         use_group_dro=config.get('use_group_dro', False)
     )
@@ -1024,6 +1050,13 @@ def main():
             logger.info(f"Gracefully terminating training at epoch {epoch + 1} due to early stopping.")
             wandb.log({"train/status": "Early Stopped"})
             break
+
+    # A2: dual-checkpoint final_eval — reload each best-step state dict and
+    # run a clean pass over test_loader, ood_heldout_loader, val_holdout.
+    try:
+        trainer.run_final_eval()
+    except Exception as final_eval_err:
+        logger.warning(f"run_final_eval failed: {final_eval_err}")
 
     wandb_run.finish()
     logger.info("Training complete.")

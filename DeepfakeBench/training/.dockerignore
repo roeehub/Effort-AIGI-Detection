@@ -60,7 +60,7 @@ debug/
 *.parquet
 *.csv
 *.json
-!arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json
+!arena/manifests/*target_domain_manifest*.json
 
 # Test artifacts
 test_data/

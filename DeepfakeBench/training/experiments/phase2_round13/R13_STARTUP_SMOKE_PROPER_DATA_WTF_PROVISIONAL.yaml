@@ -69,6 +69,7 @@ augmentation:
 combined_paired:
   identity_balanced_sampling: true
   split_seed: 737
+  identity_split_mode: "hash_stable"
   seed: 737
 
   df40:
