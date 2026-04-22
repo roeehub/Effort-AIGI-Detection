@@ -273,6 +273,14 @@ def main():
             print(f"  ✅ Applied group_dro_params: {single_cfg['group_dro_params']}")
             logger.info(f"  Applied group_dro_params: {single_cfg['group_dro_params']}")
 
+        # Apply value_composite config directly (nested dict — W&B flattens; must copy).
+        # Keys: target_mean_fpr, max_pool_fpr, stability_jitter_stat. Trainer falls
+        # back to legacy (0.02 / 0.04 / "max") when absent, so this is legacy-safe.
+        if 'value_composite' in single_cfg:
+            config['value_composite'] = single_cfg['value_composite']
+            print(f"  ✅ Applied value_composite: {single_cfg['value_composite']}")
+            logger.info(f"  Applied value_composite: {single_cfg['value_composite']}")
+
         print("=" * 70)
     else:
         print("⚠️ single_cfg is None/empty - no direct config application!")
