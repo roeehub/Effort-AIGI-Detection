@@ -36,12 +36,28 @@ class ArcFaceMixin:
             f"✅ ArcFace initialized: s_start={self.arcface_s_start}, "
             f"s_end={self.arcface_s_end}, anneal_steps={self.arcface_anneal_steps}"
         )
-        
+
         if self.arcface_anneal_steps > 0:
             self.logger.info(
                 f"   Annealing will run for {self.arcface_anneal_steps} steps "
                 f"from s={self.arcface_s_start} to s={self.arcface_s_end}"
             )
+
+            total_training_steps = int(self.config.get('total_training_steps', 0) or 0)
+            if total_training_steps > 0 and self.arcface_anneal_steps > total_training_steps * 1.1:
+                span = self.arcface_s_end - self.arcface_s_start
+                effective_s_end = (
+                    self.arcface_s_start
+                    + (total_training_steps / self.arcface_anneal_steps) * span
+                )
+                self.logger.warning(
+                    "ArcFace anneal_steps=%d exceeds total_training_steps=%d by >10%%; "
+                    "anneal will not complete — effective s_end≈%.2f (configured %.2f).",
+                    self.arcface_anneal_steps,
+                    total_training_steps,
+                    effective_s_end,
+                    self.arcface_s_end,
+                )
     
     def update_arcface_s(self, step_cnt: int) -> Optional[float]:
         """

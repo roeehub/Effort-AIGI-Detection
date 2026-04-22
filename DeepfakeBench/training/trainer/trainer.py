@@ -408,6 +408,27 @@ class Trainer(
             self.ood_monitoring_every_steps,
         )
 
+        # A9 value_composite — config-driven gate + stability jitter aggregator.
+        # Defaults match the packet 3 hardcoded values (0.02 / 0.04 / "max") so
+        # runs without the new config block are bit-identical to pre-packet-3.5
+        # trainers. Packet 3.5 yamls set {0.03, 0.05, "p95"} via this block.
+        vc_cfg = (self.config.get("value_composite") or {})
+        self._vc_target_mean_fpr = float(vc_cfg.get("target_mean_fpr", 0.02))
+        self._vc_max_pool_fpr = float(vc_cfg.get("max_pool_fpr", 0.04))
+        self._vc_stability_jitter_stat = str(vc_cfg.get("stability_jitter_stat", "max"))
+        if self._vc_stability_jitter_stat not in ("max", "p95", "mean"):
+            self.logger.warning(
+                "Unknown value_composite.stability_jitter_stat=%r; falling back to 'max'.",
+                self._vc_stability_jitter_stat,
+            )
+            self._vc_stability_jitter_stat = "max"
+        self.logger.info(
+            "value_composite config: target_mean_fpr=%.4f max_pool_fpr=%.4f stability_jitter_stat=%s",
+            self._vc_target_mean_fpr,
+            self._vc_max_pool_fpr,
+            self._vc_stability_jitter_stat,
+        )
+
         # Initialize AMP scaler for mixed precision training
         self.scaler = GradScaler()
         self.gradient_clip_val = self.config.get('gradient_clip_val')
@@ -3061,8 +3082,9 @@ class Trainer(
                     else:
                         other_fake_pools_for_vc[m] = pool_blob
 
+            stat_key = self._vc_stability_jitter_stat
             stab_candidates = [
-                ood_jitter_summary_cache.get(k, {}).get("max", 0.0)
+                ood_jitter_summary_cache.get(k, {}).get(stat_key, 0.0)
                 for k in _VALUE_COMPOSITE_STABILITY_JITTER_METHODS
             ]
             stab_max = max(stab_candidates) if stab_candidates else 0.0
@@ -3072,7 +3094,14 @@ class Trainer(
                 teams_fake_pools=teams_fake_pools_for_vc,
                 other_fake_pools=other_fake_pools_for_vc,
                 stability_jitter_max=float(stab_max),
+                target_mean_fpr=self._vc_target_mean_fpr,
+                max_pool_fpr=self._vc_max_pool_fpr,
             )
+            # Self-identify which metric definition produced this row so
+            # downstream retro-scoring / W&B comparisons are unambiguous.
+            wandb_log_dict["value_composite_stability_stat"] = stat_key
+            wandb_log_dict["value_composite_target_mean_fpr"] = self._vc_target_mean_fpr
+            wandb_log_dict["value_composite_max_pool_fpr"] = self._vc_max_pool_fpr
             wandb_log_dict["value_composite"] = vc["value_composite"] \
                 if vc["value_composite"] == vc["value_composite"] else float("nan")
             if vc.get("tau") is not None:
