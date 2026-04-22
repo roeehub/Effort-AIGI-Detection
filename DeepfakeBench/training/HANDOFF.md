@@ -110,7 +110,7 @@ RLP35_02_arcface_m015                us-east1          3065882964534493184      
 RLP35_03_arcface_m020                asia-southeast1   7562969566058381312                PENDING   (watch for collapse on transition)
 RLP35_04_stability_lambda_003        us-west4          154374731074633728                 PENDING
 RLP35_05_label_smoothing_005         europe-west4      5892697191696302080                PENDING
-RLP35_06_family_rebalance_proper_up  europe-west4      3309882805399322624                PENDING
+RLP35_06_family_rebalance_proper_up  us-central1       9185612453914869760                PENDING   (relocated from europe-west4 at 16:01 UTC — europe-west4 pending queue was slow; us-central1 had 5/8 A100 quota free)
 (slot 07 stack_top3 — yaml authored, not launched; edit arcface_m before firing)
 ```
 
@@ -122,6 +122,7 @@ CANCELLED 7297014814449074176  RLP35_03_arcface_m020
 CANCELLED 6183394253465452544  RLP35_04_stability_lambda_003
 CANCELLED 3877551244251758592  RLP35_05_label_smoothing_005
 CANCELLED 5681348448129908736  RLP35_06_family_rebalance_proper_up
+CANCELLED 3309882805399322624  RLP35_06_family_rebalance_proper_up  (europe-west4 — stale PENDING; relocated to us-central1)
 ```
 
 ## Files to Know
@@ -203,9 +204,9 @@ gcloud ai custom-jobs describe 7562969566058381312 --region=asia-southeast1 --pr
 echo "=== packet 3.5 us-west4 ==="
 gcloud ai custom-jobs describe 154374731074633728 --region=us-west4 --project=train-cvit2 --format="value(state,displayName)"
 echo "=== packet 3.5 europe-west4 ==="
-for id in 5892697191696302080 3309882805399322624; do
-  gcloud ai custom-jobs describe "$id" --region=europe-west4 --project=train-cvit2 --format="value(state,displayName)"
-done
+gcloud ai custom-jobs describe 5892697191696302080 --region=europe-west4 --project=train-cvit2 --format="value(state,displayName)"
+echo "=== packet 3.5 us-central1 ==="
+gcloud ai custom-jobs describe 9185612453914869760 --region=us-central1 --project=train-cvit2 --format="value(state,displayName)"
 ```
 Compare against the "Live Job IDs" snapshot at 12:43 UTC: packet 3 was 7 RUNNING, packet 3.5 was 6 PENDING (all freshly relaunched).
 
@@ -263,7 +264,7 @@ Write `docs/relaunch_handoffs/R13_RELAUNCH_PACKET3_5_RESULTS_<date>.md`. Rank sl
 ## Edge Cases & Error Handling
 
 - **Slot 03 collapses (m=0.20)** → cancel it; safe margin upper bound is in [0.15, 0.20). Cap packet-4 margin at 0.15.
-- **Any slot still PENDING >1h after relaunch** → check regional quota in GCP console; ask user before relocating. Regions `us-east4`, `us-west1`, `asia-east1`, `asia-northeast3`, `asia-northeast1` are known-bad as of this session (no a2-highgpu-1g or no A100 quota). Known-good: `us-east1`, `asia-southeast1`, `us-west4`, `europe-west4`.
+- **Any slot still PENDING >1h after relaunch** → check regional quota in GCP console; ask user before relocating. Regions `us-east4`, `us-west1`, `asia-east1`, `asia-northeast3`, `asia-northeast1` are known-bad as of this session (no a2-highgpu-1g or no A100 quota). Known-good: `us-east1`, `asia-southeast1`, `us-west4`, `europe-west4`, `us-central1` (8-slot A100 quota, but shared with other team jobs — check `gcloud ai custom-jobs list --region=us-central1 --project=train-cvit2` before using).
 - **Slot log doesn't show `value_composite config: target_mean_fpr=0.0300 ...` line** → the new code wasn't picked up. Check:
   - `cat VERSION` is `1.3.193`.
   - The image pinned by the launch script matches (grep `IMAGE_URI` in slot logs for `1.3.193`).
