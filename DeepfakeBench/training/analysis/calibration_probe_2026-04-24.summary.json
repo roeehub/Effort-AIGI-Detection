@@ -1,0 +1,460 @@
+{
+  "config": {
+    "data_path": "/tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json",
+    "seed": 42,
+    "target_fprs": [
+      0.05,
+      0.1,
+      0.15,
+      0.25
+    ],
+    "pool_order": [
+      "dor-real-laptop-correct-no-virtual-bg-whiteish",
+      "dor-real-laptop-correct-no-virtual-bg-yellowish",
+      "roee-real-windows-laptop-correct",
+      "dor-real-webcam-false-flag",
+      "dor-real-webcam-false-flag-no-virtual-bg",
+      "roee-mac-laptop-false-flag-virtual-bg"
+    ]
+  },
+  "pool_stats": [
+    {
+      "pool": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+      "is_failing": false,
+      "mean": 0.01823692376104494,
+      "std": 0.01440050599912986,
+      "n": 30
+    },
+    {
+      "pool": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+      "is_failing": false,
+      "mean": 0.03998176921159029,
+      "std": 0.04356198301823874,
+      "n": 30
+    },
+    {
+      "pool": "roee-real-windows-laptop-correct",
+      "is_failing": false,
+      "mean": 0.006996705289930105,
+      "std": 0.003730259276230753,
+      "n": 30
+    },
+    {
+      "pool": "dor-real-webcam-false-flag",
+      "is_failing": true,
+      "mean": 0.877894276380539,
+      "std": 0.14458615773939287,
+      "n": 30
+    },
+    {
+      "pool": "dor-real-webcam-false-flag-no-virtual-bg",
+      "is_failing": true,
+      "mean": 0.9399561524391175,
+      "std": 0.07622042578387168,
+      "n": 30
+    },
+    {
+      "pool": "roee-mac-laptop-false-flag-virtual-bg",
+      "is_failing": true,
+      "mean": 0.8997943341732025,
+      "std": 0.10633886676900614,
+      "n": 30
+    }
+  ],
+  "results_by_target_fpr": [
+    {
+      "target_fpr": 0.05,
+      "tau_global": 0.9897807836532593,
+      "per_pool": [
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+          "is_failing": false,
+          "train_mean": 0.019510748330503702,
+          "train_std": 0.017179808954489607,
+          "test_mean": 0.016963099191586176,
+          "tau_pool": 0.0574847012758255,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.0
+        },
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+          "is_failing": false,
+          "train_mean": 0.032871601482232414,
+          "train_std": 0.03979298943559189,
+          "test_mean": 0.04709193694094817,
+          "tau_pool": 0.15123800933361053,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.06666666666666667
+        },
+        {
+          "pool": "roee-real-windows-laptop-correct",
+          "is_failing": false,
+          "train_mean": 0.00646531293168664,
+          "train_std": 0.0024061421129759016,
+          "test_mean": 0.0075280976481735705,
+          "tau_pool": 0.014791125431656837,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.06666666666666667
+        },
+        {
+          "pool": "dor-real-webcam-false-flag",
+          "is_failing": true,
+          "train_mean": 0.8186298092206319,
+          "train_std": 0.17319462983561687,
+          "test_mean": 0.9371587435404459,
+          "tau_pool": 0.9901152849197388,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.0
+        },
+        {
+          "pool": "dor-real-webcam-false-flag-no-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.9337597688039144,
+          "train_std": 0.07171751360211241,
+          "test_mean": 0.9461525360743205,
+          "tau_pool": 0.9920028448104858,
+          "test_fpr_global_tau": 0.26666666666666666,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-mac-laptop-false-flag-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.8774215817451477,
+          "train_std": 0.11492680398442844,
+          "test_mean": 0.9221670866012573,
+          "tau_pool": 0.9890304207801819,
+          "test_fpr_global_tau": 0.06666666666666667,
+          "test_fpr_perpool_tau": 0.06666666666666667
+        }
+      ],
+      "test_fpr_under_global_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.0,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.0,
+          "roee-real-windows-laptop-correct": 0.0,
+          "dor-real-webcam-false-flag": 0.0,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.26666666666666666,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.06666666666666667
+        },
+        "max": 0.26666666666666666,
+        "min": 0.0,
+        "gap": 0.26666666666666666,
+        "mean": 0.05555555555555555
+      },
+      "test_fpr_under_perpool_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.0,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.06666666666666667,
+          "roee-real-windows-laptop-correct": 0.06666666666666667,
+          "dor-real-webcam-false-flag": 0.0,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.26666666666666666,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.06666666666666667
+        },
+        "max": 0.26666666666666666,
+        "min": 0.0,
+        "gap": 0.26666666666666666,
+        "mean": 0.07777777777777778
+      },
+      "gap_closure": 0.0
+    },
+    {
+      "target_fpr": 0.1,
+      "tau_global": 0.9866821765899658,
+      "per_pool": [
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+          "is_failing": false,
+          "train_mean": 0.019510748330503702,
+          "train_std": 0.017179808954489607,
+          "test_mean": 0.016963099191586176,
+          "tau_pool": 0.055852051824331284,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.0
+        },
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+          "is_failing": false,
+          "train_mean": 0.032871601482232414,
+          "train_std": 0.03979298943559189,
+          "test_mean": 0.04709193694094817,
+          "tau_pool": 0.08236812800168991,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-real-windows-laptop-correct",
+          "is_failing": false,
+          "train_mean": 0.00646531293168664,
+          "train_std": 0.0024061421129759016,
+          "test_mean": 0.0075280976481735705,
+          "tau_pool": 0.008775466121733189,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.06666666666666667
+        },
+        {
+          "pool": "dor-real-webcam-false-flag",
+          "is_failing": true,
+          "train_mean": 0.8186298092206319,
+          "train_std": 0.17319462983561687,
+          "test_mean": 0.9371587435404459,
+          "tau_pool": 0.983201801776886,
+          "test_fpr_global_tau": 0.2,
+          "test_fpr_perpool_tau": 0.2
+        },
+        {
+          "pool": "dor-real-webcam-false-flag-no-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.9337597688039144,
+          "train_std": 0.07171751360211241,
+          "test_mean": 0.9461525360743205,
+          "tau_pool": 0.9919047355651855,
+          "test_fpr_global_tau": 0.4,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-mac-laptop-false-flag-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.8774215817451477,
+          "train_std": 0.11492680398442844,
+          "test_mean": 0.9221670866012573,
+          "tau_pool": 0.9875651001930237,
+          "test_fpr_global_tau": 0.13333333333333333,
+          "test_fpr_perpool_tau": 0.13333333333333333
+        }
+      ],
+      "test_fpr_under_global_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.0,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.0,
+          "roee-real-windows-laptop-correct": 0.0,
+          "dor-real-webcam-false-flag": 0.2,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.4,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.13333333333333333
+        },
+        "max": 0.4,
+        "min": 0.0,
+        "gap": 0.4,
+        "mean": 0.12222222222222223
+      },
+      "test_fpr_under_perpool_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.0,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.26666666666666666,
+          "roee-real-windows-laptop-correct": 0.06666666666666667,
+          "dor-real-webcam-false-flag": 0.2,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.26666666666666666,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.13333333333333333
+        },
+        "max": 0.26666666666666666,
+        "min": 0.0,
+        "gap": 0.26666666666666666,
+        "mean": 0.15555555555555556
+      },
+      "gap_closure": 0.33333333333333337
+    },
+    {
+      "target_fpr": 0.15,
+      "tau_global": 0.9711700081825256,
+      "per_pool": [
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+          "is_failing": false,
+          "train_mean": 0.019510748330503702,
+          "train_std": 0.017179808954489607,
+          "test_mean": 0.016963099191586176,
+          "tau_pool": 0.034934718161821365,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.06666666666666667
+        },
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+          "is_failing": false,
+          "train_mean": 0.032871601482232414,
+          "train_std": 0.03979298943559189,
+          "test_mean": 0.04709193694094817,
+          "tau_pool": 0.07606241106987,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-real-windows-laptop-correct",
+          "is_failing": false,
+          "train_mean": 0.00646531293168664,
+          "train_std": 0.0024061421129759016,
+          "test_mean": 0.0075280976481735705,
+          "tau_pool": 0.0065880585461854935,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.4
+        },
+        {
+          "pool": "dor-real-webcam-false-flag",
+          "is_failing": true,
+          "train_mean": 0.8186298092206319,
+          "train_std": 0.17319462983561687,
+          "test_mean": 0.9371587435404459,
+          "tau_pool": 0.9824486374855042,
+          "test_fpr_global_tau": 0.3333333333333333,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "dor-real-webcam-false-flag-no-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.9337597688039144,
+          "train_std": 0.07171751360211241,
+          "test_mean": 0.9461525360743205,
+          "tau_pool": 0.9905815124511719,
+          "test_fpr_global_tau": 0.4666666666666667,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-mac-laptop-false-flag-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.8774215817451477,
+          "train_std": 0.11492680398442844,
+          "test_mean": 0.9221670866012573,
+          "tau_pool": 0.9711700081825256,
+          "test_fpr_global_tau": 0.4,
+          "test_fpr_perpool_tau": 0.4
+        }
+      ],
+      "test_fpr_under_global_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.0,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.0,
+          "roee-real-windows-laptop-correct": 0.0,
+          "dor-real-webcam-false-flag": 0.3333333333333333,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.4666666666666667,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.4
+        },
+        "max": 0.4666666666666667,
+        "min": 0.0,
+        "gap": 0.4666666666666667,
+        "mean": 0.20000000000000004
+      },
+      "test_fpr_under_perpool_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.06666666666666667,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.26666666666666666,
+          "roee-real-windows-laptop-correct": 0.4,
+          "dor-real-webcam-false-flag": 0.26666666666666666,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.26666666666666666,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.4
+        },
+        "max": 0.4,
+        "min": 0.06666666666666667,
+        "gap": 0.33333333333333337,
+        "mean": 0.27777777777777773
+      },
+      "gap_closure": 0.28571428571428564
+    },
+    {
+      "target_fpr": 0.25,
+      "tau_global": 0.9326682090759277,
+      "per_pool": [
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+          "is_failing": false,
+          "train_mean": 0.019510748330503702,
+          "train_std": 0.017179808954489607,
+          "test_mean": 0.016963099191586176,
+          "tau_pool": 0.03353844955563545,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.06666666666666667
+        },
+        {
+          "pool": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+          "is_failing": false,
+          "train_mean": 0.032871601482232414,
+          "train_std": 0.03979298943559189,
+          "test_mean": 0.04709193694094817,
+          "tau_pool": 0.05080516263842583,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-real-windows-laptop-correct",
+          "is_failing": false,
+          "train_mean": 0.00646531293168664,
+          "train_std": 0.0024061421129759016,
+          "test_mean": 0.0075280976481735705,
+          "tau_pool": 0.006410612259060144,
+          "test_fpr_global_tau": 0.0,
+          "test_fpr_perpool_tau": 0.4
+        },
+        {
+          "pool": "dor-real-webcam-false-flag",
+          "is_failing": true,
+          "train_mean": 0.8186298092206319,
+          "train_std": 0.17319462983561687,
+          "test_mean": 0.9371587435404459,
+          "tau_pool": 0.9755339622497559,
+          "test_fpr_global_tau": 0.8,
+          "test_fpr_perpool_tau": 0.3333333333333333
+        },
+        {
+          "pool": "dor-real-webcam-false-flag-no-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.9337597688039144,
+          "train_std": 0.07171751360211241,
+          "test_mean": 0.9461525360743205,
+          "tau_pool": 0.9897807836532593,
+          "test_fpr_global_tau": 0.8,
+          "test_fpr_perpool_tau": 0.26666666666666666
+        },
+        {
+          "pool": "roee-mac-laptop-false-flag-virtual-bg",
+          "is_failing": true,
+          "train_mean": 0.8774215817451477,
+          "train_std": 0.11492680398442844,
+          "test_mean": 0.9221670866012573,
+          "tau_pool": 0.968865156173706,
+          "test_fpr_global_tau": 0.6666666666666666,
+          "test_fpr_perpool_tau": 0.4
+        }
+      ],
+      "test_fpr_under_global_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.0,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.0,
+          "roee-real-windows-laptop-correct": 0.0,
+          "dor-real-webcam-false-flag": 0.8,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.8,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.6666666666666666
+        },
+        "max": 0.8,
+        "min": 0.0,
+        "gap": 0.8,
+        "mean": 0.37777777777777777
+      },
+      "test_fpr_under_perpool_tau": {
+        "per_pool": {
+          "dor-real-laptop-correct-no-virtual-bg-whiteish": 0.06666666666666667,
+          "dor-real-laptop-correct-no-virtual-bg-yellowish": 0.26666666666666666,
+          "roee-real-windows-laptop-correct": 0.4,
+          "dor-real-webcam-false-flag": 0.3333333333333333,
+          "dor-real-webcam-false-flag-no-virtual-bg": 0.26666666666666666,
+          "roee-mac-laptop-false-flag-virtual-bg": 0.4
+        },
+        "max": 0.4,
+        "min": 0.06666666666666667,
+        "gap": 0.33333333333333337,
+        "mean": 0.2888888888888889
+      },
+      "gap_closure": 0.5833333333333333
+    }
+  ],
+  "summary": {
+    "avg_gap_closure_across_target_fprs": 0.3005952380952381,
+    "gap_closure_per_target_fpr": {
+      "0.05": 0.0,
+      "0.1": 0.33333333333333337,
+      "0.15": 0.28571428571428564,
+      "0.25": 0.5833333333333333
+    },
+    "verdict": "mixed_both_levers_needed",
+    "verdict_thresholds": {
+      "calibration_is_right_lever": ">= 0.60",
+      "training_augmentation_is_right_lever": "<= 0.30"
+    }
+  }
+}
