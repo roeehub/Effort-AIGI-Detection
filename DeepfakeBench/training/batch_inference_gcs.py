@@ -403,8 +403,11 @@ class GCSFrameDataset(data.Dataset):
             logger.warning("Failed to decode image: gs://%s/%s", rec.bucket, rec.blob_path)
             return torch.zeros(3, self.resolution, self.resolution), idx
 
-        # Resize to model input resolution (images are already face-cropped)
-        img_bgr = cv2.resize(img_bgr, (self.resolution, self.resolution), interpolation=cv2.INTER_AREA)
+        # Resize to model input resolution (images are already face-cropped).
+        # INTER_LINEAR matches training preprocessing (combined_paired.py collate +
+        # data/batching/{df40_paired,deeplive}.py). Using INTER_AREA here would
+        # drift from the pixel distribution the model was trained on.
+        img_bgr = cv2.resize(img_bgr, (self.resolution, self.resolution), interpolation=cv2.INTER_LINEAR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
         tensor = self.transform(img_rgb)
@@ -645,7 +648,7 @@ def main():
 
     if device.type == "cuda":
         gpu_name = torch.cuda.get_device_name(0)
-        gpu_mem = torch.cuda.get_device_properties(0).total_mem / 1e9
+        gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
         logger.info("GPU: %s (%.1f GB)", gpu_name, gpu_mem)
 
     # Download checkpoint if on GCS

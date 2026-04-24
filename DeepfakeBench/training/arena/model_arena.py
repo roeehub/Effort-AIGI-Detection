@@ -469,7 +469,9 @@ class GCSFrameDataset:
             logger.warning("Failed to decode: gs://%s/%s", rec.bucket, rec.blob_path)
             return torch.zeros(3, self.resolution, self.resolution), idx
 
-        img_bgr = cv2.resize(img_bgr, (self.resolution, self.resolution), interpolation=cv2.INTER_AREA)
+        # INTER_LINEAR to match training preprocessing (combined_paired.py collate +
+        # data/batching/*). INTER_AREA here caused silent train/eval drift in retro-scoring.
+        img_bgr = cv2.resize(img_bgr, (self.resolution, self.resolution), interpolation=cv2.INTER_LINEAR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         tensor = self.transform(img_rgb)
         return tensor, idx
