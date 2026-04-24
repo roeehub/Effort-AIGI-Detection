@@ -1,253 +1,275 @@
-# Handoff: R13 Packet 3 + Packet 3.5 — 13 runs live, W&B anomalies flagged by user
+# Handoff: R13 Packet-7 — Camera-Signature Shortcut, Pre-Launch Gate
 
-**Generated**: 2026-04-22 14:18 UTC
-**Branch**: `teams-relaunch-root-2026-04-17` (commits `477b00b` → `bcf4c61`, not pushed)
-**Status**: In Progress — all 13 runs RUNNING, packet 3.5 config-bug fixed this session, user has flagged "strange stuff on W&B" for the next agent to investigate.
+**Generated**: 2026-04-24
+**Branch**: `teams-relaunch-root-2026-04-17`
+**Status**: Ready for pre-launch gate. Four commits shipped; launch is blocked on one cheap verification step (post-fix baseline re-score) that the previous agent recommended but did not run.
 
-## ⚠️ First thing next session
-
-The user ended this session saying: *"I'm seeing some strange stuff on W&B"*. They'll want to talk to you about what they're seeing before anything else. **Ask them what they're looking at before you recommend anything.** W&B URL: `https://wandb.ai/dtect-vision/enhanced-aug-test` (project for packet 3.5). Packet 3 is also under `dtect-vision` entity.
-
-Once their W&B question is resolved, fall back to the watchlist below.
+---
 
 ## Goal
 
-Push `value_composite` from packet-3's ~0.60 plateau toward the **0.90–0.95** deployment target. Packet 3.5 is a 6-slot single-lever FT wave that turns on 4 disabled training knobs (`arcface_m`, `stability_lambda`, `label_smoothing`, fixed `anneal_steps`) plus a user-approved metric-definition change (`target_mean_fpr` 2%→3%, `max_pool_fpr` 4%→5%, jitter stat `max`→`p95`).
+Make the Effort detector (leader `RLP6_04`, `value_composite=0.9006`) robust to camera/ISP-signature shortcuts while preserving fake recall. Concretely: stop false-flagging real Teams participants when they use certain webcams (Dor webcam → 0.94, same subject on laptop → 0.02; Roee Mac → 0.90, Roee Windows → 0.01). **Do not launch new experiments** until the pre-launch gate below is resolved — user retains the final decision.
 
-## Completed this session (2026-04-22 11:55 → 14:18 UTC)
+Plan file (approved this session): `/Users/roeedar/.claude/plans/it-s-hard-for-me-proud-journal.md`
 
-- [x] **Diagnosed a hidden config-propagation bug in `train_sweep.py`**. The prior session's slot 01/02 init logs printed LEGACY metric values (`0.0200 / 0.0400 / max`) despite yamls declaring new values — `train_sweep.py` explicitly copies nested config blocks from `single_cfg` into the effective `config` because W&B flattens nested dicts, and the `value_composite` block was never added to that copy list.
-- [x] **Patched `train_sweep.py:276-282`** with the missing copy-over. Legacy-safe; trainer defaults unchanged. Commit `872502c`.
-- [x] **Built image `1.3.193`** (Cloud Build `513d4eb1-de6f-4852-b822-dfea171e223d`, SUCCESS in 2m32s — most layers cached). VERSION bumped `1.3.192 → 1.3.193`, committed in `872502c`.
-- [x] **Cancelled 6 original RLP35 slots** in us-east1 (image 1.3.192). User explicitly confirmed before the cancels fired.
-- [x] **Relaunched 6 RLP35 slots on image 1.3.193** distributed across 4 regions, plus a 5th when slot 06 was stuck PENDING in europe-west4 and user requested relocation to us-central1.
-- [x] **Verified all 6 new slots log the NEW metric**: `value_composite config: target_mean_fpr=0.0300 max_pool_fpr=0.0500 stability_jitter_stat=p95`. Confirmed via `gcloud logging read` against each job ID.
-- [x] **Committed HANDOFF.md refreshes** (`2cdb804`, `bcf4c61`) to keep session-to-session state in sync. ← User noted this was more than asked; next agent should default to updating only when explicitly requested or when the plan contains an update task.
+---
 
-## Not Yet Done
+## TL;DR — Start Here
 
-- [ ] **Investigate user's W&B observations** — opened at end of session, no details captured yet. Ask them for specifics (slot, metric, what looks wrong) before acting.
-- [ ] **Slot 03 collapse watch** — `arcface_m=0.20`, asia-southeast1. Transitioned to RUNNING at 13:34 UTC. Abort if `val_holdout/auc < 0.95` in first 1k steps. First validation eval is ~500 steps in, so the first meaningful read is ~30-45 min after RUNNING. Confirm with user before cancelling.
-- [ ] **Early signals read ~step 3–4k (~16:45–17:30 UTC for slot 01, later for others)**. Rank 01–06 by `Δvalue_composite` vs RLP3_02 baseline. Because packet 3.5 now runs under the NEW metric directly, no retro-score is needed for this ranking (unlike packet 3 below).
-- [ ] **Slot 07 decision** — `R13_RLP35_07_stack_top3.yaml` authored but not launched. Fire only if ≥2 of {highest-healthy arcface slot, slot 04, slot 05} show `Δvalue_composite ≥ +0.03`. **Before firing**: edit `arcface_m` in the yaml to match the best-healthy margin from 01/02/03 (default is 0.15).
-- [ ] **Packet 3 completion** — 7/7 still RUNNING past the original 07:00–08:30 UTC ETA. Not stuck (no errors; likely just longer than estimated).
-- [ ] **Retro-score packet 3 top-3 under new metric `(0.03, 0.05, p95)`** via `rerun_validation.py` with image 1.3.193. `rerun_validation.py` uses plain `yaml.safe_load` + `config.update` and does NOT have the train_sweep.py bug — passing a yaml with the `value_composite` block works directly.
-- [ ] **Produce packet 3.5 results doc** after all 7 slots (01–06 + 07 if fired) complete: `docs/relaunch_handoffs/R13_RELAUNCH_PACKET3_5_RESULTS_<date>.md`.
+Before launching any Packet-7 experiment, do the post-fix baseline re-score. Reason: the 0.94 Dor score came from a code path that had silent preprocessing drift (INTER_AREA vs INTER_LINEAR). That drift was fixed this session in `batch_inference_gcs.py` and `arena/model_arena.py`, but **the fix was never re-validated against the original false-flag numbers.** If the fix alone closes most of the gap, the entire training-aug story needs re-scoping.
 
-## Failed Approaches (Don't Repeat)
+1. Run post-fix baseline re-score on the 6 Dor/Roee pools (§ Resume Instructions step 1).
+2. Interpret per the decision tree (§ Resume Instructions step 2).
+3. Launch the appropriate subset from 5 candidate yamls (§ Resume Instructions step 3).
 
-- **Trusting that yaml keys would propagate**. The nested `value_composite` block was present in every RLP35 yaml but silently dropped by `train_sweep.py` because W&B flattens nested dicts. Resolution: every nested config block needs an explicit copy-over in `train_sweep.py:171-282`. Lesson: when adding a new nested block, grep `train_sweep.py` for the existing copy pattern (`dataset_methods`, `combined_paired`, `backbone`, `checkpointing`, `group_dro_params`, etc.) and add a sibling entry.
-- **Launching RLP35 in `us-east4`, `us-west1`, `asia-east1`, `asia-northeast3`, `asia-northeast1`**. All rejected.
-  - `us-east4`, `asia-east1`: `ERROR: (gcloud.ai.custom-jobs.create) INVALID_ARGUMENT: Machine type "a2-highgpu-1g" is not supported.`
-  - `us-west1`, `asia-northeast3`, `asia-northeast1`: `RESOURCE_EXHAUSTED: The following quota metrics exceed quota limits: aiplatform.googleapis.com/custom_model_training_nvidia_a100_gpus`
-  - **Working regions for A100 40GB**: `us-east1`, `asia-southeast1`, `us-west4`, `europe-west4`, `us-central1` (8-slot quota, shared with other team jobs).
-- **Proposing `arcface_m = 0.35` as a slot**. User warned the LAION-DataComp backbone collapses under aggressive margins. Resolved by cautious 0.10 / 0.15 / 0.20 progression. **Do not exceed 0.20** unless slot 03 is healthy.
-- **Running trainer unit tests locally**. `trainer/__init__.py` imports `Trainer` which transitively imports `torchdata` (not installed on laptop). Tests only run inside image via `./dev.sh test`.
-- **Long `sleep N` blocking waits**. Harness blocks `sleep 60` and similar patterns when used alone. Use `until <condition>; do sleep 15; done` pattern for polling, or `run_in_background: true` for one-shot waits.
-- **Parallel `gcloud ai custom-jobs cancel &`**. Harness denies destructive parallel ops on shared infra. Always enumerate, confirm with user, cancel sequentially.
-- **Pre-build VERSION commit**. `dev.sh build-prod -y` auto-bumps VERSION mid-build. Commit AFTER Cloud Build returns SUCCESS (on failure, `dev.sh` reverts VERSION).
-- **Using `$status` as a shell variable name for polling**. zsh has `status` as read-only. Use `build_state` or similar.
+Expected work: step 1 ≈30–60 min, step 2 ≈10 min, step 3 ≈1 hr to kick off.
+
+---
+
+## Completed This Session
+
+- [x] **WS-P0 — Train/inference preprocessing parity fix.** Commit `855871e`. `cv2.INTER_AREA → cv2.INTER_LINEAR` in `batch_inference_gcs.py:407` and `arena/model_arena.py:472` to match training (`combined_paired.py:3455`). Guarded by `tests/test_inference_train_preprocessing_parity.py` (5/5 pass). `arena/model_arena.py` was the load-bearing one: that's the retro-score path that produced the original 0.94 Dor number.
+- [x] **WS-P1 — Per-camera calibration probe.** Commit `deac44e`. `analysis/calibration_probe_2026-04-24.py` + `.summary.json`. **Verdict: 0.301 avg gap closure** across target FPRs {5,10,15,25}%. Boundary result between plan decision gates (≥0.60 = calibration, ≤0.30 = training-aug). Read as: training-aug is dominant remaining lever; per-camera calibration is complementary.
+- [x] **WS-P2.b — Per-identity reducer.** Commit `deac44e`. `arena/postprocess_per_identity.py` groups `videos_report.csv` by `group_key` and recomputes `real_fpr`/`fake_recall` per identity with `--verify` aggregate-sum check. Covered by `tests/test_postprocess_per_identity.py` (2 tests, synthetic 3-identity fixture).
+- [x] **WS-P4.a — Teams spatial aug wiring.** Verified in pipelines.py; no code change needed. The `teams_passthrough_special_*` knobs already live in `_TEAMS_PASSTHROUGH_DEFAULTS` and `_build_teams_passthrough_pipeline` inserts `A.ShiftScaleRotate` when `teams_passthrough_special_aug_enabled=true` + `teams_passthrough_special_shift_p>0`. Smoke-tested end-to-end.
+- [x] **Packet-7 yamls drafted (2 new).** Commit `c4affa1`:
+  - `experiments/phase2_round13/R13_RLP7_04_teams_spatial_only.yaml` (seed 744, spatial ±3% shift / ±5% scale / ±3° rotate, p=0.5 on Teams passthrough)
+  - `experiments/phase2_round13/R13_RLP7_05_teams_spatial_plus_codec.yaml` (seed 745, spatial + `teams_codec_sim_p=0.25`, quality [25,70])
+  - Both verified produce expected transforms via `_build_teams_passthrough_pipeline`. Override keys survive the `combined_paired.py:4772` preset-key filter.
+- [x] **Handoff doc drafted.** Commit `584118e`. `docs/relaunch_handoffs/R13_RELAUNCH_PACKET7_CAMERA_SIGNATURE_HANDOFF_2026-04-24.md`. Longer-form version of this file; candidate subset described there.
+
+---
+
+## Not Yet Done (in priority order)
+
+- [ ] **Post-fix baseline re-score (CRITICAL, pre-launch gate).** Run `RLP6_04` through the now-fixed inference path on the 6 Dor/Roee pools. Compare to the scores in `combined_frame_tags.json` (pre-fix). Outcome determines launch plan. See § Resume Instructions step 1.
+- [ ] **Launch Packet-7 subset.** Options ordered by diagnostic alignment:
+    - `R13_RLP7_05_teams_spatial_plus_codec` — targets both axes (spatial + compression/bitrate)
+    - `R13_RLP7_02_codec_aggressive` — tightest match to fingerprint-diff evidence (`dct_hf_ratio`, `bits_per_pixel`)
+    - `R13_RLP7_04_teams_spatial_only` — isolated spatial signal, cheap insurance
+    - `R13_RLP7_01_lighting_aggressive` + `R13_RLP7_03_combined` — pre-existing; lighting axis is weaker per controlled data (yellow-vs-white clean control stayed near 0).
+- [ ] **WS-P2.a — Stress-variant suites for retro-scoring.** Add `arena/target_domain_suites.*_stress_2026-04-24.yaml` with cells applying `eval_augmentation` = `crop_shift`/`scale`/`rotation`/`jpeg_q30`/`color_warm`/`color_cold` to the `teams_real_all_dev/lockbox` pool. Reuse the presets at `data/augmentations/pipelines.py:1702-1738`. Not started.
+- [ ] **WS-P3 — Lockbox-scale fingerprint diagnostics.** Run `analysis/fingerprint_diff.py` with `lockbox_csv_identity` source at scale; rank metrics by mean \|Spearman ρ\| across identities. Expensive (2–3 days GCS fetch). Not started.
+- [ ] **Deploy server preprocessing verification.** The original 0.94 Dor score came from `http://34.16.217.28:8999`. We fixed two code paths in this repo, but the deploy server's preprocessing is untouched. If server still uses INTER_AREA, production behavior differs from what retro-score now shows. Out of scope for this repo, but flag to user.
+
+---
+
+## Failed Approaches (Don't Repeat These)
+
+- **Regex `cv2\.resize\([^)]*interpolation\s*=...` in the parity test.** Nested parens from `cv2.resize(img, (self.resolution, self.resolution), ...)` broke the `[^)]*` character class. **Fix:** line-by-line scan — check `"cv2.resize" in line` then match `INTERP_KWARG = re.compile(r"interpolation\s*=\s*cv2\.(INTER_\w+)")`. See `tests/test_inference_train_preprocessing_parity.py:36`.
+- **`python -c "from data.augmentations.pipelines import ..."` fails with `ModuleNotFoundError: No module named 'torchdata'`.** The `data/__init__.py` imports trigger the chain. **Fix:** `pip install 'torchdata<0.10'` (0.11 removed the `datapipes` submodule). Noted in commit history.
+- **Initial probe design used 5% target FPR with 15 test frames/pool.** Binarized FPR quantizes to multiples of 1/15 = 0.067; noise dominated the signal at tight operating points and produced gap_closure=0.000. **Fix:** probe now sweeps {5, 10, 15, 25}% and reports both per-target and average. The 0.301 headline is the average — not the 5% number. See `analysis/calibration_probe_2026-04-24.py:28`.
+- **Probe denominator bug inherited from the original `dor_pool_fingerprint_diff_2026-04-24.py`.** Divided by near-zero `c_std` when clean-pool std was 0 (e.g., `specular_hotspots` all zeros), producing "billion σ" readings. **Fix in `analysis/fingerprint_diff.py`:** `denom = max(c_std, f_std, 1e-6)` with `std_floor_hit` flag. Dropped `specular_hotspots` and `highlight_clip_pct` as "separating metrics" — they were noise.
+- **Shared RNG across `.sample()` calls in the original fingerprint diff.** Original script advanced one RNG state through multiple pool draws, so adding a new pool shifted the sample of every subsequent one. **Fix:** fresh per-pool seeds. Reproduces first-called pools exactly; subsequent pools differ slightly from the original script (intended).
+
+---
 
 ## Key Decisions
 
 | Decision | Rationale |
-|----------|-----------|
-| Cancel + relaunch on 1.3.193 (not retro-score-only) | User explicitly wanted in-training composite to be correct rather than relying on post-hoc retro-score; relaunch was fast given the fix. |
-| Distribute 6 slots across 4 regions | us-east1-only wave was quota-throttled (4/6 PENDING >30 min). Spread avoids single-region contention. |
-| Slot 06 relocated to us-central1 late session | europe-west4 slot 06 sat PENDING ~80 min; user said us-central1 had 5/8 A100 slots free → relocate, cancel europe-west4 job. |
-| ArcFace margin progression 0.10 / 0.15 / 0.20 | Backbone collapse risk; keep cautious. |
-| Jitter stability aggregator `max` → `p95` | `_aggregate_jitter_across_videos` already computes p95; `max` is fragile (one frame kills term). |
-| `anneal_steps: 15000 → 8000` | Let ArcFace anneal finish by step 8k of 10k training. |
-| Single-lever slots + contingent stacked slot 07 | Attribution over speed. |
+|---|---|
+| Calibration probe uses average gap closure across target FPRs (not a single target) | Small-sample FPR is heavily quantized at any single operating point (15 test frames → FPR resolution 1/15). Averaging {5,10,15,25}% gives a more robust signal. 0.301 is the average. |
+| Per-identity reducer is a separate CLI, not integrated into the scorer | User can run it against any existing `videos_report.csv` without re-running retro-score. Lower commitment; higher reuse. Plan (WS-P2.b) left the option open. |
+| RLP7_04 + RLP7_05 fork RLP6_04 (not RLP6_04 + fine-tune from scratch) | Matches RLP7_01/02/03 precedent. Validates deltas as narrow as possible. |
+| Yaml-only enablement of `teams_passthrough_special_*` (no code change) | All knobs already exist; all survive the override filter. Any code change would be a nop that adds risk. |
+| Recommended launch priority flipped from my own initial ordering | Fingerprint diff pointed at `dct_hf_ratio` + `bits_per_pixel` as cleanest pool separators — both more codec-aligned than spatial-aligned. ShiftScaleRotate doesn't touch either metric directly. |
+
+---
 
 ## Current State
 
-**Working** (2026-04-22 14:18 UTC, all 13 jobs RUNNING):
+**Working**:
+- Preprocessing parity — test green, both inference paths use INTER_LINEAR.
+- Calibration probe reproducible: `python analysis/calibration_probe_2026-04-24.py` → deterministic output at `analysis/calibration_probe_2026-04-24.summary.json`.
+- Per-identity reducer: `python arena/postprocess_per_identity.py --reports <CSV> --threshold <τ> --out <OUT> --verify`.
+- Two new yamls parse and produce correct pipelines.
 
-Packet 3 — `asia-southeast1`, image `1.3.191`:
-```
-RLP3_01_control         1977661603188834304  RUNNING
-RLP3_02_main            3243173098479943680  RUNNING
-RLP3_03_low_arcface     4506432793957367808  RUNNING
-RLP3_04_spatial         7438839101328982016  RUNNING
-RLP3_05_lowarc_spatial  5533253508997840896  RUNNING
-RLP3_06_seedB           7854859116907331584  RUNNING
-RLP3_07_lighting        8730809244430893056  RUNNING
-```
+**Broken**: Nothing known broken. `launch_retro_score.sh` and promotion-contract launcher were not touched this session; assume unchanged from main.
 
-Packet 3.5 — image `1.3.193`, distributed across 5 regions, **all verified on NEW metric**:
-```
-slot 01 arcface_m=0.10       us-east1         6776286107534360576   RUNNING
-slot 02 arcface_m=0.15       us-east1         3065882964534493184   RUNNING
-slot 03 arcface_m=0.20       asia-southeast1  7562969566058381312   RUNNING  (collapse watch)
-slot 04 stability_lambda=0.03 us-west4        154374731074633728    RUNNING
-slot 05 label_smoothing=0.05 europe-west4     5892697191696302080   RUNNING
-slot 06 family_rebalance     us-central1      9185612453914869760   RUNNING
-(slot 07 stack_top3 — yaml authored, not launched)
-```
+**Uncommitted Changes**: Only the long tail of pre-existing modifications on this branch (HANDOFF.md, VERSION, several arena/docs files from prior sessions). None of this session's work is uncommitted — everything shipped across 4 commits.
 
-Cancelled this session (reference only; all image 1.3.192 or stale):
-```
-CANCELLED  775802554016595968  us-east1       RLP35_01  (wrong metric — train_sweep bug)
-CANCELLED  7062827633825808384 us-east1       RLP35_02  (wrong metric)
-CANCELLED  7297014814449074176 us-east1       RLP35_03  (wrong metric)
-CANCELLED  6183394253465452544 us-east1       RLP35_04  (wrong metric)
-CANCELLED  3877551244251758592 us-east1       RLP35_05  (wrong metric)
-CANCELLED  5681348448129908736 us-east1       RLP35_06  (wrong metric)
-CANCELLED  3309882805399322624 europe-west4   RLP35_06  (stale PENDING → relocated to us-central1)
-```
-
-**Broken**: Nothing known. User has open W&B observations — treat as unknown, not confirmed-broken.
-
-**Uncommitted Changes**: Only pre-existing files (arena yamls/reports, older handoff docs, packet 1/2/3 yamls). **Nothing from this session is uncommitted.** Session commits `872502c`, `2cdb804`, `bcf4c61` all landed on `teams-relaunch-root-2026-04-17`; not pushed.
+---
 
 ## Files to Know
 
 | File | Why It Matters |
 |------|----------------|
-| `HANDOFF.md` | This file. |
-| `train_sweep.py:171-282` | The explicit nested-block copy-over list. New nested yaml blocks MUST be added here or they'll be silently dropped (W&B flattens). `value_composite` was just added at L276-282. |
-| `trainer/trainer.py:414-429` | Trainer.__init__ reads `value_composite` config block with legacy defaults. Emits the `value_composite config:` INFO log used for the Step 1 verification. |
-| `trainer/trainer.py:103` | `_aggregate_jitter_across_videos` emits `p95` (and `mean`, `max`, `spike_rate_0p3`). |
-| `trainer/trainer.py:3085-3104` | `value_composite` call site — picks stat key, calls `_compute_value_composite(...)`, logs `value_composite_target_mean_fpr`/`value_composite_max_pool_fpr` to W&B. |
-| `trainer/mixins/arcface.py` | Anneal-mismatch warning (commit `477b00b`). |
-| `rerun_validation.py:210-215` | Plain `yaml.safe_load` + `config.update` — does NOT have the train_sweep.py bug. Use for retro-score. |
-| `experiments/phase2_round13/R13_RLP35_0{1..7}_*.yaml` | 7 packet-3.5 slot yamls. 01-06 launched; 07 contingent. |
-| `experiments/phase2_round13/R13_RLP3_02_FT_proper_main.yaml` | Baseline every RLP35 slot copies from. |
-| `docs/relaunch_handoffs/R13_RELAUNCH_PACKET3_5_EXPERIMENT_PLAN_2026-04-22.md` | Plan of record for packet 3.5 (§5 decision rules, §6 retro-score path). |
-| `VERSION` | `1.3.193` — must match image tag for any new launches. |
-| `scripts/launch/launch_experiment.sh` | Signature: `./launch_experiment.sh [-y] <WANDB_PROJECT> [<REGION>] <PARAM_CONFIG>`. Reads VERSION directly; no env override needed for image tag. |
-| `dev.sh` | `build-prod -y` auto-bumps VERSION patch+1 and submits Cloud Build synchronously; on fail, VERSION reverts. |
+| `batch_inference_gcs.py:407` | Fixed INTER_LINEAR. Use for any new bulk re-score. |
+| `arena/model_arena.py:472` | Fixed INTER_LINEAR. Retro-score path. |
+| `analysis/calibration_probe_2026-04-24.py` | WS-P1 probe. Inputs `/tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json`. |
+| `analysis/calibration_probe_2026-04-24.summary.json` | Probe result: 0.301 avg gap closure; per-target breakdown. |
+| `arena/postprocess_per_identity.py` | Per-identity reducer for any `videos_report.csv`. |
+| `tests/test_inference_train_preprocessing_parity.py` | Guards the INTER_LINEAR fix from future regressions. |
+| `tests/test_postprocess_per_identity.py` | Guards the reducer. |
+| `experiments/phase2_round13/R13_RLP7_04_teams_spatial_only.yaml` | Isolated spatial-aug variant. Seed 744. |
+| `experiments/phase2_round13/R13_RLP7_05_teams_spatial_plus_codec.yaml` | Spatial + `teams_codec_sim_p=0.25`. Seed 745. |
+| `experiments/phase2_round13/R13_RLP7_02_codec_aggressive.yaml` | Codec-heavy variant; diagnosis-aligned. Seed 742. |
+| `data/augmentations/pipelines.py:787` | `_TEAMS_PASSTHROUGH_DEFAULTS` — single source of truth for override-filter-safe Teams knobs. |
+| `data/augmentations/pipelines.py:1086` | `_build_teams_passthrough_special_block` — spatial/cct/shadow/gamma knobs. |
+| `data/augmentations/pipelines.py:1386` | `_build_teams_passthrough_pipeline` — where the special block is assembled. |
+| `data/sources/combined_paired.py:4772` | Override filter: any yaml key NOT in the first preset's keys is silently dropped. |
+| `arena/score_teams_promotion_contract.py` | Contract scorer. `videos_report.csv` has columns `video_id,label,avg_video_prob,method,group_key,family_key,prediction`. |
+| `docs/relaunch_handoffs/R13_RELAUNCH_PACKET7_CAMERA_SIGNATURE_HANDOFF_2026-04-24.md` | Longer-form companion to this file. |
+| `/Users/roeedar/.claude/plans/it-s-hard-for-me-proud-journal.md` | Approved plan — workstream definitions + decision gates. |
+
+---
 
 ## Code Context
 
-### The `train_sweep.py` patch (commit `872502c`)
+### Per-identity reducer CLI
+```
+python arena/postprocess_per_identity.py \
+    --reports <suite>_<ckpt>_videos_report.csv [more...] \
+    --threshold <tau> \
+    --out per_identity_<ckpt>.csv \
+    --verify
+```
+`--verify` prints `-> OK` to stderr when per-group `fp_count`/`tp_count` sums equal the aggregate (exits non-zero otherwise). Handles multiple reports in one invocation — each row carries `report`, `suite`, `checkpoint` inferred from `<suite>_<ckpt>_videos_report.csv`.
 
-```python
-# train_sweep.py:276-282 (immediately after group_dro_params block)
-# Apply value_composite config directly (nested dict — W&B flattens; must copy).
-# Keys: target_mean_fpr, max_pool_fpr, stability_jitter_stat. Trainer falls
-# back to legacy (0.02 / 0.04 / "max") when absent, so this is legacy-safe.
-if 'value_composite' in single_cfg:
-    config['value_composite'] = single_cfg['value_composite']
-    print(f"  ✅ Applied value_composite: {single_cfg['value_composite']}")
-    logger.info(f"  Applied value_composite: {single_cfg['value_composite']}")
+### Calibration probe summary structure
+```
+{
+  "summary": {
+    "avg_gap_closure_across_target_fprs": 0.301,
+    "gap_closure_per_target_fpr": {0.05: 0.000, 0.10: 0.333, 0.15: 0.286, 0.25: 0.583},
+    "verdict": "mixed_both_levers_needed"
+  },
+  "pool_stats": [...],
+  "results_by_target_fpr": [...]
+}
 ```
 
-### Every RLP35 yaml includes this block (required — defines the evaluation metric)
-
+### Teams passthrough override knobs (all survive `combined_paired.py:4772` filter)
 ```yaml
-value_composite:
-  target_mean_fpr: 0.03         # was 0.02 hardcoded
-  max_pool_fpr: 0.05            # was 0.04 hardcoded
-  stability_jitter_stat: "p95"  # was "max" hardcoded
-anneal_steps: 8000              # was 15000 (fixes ArcFace anneal finishing inside 10k training)
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  teams_passthrough_special_aug_enabled: true    # MUST be true, else all special-block knobs are no-ops
+  teams_passthrough_special_shift_p: 0.5         # probability spatial transform fires
+  teams_passthrough_special_shift: 0.03          # +/-3% translation
+  teams_passthrough_special_scale: 0.05          # +/-5% scale
+  teams_passthrough_special_rotate: 3            # +/-3 degrees
+  teams_codec_sim_p: 0.25                        # generic codec re-encode probability
+  teams_codec_sim_quality: [25, 70]              # quality range
 ```
 
-### Trainer-side read (unchanged from prior session, `trainer/trainer.py:415-418`)
+### Reference data
+- Pools: `/tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json` — 6 tags × 30 frames, all real subjects, with per-frame `score`/`verdict`.
+- GCS source: `gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/` — full 180 frames plus metadata.
+- RLP6_04 checkpoint: `gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth`
 
-```python
-vc_cfg = (self.config.get("value_composite") or {})
-self._vc_target_mean_fpr = float(vc_cfg.get("target_mean_fpr", 0.02))
-self._vc_max_pool_fpr = float(vc_cfg.get("max_pool_fpr", 0.04))
-self._vc_stability_jitter_stat = str(vc_cfg.get("stability_jitter_stat", "max"))
-```
-
-### value_composite arithmetic for the 0.90–0.95 target
-
-```
-composite = 0.6·teams_tpr + 0.3·other_tpr + 0.1·stability
-With stability = 0.5 ceiling:
-  to reach 0.90: 0.6·teams_tpr + 0.3·other_tpr = 0.85
-    if TPRs equal: TPR ≈ 0.944 at (3%-mean, 5%-max) FPR gate
-  to reach 0.95:  TPR ≈ 1.00
-```
-
-### Per-slot single-variable delta (from RLP3_02 baseline)
-
-| Slot | Delta | Baseline |
-|------|-------|----------|
-| 01 | `arcface_m: 0.10` | 0.0 |
-| 02 | `arcface_m: 0.15` | 0.0 |
-| 03 | `arcface_m: 0.20` | 0.0 (collapse risk) |
-| 04 | `stability_lambda: 0.03` (+ `noise_std=0.02`, `crop_jitter=0.03`) | 0.0 |
-| 05 | `label_smoothing: 0.05` | 0.0 |
-| 06 | `family_weights`: proper_clean/teams_fake 1.0→1.5, realpool/external_real 2.5→3.5, df40_fake 0.15→0.10 | as baseline |
-| 07 (contingent) | stacks winners from 01–06; edit `arcface_m` before firing | — |
+---
 
 ## Resume Instructions
 
-1. **Read the warning at the top.** User will bring up W&B anomalies first. Don't guess — ask what they're seeing. Have the run URLs ready:
-   - Packet 3.5: `https://wandb.ai/dtect-vision/enhanced-aug-test` (filter: `exp-R13_RLP35_*`)
-   - Packet 3: same entity, run name filter `exp-R13_RLP3_*`
+### Step 1 — Post-fix baseline re-score (pre-launch gate, CRITICAL)
 
-2. **Baseline status check** (you'll need these numbers when the user asks):
-   ```bash
-   cd /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training
+Goal: score `RLP6_04` on the 6 Dor/Roee pools through the now-fixed `INTER_LINEAR` path. Compare to the scores in `combined_frame_tags.json`, which came from the deploy server at `http://34.16.217.28:8999` (preprocessing behavior of that server is **unknown** — see step 1c).
 
-   # Packet 3 (all should be RUNNING)
-   for id in 1977661603188834304 3243173098479943680 4506432793957367808 7438839101328982016 5533253508997840896 7854859116907331584 8730809244430893056; do
-     gcloud ai custom-jobs describe "$id" --region=asia-southeast1 --project=train-cvit2 --format="value(state,displayName)"
-   done
+**1a. Pick a path.**
+Two viable options:
+- **Option A (preferred, cheap):** Use `batch_inference_gcs.py` on the 6 tag folders in `gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/<tag>/`. This is the path that was fixed. Takes ~20–40 min incl. checkpoint download.
+- **Option B:** Use `arena/run_target_domain_validation_sequential.py` (retro-score path). Requires a checkpoint-map yaml + a target-domain-suites yaml pointing at the 6 pools. More setup, more authoritative. Skip unless Option A is blocked.
 
-   # Packet 3.5 (spread across 5 regions)
-   gcloud ai custom-jobs describe 6776286107534360576 --region=us-east1        --project=train-cvit2 --format="value(state,displayName)"
-   gcloud ai custom-jobs describe 3065882964534493184 --region=us-east1        --project=train-cvit2 --format="value(state,displayName)"
-   gcloud ai custom-jobs describe 7562969566058381312 --region=asia-southeast1 --project=train-cvit2 --format="value(state,displayName)"
-   gcloud ai custom-jobs describe 154374731074633728  --region=us-west4        --project=train-cvit2 --format="value(state,displayName)"
-   gcloud ai custom-jobs describe 5892697191696302080 --region=europe-west4    --project=train-cvit2 --format="value(state,displayName)"
-   gcloud ai custom-jobs describe 9185612453914869760 --region=us-central1     --project=train-cvit2 --format="value(state,displayName)"
-   ```
-   Expected: all 13 in `JOB_STATE_RUNNING`.
+**1b. Option A concrete steps.**
+```bash
+# Reuse the launcher if appropriate, or run batch_inference_gcs.py directly with
+#   --checkpoint gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth
+#   --gcs-prefix  gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+#   (point at each tag folder or process the whole session)
+```
+Check the launcher usage first: `./scripts/launch/launch_batch_inference.sh --help`. Per memory, `launch_batch_inference.sh` does NOT need `WANDB_*` env vars (unlike the promotion-contract launcher).
 
-3. **Config-wiring verification** (do once per slot if you haven't seen the log yet, or to double-check a slot the user is worried about):
-   ```bash
-   gcloud logging read "resource.type=ml_job AND resource.labels.job_id=<JOB_ID> AND textPayload:\"value_composite config\"" \
-     --project=train-cvit2 --limit=1 --format="value(textPayload)"
-   ```
-   Expected (all 6 RLP35 slots): `value_composite config: target_mean_fpr=0.0300 max_pool_fpr=0.0500 stability_jitter_stat=p95`.
-   If any slot shows legacy `0.0200 / 0.0400 / max`, something broke — check image tag on the job (`gcloud ai custom-jobs describe ... --format="value(jobSpec.workerPoolSpecs[0].containerSpec.imageUri)"`) and `git log train_sweep.py`.
+**1c. Confirm what the deploy server does.**
+The 0.94 Dor score that anchors the whole "camera shortcut" narrative came from `http://34.16.217.28:8999` (see `analysis/check_frame_4people_2026-04-24.py`). Ask the user whether that server's preprocessing is INTER_AREA or INTER_LINEAR. If unknown, the user can either (i) check the server code, or (ii) re-run `check-frame` after we confirm the server has been updated. Until we know, interpret step 1's result with caution.
 
-4. **Slot 03 collapse watch** (m=0.20, asia-southeast1):
-   ```bash
-   gcloud logging read "resource.type=ml_job AND resource.labels.job_id=7562969566058381312 AND textPayload:\"val_holdout/auc\"" \
-     --project=train-cvit2 --limit=10 --format="value(textPayload)"
-   ```
-   Abort rule: `val_holdout/auc < 0.95` in first 1k steps. **Confirm with user before cancelling.** Cancel command: `gcloud ai custom-jobs cancel 7562969566058381312 --region=asia-southeast1 --project=train-cvit2`.
+**1d. Aggregate per-pool mean score and write the result.**
+Pair each frame in the re-score output with its tag (from `combined_frame_tags.json`). Compute per-pool mean score post-fix. Compare to the pre-fix means:
 
-5. **Early signals read (~step 3–4k)**. Pull W&B summary for each slot; rank by `summary/value_composite`. Numbers are directly comparable across RLP35 slots (all on NEW metric) but NOT directly comparable to packet 3 (which is under LEGACY metric — retro-score needed, see step 7).
+| Pool | Pre-fix mean (from `combined_frame_tags.json`) |
+|---|---|
+| `dor-real-laptop-correct-no-virtual-bg-whiteish` | 0.018 |
+| `dor-real-laptop-correct-no-virtual-bg-yellowish` | 0.040 |
+| `roee-real-windows-laptop-correct` | 0.007 |
+| `dor-real-webcam-false-flag` | 0.878 |
+| `dor-real-webcam-false-flag-no-virtual-bg` | 0.940 |
+| `roee-mac-laptop-false-flag-virtual-bg` | 0.900 |
 
-6. **Slot 07 decision**. If ≥2 of {highest-healthy arcface slot, slot 04, slot 05} show `Δvalue_composite ≥ +0.03` vs RLP3_02: edit `arcface_m` in `experiments/phase2_round13/R13_RLP35_07_stack_top3.yaml` to the best healthy margin, then:
-   ```bash
-   ./launch_experiment.sh -y enhanced-aug-test <REGION> experiments/phase2_round13/R13_RLP35_07_stack_top3.yaml
-   ```
-   Pick whichever of us-east1/asia-southeast1/us-west4/europe-west4/us-central1 has capacity.
+Save your result as `analysis/rlp6_04_postfix_rescore_2026-04-24.summary.json` with the same pool keys.
 
-7. **Retro-score packet 3** once those runs finish. Use `rerun_validation.py` with image 1.3.193 + a yaml containing the new `value_composite` block. This produces fair packet-3-vs-packet-3.5 comparison.
+### Step 2 — Interpret and branch
+
+Use this decision tree:
+
+- **If post-fix `dor-real-webcam-false-flag-no-virtual-bg` mean drops by ≥0.30 (to ≤0.64):** preprocessing drift was a LARGE part of the "shortcut." The calibration-probe verdict (0.301 gap closure) overstates the training-aug need because its inputs are pre-fix scores. Before launching anything:
+    - Re-run `analysis/calibration_probe_2026-04-24.py` after substituting post-fix scores into `combined_frame_tags.json` (or a derivative file). Preserve the old file for comparison.
+    - If the re-run verdict flips to "calibration_is_right_lever" (≥0.60), **descope Packet-7 training and explore production-side per-camera calibration** (separate workstream, not covered by current plan).
+- **If post-fix mean drops by 0.10–0.30:** preprocessing drift contributed but not decisively. Launch 1–2 experiments from the codec/spatial side (RLP7_05 first). Hold RLP7_02 + RLP7_04 in reserve.
+- **If post-fix mean drops by <0.10:** the shortcut is essentially fully-structural. Launch the full suggested subset (RLP7_05, RLP7_02, RLP7_04).
+- **If post-fix mean drops by MORE than expected** (e.g., clean pools now also rise): something else is wrong. Stop, debug.
+
+### Step 3 — Launch (only after step 2)
+
+Recommended order if step 2 doesn't descope:
+
+1. `R13_RLP7_05_teams_spatial_plus_codec.yaml` — hits both axes; highest prior for breaking the shortcut.
+2. `R13_RLP7_02_codec_aggressive.yaml` — tightest match to fingerprint-diff evidence.
+3. `R13_RLP7_04_teams_spatial_only.yaml` — isolated spatial-only reference (helps interpret _05 vs _02).
+
+Skip `R13_RLP7_01_lighting_aggressive.yaml` and `R13_RLP7_03_combined.yaml` unless budget permits. Lighting axis is weaker per the yellow-vs-white clean control.
+
+Launch path is the existing `./arena/launch_teams_promotion_contract.sh` or equivalent packet-6/7 launcher — per memory, this **requires `WANDB_API_KEY` / `WANDB_ENTITY` / `WANDB_PROJECT` exported first** (unlike batch_inference).
+
+### Step 4 — How to evaluate the results
+
+Once trained checkpoints exist, to decide which Packet-7 variant actually broke the shortcut:
+
+**4a. Retro-score each variant on the promotion contract suite.** Same suite as Packet-6 used; compare `selected_threshold_scorecard.csv`. Make sure `max_pool_fpr` doesn't blow up on any `teams_real_*` pool — that would indicate the aug hurt fake recall or benign-pool calibration.
+
+**4b. Score each variant on the 6 Dor/Roee pools.** Same method as step 1. Decision criteria:
+- Target: `dor-real-webcam-false-flag*` + `roee-mac-*` mean scores fall below 0.30 (from ~0.88–0.94 baseline).
+- Clean-pool means (`*_clean`) must stay below 0.10 — otherwise the aug generalized poorly.
+
+**4c. Per-identity FPR breakdown using the reducer.** On the lockbox/dev retro-score CSVs:
+```
+python arena/postprocess_per_identity.py \
+    --reports arena/reports/<suite>_<ckpt>_videos_report.csv \
+    --threshold <selected_threshold_from_scorecard> \
+    --out per_identity_<ckpt>.csv --verify
+```
+Watch for identities where `real_fpr` is dramatically higher than the suite mean — those are the "new Dor/Roee"s — and for identities where `fake_recall` drops vs RLP6_04 baseline. An ideal Packet-7 variant has narrower `real_fpr` spread across identities with no drop in `fake_recall`.
+
+**4d. Combined scorecard heuristic.** The winner is the variant with:
+- Lowest `max(per-identity real_fpr)` on the Teams lockbox
+- `fake_recall ≥ RLP6_04 - 0.01` (within noise)
+- `value_composite ≥ 0.89` on the contract suite
+
+Any variant that fails condition 2 is rejected regardless of camera-shortcut improvement. Fake-recall regression is the main failure mode to guard against.
+
+---
 
 ## Setup Required
 
-- **GCP auth**: project `train-cvit2`, account `roee@dtectvision.ai`.
-- **W&B**: entity `dtect-vision`, project `enhanced-aug-test`. Key hardcoded at `scripts/launch/launch_experiment.sh:89`.
-- **Image for any new launch**: `1.3.193`. Do NOT relaunch anything on 1.3.192 — it has the `train_sweep.py` config-propagation bug.
-- **Running trainer tests**: only inside image via `./dev.sh test` (laptop lacks `torchdata`).
+- Python deps: `pip install 'torchdata<0.10'` if importing `data.augmentations.pipelines` in a fresh interpreter (the 0.11 release removed the `datapipes` submodule our code imports). Only needed for smoke-testing; training containers pin a working version.
+- W&B env vars exported for the contract launcher: `WANDB_API_KEY`, `WANDB_ENTITY`, `WANDB_PROJECT`. Not needed for `launch_batch_inference.sh`.
+- GCP auth: `gcloud auth application-default login` if running locally. On Vertex AI jobs this is handled by the service account.
 
-## Edge Cases & Error Handling
+---
 
-- **Slot 03 collapses (m=0.20)** → cancel it; safe margin cap is in [0.15, 0.20). Packet 4 must not exceed 0.15 without further evidence.
-- **A slot PENDING >1h** → check regional quota. Known-good regions: us-east1, asia-southeast1, us-west4, europe-west4, us-central1 (shared 8-slot quota). Known-bad as of today: us-east4, us-west1, asia-east1, asia-northeast3, asia-northeast1.
-- **A slot logs legacy metric** → the image pinned to that job isn't 1.3.193. Check `gcloud ai custom-jobs describe ... --format="value(jobSpec.workerPoolSpecs[0].containerSpec.imageUri)"`.
-- **Packet 3 runs past initial ETA** (already happening — 7/7 still RUNNING >6h past the 07:00–08:30 UTC estimate). Possibilities: early-stopping patience hasn't triggered; real run time underestimated. Not a crisis.
-- **`score_jitter_p95 ≈ 1.0` too** (not just `max`) → stability term stays pinned despite stat swap. Only slot 04 (stability_lambda) can unpin stability via training. Retro-score will reveal.
+## Edge Cases & Warnings
 
-## Warnings
+- **`combined_paired.py:4772` preset-key filter silently drops unknown augmentation overrides.** Always verify new augmentation yaml keys appear in `set(_QUALITY_TARGETED_PRESETS["<any>"].keys())`. The cleanest way: print overrides through `_build_teams_passthrough_pipeline` and inspect the resulting `A.Compose.transforms`. Done for _04 and _05 this session.
+- **`teams_passthrough_special_aug_enabled` must be `true` OR every `teams_passthrough_special_*` knob is a no-op.** See `pipelines.py:1088`. RLP7_04 and _05 both set it true; don't forget in any derivative yaml.
+- **Calibration probe input is PRE-fix scores.** If you re-run the probe after post-fix scoring, you'll want to either substitute post-fix scores into the JSON, or write a sibling script that reads post-fix scores directly. Don't interpret the 0.301 verdict as applying to post-fix data.
+- **RLP7_04/05 seeds (744, 745) were chosen to not collide with RLP7_01/02/03 (740, 742, 743).** Verify no currently-running Packet-7 job is using 744 or 745 before launch.
+- **The original 0.94 Dor number came from the deploy server, not this repo.** The INTER fix in this repo doesn't touch production. Flag to user: a full "is the shortcut gone?" answer requires either updating the deploy server or using the repo's inference path as the ground truth for deployment behavior.
+- **Don't re-read `arena/model_arena.py` in full** — it's large (>2k lines). Use `Grep` or `Read` with specific offset/limit ranges.
 
-- **User flagged W&B anomalies at end of session — ask them first.** Don't recommend action until you know what they're looking at.
-- **Handoff-file updates**: user pushed back mid-session on me auto-updating `HANDOFF.md` across sub-steps. Default to updating only when the user explicitly asks or the approved plan contains an update task.
-- **Cancels**: always enumerate + confirm with user + cancel sequentially. Harness denies parallel destructive ops, and the user wants explicit confirmation per cancel batch.
-- **ArcFace margin ceiling**: do NOT launch `arcface_m > 0.20` in this wave. Backbone is LAION-DataComp and collapses under aggressive margins (user has prior evidence).
-- **Metric comparability**: packet 3 is LEGACY-metric W&B; packet 3.5 is NEW-metric W&B. Direct composite comparison is invalid until packet 3 is retro-scored.
-- **`dev.sh build-prod -y` auto-bumps VERSION.** Commit the bump AFTER Cloud Build SUCCESS (on failure, VERSION reverts and an un-reverted commit would be wrong).
-- **Nested config blocks in yamls are silently dropped by `train_sweep.py`** unless explicitly added to the copy list at L171-282. Every time a new nested block appears, add a sibling entry.
-- **Data recipe is LOCKED to RLP3_02**: unenhanced proper-data, no hints, no enhanced proper. Packets 1–2 closed these decisions. Do not reopen in packet 3.5.
-- **Slot 07 is NOT launched.** Do not fire until early signals from 01–06 are in.
+---
+
+## Pointers for the next agent
+
+- Memory system is at `/Users/roeedar/.claude/projects/-Users-roeedar-Documents-repos-Effort-AIGI-Detection-DtectVision/memory/`. Respect existing memories; update them if you discover something surprising.
+- User (Roee) reserves judgment calls at decision points — present recommendations with tradeoffs and wait for an explicit pick. Do not auto-launch training jobs.
+- User prefers: concise summaries, explicit commits, no per-subject interpretive questions when sample size is small. When asked about confidence, give honest calibrated ranges, not "yes this will work."
+- When in doubt about a workstream boundary, re-read the approved plan at `/Users/roeedar/.claude/plans/it-s-hard-for-me-proud-journal.md`.
