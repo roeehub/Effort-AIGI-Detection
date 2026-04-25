@@ -71,14 +71,71 @@ Training was early-stopped at step 5000 by `value_composite` selection — same 
 - **Roee-mac broke the threshold.** 7/30 frames now score below 0.1 (would be correct under any reasonable τ), 3/30 still flip above 0.9. Mean 0.35 puts the pool below most production thresholds we've considered.
 - **Anchor `frac_gt_0_9 = 0.43` is the key remaining failure.** Even at the new mean, a strict τ would still false-flag ~43% of anchor frames. P8A broke the ceiling but did not eliminate the shortcut.
 
-### 2.3. Slices we DO NOT have for P8A yet
+### 2.3. Slices we DO have for P8A (from W&B run summary, updated 2026-04-25)
 
-- **Augmentation-bucket OOD eval.** No saved `aug-slice` JSONs in the run's GCS prefix; the training-time eval reports aggregate AUC/EER but no per-aug breakdown.
-- **Lockbox FPR (production-policy).** Not run. Was deferred as Task #17 along with the arena scorecard.
-- **Fake recall on target methods (FaceFusion / SimSwap / DDIM / etc.).** Not measured outside training-time AUC; the arena scorecard would give per-method recall.
-- **Cross-camera fingerprint diff (per-pool DCT/HF analysis post-fix).** Available for RLP6_04 baseline; not regenerated for P8A.
+W&B run `9lmvb5b4` summary exposes per-method and OOD-stress evaluations the
+training loop computed at the value_composite step 5000 checkpoint.
 
-These four gaps are the next-most-valuable data points for promotion. None require new training — all are local rescore / arena runs.
+**Per-method fake recall (test set, 39 fake methods + 1 real method):**
+- Macro accuracy 0.977, AUC 0.993, EER 0.027.
+- 33/39 fake methods at 100%. Imperfect (sorted by acc):
+  - facedancer 0.75 (4 videos — noisy, ignore)
+  - mobileswap 0.83 (regressed from 1.0 at step 2500)
+  - blendface 0.92 (regressed from 1.0 at step 2500)
+  - simswap 0.93
+  - deeplive_edge_cases 0.94
+  - deeplive_teams_edge_cases 0.96 (improved from 0.90)
+  - deeplive_teams_minimal_processing 0.98
+  - deeplive_minimal_processing_enhanced 0.97
+- Only one real method in `final_eval/.../method/`: `external_vcd_real` 0.80.
+
+**Threshold curve at value_composite step 5000 (validation):**
+| τ at FPR | Threshold | TPR (recall) |
+|---|---:|---:|
+| 0.1% | 0.533 | 0.945 |
+| 0.5% | 0.529 | 0.949 |
+| 1% | 0.518 | 0.952 |
+| 2% | 0.488 | 0.962 |
+| 5% | 0.444 | 0.972 |
+
+**OOD aug-stress slices (200 real videos from external_youtube_avspeech,
+augmented at eval time; trajectory comparison RLP6_04 → P8A):**
+
+| Slice | RLP6_04 | RLP7_02 | RLP7_05 | **P8A** |
+|---|---:|---:|---:|---:|
+| teams_ood_real_real | 0.968 | 0.973 | 0.968 | **0.995** ✅ |
+| teams_ood_fake_fake | 0.995 | 0.984 | 0.979 | **0.995** ✅ |
+| ood_lighting_stress_general_real | 0.528 | 0.528 | 0.500 | 0.528 |
+| ood_lighting_stress_backlight_dim_real | 0.653 | 0.667 | 0.625 | **0.681** |
+| ood_lighting_stress_warm_harsh_real | 0.667 | 0.667 | 0.625 | **0.694** |
+| ood_spatial_stress_crop_shift_real | 0.625 | 0.611 | **0.681** | 0.639 ⚠️ |
+| ood_spatial_stress_rotation_real | 0.667 | 0.681 | 0.681 | **0.694** |
+| ood_spatial_stress_scale_real | 0.653 | **0.708** | **0.708** | 0.653 ⚠️ |
+
+**Trajectory readings:**
+- P8A is the leader on Teams in-distribution: best real-pool acc AND tied for
+  best fake recall. Big win on the deployment-priority slice.
+- P8A wins or ties all three lighting-stress slices.
+- P8A regressed vs RLP7_05 on `crop_shift` and `scale` spatial-stress slices —
+  the unfreeze-CLIP-backbone bet undid RLP7_05's spatial-aug gain. RLP7_05
+  remains the spatial-stress leader.
+- ALL runs are weak on lighting/spatial stress (50-70% acc — i.e. 30-50%
+  false-flag on stressed reals). This is the THIRD success-criteria pillar
+  and it's a much bigger problem than the Dor/Roee anchor pools in expected
+  value, and is essentially unaddressed.
+
+### 2.4. Slices we DO NOT have for P8A yet
+
+- **Lockbox FPR (production-policy).** Promotion-contract scorecard is running
+  on Vertex (job `2162379556655202304`, asia-southeast1, started 08:33 UTC
+  2026-04-25). Will produce lockbox real/fake accuracies at the calibrated τ.
+- **Per-method recall on the broader test corpus** (vs the 39-method
+  training-time eval). Same scorecard run produces this.
+- **Cross-camera fingerprint diff (per-pool DCT/HF analysis post-fix).** Available
+  for RLP6_04 baseline; not regenerated for P8A.
+
+The first two land when the scorecard finishes (~1-2h). Third is a separate
+local analysis if needed.
 
 ---
 
@@ -131,23 +188,27 @@ Probes designed to test whether the shortcut sits in the FT chain (P8A) or in th
 ## 4. What we know vs what's still unmeasured
 
 ### Known (high confidence)
-- P8A breaks the P7 anchor ceiling. Single-variable change, reproducible config.
-- Real-correct pools improved (not just held). FPR risk on the populations we already handled is at or below RLP6_04.
-- Roee-mac materially improves and now has 7/30 frames decisively correct.
-- Scratch on plain CLIP is dominated by FT+unfreeze on every metric — do not retrain R12g.
-- The Teams camera-signature shortcut is real, cross-subject (Dor + Roee), and lives upstream in the data mix.
+- **P8A is the leader on Teams in-distribution.** `teams_ood_real_real` 0.995 (vs 0.968 RLP6_04), `teams_ood_fake_fake` 0.995 (tied with RLP6_04, ahead of all P7).
+- **P8A breaks the P7 anchor ceiling.** Single-variable change vs RLP7_02, reproducible.
+- **Real-correct pools (Dor laptop + Roee Windows) improved**, not just held.
+- **Roee-mac is mostly solved.** 23/30 frames decisively correct (mean 0.35 vs baseline 0.75).
+- **Per-method fake recall is high.** 33/39 fake methods at 100% on training-time eval; macro acc 0.977.
+- **Threshold curve is clean.** TPR 0.95 at FPR 1% on validation, 0.97 at FPR 5%.
+- **Scratch on plain CLIP is dominated** by FT+unfreeze on every metric.
+- **The shortcut lives in the data mix** (P8A vs P8B comparison).
+- **Anchor pool has temporal structure** — pinned/escaped frames cluster in time within a single ~6-sec clip; the model has the *capacity* to escape, just doesn't on most frames.
 
-### Unmeasured (open questions)
-- **Lockbox FPR.** Production-policy threshold check on diverse real footage — not yet run for P8A.
-- **Per-method fake recall.** Arena scorecard per generator — not yet run for P8A.
+### Known limitations / weaknesses (the three weakness clusters, ranked by severity)
+
+1. **OOD lighting stress (47% false-flag at worst).** `ood_lighting_stress_general_real` is at 53% acc on P8A. P8A wins or ties RLP6_04 on lighting stress but ALL runs are weak here — 30-50% real false-flag on lighting-perturbed reals. **Largest weakness in expected value**, and unaddressed in any P7/P8 recipe.
+2. **OOD spatial stress (35% false-flag at worst).** `ood_spatial_stress_crop_shift_real` 64%, `_scale_real` 65%, `_rotation_real` 69%. **P8A regressed here vs RLP7_05** — the unfreeze undid RLP7_05's spatial-aug gain. RLP7_05 remains the spatial-stress leader.
+3. **Camera-signature shortcut (43% of anchor frames pin).** Dor's webcam in particular. Bimodal distribution suggests the shortcut weakened but is not eliminated.
+
+### Unmeasured (open questions, in priority order)
+- **Lockbox FPR + per-method recall on broader corpus.** Promotion-contract scorecard running now (Vertex job `2162379556655202304`).
 - **P8A schedule sensitivity.** Early-stopped at step 5000. Whether 10k–20k continues to drop the anchor is open.
-- **Augmentation slice contributions.** No per-aug-bucket OOD eval for P8A.
 - **Real subject diversity.** Dor + Roee are 2 cameras. The shortcut may exist per-camera-vendor and not generalize to a third.
-
-### Known limitations of P8A as it stands
-- Anchor pool `frac_gt_0_9` is still 0.43 — 13/30 frames remain pinned above 0.9. P8A broke the ceiling but did not eliminate the shortcut.
-- Anchor std jumped from 0.09 (RLP6_04) to 0.27 (P8A) — the pool is now bimodal, not uniformly fixed. This is consistent with "shortcut weakened, not eliminated".
-- Step 5000 / 10k means P8A might not have saturated. Or might have already overfit on the value_composite criterion. Unknown without longer runs.
+- **Step 2500 ood_composite checkpoint.** Trade-off vs step 5000 value_composite — step 2500 had stronger fake recall on a few methods (mobileswap, blendface 1.00 vs 0.83/0.92 at step 5000). Anchor pool not yet rescored at step 2500.
 
 ---
 
@@ -165,15 +226,33 @@ These do not require new training; they're local rescore + arena runs that shoul
 
 ## 6. Packet-9 scoping (preview, not committed)
 
-Detailed reasoning lives in `analysis/overnight_packet7_packet8_summary_2026-04-25.md`. Highlights:
+**Updated 2026-04-25** with W&B-derived OOD aug-stress findings. The picture
+is no longer "P8A wins everything" — P8A regressed vs RLP7_05 on spatial-stress
+slices and lighting-stress is broadly weak across the trajectory.
 
-- **Adopt the P8A recipe as the Packet-9 base.** The three flags should default to `true` for any Teams-FT yaml.
-- **Stretch tests to consider:**
-  - Extend P8A schedule to 15k–20k steps (test if it saturates past step 5000).
-  - Unfreeze the last two attention blocks via `svd_blocks: [10, 11]` (deeper backbone reach).
-  - Stack RLP7_07's CCT aug on the P8A base (try to push Roee-mac past −0.4).
-  - Data-side intervention: camera-diversify the Teams real-pool (heavier lift; longer-term).
-- **Do NOT** propose: scratch-on-plain-CLIP variants, retrain R12g with same data, head+attention-only SVD as default.
+### Refined ranking — Packet-9 priority candidates
+
+1. **RLP9_01: stack P8A unfreeze + RLP7_05 spatial+codec aug.** P8A's unfreeze
+   regressed `crop_shift` and `scale_real` vs RLP7_05; stacking them should
+   recover RLP7_05's spatial-stress gain while keeping P8A's Teams in-dist
+   + lighting wins. Single-variable from P8A: enable
+   `teams_passthrough_special_aug_enabled=true` + `teams_codec_sim_p`. **Highest
+   evidence.**
+2. **RLP9_02: P8A + RLP7_07 CCT/lighting aug (heavier brightness jitter).**
+   Direct attack on lighting-stress weakness — the largest weakness cluster.
+   CCT was already proven for Roee-mac in RLP7_07.
+3. **RLP9_03: P8A schedule extended to 15k.** Cheap saturation test.
+4. **RLP9_04: deeper unfreeze (last attention block).** Diminishing returns
+   given the OOD stress weaknesses are upstream of head reach. Skip unless
+   (1)/(2) fail.
+
+**Recommendation:** fire (1) + (2) in parallel as primary bets, (3) as a
+short-schedule control.
+
+### Do NOT propose
+- Scratch-on-plain-CLIP variants (P8B proved this fails).
+- Retrain R12g with same data (would re-form the shortcut).
+- Head+attention-only SVD as default (provably reach-limited, see P7 ceiling).
 
 User retains the final decision on which subset to launch.
 
