@@ -1,0 +1,18 @@
+# Promotion-contract review for the P8A breakthrough.
+#
+# Purpose:
+# - Validate the P8A leader (run 9lmvb5b4, value_composite step 5000) against
+#   the calibrated promotion contract — lockbox FPR + per-method fake recall.
+# - Carry the best Packet-7 candidate (RLP7_05) for direct comparison on the
+#   same dev/lockbox suites.
+# - Anchor the run with RLP6_04 step 23500 — the current production baseline
+#   that every anchor-pool delta has been measured against.
+#
+# Anchor-pool readout (from `pool_rescore_*.summary.json`, 2026-04-25):
+# - RLP6_04:  anchor mean 0.932 (baseline), Roee-mac 0.751
+# - RLP7_05:  anchor Δ -0.089, Roee-mac Δ -0.154 (best balanced P7)
+# - P8A:      anchor Δ -0.188, Roee-mac Δ -0.399 (current leader)
+
+P8A_STEP5000: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+RLP7_05_STEP3500: "gs://training-job-outputs/phase2r13_experiments/hhc8quq9/value_composite_effort_20260424_step3500_auc0.9935_eer0.0203.pth"
+RLP6_04_STEP23500: "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"

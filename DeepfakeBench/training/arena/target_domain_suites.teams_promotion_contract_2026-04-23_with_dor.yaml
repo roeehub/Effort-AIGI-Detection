@@ -1,0 +1,77 @@
+# Authoritative suite manifest for the calibrated Teams promotion contract.
+#
+# Purpose:
+# - keep only the suites that decide promotion
+# - exclude per-session and mixed-source diagnostic-only slices
+# - fit thresholds on dev, then freeze before lockbox
+#
+# Intended usage from the training root:
+#   cd DeepfakeBench/training
+#   python arena/run_target_domain_validation_sequential.py \
+#     --checkpoint_map arena/checkpoint_maps/teams_target_domain.promotion_shortlist_2026-04-17.yaml \
+#     --checkpoints ALL \
+#     --suite_manifest arena/target_domain_suites.teams_promotion_contract_2026-04-17.yaml \
+#     --promotion_contract_dir arena/promotion_contracts/<run-name>
+
+suites:
+  - name: teams_real_all_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_real_poor_quality_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_poor_quality"
+    external_real_deterministic: true
+
+  - name: teams_real_lighting_extreme_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_lighting_extreme"
+    external_real_deterministic: true
+
+  - name: teams_fake_all_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+
+  - name: visomaster_enhanced_macro_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "visomaster_enhanced_macro"
+    external_fake_deterministic: true
+
+  - name: deeplive_enhanced_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "deeplive_enhanced"
+    external_fake_deterministic: true
+
+  - name: teams_real_all_lockbox
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "lockbox"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_fake_all_lockbox
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "lockbox"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+  - name: teams_real_dor_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "dor"
+    external_real_deterministic: true
