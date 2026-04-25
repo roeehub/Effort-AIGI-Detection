@@ -1,0 +1,368 @@
+# ============================================================================
+# R13_P9_R_p8a_reseed
+# Phase 2, Round 13 — Packet-9 / replication track.
+#
+# Single-variable delta from P8A (R13_RLP8_01_unfreeze_clip_codec.yaml):
+#   - seed: 749 → 938
+#   - combined_paired.seed: 737 → 938
+#   - combined_paired.split_seed: 737 → 938
+#
+# Same data, same aug, same schedule, same arcface, same base checkpoint, same
+# unfreeze flags. ONLY seeds change.
+#
+# Why this experiment exists:
+#   We have N=1 on P8A's headline result (run 9lmvb5b4). Before launching any
+#   variants of P8A (softened, narrower, etc.), prove the headline is real
+#   under reseed. If P9_R fails to replicate the anchor-pool win or doesn't
+#   regress on the same fake families, the entire P8A-base premise needs
+#   re-evaluation before any softening matters.
+#
+#   Decision rule (post-scorecard):
+#     - P9_R anchor delta within ±0.02 of P8A's −0.188 → headline confirmed,
+#       proceed with magnitude/topology/data variants.
+#     - P9_R anchor delta materially different → P8A was a one-shot artifact;
+#       Packet-10 reorganizes around the actual reproducible signal.
+#
+# Crowning protocol: lockbox_real_fpr (must beat RLP6_04) + lockbox_fake_recall
+# (≥ max(0.80, RLP6_04 − 0.02)) + per-method recall preservation on
+# deeplive_enhanced and visomaster_enhanced_macro (≥ RLP6_04 − 0.03). NEVER
+# crown by value_composite or anchor-pool delta alone.
+# ============================================================================
+
+name: "R13_P9_R_p8a_reseed"
+description: "Packet 9 / replication — exact P8A recipe with seed 938 (was 749/737). Tests whether P8A's headline result is reproducible at all."
+seed: 938
+
+wandb:
+  tags: ["phase2-round13", "fine-tune", "vit-b-16", "wt-b", "wt-f", "data-composition", "proper-data", "policy-aware-teams", "live-discovery", "cacheless-sources", "r12g-fp32-base", "ft-scorecard-base", "seed-938", "truthful-aug-baseline", "arcface-m-015", "value-composite-35-gate", "p95-stability", "packet-9", "p9_R", "p8a-reseed", "replication-test", "unfreeze-final-proj", "unfreeze-final-ln", "svd-mlp", "codec-aggressive", "fork-rlp6-04"]
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 3.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 15
+total_training_steps: 10000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 400
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 8
+prefetch_factor: 4
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+value_composite:
+  target_mean_fpr: 0.03
+  max_pool_fpr: 0.05
+  stability_jitter_stat: "p95"
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  webcam_codec_p: 0.35
+  webcam_codec_quality: [20, 65]
+  quality_p: 0.72
+  jpeg_lower: 30
+  downscale_min: 0.35
+  downscale_max: 0.80
+  teams_codec_sim_p: 0.40
+  teams_codec_sim_quality: [20, 65]
+  context_variation_enabled: true
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 938   # P9_R: was 737
+  identity_split_mode: "hash_stable"
+  seed: 938         # P9_R: was 737
+  bad_data_policy_manifest: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv"
+  bad_data_policy_summary: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_SUMMARY_2026-04-17.json"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: false
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_hints:
+    enabled: false
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  visomaster_teams_enhanced:
+    enabled: false
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    include_statuses:
+      - "teams_v2_companion"
+      - "clean_companion_only"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  visomaster_enhanced:
+    enabled: false
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    gcs_project: "train-cvit2"
+    exclude_tiers: ["ARTIFACT"]
+    enhancers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    require_pair_complete: true
+    apply_bad_data_policy: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  visomaster_hints_teams:
+    enabled: false
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  proper_data:
+    enabled: true
+    inventory_path: "arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml"
+    manifest_path: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    include_lanes:
+      - "proper_visomaster_clean"
+      - "proper_visomaster_teams"
+      - "proper_visomaster_enhanced_teams"
+      - "proper_visomaster_enhanced_clean"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 938   # P9_R: was 737
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.15
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 5.0
+      proper_visomaster_clean_fake: 1.0
+      proper_visomaster_teams_fake: 2.5
+      proper_visomaster_enhanced_teams_fake: 1.0
+      proper_visomaster_enhanced_clean_fake: 2.0
+      deeplive_teams_real: 4.0
+      df40_real: 0.4
+      realpool_real: 2.5
+      external_real: 2.5
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+
+    first_ood_step: 1000
+    ood_cadence: 500
+
+    heldout_fraction: 0.1
+    heldout_hash_rule: blake2b_lo10
+
+    external_real_sources:
+      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+        prefix: "samples"
+        method: "teams_ood_real"
+        grouping: "by_folder"
+        path_contains: "/frames/real/"
+        video_id_depth: -4
+        max_videos: 300
+        deterministic: true
+
+    readout_only_external_real_sources:
+      - bucket: "real-teams-dor-roee"
+        prefix: "session_20260424_110139/uniform30"
+        method: "teams_real_dor_20260424_session"
+        grouping: "by_folder"
+        max_videos: 10
+        deterministic: true
+
+    external_fake_sources:
+      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+        prefix: "samples"
+        method: "teams_ood_fake"
+        grouping: "by_folder"
+        path_contains: "/frames/fake/"
+        path_exclude_contains: ["/visomaster_"]
+        video_id_depth: -4
+        max_videos: 300
+        deterministic: true
+
+    lighting_stress_sources:
+      - label: real
+        method: ood_lighting_stress_general
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: vcd_targeted_stress
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_lighting_stress_backlight_dim
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: backlight_dim_stress
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_lighting_stress_warm_harsh
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: warm_harsh_stress
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+
+    spatial_stress_sources:
+      - label: real
+        method: ood_spatial_stress_crop_shift
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: crop_shift
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_spatial_stress_scale
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: scale
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+      - label: real
+        method: ood_spatial_stress_rotation
+        bucket: effort-collected-data
+        prefix: real/external_youtube_avspeech
+        eval_augmentation: rotation
+        grouping: by_folder
+        max_videos: 200
+        deterministic: true
+
+    expected_counts:
+      teams_ood_real: 300
+      teams_ood_fake: 300
+    strict_expected_counts: false
+
+use_arcface_head: true
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 12.0
+anneal_steps: 8000
+
+evaluate_every_steps: 500
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3
+  ood_composite_enabled: true
+  ood_composite_top_n_size: 3
