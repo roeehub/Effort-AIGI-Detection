@@ -803,6 +803,12 @@ _TEAMS_PASSTHROUGH_DEFAULTS = {
     "teams_passthrough_special_shadow_softness": (0.20, 0.50),
     "teams_passthrough_special_gamma_up_p": 0.0,
     "teams_passthrough_special_gamma_up_range": (0.45, 0.85),
+    # Generic VideoCodecSimulation lift on Teams-passthrough frames. Off by
+    # default (preserves the "Teams is pristine" contract). Packet-7 uses
+    # this to break the learned pipeline-signature shortcut on Dor / lockbox
+    # (see analysis/dor_pool_fingerprint_diff_2026-04-24).
+    "teams_codec_sim_p": 0.0,
+    "teams_codec_sim_quality": (30, 75),
 }
 
 _QUALITY_TARGETED_PRESETS = {
@@ -1325,6 +1331,15 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
     real_noise_p = p.get("real_noise_p", 0.0)
     real_noise_var = p.get("real_noise_var", (5.0, 20.0))
 
+    # P9_05 experimental knob — narrows the real/fake codec asymmetry on the
+    # real route. When `augmentation.real_codec_uplift: true` is set in yaml,
+    # df40_real / realpool_real / external_real get a lower JPEG quality floor
+    # plus a chained second ImageCompression. Default OFF preserves the
+    # previous real-route behavior bit-identically.
+    real_codec_uplift = bool(p.get("real_codec_uplift", False))
+    real_codec_uplift_floor = int(p.get("real_codec_uplift_floor", 38))
+    real_codec_uplift_chain_p = float(p.get("real_codec_uplift_chain_p", 0.40))
+
     if family_key == "df40_real":
         df40_real_steps = [
             A.HorizontalFlip(p=0.5),
@@ -1333,7 +1348,11 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
             *context_variation,
             A.OneOf(
                 [
-                    A.ImageCompression(quality_lower=max(58, p["jpeg_lower"]), quality_upper=95, p=1.0),
+                    A.ImageCompression(
+                        quality_lower=max(real_codec_uplift_floor if real_codec_uplift else 58, p["jpeg_lower"]),
+                        quality_upper=95,
+                        p=1.0,
+                    ),
                     A.GaussNoise(var_limit=(3.0, max(12.0, p["noise_var"][1] * 0.6)), p=1.0),
                     # Dedicated real-noise option (bridges DF40→VCD noise gap)
                     A.GaussNoise(var_limit=real_noise_var, p=1.0),
@@ -1342,6 +1361,15 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
             ),
             webcam_codec_step,
         ]
+        if real_codec_uplift:
+            df40_real_steps.insert(
+                -1,  # before webcam_codec_step
+                A.ImageCompression(
+                    quality_lower=max(28, real_codec_uplift_floor - 8),
+                    quality_upper=70,
+                    p=real_codec_uplift_chain_p,
+                ),
+            )
         return A.Compose(df40_real_steps)
 
     if family_key in {"realpool_real", "external_real"}:
@@ -1349,7 +1377,11 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
             A.HorizontalFlip(p=0.5),
             A.OneOf(
                 [
-                    A.ImageCompression(quality_lower=max(52, p["jpeg_lower"]), quality_upper=95, p=1.0),
+                    A.ImageCompression(
+                        quality_lower=max(real_codec_uplift_floor if real_codec_uplift else 52, p["jpeg_lower"]),
+                        quality_upper=95,
+                        p=1.0,
+                    ),
                     A.GaussianBlur(blur_limit=(3, min(7, p["blur_limit"][1])), p=1.0),
                     A.Downscale(
                         scale_min=max(0.62, p["downscale_min"]),
@@ -1372,6 +1404,15 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
                 -1,  # Before webcam_codec_step
                 A.GaussNoise(var_limit=real_noise_var, p=real_noise_p),
             )
+        if real_codec_uplift:
+            ext_real_steps.insert(
+                -1,  # before webcam_codec_step
+                A.ImageCompression(
+                    quality_lower=max(28, real_codec_uplift_floor - 8),
+                    quality_upper=70,
+                    p=real_codec_uplift_chain_p,
+                ),
+            )
         return A.Compose(ext_real_steps)
 
     return create_quality_robust_pipeline("moderate")
@@ -1389,11 +1430,28 @@ def _build_teams_passthrough_pipeline(p: dict | None = None) -> A.Compose:
     By default, only spatial flip and very light colour jitter are applied.
     An explicit opt-in special block exists for sidecar experiments that want
     extra Teams-native nuisance robustness without affecting the default path.
+
+    ``teams_codec_sim_p`` (default 0.0) is an opt-in generic-codec re-encode
+    that applies VideoCodecSimulation to Teams-passthrough frames before the
+    light-color block. Packet-7 experiments use this to break the learned
+    pipeline-signature shortcut (dor_shkedi vs real_dor diverged on codec/WB;
+    see analysis/dor_pool_fingerprint_diff_2026-04-24).
     """
     p = p or {}
 
+    teams_codec_sim_p = float(p.get("teams_codec_sim_p", 0.0) or 0.0)
+    extra: list = []
+    if teams_codec_sim_p > 0:
+        extra.append(
+            VideoCodecSimulation(
+                codec_quality=p.get("teams_codec_sim_quality", (30, 75)),
+                p=teams_codec_sim_p,
+            )
+        )
+
     return A.Compose([
         A.HorizontalFlip(p=p.get("teams_passthrough_flip_p", 0.5)),
+        *extra,
         A.RandomBrightnessContrast(
             brightness_limit=p.get("teams_passthrough_brightness_limit", 0.08),
             contrast_limit=p.get("teams_passthrough_contrast_limit", 0.08),
