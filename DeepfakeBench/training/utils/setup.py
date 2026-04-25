@@ -45,15 +45,21 @@ def init_seed(config: dict) -> None:
 def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
     """
     Create an optimizer based on configuration.
-    
+
     Currently supports:
         - 'adam': Adam optimizer with configurable lr, eps, weight_decay
-    
+
     IMPORTANT (Jan 11, 2026): SVD residual parameters (U_residual, S_residual, V_residual)
     are placed in a separate param group with weight_decay=0.0 to prevent interference
     with orthogonality and keepsv constraints. Weight decay on these params creates a
     constant tug-of-war with the regularization losses, causing them to grow unbounded.
-    
+
+    Optional capability (Apr 25, 2026): a per-group LR multiplier for the unfrozen
+    backbone parameters (SVD residuals + visual.proj + visual.ln_post when those flags
+    are enabled). Set `optimizer.adam.backbone_lr_mult` in yaml to apply
+    `lr * backbone_lr_mult` to those params while keeping the head at the base lr.
+    Default is 1.0, which preserves the previous single-LR behavior bit-identically.
+
     Args:
         model: PyTorch model whose parameters will be optimized
         config: Configuration dictionary with structure:
@@ -63,59 +69,84 @@ def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
                 lr: 0.0002
                 eps: 1e-8
                 weight_decay: 0.0005
-    
+                backbone_lr_mult: 1.0   # optional, default 1.0
+
     Returns:
         Configured optimizer instance
-    
+
     Raises:
         NotImplementedError: If optimizer type is not supported
     """
     opt_name = config['optimizer']['type']
     if opt_name == 'adam':
-        # Separate SVD residual parameters from other parameters
-        # SVD params should NOT have weight decay (interferes with orthogonality constraints)
-        svd_param_names = ['U_residual', 'S_residual', 'V_residual']
-        
+        adam_cfg = config['optimizer'][opt_name]
+        base_lr = adam_cfg['lr']
+        weight_decay = adam_cfg['weight_decay']
+        backbone_lr_mult = adam_cfg.get('backbone_lr_mult', 1.0)
+        backbone_lr = base_lr * backbone_lr_mult
+
+        # Three categories of trainable params:
+        #   1. SVD residual params (no weight decay; tracked separately since
+        #      Jan 11 2026 to prevent orthogonality/keepsv interference).
+        #   2. Native CLIP backbone params that may be unfrozen via the
+        #      backbone.unfreeze_final_proj / unfreeze_final_ln flags.
+        #   3. Everything else (head, ArcFace, etc.).
+        # Categories (1) and (2) share `backbone_lr`; (3) uses `base_lr`.
+        # When backbone_lr_mult == 1.0, all groups end up with the same LR,
+        # so behavior is identical to the prior 2-group split.
+        svd_param_names = ('U_residual', 'S_residual', 'V_residual')
+        backbone_native_names = ('visual.proj', 'visual.ln_post')
+
         svd_params = []
+        backbone_native_params = []
         other_params = []
-        
+
         for name, param in model.named_parameters():
             if not param.requires_grad:
                 continue
             if any(svd_name in name for svd_name in svd_param_names):
                 svd_params.append(param)
+            elif any(bn_name in name for bn_name in backbone_native_names):
+                backbone_native_params.append(param)
             else:
                 other_params.append(param)
-        
-        # Log the parameter group split
+
         svd_param_count = sum(p.numel() for p in svd_params)
+        backbone_native_param_count = sum(p.numel() for p in backbone_native_params)
         other_param_count = sum(p.numel() for p in other_params)
-        
-        weight_decay = config['optimizer'][opt_name]['weight_decay']
-        
-        # Create param groups: SVD params get weight_decay=0, others get normal weight_decay
+
         param_groups = []
         if svd_params:
             param_groups.append({
                 'params': svd_params,
                 'weight_decay': 0.0,  # CRITICAL: No weight decay for SVD residual params
-                'name': 'svd_residual'
+                'lr': backbone_lr,
+                'name': 'svd_residual',
+            })
+        if backbone_native_params:
+            param_groups.append({
+                'params': backbone_native_params,
+                'weight_decay': weight_decay,
+                'lr': backbone_lr,
+                'name': 'backbone_native',
             })
         if other_params:
             param_groups.append({
                 'params': other_params,
                 'weight_decay': weight_decay,
-                'name': 'other'
+                'lr': base_lr,
+                'name': 'other',
             })
-        
-        print(f"INFO: Optimizer param groups:")
-        print(f"  - SVD residual params: {svd_param_count:,} (weight_decay=0.0)")
-        print(f"  - Other params: {other_param_count:,} (weight_decay={weight_decay})")
-        
+
+        print(f"INFO: Optimizer param groups (backbone_lr_mult={backbone_lr_mult}):")
+        print(f"  - SVD residual params: {svd_param_count:,} (lr={backbone_lr:g}, weight_decay=0.0)")
+        print(f"  - Backbone native params: {backbone_native_param_count:,} (lr={backbone_lr:g}, weight_decay={weight_decay})")
+        print(f"  - Other params: {other_param_count:,} (lr={base_lr:g}, weight_decay={weight_decay})")
+
         optimizer = optim.Adam(
             param_groups,
-            lr=config['optimizer'][opt_name]['lr'],
-            eps=config['optimizer'][opt_name]['eps'],
+            lr=base_lr,
+            eps=adam_cfg['eps'],
         )
         return optimizer
     else:
