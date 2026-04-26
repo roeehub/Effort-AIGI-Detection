@@ -1673,6 +1673,102 @@ class SVDInProjLinear(nn.Module):
         return loss / 3.0
 
 
+def _install_svd_in_proj_routing(mha_module):
+    """
+    Patch an nn.MultiheadAttention instance so its forward routes the in_proj
+    weight through the autograd-tracked ``self._svd_in_proj.weight`` property,
+    instead of through the leaf ``self.in_proj_weight`` parameter.
+
+    -------------------------------------------------------------------------
+    BUG CONTEXT (silent zero-gradient on in_proj SVD residuals; fixed 2026-04-26)
+    -------------------------------------------------------------------------
+    Prior implementation registered a ``forward_pre_hook`` that did
+
+        module.in_proj_weight.data.copy_(module._svd_in_proj.weight)
+
+    before each MHA forward. ``in_proj_weight`` is a leaf ``nn.Parameter`` with
+    ``requires_grad=False`` (intentionally frozen by design). ``.data.copy_``
+    writes values in place WITHOUT participating in autograd: the weight tensor
+    that ``F.multi_head_attention_forward`` actually reads is never connected to
+    the SVD residual parameters in the autograd graph.
+
+    Consequence: ``_svd_in_proj.svd_{q,k,v}.{U_residual, V_residual,
+    S_residual}`` received gradient ONLY from ``compute_orthogonal_loss`` /
+    ``compute_keepsv_loss`` (when ``lambda_reg > 0``), never from the
+    classification loss. They drifted toward orthogonality but learned nothing
+    about the task. Adam silently skipped them whenever grad was None.
+
+    Every R12 / RLP / P-* run with ``apply_svd_to_in_proj=True`` was affected.
+    P8A's anchor-pool improvement therefore came from the MLP-SVD path +
+    unfrozen ``visual.proj`` + unfrozen ``ln_post`` only — the in_proj-SVD
+    capacity it was supposed to test was a no-op.
+
+    -------------------------------------------------------------------------
+    THE FIX
+    -------------------------------------------------------------------------
+    Override the MHA instance's forward to call
+    ``F.multi_head_attention_forward`` with ``self._svd_in_proj.weight``
+    (an autograd-tracked ``@property`` that recomputes the fused weight from
+    the residual parameters on each access). The frozen leaf
+    ``self.in_proj_weight`` becomes unused; we keep it on the module purely
+    for checkpoint backward-compatibility.
+
+    The MLP-SVD path (``SVDResidualLinear``) and the out_proj-SVD path
+    (``SVDResidualLinear`` replacing ``out_proj``) are unaffected — they
+    already route through autograd-tracked tensors via their ``forward`` and
+    ``weight`` property respectively.
+    """
+    import types
+    import torch.nn.functional as F  # noqa: F401  (F is imported at module top; alias here for clarity)
+
+    def forward(self, query, key=None, value=None,
+                key_padding_mask=None, need_weights=True, attn_mask=None,
+                average_attn_weights=True, is_causal=False):
+        # Mirrors the slow path of nn.MultiheadAttention.forward, with one
+        # change: the in_proj weight comes from the autograd-tracked SVD
+        # property, NOT from the frozen leaf parameter.
+        if key is None:
+            key = query
+        if value is None:
+            value = query
+
+        is_batched = query.dim() == 3
+        if self.batch_first and is_batched:
+            query, key, value = (x.transpose(1, 0) for x in (query, key, value))
+
+        in_proj_weight = self._svd_in_proj.weight   # autograd-tracked property
+        in_proj_bias = self.in_proj_bias            # frozen leaf, kept as-is
+
+        # out_proj is itself an SVDResidualLinear when out_proj-SVD is enabled;
+        # its .weight is also an autograd-tracked property.
+        out_proj_weight = self.out_proj.weight
+        out_proj_bias = self.out_proj.bias
+
+        attn_output, attn_output_weights = F.multi_head_attention_forward(
+            query, key, value,
+            self.embed_dim, self.num_heads,
+            in_proj_weight, in_proj_bias,
+            self.bias_k, self.bias_v, self.add_zero_attn,
+            self.dropout, out_proj_weight, out_proj_bias,
+            training=self.training,
+            key_padding_mask=key_padding_mask,
+            need_weights=need_weights,
+            attn_mask=attn_mask,
+            use_separate_proj_weight=False,
+            average_attn_weights=average_attn_weights,
+            is_causal=is_causal,
+        )
+
+        if self.batch_first and is_batched:
+            attn_output = attn_output.transpose(1, 0)
+
+        return attn_output, attn_output_weights
+
+    mha_module.forward = types.MethodType(forward, mha_module)
+    # Mark the patch so callers (e.g. checkpoint loaders, audits) can detect it.
+    mha_module._svd_in_proj_routing_active = True
+
+
 def apply_svd_residual_to_openclip_attn(model, r, apply_to_in_proj=True, block_indices=None, _current_block_idx=None, apply_to_mlp=False):
     """
     Apply SVD decomposition to OpenCLIP vision transformer attention layers.
@@ -1750,11 +1846,11 @@ def apply_svd_residual_to_openclip_attn(model, r, apply_to_in_proj=True, block_i
                         new_out.bias.data.copy_(module.out_proj.bias.data)
                 module.out_proj = new_out
                 
-                # 2. Apply SVD to in_proj_weight (NEW - q, k, v projections)
+                # 2. Apply SVD to in_proj_weight (q, k, v projections)
                 if apply_to_in_proj and module.in_proj_weight is not None:
                     logger.info(f"Applying SVD residual to MultiheadAttention.in_proj (q, k, v) for module: {name}")
                     embed_dim = module.embed_dim
-                    
+
                     # Create SVDInProjLinear which handles the fused q, k, v
                     svd_in_proj = SVDInProjLinear(
                         module.in_proj_weight.data,
@@ -1762,26 +1858,24 @@ def apply_svd_residual_to_openclip_attn(model, r, apply_to_in_proj=True, block_i
                         embed_dim,
                         r
                     )
-                    
-                    # Replace the in_proj_weight with a property-based approach
-                    # We store the SVD module and override the weight
+
                     module._svd_in_proj = svd_in_proj
-                    
-                    # Create a tensor that will be dynamically updated
-                    # PyTorch's MHA accesses in_proj_weight directly, so we need to
-                    # make it a property. Since we can't easily make Parameter a property,
-                    # we use a hook to update the weight before forward pass.
-                    def update_in_proj_weight_hook(module, inputs):
-                        if hasattr(module, '_svd_in_proj'):
-                            # Update the in_proj_weight from SVD components
-                            module.in_proj_weight.data.copy_(module._svd_in_proj.weight)
-                    
-                    module.register_forward_pre_hook(update_in_proj_weight_hook)
-                    
-                    # Freeze the original in_proj_weight (we'll update it via hook)
+
+                    # Route the MHA forward through the autograd-tracked SVD weight.
+                    # See _install_svd_in_proj_routing for the bug context (2026-04-26 fix).
+                    _install_svd_in_proj_routing(module)
+
+                    # Freeze the original (now unused) in_proj_weight / in_proj_bias.
+                    # The forward override never reads these; they remain on the module
+                    # only for checkpoint compatibility.
                     module.in_proj_weight.requires_grad = False
                     if module.in_proj_bias is not None:
                         module.in_proj_bias.requires_grad = False
+                    # Also freeze the SVDInProjLinear's bias copy: the original code
+                    # intent was to freeze the bias, but SVDInProjLinear creates it
+                    # with requires_grad=True by default. Match the freeze intent.
+                    if svd_in_proj.bias is not None:
+                        svd_in_proj.bias.requires_grad = False
                     
             except Exception as e:
                 logger.exception(f"Failed to replace projections for module {name}: {e}")
