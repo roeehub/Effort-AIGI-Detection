@@ -1,0 +1,45 @@
+{
+  "schema": "manifest_overlap.v1",
+  "run_started_iso": "2026-04-26T20:21:53+0200",
+  "buckets": {
+    "training": "gs://live-deepfake-methods-real-and-fake-frames-cropped-teams-v2",
+    "lockbox": "gs://teams-faces-data-test-2914-fake-4420-real-feb-28"
+  },
+  "method": {
+    "phash": "md5(cv2.resize(grayscale, (64,64)).tobytes())",
+    "decoder": "cv2.imdecode(IMREAD_GRAYSCALE)",
+    "sample_seed": 20260426,
+    "target_train_per_stratum": 500,
+    "target_lockbox_per_stratum": 1666
+  },
+  "sample_sizes": {
+    "training_requested": 4510,
+    "training_hashed_ok": 4510,
+    "lockbox_requested": 3382,
+    "lockbox_hashed_ok": 3382
+  },
+  "overlap": {
+    "count": 0,
+    "fraction_lockbox": 0.0,
+    "fraction_lockbox_pct": 0.0,
+    "per_lockbox_stratum": {
+      "lockbox.dor": {
+        "total": 50,
+        "overlap": 0,
+        "overlap_pct": 0.0
+      },
+      "lockbox.fake": {
+        "total": 1666,
+        "overlap": 0,
+        "overlap_pct": 0.0
+      },
+      "lockbox.real": {
+        "total": 1666,
+        "overlap": 0,
+        "overlap_pct": 0.0
+      }
+    }
+  },
+  "verdict": "0% \u2014 clean (no frame-level leakage detected at this sample size)",
+  "evidence_top5": []
+}

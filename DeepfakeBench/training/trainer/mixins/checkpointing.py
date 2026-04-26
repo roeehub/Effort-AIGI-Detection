@@ -63,6 +63,29 @@ class CheckpointingMixin:
         self.best_value_composite_step = -1
         self._best_ood_composite_state_dict_cpu = None
         self._best_value_composite_state_dict_cpu = None
+
+        # --- Anchor-pool monitor state (Phase 0.4 methodology fix) ---
+        # ``value_composite`` does NOT reflect anchor-pool false-positive
+        # behaviour (the actual deployment failure mode). The anchor monitor
+        # tracks per-step pool metrics on ~180 cached real Dor/Roee frames and
+        # GATES ``value_composite_*.pth`` checkpoint writes. See R13 plan §8.
+        validation_cfg = self.config.get('validation', {}) or {}
+        self.anchor_monitor_enabled = bool(
+            validation_cfg.get('anchor_monitor_enabled', True)
+        )
+        self.anchor_cache_dir = str(
+            validation_cfg.get('anchor_cache_dir', '~/.cache/anchor_pools')
+        )
+        # Allowed regression on anchor/composite when value_composite alone
+        # justifies a save. Larger -> more permissive.
+        self.anchor_regression_tolerance = float(
+            validation_cfg.get('anchor_regression_tolerance', 0.02)
+        )
+        self.best_anchor_composite = -1e9  # sentinel: any real value beats it
+        self.best_anchor_composite_step = -1
+        self.last_anchor_composite = None  # set by _run_validation each step
+        self._anchor_monitor_failures = 0
+        self._anchor_monitor_disabled_after_failures = False
     
     def _upload_to_gcs(self, local_path: str, gcs_path: str) -> bool:
         """Uploads a local file to a GCS path."""

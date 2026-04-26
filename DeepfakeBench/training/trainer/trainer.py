@@ -2057,6 +2057,90 @@ class Trainer(
         # earlier in this same method).
         all_val_metrics_snapshot = all_val_metrics
 
+        # --- Anchor-pool monitor (Phase 0.4 methodology fix) -----------------
+        # Per-step inference on ~180 cached real Dor/Roee frames spanning 6
+        # pools. ``value_composite`` does NOT see anchor false-positives —
+        # this monitor does. Output is logged to W&B and used to GATE
+        # ``value_composite_*.pth`` checkpoint writes below. Wrapped in a
+        # try/except so it can NEVER crash a long training run.
+        anchor_metrics = None
+        if (
+            getattr(self, 'anchor_monitor_enabled', False)
+            and not getattr(self, '_anchor_monitor_disabled_after_failures', False)
+        ):
+            try:
+                from analysis.teams_pool_rescore import compute_anchor_metrics
+
+                model_for_anchor = (
+                    self.model.module if self.config.get('ddp') else self.model
+                )
+                was_training = model_for_anchor.training
+                model_for_anchor.eval()
+                anchor_device = next(model_for_anchor.parameters()).device
+                anchor_metrics = compute_anchor_metrics(
+                    model=model_for_anchor,
+                    device=anchor_device,
+                    anchor_cache_dir=self.anchor_cache_dir,
+                )
+                if was_training:
+                    model_for_anchor.train()
+
+                self.last_anchor_composite = (
+                    float(anchor_metrics['composite'])
+                    if anchor_metrics['composite'] == anchor_metrics['composite']  # not NaN
+                    else None
+                )
+                if self.last_anchor_composite is not None:
+                    if self.last_anchor_composite > self.best_anchor_composite:
+                        self.best_anchor_composite = self.last_anchor_composite
+                        self.best_anchor_composite_step = step_cnt
+
+                self.logger.info(
+                    "anchor monitor: composite=%.4f anchor_mean=%.4f "
+                    "max_correct_real=%.4f spread_mean=%.4f n_frames=%d",
+                    anchor_metrics['composite'],
+                    anchor_metrics['anchor_mean'],
+                    anchor_metrics['max_correct_real_mean'],
+                    anchor_metrics['spread_mean'],
+                    anchor_metrics['n_frames_total'],
+                )
+
+                if self.wandb_run:
+                    log_dict_anchor = {
+                        'anchor/composite': anchor_metrics['composite'],
+                        'anchor/anchor_mean': anchor_metrics['anchor_mean'],
+                        'anchor/anchor_frac_gt_0_9': anchor_metrics['anchor_frac_gt_0_9'],
+                        'anchor/max_correct_real_mean': anchor_metrics['max_correct_real_mean'],
+                        'anchor/spread_mean': anchor_metrics['spread_mean'],
+                        'anchor/n_frames_total': anchor_metrics['n_frames_total'],
+                        'train/step': step_cnt,
+                    }
+                    for pool_name, mean_val in anchor_metrics['per_pool_mean'].items():
+                        log_dict_anchor[f'anchor/pool_{pool_name}_mean'] = mean_val
+                    for pool_name, frac_val in anchor_metrics['per_pool_frac_gt_0_9'].items():
+                        log_dict_anchor[f'anchor/pool_{pool_name}_frac_gt_0_9'] = frac_val
+                    self.wandb_run.log(log_dict_anchor)
+                    if self.last_anchor_composite is not None:
+                        self.wandb_run.summary['best_anchor/composite'] = (
+                            self.best_anchor_composite
+                        )
+                        self.wandb_run.summary['best_anchor/step'] = (
+                            self.best_anchor_composite_step
+                        )
+            except Exception as anchor_err:
+                self._anchor_monitor_failures += 1
+                self.logger.warning(
+                    "anchor monitor failed (attempt %d): %s",
+                    self._anchor_monitor_failures, anchor_err,
+                )
+                if self._anchor_monitor_failures >= 3:
+                    self._anchor_monitor_disabled_after_failures = True
+                    self.logger.warning(
+                        "anchor monitor disabled after %d consecutive failures.",
+                        self._anchor_monitor_failures,
+                    )
+                anchor_metrics = None
+
         # A2: parallel tracking for best_value_composite. Readout-only — does
         # NOT change packet-3 checkpoint selection (see §8.7). Guards: only run
         # if A9 produced a non-NaN value_composite and value_composite_enabled.
@@ -2069,6 +2153,46 @@ class Trainer(
         ):
             vc_metric = float(vc_state['value_composite'])
             is_vc_improvement = vc_metric > self.best_value_composite
+
+            # Anchor-gated checkpoint logic (Phase 0.4 methodology fix).
+            # ``value_composite`` is blind to anchor-pool false-flag behaviour,
+            # so a pure-VC gate routinely promotes deployment-broken weights.
+            # New rule:
+            #   save IFF (vc improved AND anchor/composite did not regress
+            #            beyond ``anchor_regression_tolerance``)
+            #         OR (anchor/composite improved alone, even with no VC win)
+            # When the monitor is unavailable (disabled, errored, NaN), fall
+            # back to legacy behaviour (vc improvement only) for backward
+            # compatibility — runs without the monitor are bit-identical.
+            anchor_now = getattr(self, 'last_anchor_composite', None)
+            anchor_best = getattr(self, 'best_anchor_composite', -1e9)
+            tol = getattr(self, 'anchor_regression_tolerance', 0.02)
+
+            anchor_available = anchor_now is not None
+            is_anchor_improvement = (
+                anchor_available and anchor_now > anchor_best
+            )
+            anchor_did_not_regress_meaningfully = (
+                (not anchor_available)
+                or (anchor_now >= anchor_best - tol)
+            )
+
+            should_save_ckpt = False
+            save_reason = None
+            if anchor_available:
+                if is_vc_improvement and anchor_did_not_regress_meaningfully:
+                    should_save_ckpt = True
+                    save_reason = "vc_improved_anchor_held"
+                elif is_anchor_improvement:
+                    should_save_ckpt = True
+                    save_reason = "anchor_improved"
+            else:
+                # Legacy / fallback path — preserves previous behaviour exactly.
+                if is_vc_improvement:
+                    should_save_ckpt = True
+                    save_reason = "vc_improved_no_anchor"
+
+            # Always track best VC (readout-preserving) — independent of save.
             if is_vc_improvement:
                 holdout_m_vc = all_val_metrics_snapshot.get('val_holdout') if all_val_metrics_snapshot else None
                 holdout_auc_vc = None
@@ -2079,7 +2203,9 @@ class Trainer(
 
                 self.logger.info(
                     f"🎯 VALUE COMPOSITE IMPROVED! {vc_metric:.4f} "
-                    f"(prev best: {self.best_value_composite:.4f})"
+                    f"(prev best: {self.best_value_composite:.4f}) "
+                    f"[anchor_now={anchor_now} anchor_best={anchor_best:.4f} "
+                    f"save={should_save_ckpt} reason={save_reason}]"
                 )
                 self.best_value_composite = vc_metric
                 self.best_value_composite_step = step_cnt
@@ -2101,38 +2227,94 @@ class Trainer(
                     if holdout_auc_vc is not None:
                         self.wandb_run.summary['best_value_composite/holdout_auc'] = holdout_auc_vc
                     self.wandb_run.summary['summary/best_value_composite/step'] = step_cnt
+            else:
+                # No VC improvement — but we may still need locals for the
+                # save path (e.g. anchor_improved alone case).
+                holdout_m_vc = all_val_metrics_snapshot.get('val_holdout') if all_val_metrics_snapshot else None
+                holdout_auc_vc = None
+                holdout_eer_vc = None
+                if holdout_m_vc and 'overall' in holdout_m_vc:
+                    holdout_auc_vc = holdout_m_vc['overall'].get('auc')
+                    holdout_eer_vc = holdout_m_vc['overall'].get('eer')
 
-                if self.config.get('save_ckpt', True) and holdout_auc_vc is not None:
+            if (
+                should_save_ckpt
+                and self.config.get('save_ckpt', True)
+                and holdout_auc_vc is not None
+            ):
+                # Top-N admission rule:
+                # - For VC-driven saves, keep the legacy "must beat the worst
+                #   in top_n by metric" rule.
+                # - For anchor-only saves, ALWAYS admit and rank by anchor
+                #   composite — otherwise an anchor improvement with a low
+                #   VC value would never persist (defeating the methodology
+                #   fix). The list is heterogeneous after this point but
+                #   final_eval reads ``best_value_composite/gcs_path`` from
+                #   the leader, which is set explicitly below.
+                if save_reason == "anchor_improved":
+                    is_top_vc = True
+                else:
                     is_top_vc = (
                         len(self.value_composite_top_n) < self.value_composite_top_n_size
                         or vc_metric > self.value_composite_top_n[-1]['metric']
                     )
-                    if is_top_vc:
-                        gcs_path_vc = self.save_ckpt(
-                            epoch=epoch + 1,
-                            auc=holdout_auc_vc,
-                            eer=holdout_eer_vc if holdout_eer_vc is not None else 0.0,
-                            ckpt_prefix='value_composite',
-                            step=step_cnt,
-                        )
-                        if gcs_path_vc:
-                            self.value_composite_top_n.append({
-                                'metric': vc_metric,
-                                'holdout_auc': holdout_auc_vc,
-                                'epoch': epoch + 1,
-                                'step': step_cnt,
-                                'gcs_path': gcs_path_vc,
-                            })
-                            self.value_composite_top_n.sort(
-                                key=lambda x: x['metric'], reverse=True
+                if is_top_vc:
+                    if self.wandb_run:
+                        self.wandb_run.log({
+                            'anchor/save_triggered': 1.0,
+                            'anchor/save_reason_vc_held': float(save_reason == "vc_improved_anchor_held"),
+                            'anchor/save_reason_anchor_only': float(save_reason == "anchor_improved"),
+                            'anchor/save_reason_legacy': float(save_reason == "vc_improved_no_anchor"),
+                            'train/step': step_cnt,
+                        })
+                    self.logger.info(
+                        f"value_composite ckpt save triggered: reason={save_reason} "
+                        f"vc_metric={vc_metric:.4f} anchor_now={anchor_now}"
+                    )
+                    gcs_path_vc = self.save_ckpt(
+                        epoch=epoch + 1,
+                        auc=holdout_auc_vc,
+                        eer=holdout_eer_vc if holdout_eer_vc is not None else 0.0,
+                        ckpt_prefix='value_composite',
+                        step=step_cnt,
+                    )
+                    if gcs_path_vc:
+                        self.value_composite_top_n.append({
+                            'metric': vc_metric,
+                            'holdout_auc': holdout_auc_vc,
+                            'anchor_composite': anchor_now,
+                            'save_reason': save_reason,
+                            'epoch': epoch + 1,
+                            'step': step_cnt,
+                            'gcs_path': gcs_path_vc,
+                        })
+                        # Sort key: prefer anchor-improvement saves (they
+                        # encode the methodology fix), then rank by metric
+                        # within each tier. Within-tier metric is anchor
+                        # composite for anchor saves, VC for VC saves —
+                        # higher always better.
+                        def _vc_sort_key(entry):
+                            is_anchor = (
+                                entry.get('save_reason') == 'anchor_improved'
                             )
-                            if len(self.value_composite_top_n) > self.value_composite_top_n_size:
-                                worst_vc = self.value_composite_top_n.pop()
-                                self._delete_from_gcs(worst_vc['gcs_path'])
-                            if self.wandb_run:
-                                self.wandb_run.summary['best_value_composite/gcs_path'] = (
-                                    self.value_composite_top_n[0]['gcs_path']
-                                )
+                            ac = entry.get('anchor_composite')
+                            ac = ac if ac is not None else float('-inf')
+                            m = entry.get('metric', float('-inf'))
+                            # Tuple: anchor-tier flag first (1 > 0), then a
+                            # within-tier score, then step as a stable tiebreak.
+                            within = ac if is_anchor else m
+                            return (1 if is_anchor else 0, within, entry.get('step', 0))
+
+                        self.value_composite_top_n.sort(
+                            key=_vc_sort_key, reverse=True
+                        )
+                        if len(self.value_composite_top_n) > self.value_composite_top_n_size:
+                            worst_vc = self.value_composite_top_n.pop()
+                            self._delete_from_gcs(worst_vc['gcs_path'])
+                        if self.wandb_run:
+                            self.wandb_run.summary['best_value_composite/gcs_path'] = (
+                                self.value_composite_top_n[0]['gcs_path']
+                            )
 
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
