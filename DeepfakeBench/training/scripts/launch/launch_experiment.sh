@@ -104,6 +104,11 @@ fi
 # Always rebuild IMAGE_URI from VERSION to avoid stale env vars
 IMAGE_URI="us-docker.pkg.dev/${PROJECT}/effort-detector/effort-detector:${VERSION}"
 
+# Image-currency pre-launch check (PCP #2 from plan-v2 LOG):
+# verify the param config yaml is older than the image push time. Catches
+# the class of bug where a new yaml/checkpoint-map sits outside the image.
+"${SCRIPT_DIR}/check_image_currency.sh" "${IMAGE_URI}" "${PARAM_CONFIG_INPUT}"
+
 # GPU configuration (can be overridden via env vars)
 GPU_TYPE="${GPU_TYPE:-NVIDIA_TESLA_A100}"
 GPU_COUNT="${GPU_COUNT:-1}"

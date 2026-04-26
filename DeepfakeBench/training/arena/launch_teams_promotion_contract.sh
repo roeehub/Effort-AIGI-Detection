@@ -119,6 +119,10 @@ done
 SUITE_MANIFEST="$(normalize_container_local_path "${SUITE_MANIFEST}")"
 CHECKPOINT_MAP="$(normalize_container_local_path "${CHECKPOINT_MAP}")"
 
+# Image-currency pre-launch check (PCP #2 from plan-v2 LOG): verify both
+# the suite manifest and checkpoint map are older than the image push time.
+"${TRAINING_DIR}/scripts/launch/check_image_currency.sh" "${IMAGE_URI}" "${SUITE_MANIFEST}" "${CHECKPOINT_MAP}"
+
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 if [[ -z "${JOB_NAME}" ]]; then
     JOB_NAME="teams-promotion-contract-${TIMESTAMP}"
