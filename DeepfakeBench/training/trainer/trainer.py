@@ -4,6 +4,7 @@ import sys
 import time
 import gc
 import contextlib
+import hashlib
 
 current_file_path = os.path.abspath(__file__)
 parent_dir = os.path.dirname(os.path.dirname(current_file_path))
@@ -292,6 +293,20 @@ def _compute_value_composite(
         (teams_component + other_component + stab_component) / active_weight
     )
     return out
+
+
+def _safe_wandb_table_key(log_prefix: str, suffix: str) -> str:
+    # wandb wraps Table keys into artifact names like
+    # 'run-<8charid>-<sanitized_key>-<32charhash>' (sanitization strips '/').
+    # That's ~46 chars of overhead against wandb's 128-char artifact-name limit,
+    # leaving ~82 for the key itself. Reserve 70 as a safety margin.
+    full_key = f"{log_prefix}/{suffix}"
+    sanitized_len = len(full_key.replace("/", ""))
+    if sanitized_len <= 70:
+        return full_key
+    h = hashlib.blake2s(log_prefix.encode("utf-8"), digest_size=4).hexdigest()
+    short_prefix = f"{log_prefix[:30]}_{h}"
+    return f"{short_prefix}/{suffix}"
 
 
 class Trainer(
@@ -2592,7 +2607,7 @@ class Trainer(
                 table_data.append([
                     epoch + 1, method, metrics.get('acc'), metrics.get('n_samples')
                 ])
-            wandb_log_dict[f"{log_prefix}/method_table"] = wandb.Table(columns=columns, data=table_data)
+            wandb_log_dict[_safe_wandb_table_key(log_prefix, "method_table")] = wandb.Table(columns=columns, data=table_data)
 
         # Calculate macro accuracy: Unweighted average of per-method accuracies
         method_accuracies = [metrics.get('acc') for metrics in method_table_metrics.values() if metrics.get('acc') is not None]
@@ -2622,8 +2637,8 @@ class Trainer(
         if self.wandb_run and sanity_check_data:
             sanity_check_columns = ['method', 'video_id', 'frame_idx', 'frame_path', 'probability', 'label', 'epoch', 'step']
             sanity_check_table_data = [[row[col] for col in sanity_check_columns] for row in sanity_check_data]
-            wandb_log_dict[f'{log_prefix}/sanity_check_predictions'] = wandb.Table(
-                columns=sanity_check_columns, 
+            wandb_log_dict[_safe_wandb_table_key(log_prefix, "sanity_check_predictions")] = wandb.Table(
+                columns=sanity_check_columns,
                 data=sanity_check_table_data
             )
             
