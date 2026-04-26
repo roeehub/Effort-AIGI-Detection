@@ -1418,6 +1418,71 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
     return create_quality_robust_pipeline("moderate")
 
 
+def _build_symmetric_quality_pipeline(p: dict) -> A.Compose:
+    """Build a label-symmetric quality pipeline (P10 anti-shortcut).
+
+    All non-teams samples — real and fake — see the same augmentation
+    distribution. No per-family OneOf-prob boost, no per-family JPEG-floor
+    clamp, no per-class sharpen asymmetry. Tests the hypothesis that
+    `_build_family_quality_pipeline`'s class-conditional augmentation is
+    itself the shortcut source: model learns "low quality / heavy
+    degradation → fake" because the router installs that correlation.
+    """
+    balanced_degrade = [
+        A.ImageCompression(
+            quality_lower=p["jpeg_lower"], quality_upper=p["jpeg_upper"], p=1.0
+        ),
+        A.GaussianBlur(blur_limit=p["blur_limit"], p=1.0),
+        A.GaussNoise(var_limit=p["noise_var"], p=1.0),
+        A.Downscale(
+            scale_min=p["downscale_min"],
+            scale_max=p["downscale_max"],
+            interpolation=cv2.INTER_AREA,
+            p=1.0,
+        ),
+    ]
+
+    webcam_codec_step = VideoCodecSimulation(
+        codec_quality=p.get("webcam_codec_quality", (30, 80)),
+        p=p.get("webcam_codec_p", 0.0),
+    )
+
+    color_block = A.OneOf(
+        [
+            A.RandomBrightnessContrast(
+                brightness_limit=p["color_brightness"],
+                contrast_limit=p["color_contrast"],
+                p=1.0,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=p["hue_shift"],
+                sat_shift_limit=p["sat_shift"],
+                val_shift_limit=p["val_shift"],
+                p=1.0,
+            ),
+        ],
+        p=p["color_p"],
+    )
+
+    context_variation = _build_context_variation_block(p)
+
+    sym_sharpen_p = float(p.get("symmetric_sharpen_p", 0.25))
+    sym_sharpen_alpha = p.get("sharpen_alpha_balanced", (0.20, 0.45))
+
+    return A.Compose(
+        [
+            A.HorizontalFlip(p=0.5),
+            A.OneOf(balanced_degrade, p=p["quality_p"]),
+            color_block,
+            *context_variation,
+            A.IAASharpen(
+                alpha=sym_sharpen_alpha, lightness=(0.6, 1.0), p=sym_sharpen_p
+            ),
+            webcam_codec_step,
+        ]
+    )
+
+
 def _build_teams_passthrough_pipeline(p: dict | None = None) -> A.Compose:
     """
     Build a minimal augmentation pipeline for Teams-passthrough data.
@@ -1483,32 +1548,66 @@ class QualityTargetedFamilyRouter:
         # Merge any YAML-level overrides into the hardcoded preset dict.
         self._preset = {**_QUALITY_TARGETED_PRESETS[strength], **(preset_overrides or {})}
         self._fallback = create_quality_robust_pipeline(strength if strength in {"light", "moderate", "strong"} else "moderate")
-        self._pipelines = {
-            "df40_fake": _build_family_quality_pipeline("df40_fake", self._preset),
-            "deeplive_non_enhanced_fake": _build_family_quality_pipeline("deeplive_non_enhanced_fake", self._preset),
-            "deeplive_enhanced_fake": _build_family_quality_pipeline("deeplive_enhanced_fake", self._preset),
-            "visomaster_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
-            # WT-B explicit weak-signal lanes keep source-specific augmentation truth
-            # while remaining visible as separate families in reporting/sampling.
-            "visomaster_hints_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
-            "visomaster_enhanced_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
-            "proper_visomaster_clean_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
-            "proper_visomaster_enhanced_clean_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
-            "df40_real": _build_family_quality_pipeline("df40_real", self._preset),
-            "realpool_real": _build_family_quality_pipeline("realpool_real", self._preset),
-            "visomaster_hints_real": _build_family_quality_pipeline("realpool_real", self._preset),
-            "proper_real_clean": _build_family_quality_pipeline("realpool_real", self._preset),
-            "external_real": _build_family_quality_pipeline("external_real", self._preset),
-            # Teams passthrough data has already been through the codec pipeline.
-            # Default path stays minimal; extra Teams nuisance knobs are opt-in.
-            "deeplive_teams_fake": _build_teams_passthrough_pipeline(self._preset),
-            "deeplive_teams_real": _build_teams_passthrough_pipeline(self._preset),
-            "visomaster_hints_teams_fake": _build_teams_passthrough_pipeline(self._preset),
-            "visomaster_hints_teams_real": _build_teams_passthrough_pipeline(self._preset),
-            "proper_visomaster_teams_fake": _build_teams_passthrough_pipeline(self._preset),
-            "proper_visomaster_enhanced_teams_fake": _build_teams_passthrough_pipeline(self._preset),
-            "proper_real_teams": _build_teams_passthrough_pipeline(self._preset),
-        }
+
+        if routing_mode == "symmetric":
+            # P10 anti-shortcut: every non-teams family uses the same
+            # symmetric pipeline. Teams families still bypass to
+            # teams_passthrough (already symmetric across teams_real /
+            # teams_fake by design — Teams data already carries the codec
+            # fingerprint and shouldn't be re-degraded).
+            sym_pipeline = _build_symmetric_quality_pipeline(self._preset)
+            teams_passthrough = _build_teams_passthrough_pipeline(self._preset)
+            self._pipelines = {
+                "df40_fake": sym_pipeline,
+                "deeplive_non_enhanced_fake": sym_pipeline,
+                "deeplive_enhanced_fake": sym_pipeline,
+                "visomaster_fake": sym_pipeline,
+                "visomaster_hints_fake": sym_pipeline,
+                "visomaster_enhanced_fake": sym_pipeline,
+                "proper_visomaster_clean_fake": sym_pipeline,
+                "proper_visomaster_enhanced_clean_fake": sym_pipeline,
+                "df40_real": sym_pipeline,
+                "realpool_real": sym_pipeline,
+                "visomaster_hints_real": sym_pipeline,
+                "proper_real_clean": sym_pipeline,
+                "external_real": sym_pipeline,
+                "deeplive_teams_fake": teams_passthrough,
+                "deeplive_teams_real": teams_passthrough,
+                "visomaster_hints_teams_fake": teams_passthrough,
+                "visomaster_hints_teams_real": teams_passthrough,
+                "proper_visomaster_teams_fake": teams_passthrough,
+                "proper_visomaster_enhanced_teams_fake": teams_passthrough,
+                "proper_real_teams": teams_passthrough,
+            }
+            # unknown_real / unknown_fake also go through the symmetric pipeline.
+            self._fallback = sym_pipeline
+        else:
+            self._pipelines = {
+                "df40_fake": _build_family_quality_pipeline("df40_fake", self._preset),
+                "deeplive_non_enhanced_fake": _build_family_quality_pipeline("deeplive_non_enhanced_fake", self._preset),
+                "deeplive_enhanced_fake": _build_family_quality_pipeline("deeplive_enhanced_fake", self._preset),
+                "visomaster_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
+                # WT-B explicit weak-signal lanes keep source-specific augmentation truth
+                # while remaining visible as separate families in reporting/sampling.
+                "visomaster_hints_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
+                "visomaster_enhanced_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
+                "proper_visomaster_clean_fake": _build_family_quality_pipeline("visomaster_fake", self._preset),
+                "proper_visomaster_enhanced_clean_fake": _build_family_quality_pipeline("visomaster_enhanced_fake", self._preset),
+                "df40_real": _build_family_quality_pipeline("df40_real", self._preset),
+                "realpool_real": _build_family_quality_pipeline("realpool_real", self._preset),
+                "visomaster_hints_real": _build_family_quality_pipeline("realpool_real", self._preset),
+                "proper_real_clean": _build_family_quality_pipeline("realpool_real", self._preset),
+                "external_real": _build_family_quality_pipeline("external_real", self._preset),
+                # Teams passthrough data has already been through the codec pipeline.
+                # Default path stays minimal; extra Teams nuisance knobs are opt-in.
+                "deeplive_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+                "deeplive_teams_real": _build_teams_passthrough_pipeline(self._preset),
+                "visomaster_hints_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+                "visomaster_hints_teams_real": _build_teams_passthrough_pipeline(self._preset),
+                "proper_visomaster_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+                "proper_visomaster_enhanced_teams_fake": _build_teams_passthrough_pipeline(self._preset),
+                "proper_real_teams": _build_teams_passthrough_pipeline(self._preset),
+            }
 
         # ── Teams codec simulation (optional post-pipeline step) ──────
         # When enabled, apply TeamsCodecSimulation after the per-family
@@ -1581,7 +1680,10 @@ class QualityTargetedFamilyRouter:
         if not isinstance(image, np.ndarray):
             return image
 
-        if self.routing_mode != "family_aware":
+        # "symmetric" mode shares family_key dispatch with "family_aware"
+        # so Teams families still bypass to teams_passthrough; the difference
+        # is that all non-teams families resolve to the same symmetric pipeline.
+        if self.routing_mode not in ("family_aware", "symmetric"):
             result = self._fallback(image=image)["image"]
             return self._maybe_apply_teams_sim(result, family_key=None)
 
