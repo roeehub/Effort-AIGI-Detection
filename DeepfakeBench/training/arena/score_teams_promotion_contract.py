@@ -25,7 +25,7 @@ import csv
 import io
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
@@ -52,6 +52,22 @@ def _read_text_from_path(path: str) -> str:
         return client.bucket(bucket_name).blob(blob_path).download_as_text()
 
     return Path(path).read_text()
+
+
+def _path_exists(path: str) -> bool:
+    if path.startswith("gs://"):
+        try:
+            from google.cloud import storage
+        except ImportError as exc:  # pragma: no cover - depends on runtime image.
+            raise RuntimeError(
+                "Checking gs:// paths requires google-cloud-storage in this runtime."
+            ) from exc
+
+        bucket_name, blob_path = _split_gs_uri(path)
+        client = storage.Client()
+        return client.bucket(bucket_name).blob(blob_path).exists()
+
+    return Path(path).exists()
 
 
 def _write_text_to_path(path: str, text: str) -> None:
@@ -253,6 +269,17 @@ class ContractConfig:
     dev_fake_suites: Tuple[str, ...]
     lockbox_real_suite: str
     lockbox_fake_suite: str
+    # Budget-based τ-selection policy (2026-04-23). The original policy minimized
+    # primary real FPR with no budget, which on a sharp-prediction model drives τ
+    # to ~0.995 and crushes fake recall. With these set, the policy filters τ
+    # candidates by FPR ≤ budget, then maximizes dev_fake_macro_recall.
+    target_real_fpr: float = 0.02
+    target_stress_fpr: float = 0.05
+    # Readout-only suites: included in selected_threshold_scorecard.csv at the
+    # selected τ but DO NOT influence τ selection. Used for OOD-real monitors
+    # (e.g., teams_real_dor_dev) where we want a per-checkpoint readout without
+    # letting the new pool drag the contract's τ around.
+    readout_only_suites: Tuple[str, ...] = ()
 
     def all_suites(self) -> Tuple[str, ...]:
         ordered: List[str] = []
@@ -262,6 +289,7 @@ class ContractConfig:
             *self.dev_fake_suites,
             self.lockbox_real_suite,
             self.lockbox_fake_suite,
+            *self.readout_only_suites,
         ):
             if suite_name and suite_name not in ordered:
                 ordered.append(suite_name)
@@ -416,14 +444,40 @@ def _build_threshold_grid_row(
 
 
 def _threshold_sort_key(row: Dict[str, Any], contract: ContractConfig) -> Tuple[float, ...]:
+    primary_fpr = _sort_number(row.get("dev_primary_real_fpr"))
+    stress_fpr = _sort_number(row.get("dev_worst_real_stress_fpr"))
+    macro_recall = _sort_number(row.get("dev_fake_macro_recall"), higher_is_better=True)
+    threshold = _sort_number(row.get("threshold"), higher_is_better=True)
+
+    budget_active = (
+        contract.target_real_fpr is not None and contract.target_real_fpr < 1.0
+        and contract.target_stress_fpr is not None and contract.target_stress_fpr < 1.0
+    )
+    if budget_active:
+        violates = (
+            primary_fpr > contract.target_real_fpr + 1e-9
+            or stress_fpr > contract.target_stress_fpr + 1e-9
+        )
+        # Penalty 0 for budget-satisfying rows, 1 otherwise. Among satisfying rows,
+        # maximize dev_fake_macro_recall, then prefer higher τ (more conservative),
+        # then prefer lower primary FPR. Among violating rows, fall back to
+        # lex-minimize FPR so we still get something deterministic.
+        return (
+            0 if not violates else 1,
+            macro_recall,
+            threshold,
+            primary_fpr,
+        )
+
+    # Legacy "minimize FPR" policy preserved when budgets are disabled (≥1.0).
     return (
-        _sort_number(row.get("dev_primary_real_fpr")),
-        _sort_number(row.get("dev_worst_real_stress_fpr")),
+        primary_fpr,
+        stress_fpr,
         *[
             _sort_number(row.get(f"{suite_name}__fake_recall"), higher_is_better=True)
             for suite_name in contract.dev_fake_suites
         ],
-        _sort_number(row.get("threshold"), higher_is_better=True),
+        threshold,
     )
 
 
@@ -473,6 +527,25 @@ def score_promotion_contract(
 ) -> Dict[str, Any]:
     selected_keys = _resolve_requested_checkpoint_keys(checkpoints_arg, checkpoint_map_path)
     checkpoints = _resolve_checkpoints(selected_keys, checkpoint_map_path)
+
+    # Drop readout-only suites whose reports don't exist for the first checkpoint.
+    # Readout-only suites don't influence τ — missing reports for them must not
+    # crash the contract. Required suites still hard-fail at load below.
+    available_readout_only: Tuple[str, ...] = contract.readout_only_suites
+    if contract.readout_only_suites and selected_keys:
+        probe_key = selected_keys[0]
+        kept: List[str] = []
+        for suite_name in contract.readout_only_suites:
+            probe_path = _report_path_for_job(report_root, probe_key, suite_name)
+            if _path_exists(probe_path):
+                kept.append(suite_name)
+            else:
+                print(
+                    f"WARN: readout-only suite '{suite_name}' has no report at "
+                    f"{probe_path} — dropping from contract output."
+                )
+        available_readout_only = tuple(kept)
+    contract = replace(contract, readout_only_suites=available_readout_only)
 
     threshold_grid_rows: List[Dict[str, Any]] = []
     selected_threshold_scorecard_rows: List[Dict[str, Any]] = []
@@ -630,6 +703,30 @@ def main() -> None:
     )
     parser.add_argument("--lockbox_real_suite", default="teams_real_all_lockbox")
     parser.add_argument("--lockbox_fake_suite", default="teams_fake_all_lockbox")
+    parser.add_argument(
+        "--target_real_fpr",
+        type=float,
+        default=0.02,
+        help=(
+            "FPR budget on the primary real dev suite for τ selection. "
+            "Set ≥1.0 to disable budget and use the legacy minimize-FPR policy."
+        ),
+    )
+    parser.add_argument(
+        "--target_stress_fpr",
+        type=float,
+        default=0.05,
+        help="FPR budget on the worst real stress dev suite for τ selection.",
+    )
+    parser.add_argument(
+        "--readout_only_suites",
+        default="teams_real_dor_dev",
+        help=(
+            "Comma-separated readout-only suite names that appear in "
+            "selected_threshold_scorecard.csv but do NOT influence τ selection. "
+            "Default includes teams_real_dor_dev (OOD-real monitor). Pass '' to disable."
+        ),
+    )
     args = parser.parse_args()
 
     contract = ContractConfig(
@@ -638,6 +735,9 @@ def main() -> None:
         dev_fake_suites=_csv_list(args.dev_fake_suites),
         lockbox_real_suite=str(args.lockbox_real_suite).strip(),
         lockbox_fake_suite=str(args.lockbox_fake_suite).strip(),
+        target_real_fpr=float(args.target_real_fpr),
+        target_stress_fpr=float(args.target_stress_fpr),
+        readout_only_suites=_csv_list(args.readout_only_suites),
     )
 
     payload = score_promotion_contract(
