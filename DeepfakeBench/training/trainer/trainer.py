@@ -34,6 +34,7 @@ import shutil
 from datetime import datetime
 from sklearn.metrics import confusion_matrix
 from utils.grouping import infer_group_and_family
+from loss.anchor_aware_penalty import AnchorAwarePenalty
 
 # Import trainer mixins for modular functionality
 from trainer.mixins import (
@@ -469,6 +470,27 @@ class Trainer(
 
         # Stability regularisation: perturbation consistency loss
         self.init_stability_reg()
+
+        # Anchor-aware penalty: push prob_fake on false-flag pools toward target.
+        # Same isinstance(dict) defense as periodic_saves (wandb.Config may wrap
+        # nested dicts in a non-dict object that doesn't behave like dict).
+        _aa_raw = self.config.get('anchor_aware')
+        anchor_cfg = (_aa_raw or {}) if isinstance(_aa_raw, dict) else {}
+        self.anchor_aware_penalty = AnchorAwarePenalty(
+            config=anchor_cfg,
+            anchor_cache_dir=getattr(self, 'anchor_cache_dir', '~/.cache/anchor_pools'),
+            logger=self.logger,
+        )
+
+        # Face scale-jitter — module-level config consumed by collate_fns.
+        from data.augmentations.face_scale_jitter import set_face_scale_jitter_config
+        _fsj_raw = self.config.get('face_scale_jitter')
+        fsj_cfg = (_fsj_raw or {}) if isinstance(_fsj_raw, dict) else {}
+        set_face_scale_jitter_config(
+            enabled=bool(fsj_cfg.get('enabled', False)),
+            scale_limit=float(fsj_cfg.get('scale_limit', 0.0)),
+            logger=self.logger,
+        )
 
     # --- Group-DRO methods are now provided by GroupDROMixin ---
     # The mixin provides: init_group_dro(), calculate_group_dro_loss(), get_group_dro_stats()
@@ -1494,6 +1516,13 @@ class Trainer(
                     )
                     losses['overall'] = losses['overall'] + stability_loss
                     losses['stability'] = stability_loss.detach()
+
+                    # --- Anchor-aware penalty (false-flag real pools) ---
+                    anchor_loss = self.anchor_aware_penalty.compute(
+                        self.model, data_dict["image"].device,
+                    )
+                    losses['overall'] = losses['overall'] + anchor_loss
+                    losses['anchor_aware'] = anchor_loss.detach()
 
                     # Store unscaled loss for accurate logging
                     unscaled_loss = losses['overall'].clone().detach()

@@ -357,6 +357,11 @@ def df40_paired_collate_fn(batch: List[Dict[str, Any]], target_size: Tuple[int, 
             if img.ndim == 2:
                 img = np.stack([img] * 3, axis=-1)
             
+            # Face scale-jitter (anti-shortcut, label-symmetric) — runs BEFORE
+            # the canonical 224×224 resize so the final face area is randomized.
+            from data.augmentations.face_scale_jitter import apply_face_scale_jitter
+            img = apply_face_scale_jitter(img)
+
             # Resize to target size if needed
             if img.shape[:2] != target_size:
                 img = cv2.resize(img, (target_size[1], target_size[0]), interpolation=cv2.INTER_LINEAR)

@@ -811,6 +811,23 @@ _TEAMS_PASSTHROUGH_DEFAULTS = {
     "teams_codec_sim_quality": (30, 75),
 }
 
+# Webcam-harden block — heavier webcam-style perturbations applied to FAKE
+# samples only in family-aware mode. Direct attack on the camera-signature
+# shortcut: when training real captures share a uniform "looks-webcam"
+# signature, the model learns "looks-webcam → real". Applying strong
+# webcam-style aug to fakes breaks the feature/label correlation. Off by
+# default (webcam_harden_p=0.0). Symmetric pipeline does NOT apply this
+# (would break its label-symmetric invariant).
+_WEBCAM_HARDEN_DEFAULTS = {
+    "webcam_harden_p": 0.0,
+    "webcam_harden_quality": (18, 50),
+    "webcam_harden_blur_limit": (3, 5),
+    "webcam_harden_noise_var": (20.0, 70.0),
+    "webcam_harden_hue_shift": 8,
+    "webcam_harden_sat_shift": 12,
+    "webcam_harden_val_shift": 8,
+}
+
 _QUALITY_TARGETED_PRESETS = {
     "light": {
         "jpeg_lower": 62,
@@ -856,6 +873,7 @@ _QUALITY_TARGETED_PRESETS = {
         "real_sharpen_p": 0.50,
         "fake_extra_degrade_p": 0.0,
         **_TEAMS_PASSTHROUGH_DEFAULTS,
+        **_WEBCAM_HARDEN_DEFAULTS,
     },
     "moderate": {
         "jpeg_lower": 48,
@@ -897,6 +915,7 @@ _QUALITY_TARGETED_PRESETS = {
         "real_sharpen_p": 0.50,
         "fake_extra_degrade_p": 0.0,
         **_TEAMS_PASSTHROUGH_DEFAULTS,
+        **_WEBCAM_HARDEN_DEFAULTS,
     },
     "strong": {
         "jpeg_lower": 40,
@@ -938,6 +957,7 @@ _QUALITY_TARGETED_PRESETS = {
         "real_sharpen_p": 0.50,
         "fake_extra_degrade_p": 0.0,
         **_TEAMS_PASSTHROUGH_DEFAULTS,
+        **_WEBCAM_HARDEN_DEFAULTS,
     },
     # -----------------------------------------------------------------------
     # VCD-targeted preset: designed to break quality-label shortcuts.
@@ -998,6 +1018,7 @@ _QUALITY_TARGETED_PRESETS = {
         "context_variation_gamma_up_range": (0.45, 0.85),
         "hue_shift": 20,
         **_TEAMS_PASSTHROUGH_DEFAULTS,
+        **_WEBCAM_HARDEN_DEFAULTS,
     },
 }
 
@@ -1169,6 +1190,35 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
         p=p.get("webcam_codec_p", 0.0),
     )
 
+    # Webcam-harden — heavier webcam-style perturbation chain applied to FAKE
+    # families only. Empty list when webcam_harden_p=0 (default), so adding
+    # `*webcam_harden_steps` to a Compose is a no-op in default mode.
+    webcam_harden_p_val = float(p.get("webcam_harden_p", 0.0) or 0.0)
+    webcam_harden_steps: list = []
+    if webcam_harden_p_val > 0:
+        whq_low, whq_high = p.get("webcam_harden_quality", (18, 50))
+        webcam_harden_steps = [
+            A.MotionBlur(
+                blur_limit=p.get("webcam_harden_blur_limit", (3, 5)),
+                p=webcam_harden_p_val * 0.6,
+            ),
+            A.ImageCompression(
+                quality_lower=int(whq_low),
+                quality_upper=int(whq_high),
+                p=webcam_harden_p_val,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=int(p.get("webcam_harden_hue_shift", 8)),
+                sat_shift_limit=int(p.get("webcam_harden_sat_shift", 12)),
+                val_shift_limit=int(p.get("webcam_harden_val_shift", 8)),
+                p=webcam_harden_p_val * 0.5,
+            ),
+            A.GaussNoise(
+                var_limit=p.get("webcam_harden_noise_var", (20.0, 70.0)),
+                p=webcam_harden_p_val * 0.4,
+            ),
+        ]
+
     color_block = A.OneOf(
         [
             A.RandomBrightnessContrast(
@@ -1202,6 +1252,7 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
             A.IAASharpen(alpha=p["sharpen_alpha_balanced"], lightness=(0.6, 1.0), p=0.26),
             color_block,
             *context_variation,
+            *webcam_harden_steps,
             webcam_codec_step,
         ]
         # Inject extra heavy degradation for a fraction of fakes
@@ -1220,6 +1271,7 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
                 A.IAASharpen(alpha=p["sharpen_alpha_balanced"], lightness=(0.6, 1.0), p=0.22),
                 color_block,
                 *context_variation,
+                *webcam_harden_steps,
                 webcam_codec_step,
             ]
         )
@@ -1253,6 +1305,7 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
                 color_block,
                 *context_variation,
                 A.IAASharpen(alpha=(0.08, 0.22), lightness=(0.6, 1.0), p=0.08),
+                *webcam_harden_steps,
                 webcam_codec_step,
             ]
         )
@@ -1282,6 +1335,7 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
                 color_block,
                 *context_variation,
                 A.IAASharpen(alpha=(0.10, 0.30), lightness=(0.6, 1.0), p=0.14),
+                *webcam_harden_steps,
                 webcam_codec_step,
             ]
         )
@@ -1320,6 +1374,7 @@ def _build_family_quality_pipeline(family_key: str, p: dict) -> A.Compose:
                 color_block,
                 *context_variation,
                 A.IAASharpen(alpha=(0.06, 0.18), lightness=(0.6, 1.0), p=0.06),
+                *webcam_harden_steps,
                 webcam_codec_step,
             ]
         )
@@ -1536,6 +1591,7 @@ class QualityTargetedFamilyRouter:
         enhanced_strategy_names: tuple[str, ...] = _DEFAULT_ENHANCED_STRATEGIES,
         preset_overrides: dict | None = None,
         teams_codec_simulation: dict | None = None,
+        pipeline_randomization: dict | None = None,
     ):
         if strength not in _QUALITY_TARGETED_PRESETS:
             raise ValueError(
@@ -1676,6 +1732,15 @@ class QualityTargetedFamilyRouter:
                     "Choose from: legacy_single, adaptive_mixture, family_split"
                 )
 
+        # ── Pipeline-randomization (anti-shortcut, label-symmetric) ──
+        # Applied AFTER the family pipeline + teams_sim, gated by per-label
+        # probability so the same sub-augs land on real and fake samples.
+        from .pipeline_randomization import PipelineRandomization
+
+        self._pipeline_random = PipelineRandomization(
+            config=pipeline_randomization or {},
+        )
+
     def __call__(self, image: np.ndarray, landmarks=None, meta: dict | None = None) -> np.ndarray:
         if not isinstance(image, np.ndarray):
             return image
@@ -1685,7 +1750,11 @@ class QualityTargetedFamilyRouter:
         # is that all non-teams families resolve to the same symmetric pipeline.
         if self.routing_mode not in ("family_aware", "symmetric"):
             result = self._fallback(image=image)["image"]
-            return self._maybe_apply_teams_sim(result, family_key=None)
+            result = self._maybe_apply_teams_sim(result, family_key=None)
+            result = self._pipeline_random(
+                result, label=(meta or {}).get("label"),
+            )
+            return result
 
         meta = meta or {}
         from utils.grouping import infer_family_key  # Local import avoids tight coupling.
@@ -1698,7 +1767,9 @@ class QualityTargetedFamilyRouter:
         )
         pipeline = self._pipelines.get(family_key, self._fallback)
         result = pipeline(image=image)["image"]
-        return self._maybe_apply_teams_sim(result, family_key)
+        result = self._maybe_apply_teams_sim(result, family_key)
+        result = self._pipeline_random(result, label=meta.get("label"))
+        return result
 
     def _maybe_apply_teams_sim(self, image: np.ndarray, family_key: str | None) -> np.ndarray:
         """Optionally apply TeamsCodecSimulation as a post-pipeline step."""
@@ -1720,6 +1791,7 @@ def create_quality_targeted_family_router(
     enhanced_strategy_names: tuple[str, ...] = _DEFAULT_ENHANCED_STRATEGIES,
     preset_overrides: dict | None = None,
     teams_codec_simulation: dict | None = None,
+    pipeline_randomization: dict | None = None,
 ) -> QualityTargetedFamilyRouter:
     """
     Create a family-aware quality-targeted augmentation router.
@@ -1741,6 +1813,7 @@ def create_quality_targeted_family_router(
         enhanced_strategy_names=enhanced_strategy_names,
         preset_overrides=preset_overrides,
         teams_codec_simulation=teams_codec_simulation,
+        pipeline_randomization=pipeline_randomization,
     )
 
 

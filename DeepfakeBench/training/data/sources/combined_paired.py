@@ -1973,6 +1973,7 @@ def _build_external_ood_videos(
             grouping=grouping,
             deterministic_frame_count=deterministic_frames,
             path_contains=source_cfg.get("path_contains"),
+            path_exclude_contains=source_cfg.get("path_exclude_contains"),
             video_id_depth=int(source_cfg.get("video_id_depth") if source_cfg.get("video_id_depth") is not None else -2),
         )
         # Filter out identities already used for training (if applicable)
@@ -2027,6 +2028,7 @@ def _build_external_ood_videos(
             grouping=grouping,
             deterministic_frame_count=deterministic_frames,
             path_contains=source_cfg.get("path_contains"),
+            path_exclude_contains=source_cfg.get("path_exclude_contains"),
             video_id_depth=int(source_cfg.get("video_id_depth") if source_cfg.get("video_id_depth") is not None else -2),
         )
         videos.extend(source_videos)
@@ -2102,6 +2104,7 @@ def _build_external_ood_videos(
                 grouping=grouping,
                 deterministic_frame_count=deterministic_frames,
                 path_contains=source_cfg.get("path_contains"),
+                path_exclude_contains=source_cfg.get("path_exclude_contains"),
                 video_id_depth=int(
                     source_cfg.get("video_id_depth")
                     if source_cfg.get("video_id_depth") is not None
@@ -3448,9 +3451,14 @@ def combined_paired_collate_fn(
             if img.ndim == 2:
                 img = np.stack([img] * 3, axis=-1)
             
+            # Face scale-jitter (anti-shortcut, label-symmetric) — runs BEFORE
+            # the canonical 224×224 resize so the final face area is randomized.
+            from data.augmentations.face_scale_jitter import apply_face_scale_jitter
+            img = apply_face_scale_jitter(img)
+
             if img.shape[:2] != target_size:
                 img = cv2.resize(img, (target_size[1], target_size[0]), interpolation=cv2.INTER_LINEAR)
-            
+
             img_tensor = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
             img_tensor = (img_tensor - CLIP_MEAN) / CLIP_STD
             frame_tensors.append(img_tensor)
@@ -4774,12 +4782,16 @@ def _create_combined_transform(
         # ── Teams codec simulation config (optional) ─────────────────
         teams_codec_cfg = aug_config.get('teams_codec_simulation', None)
 
+        # ── Pipeline-randomization config (anti-shortcut, label-symmetric) ──
+        pipeline_random_cfg = aug_config.get('pipeline_randomization', None)
+
         router = create_quality_targeted_family_router(
             strength=strength,
             routing_mode=routing_mode,
             enhanced_strategy_names=enhanced_strategy_names,
             preset_overrides=preset_overrides or None,
             teams_codec_simulation=teams_codec_cfg,
+            pipeline_randomization=pipeline_random_cfg,
         )
         logger.info(
             "Created quality_targeted_family augmentation "

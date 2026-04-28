@@ -1,0 +1,291 @@
+# ============================================================================
+# R13_P13_FROM_SCRATCH.yaml
+# Phase 2, Round 13 — From-scratch + anti-shortcut interventions
+#
+# Cloned from experiments/phase2_round9/R9_C_teams_scratch.yaml. Layered on:
+#   - stability_lambda: 0          (R95 final report: monotonic OOD degradation)
+#   - label_smoothing: 0           (R95: no measurable benefit)
+#   - total_training_steps: 18000  (R95 recommended 20K; split-the-difference)
+#   - arcface s schedule: 10 → 18 over 18000   (R95: works for scratch, not FT)
+#   - apply_svd_to_in_proj: true   (now actually working post commit 2feea58)
+#   - periodic_saves with bug-fixed step_list  (post commit c7dc828)
+#   - early_stopping_patience: 50  (scratch wants more headroom than FT's 10)
+#   - visomaster_fake oversample: 4.0   (HEAVY's 3.0 → 4.0; not 6.0 which broke pairs)
+#
+# NEW interventions (anti-shortcut, layered on from-scratch substrate):
+#   - anchor_aware loss term       — push false-flag anchor pool toward 0.10
+#   - pipeline_randomization aug   — symmetric across labels (real 0.55 / fake 0.45)
+#   - face_scale_jitter [0.75, 1.25] — counters face-pixel-area label leak
+#
+# See plan: ultrathink-read-all-the-generic-flute.md (Plan v6).
+# Seed: 737
+# ============================================================================
+
+name: "R13_P13_FROM_SCRATCH"
+description: "Scratch + anti-shortcut interventions (anchor-aware loss, pipeline-random aug, face scale-jitter)"
+seed: 737
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "p13-from-scratch"
+    - "anti-shortcut"
+    - "anchor-aware-loss"
+    - "pipeline-random"
+    - "face-scale-jitter"
+    - "seed-737"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+# Scratch learning rate
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 25
+total_training_steps: 18000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1000
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# No checkpoint — train from scratch
+load_base_checkpoint: false
+
+# R95 final report: stability λ>0 monotonically degraded OOD; label-smoothing
+# had no measurable benefit. Explicitly off.
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# --- Anchor-aware penalty (NEW: training-time false-flag pool penalty) ---
+anchor_aware:
+  enabled: true
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+# --- Face scale-jitter (NEW: counters face pixel-area label leak) ---
+# Applied symmetrically across labels in collate-fn before the 224×224 resize.
+face_scale_jitter:
+  enabled: true
+  scale_limit: 0.25
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  # --- Pipeline-randomization aug (NEW: anti-shortcut, label-symmetric) ---
+  # Applied AFTER the family pipeline. p_real and p_fake gate the entire stack.
+  # Per-sub probabilities default to 0.5 each; here left at default to keep
+  # the stack additive but bounded.
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.55
+    p_fake: 0.45
+    jpeg_quality: [40, 95]
+    downscale_range: [0.85, 1.0]
+    chroma_blur_ksize: 3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 737
+  seed: 737
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 737
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    # Visomaster oversampled to 4.0 (HEAVY's 3.0 was insufficient;
+    # HEAVY_DEEPLIVE's 6.0 broke pair structure).
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+# ArcFace: scratch-friendly schedule per R95 (s=10→18 over total steps).
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 10.0
+s_start: 10.0
+s_end: 18.0
+anneal_steps: 18000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 500
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+# Scratch needs more patience than FT's 10 (AUC keeps improving for ~4-6 epochs).
+early_stopping_enabled: true
+early_stopping_patience: 50
+
+# Periodic step-based saves (post bug-fix c7dc828). Captures the trajectory
+# even if metric-gated saves saturate (which happened in P11 overnight runs).
+periodic_saves:
+  enabled: true
+  step_list:
+    - 2000
+    - 4000
+    - 6000
+    - 9000
+    - 12000
+    - 15000
+    - 18000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3
