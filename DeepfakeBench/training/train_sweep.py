@@ -281,6 +281,37 @@ def main():
             print(f"  ✅ Applied value_composite: {single_cfg['value_composite']}")
             logger.info(f"  Applied value_composite: {single_cfg['value_composite']}")
 
+        # Apply anchor_aware config directly (nested dict — W&B flattens; must copy).
+        # Trainer reads self.config.get('anchor_aware') at trainer.py:496 and constructs
+        # loss/anchor_aware_penalty.AnchorAwarePenalty. Without this, AnchorAwarePenalty
+        # silently logs DISABLED and the anti-shortcut anchor-aware loss term is no-op.
+        if 'anchor_aware' in single_cfg:
+            config['anchor_aware'] = single_cfg['anchor_aware']
+            aa = single_cfg['anchor_aware']
+            print(f"  ✅ Applied anchor_aware: enabled={aa.get('enabled')} weight={aa.get('weight')} target_mean_prob={aa.get('target_mean_prob')}")
+            logger.info(f"  Applied anchor_aware: enabled={aa.get('enabled')} weight={aa.get('weight')} target_mean_prob={aa.get('target_mean_prob')}")
+
+        # Apply face_scale_jitter config directly (nested dict — W&B flattens; must copy).
+        # Trainer reads self.config.get('face_scale_jitter') at trainer.py:505 and calls
+        # data.augmentations.face_scale_jitter.set_face_scale_jitter_config. Without this,
+        # FaceScaleJitter silently logs DISABLED and face-size canonicalization is no-op.
+        if 'face_scale_jitter' in single_cfg:
+            config['face_scale_jitter'] = single_cfg['face_scale_jitter']
+            fsj = single_cfg['face_scale_jitter']
+            print(f"  ✅ Applied face_scale_jitter: enabled={fsj.get('enabled')} scale_limit={fsj.get('scale_limit')}")
+            logger.info(f"  Applied face_scale_jitter: enabled={fsj.get('enabled')} scale_limit={fsj.get('scale_limit')}")
+
+        # Apply periodic_saves config directly (nested dict — W&B flattens; must copy).
+        # Trainer reads self.config.get('periodic_saves') at trainer.py:2374 to decide
+        # whether to save checkpoints at fixed step_list values. Without this, no
+        # periodic checkpoints are saved (only metric-gated saves), and Day-4 evaluation
+        # loses access to mid-training trajectory ckpts.
+        if 'periodic_saves' in single_cfg:
+            config['periodic_saves'] = single_cfg['periodic_saves']
+            ps = single_cfg['periodic_saves']
+            print(f"  ✅ Applied periodic_saves: enabled={ps.get('enabled')} step_list={ps.get('step_list')}")
+            logger.info(f"  Applied periodic_saves: enabled={ps.get('enabled')} step_list={ps.get('step_list')}")
+
         print("=" * 70)
     else:
         print("⚠️ single_cfg is None/empty - no direct config application!")

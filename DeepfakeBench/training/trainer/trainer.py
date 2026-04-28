@@ -53,6 +53,26 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Trainer Is Using device: {device}")
 
 
+def _to_plain_dict(raw):
+    """Coerce wandb.Config / dict / dict-like to a plain dict; {} on None.
+
+    The earlier ``isinstance(raw, dict)`` guard silently dropped wandb.Config
+    sub-objects (they are not dict subclasses), which made nested config
+    blocks like ``anchor_aware``, ``face_scale_jitter`` and ``periodic_saves``
+    appear empty at runtime even when the yaml was correct.
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw) or {}
+    if hasattr(raw, 'keys') and callable(raw.keys):
+        try:
+            return {k: raw[k] for k in raw.keys()}
+        except Exception:
+            return {}
+    return {}
+
+
 def _per_video_jitter_stats(frame_probs_np):
     """A1 helper — per-video frame-to-frame score jitter.
 
@@ -472,10 +492,8 @@ class Trainer(
         self.init_stability_reg()
 
         # Anchor-aware penalty: push prob_fake on false-flag pools toward target.
-        # Same isinstance(dict) defense as periodic_saves (wandb.Config may wrap
-        # nested dicts in a non-dict object that doesn't behave like dict).
-        _aa_raw = self.config.get('anchor_aware')
-        anchor_cfg = (_aa_raw or {}) if isinstance(_aa_raw, dict) else {}
+        # _to_plain_dict() handles wandb.Config sub-objects (not dict subclasses).
+        anchor_cfg = _to_plain_dict(self.config.get('anchor_aware'))
         self.anchor_aware_penalty = AnchorAwarePenalty(
             config=anchor_cfg,
             anchor_cache_dir=getattr(self, 'anchor_cache_dir', '~/.cache/anchor_pools'),
@@ -484,8 +502,7 @@ class Trainer(
 
         # Face scale-jitter — module-level config consumed by collate_fns.
         from data.augmentations.face_scale_jitter import set_face_scale_jitter_config
-        _fsj_raw = self.config.get('face_scale_jitter')
-        fsj_cfg = (_fsj_raw or {}) if isinstance(_fsj_raw, dict) else {}
+        fsj_cfg = _to_plain_dict(self.config.get('face_scale_jitter'))
         set_face_scale_jitter_config(
             enabled=bool(fsj_cfg.get('enabled', False)),
             scale_limit=float(fsj_cfg.get('scale_limit', 0.0)),
@@ -2352,10 +2369,10 @@ class Trainer(
         # while the underlying anchor/recall metrics continue evolving through
         # step 6000+. Without this trigger, those late-stage improvements are
         # not persisted.
-        # Defensive resolution — wandb.config may wrap nested dicts into a
-        # non-dict object; same isinstance(dict) guard as line 392-393.
+        # _to_plain_dict() unwraps wandb.Config sub-objects that the prior
+        # isinstance(dict) guard silently dropped.
         _ps_raw = self.config.get('periodic_saves')
-        periodic_cfg = (_ps_raw or {}) if isinstance(_ps_raw, dict) else {}
+        periodic_cfg = _to_plain_dict(_ps_raw)
         _save_ckpt_ok = self.config.get('save_ckpt', True)
         _step_list = periodic_cfg.get('step_list') or []
         self.logger.info(
