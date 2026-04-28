@@ -2316,6 +2316,65 @@ class Trainer(
                                 self.value_composite_top_n[0]['gcs_path']
                             )
 
+        # Periodic step-based saves — guaranteed checkpoints at fixed steps
+        # regardless of metric improvement. Added 2026-04-28 after the P11
+        # overnight runs (2026-04-27) revealed that all metric-gated saves
+        # (top_n by AUC, ood_composite, value_composite) saturate at step 1000
+        # while the underlying anchor/recall metrics continue evolving through
+        # step 6000+. Without this trigger, those late-stage improvements are
+        # not persisted.
+        # Defensive resolution — wandb.config may wrap nested dicts into a
+        # non-dict object; same isinstance(dict) guard as line 392-393.
+        _ps_raw = self.config.get('periodic_saves')
+        periodic_cfg = (_ps_raw or {}) if isinstance(_ps_raw, dict) else {}
+        _save_ckpt_ok = self.config.get('save_ckpt', True)
+        _step_list = periodic_cfg.get('step_list') or []
+        self.logger.info(
+            f"periodic_saves diagnostic: step_cnt={step_cnt} "
+            f"raw_type={type(_ps_raw).__name__} "
+            f"resolved_keys={list(periodic_cfg.keys()) if periodic_cfg else []} "
+            f"enabled={periodic_cfg.get('enabled', False)} "
+            f"save_ckpt_ok={_save_ckpt_ok} "
+            f"step_list={_step_list} "
+            f"step_in_list={step_cnt in _step_list}"
+        )
+        if periodic_cfg.get('enabled', False) and _save_ckpt_ok:
+            step_list = _step_list
+            if step_cnt in step_list:
+                holdout_m_p = (
+                    all_val_metrics_snapshot.get('val_holdout')
+                    if all_val_metrics_snapshot else None
+                )
+                holdout_auc_p = None
+                holdout_eer_p = None
+                if holdout_m_p and 'overall' in holdout_m_p:
+                    holdout_auc_p = holdout_m_p['overall'].get('auc')
+                    holdout_eer_p = holdout_m_p['overall'].get('eer')
+                if holdout_auc_p is not None:
+                    self.logger.info(
+                        f"periodic_save triggered at step={step_cnt} "
+                        f"(holdout_auc={holdout_auc_p:.4f})"
+                    )
+                    try:
+                        gcs_path_p = self.save_ckpt(
+                            epoch=epoch + 1,
+                            auc=holdout_auc_p,
+                            eer=holdout_eer_p if holdout_eer_p is not None else 0.0,
+                            ckpt_prefix='periodic',
+                            step=step_cnt,
+                        )
+                        if gcs_path_p and self.wandb_run:
+                            self.wandb_run.summary[
+                                f'periodic_saves/step_{step_cnt}/gcs_path'
+                            ] = gcs_path_p
+                            self.wandb_run.summary[
+                                f'periodic_saves/step_{step_cnt}/holdout_auc'
+                            ] = float(holdout_auc_p)
+                    except Exception as save_err:
+                        self.logger.warning(
+                            f"periodic save failed at step {step_cnt}: {save_err}"
+                        )
+
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,
                    generate_detailed_reports: bool = False, run_name: str = None,
