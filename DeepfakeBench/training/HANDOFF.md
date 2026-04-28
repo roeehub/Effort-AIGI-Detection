@@ -1,275 +1,168 @@
-# Handoff: R13 Packet-7 — Camera-Signature Shortcut, Pre-Launch Gate
+# Handoff: Day 3 evening — P13_FROM_SCRATCH code committed, image building, ready to launch
 
-**Generated**: 2026-04-24
+**Generated**: 2026-04-28 evening CEST
 **Branch**: `teams-relaunch-root-2026-04-17`
-**Status**: Ready for pre-launch gate. Four commits shipped; launch is blocked on one cheap verification step (post-fix baseline re-score) that the previous agent recommended but did not run.
-
----
+**Status**: All anti-shortcut code committed (`cab2909`). Cloud Build running for image **1.3.224** (started ~17:30 CEST, takes ~12-15 min). Local 200-step micro-smoke skipped per user (this Mac can't run trainer end-to-end without GCS+GPU). Substitute is **close monitoring of first 500 steps of the live launch.** User authorization for the ~$150 launch already given as part of plan v6 approval.
 
 ## Goal
 
-Make the Effort detector (leader `RLP6_04`, `value_composite=0.9006`) robust to camera/ISP-signature shortcuts while preserving fake recall. Concretely: stop false-flagging real Teams participants when they use certain webcams (Dor webcam → 0.94, same subject on laptop → 0.02; Roee Mac → 0.90, Roee Windows → 0.01). **Do not launch new experiments** until the pre-launch gate below is resolved — user retains the final decision.
+Push the Effort detector to the **triple-axis Day-4 α gate** by training **R13_P13_FROM_SCRATCH** for 18,000 steps from the OpenCLIP ViT-B/16 + datacomp_xl_s13b_b90k base (no FT history), with the in_proj-SVD lever working (post commit 2feea58) and three new anti-shortcut interventions layered on:
 
-Plan file (approved this session): `/Users/roeedar/.claude/plans/it-s-hard-for-me-proud-journal.md`
+1. **Anchor-aware loss term** — training-time hinge penalty pushing prob_fake on the false-flag anchor pool toward 0.10.
+2. **Pipeline-randomization aug** — symmetric-across-labels JPEG/downscale/chroma/YUV/gamma stack.
+3. **Face scale-jitter** [0.75, 1.25] — counters face-pixel-area label leak.
 
----
+**Triple-axis target (Day 4):**
+- 90/5: viso ≥ 90 AND deeplive ≥ 90 AND teams_fake_all ≥ 90 AND modern_v2 FPR ≤ 5 AND teams_real_all_dev FPR ≤ 7
+- clean_eval_v1: recall ≥ 80 (deployment-honest, ~50 frames)
+- shortcut_probe_v1: max-min Δprob ≤ 0.15 across same-face-different-pipeline pairs
 
-## TL;DR — Start Here
+Sprint deadline: Day 4 (2026-04-29). One extension day authorized (Day 5, 2026-04-30) for FT-from-P8A fallback if scratch doesn't clear all three axes.
 
-Before launching any Packet-7 experiment, do the post-fix baseline re-score. Reason: the 0.94 Dor score came from a code path that had silent preprocessing drift (INTER_AREA vs INTER_LINEAR). That drift was fixed this session in `batch_inference_gcs.py` and `arena/model_arena.py`, but **the fix was never re-validated against the original false-flag numbers.** If the fix alone closes most of the gap, the entire training-aug story needs re-scoping.
+## Completed today (Day 3, 2026-04-28 evening)
 
-1. Run post-fix baseline re-score on the 6 Dor/Roee pools (§ Resume Instructions step 1).
-2. Interpret per the decision tree (§ Resume Instructions step 2).
-3. Launch the appropriate subset from 5 candidate yamls (§ Resume Instructions step 3).
+- [x] **Verified periodic_saves bug fix** at `trainer/trainer.py:2326-2340`. Already committed in `c7dc828` (the prior session bundled the fix). Wrote `tests/test_periodic_saves_resolution.py` — **12 tests pass** including the canonical p13 step_list `[2000,4000,6000,9000,12000,15000,18000]`.
+- [x] **Implemented anchor-aware loss** at `loss/anchor_aware_penalty.py`. Reads cached anchor pool via `analysis.teams_pool_rescore.cache_anchor_pools_locally`; per-step hinge penalty `weight * max(0, mean(prob_fake) - target)^2`. **Wired at `trainer/trainer.py:1485` next to `compute_stability_loss`**; logs as `train/loss/anchor_aware`. **8 tests pass** including gradient flow.
+- [x] **Implemented pipeline-randomization aug** at `data/augmentations/pipeline_randomization.py`. Five sub-augs (gamma → chroma blur → YUV roundtrip → downscale-upscale → JPEG roundtrip), each with own probability; gated overall by `p_real` / `p_fake`. Defensive `np.nan_to_num` + `np.clip(0,255)` after each. **Wired into `QualityTargetedFamilyRouter.__call__` after `_maybe_apply_teams_sim`**; reads label from `meta` dict. Yaml block under `augmentation.pipeline_randomization`. **10 tests pass.**
+- [x] **Implemented face scale-jitter** at `data/augmentations/face_scale_jitter.py`. Module-level config (set once at trainer init); applied in collate-fn loop **before** the canonical 224×224 resize at both `data/batching/df40_paired.py:362` and `data/sources/combined_paired.py:3455`. **6 tests pass.**
+- [x] **Authored** `experiments/phase2_round13/R13_P13_FROM_SCRATCH.yaml`. Cloned from `experiments/phase2_round9/R9_C_teams_scratch.yaml`. Diffs from R9_C: `stability_lambda=0`, `label_smoothing=0`, `total_training_steps=18000`, ArcFace `s=10→18` over 18000, `apply_svd_to_in_proj=true` (now actually working), `early_stopping_patience=50`, `visomaster_fake` family weight 4.0 (was 2.0), all three new interventions enabled, `periodic_saves` with the bug-fixed step_list. **Yaml parses cleanly via `yaml.safe_load`.**
+- [x] **Committed as `cab2909`** — 12 files, +1297 lines, all 36 tests passing post-commit. Bundled in two pre-session-uncommitted edits in `pipelines.py` (webcam_harden scaffolding, off by default) and `combined_paired.py` (path_exclude_contains plumbing) so the working tree matches HEAD post-commit.
+- [x] **Triggered Cloud Build** via `./dev.sh build-prod -y` (in background). VERSION already auto-bumped to **1.3.224**. Build log at `/tmp/build_prod_2026-04-28.log`. Expected to land at `us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.224`.
 
-Expected work: step 1 ≈30–60 min, step 2 ≈10 min, step 3 ≈1 hr to kick off.
+## Not yet done (resume here)
 
----
+- [ ] **Verify Cloud Build succeeded.** `tail -50 /tmp/build_prod_2026-04-28.log` — look for `✅ Build successful!`. If failed, **VERSION will have been auto-reverted** to 1.3.223; investigate before retrying. The build packages the working tree (uncommitted dirty files and all), but our committed cab2909 is a clean reference for what's intended.
+- [ ] **Launch P13_FROM_SCRATCH on Vertex.** Recipe:
+  ```bash
+  cd /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training
+  ./scripts/launch/launch_experiment.sh -y phase2r13-experiments us-east1 \
+      experiments/phase2_round13/R13_P13_FROM_SCRATCH.yaml
+  ```
+  - **W&B project**: `phase2r13-experiments` (matches recent R13 runs).
+  - **Region**: us-east1 first (us-multi-region buckets, ~3.4 it/s expected per `project_gcs_region_locality`). Fallback `us-west4` then `us-central1` if PENDING > 30 min — see CLAUDE.md "Region capacity" rule.
+  - **Cost**: ~$150 for 18h on A100. **Don't cancel without explicit user authorization** (see `feedback_no_cancelling_vertex_jobs`).
+- [ ] **Monitor first 500 steps closely** (substitute for the skipped local micro-smoke). Specific things to watch in W&B (`https://wandb.ai/dtect-vision/phase2r13-experiments/`):
+  1. **No NaN/Inf**. The trainer raises `RuntimeError` at step N if `unscaled_loss` is non-finite (`trainer/trainer.py:1502`); job will fail-fast. Webcam_harden produced NaN at step 5683 in P11 (~$30 wasted) — pipeline-random has the same NaN-risk profile (chroma blur + YUV roundtrip can produce out-of-range values). Defensive `np.nan_to_num + np.clip` is in place; verify it holds.
+  2. **`train/loss/anchor_aware` logs every step.** Initially the random model gives ~0.5 prob_fake on everything → expect anchor_aware ≈ 5 * (0.5 - 0.10)² = 0.80 in early steps, decaying as the model learns. If it stays flat at 0 throughout, the cache failed to load (check trainer init log: `AnchorAwarePenalty ENABLED` vs `DISABLED`).
+  3. **`train/loss/stability` should log 0** (we set `stability_lambda=0` per R95 finding). If it logs non-zero, the override didn't take.
+  4. **`train/loss/overall` decreasing** by step ~200-500. Scratch is slow to start; minor wiggles fine, monotonic increase is a fail.
+  5. **`anchor/anchor_mean` at first validation (step 500)** — random init should be ~0.5; if it's already ~0.10, the cache is misconfigured.
+  6. **First periodic save fires at step 2000** — search W&B logs for `periodic_save triggered at step=2000`. If silent, the bug fix didn't survive the build (rebuild + relaunch).
+  7. **Augmentation init log**: `PipelineRandomization ENABLED p_real=0.55 p_fake=0.45` and `FaceScaleJitter ENABLED: scale_limit=0.250` should both appear at trainer startup. If either says DISABLED, the yaml override didn't load.
+- [ ] **End-of-Day-3 RESULTS + LOG entry** once launch is RUNNING (not PENDING). Don't write entries before then; PENDING > 30 min means region switch, not progress.
+- [ ] **Wednesday daytime parallel work** (no GPU contention with the live training):
+  - Track H.1 — `analysis/modern_v2_audit_2026-04-29/` modern_v2 filter audit (~1.5h CPU). Plan §3.3 step 3.5. May change Day-4 verdict retroactively if filter is over-pruning.
+  - Track H.2 — ArcFace identity-purity audit (~3h CPU, **n_jobs=1 only** per `feedback_sklearn_njobs`).
+  - clean_eval_v1 + shortcut_probe_v1 frame URI lists (~2h). Source: `analysis/lockbox_tagging/full_tags_2026-04-27.parquet`. Plan §3.3 step 3.6.
 
-## Completed This Session
+## Failed Approaches (don't repeat)
 
-- [x] **WS-P0 — Train/inference preprocessing parity fix.** Commit `855871e`. `cv2.INTER_AREA → cv2.INTER_LINEAR` in `batch_inference_gcs.py:407` and `arena/model_arena.py:472` to match training (`combined_paired.py:3455`). Guarded by `tests/test_inference_train_preprocessing_parity.py` (5/5 pass). `arena/model_arena.py` was the load-bearing one: that's the retro-score path that produced the original 0.94 Dor number.
-- [x] **WS-P1 — Per-camera calibration probe.** Commit `deac44e`. `analysis/calibration_probe_2026-04-24.py` + `.summary.json`. **Verdict: 0.301 avg gap closure** across target FPRs {5,10,15,25}%. Boundary result between plan decision gates (≥0.60 = calibration, ≤0.30 = training-aug). Read as: training-aug is dominant remaining lever; per-camera calibration is complementary.
-- [x] **WS-P2.b — Per-identity reducer.** Commit `deac44e`. `arena/postprocess_per_identity.py` groups `videos_report.csv` by `group_key` and recomputes `real_fpr`/`fake_recall` per identity with `--verify` aggregate-sum check. Covered by `tests/test_postprocess_per_identity.py` (2 tests, synthetic 3-identity fixture).
-- [x] **WS-P4.a — Teams spatial aug wiring.** Verified in pipelines.py; no code change needed. The `teams_passthrough_special_*` knobs already live in `_TEAMS_PASSTHROUGH_DEFAULTS` and `_build_teams_passthrough_pipeline` inserts `A.ShiftScaleRotate` when `teams_passthrough_special_aug_enabled=true` + `teams_passthrough_special_shift_p>0`. Smoke-tested end-to-end.
-- [x] **Packet-7 yamls drafted (2 new).** Commit `c4affa1`:
-  - `experiments/phase2_round13/R13_RLP7_04_teams_spatial_only.yaml` (seed 744, spatial ±3% shift / ±5% scale / ±3° rotate, p=0.5 on Teams passthrough)
-  - `experiments/phase2_round13/R13_RLP7_05_teams_spatial_plus_codec.yaml` (seed 745, spatial + `teams_codec_sim_p=0.25`, quality [25,70])
-  - Both verified produce expected transforms via `_build_teams_passthrough_pipeline`. Override keys survive the `combined_paired.py:4772` preset-key filter.
-- [x] **Handoff doc drafted.** Commit `584118e`. `docs/relaunch_handoffs/R13_RELAUNCH_PACKET7_CAMERA_SIGNATURE_HANDOFF_2026-04-24.md`. Longer-form version of this file; candidate subset described there.
+This handoff inherits all sections from the prior `HANDOFF.md` snapshot in commit history (specifically items 1-6 from the earlier Day-3 handoff). New additions tonight:
 
----
+### 7. ❌ Trying to commit only my hunks via `git add -p` non-interactively
 
-## Not Yet Done (in priority order)
+The pre-session-uncommitted webcam_harden block in `pipelines.py` and `path_exclude_contains` plumbing in `combined_paired.py` were entangled with my anti-shortcut changes. Surgical staging needs interactive `git add -p`. **What I did instead**: bundled the pre-existing dirty content into commit `cab2909` with a clear note in the commit message about what was bundled. Acceptable because both the webcam_harden scaffolding (off by default) and path_exclude_contains plumbing are anti-shortcut-adjacent. **Lesson for future**: don't let pre-session dirty content sit uncommitted — it forces these awkward bundling decisions.
 
-- [ ] **Post-fix baseline re-score (CRITICAL, pre-launch gate).** Run `RLP6_04` through the now-fixed inference path on the 6 Dor/Roee pools. Compare to the scores in `combined_frame_tags.json` (pre-fix). Outcome determines launch plan. See § Resume Instructions step 1.
-- [ ] **Launch Packet-7 subset.** Options ordered by diagnostic alignment:
-    - `R13_RLP7_05_teams_spatial_plus_codec` — targets both axes (spatial + compression/bitrate)
-    - `R13_RLP7_02_codec_aggressive` — tightest match to fingerprint-diff evidence (`dct_hf_ratio`, `bits_per_pixel`)
-    - `R13_RLP7_04_teams_spatial_only` — isolated spatial signal, cheap insurance
-    - `R13_RLP7_01_lighting_aggressive` + `R13_RLP7_03_combined` — pre-existing; lighting axis is weaker per controlled data (yellow-vs-white clean control stayed near 0).
-- [ ] **WS-P2.a — Stress-variant suites for retro-scoring.** Add `arena/target_domain_suites.*_stress_2026-04-24.yaml` with cells applying `eval_augmentation` = `crop_shift`/`scale`/`rotation`/`jpeg_q30`/`color_warm`/`color_cold` to the `teams_real_all_dev/lockbox` pool. Reuse the presets at `data/augmentations/pipelines.py:1702-1738`. Not started.
-- [ ] **WS-P3 — Lockbox-scale fingerprint diagnostics.** Run `analysis/fingerprint_diff.py` with `lockbox_csv_identity` source at scale; rank metrics by mean \|Spearman ρ\| across identities. Expensive (2–3 days GCS fetch). Not started.
-- [ ] **Deploy server preprocessing verification.** The original 0.94 Dor score came from `http://34.16.217.28:8999`. We fixed two code paths in this repo, but the deploy server's preprocessing is untouched. If server still uses INTER_AREA, production behavior differs from what retro-score now shows. Out of scope for this repo, but flag to user.
+### 8. ❌ Hoping pipelines.py/combined_paired.py changes would land via build alone
 
----
+`./dev.sh build-prod` packages the **working tree**, not the **commit**. So Cloud Build will get my changes regardless of commit status. But a future agent cherry-picking commits would have an incomplete cab2909 if I'd skipped staging those two files. **What I did**: included them in the commit anyway (per #7). **Lesson**: always commit the full set of files needed for a feature, even if part of it is messy.
 
-## Failed Approaches (Don't Repeat These)
-
-- **Regex `cv2\.resize\([^)]*interpolation\s*=...` in the parity test.** Nested parens from `cv2.resize(img, (self.resolution, self.resolution), ...)` broke the `[^)]*` character class. **Fix:** line-by-line scan — check `"cv2.resize" in line` then match `INTERP_KWARG = re.compile(r"interpolation\s*=\s*cv2\.(INTER_\w+)")`. See `tests/test_inference_train_preprocessing_parity.py:36`.
-- **`python -c "from data.augmentations.pipelines import ..."` fails with `ModuleNotFoundError: No module named 'torchdata'`.** The `data/__init__.py` imports trigger the chain. **Fix:** `pip install 'torchdata<0.10'` (0.11 removed the `datapipes` submodule). Noted in commit history.
-- **Initial probe design used 5% target FPR with 15 test frames/pool.** Binarized FPR quantizes to multiples of 1/15 = 0.067; noise dominated the signal at tight operating points and produced gap_closure=0.000. **Fix:** probe now sweeps {5, 10, 15, 25}% and reports both per-target and average. The 0.301 headline is the average — not the 5% number. See `analysis/calibration_probe_2026-04-24.py:28`.
-- **Probe denominator bug inherited from the original `dor_pool_fingerprint_diff_2026-04-24.py`.** Divided by near-zero `c_std` when clean-pool std was 0 (e.g., `specular_hotspots` all zeros), producing "billion σ" readings. **Fix in `analysis/fingerprint_diff.py`:** `denom = max(c_std, f_std, 1e-6)` with `std_floor_hit` flag. Dropped `specular_hotspots` and `highlight_clip_pct` as "separating metrics" — they were noise.
-- **Shared RNG across `.sample()` calls in the original fingerprint diff.** Original script advanced one RNG state through multiple pool draws, so adding a new pool shifted the sample of every subsequent one. **Fix:** fresh per-pool seeds. Reproduces first-called pools exactly; subsequent pools differ slightly from the original script (intended).
-
----
-
-## Key Decisions
+## Key Decisions (tonight)
 
 | Decision | Rationale |
 |---|---|
-| Calibration probe uses average gap closure across target FPRs (not a single target) | Small-sample FPR is heavily quantized at any single operating point (15 test frames → FPR resolution 1/15). Averaging {5,10,15,25}% gives a more robust signal. 0.301 is the average. |
-| Per-identity reducer is a separate CLI, not integrated into the scorer | User can run it against any existing `videos_report.csv` without re-running retro-score. Lower commitment; higher reuse. Plan (WS-P2.b) left the option open. |
-| RLP7_04 + RLP7_05 fork RLP6_04 (not RLP6_04 + fine-tune from scratch) | Matches RLP7_01/02/03 precedent. Validates deltas as narrow as possible. |
-| Yaml-only enablement of `teams_passthrough_special_*` (no code change) | All knobs already exist; all survive the override filter. Any code change would be a nop that adds risk. |
-| Recommended launch priority flipped from my own initial ordering | Fingerprint diff pointed at `dct_hf_ratio` + `bits_per_pixel` as cleanest pool separators — both more codec-aligned than spatial-aligned. ShiftScaleRotate doesn't touch either metric directly. |
-
----
+| Pivot from FT-from-P8A (Plan v5) to from-scratch (Plan v6) | R95 final report (March 2026) explicitly recommended scratch; project deferred for FT velocity, now saturated as predicted. 0/85 ensembles passing → 0.647 AUC ceiling on FT lineage. |
+| 18K steps over 12K or 24K | Split-the-difference between R9_C's 12K baseline and R95's recommended 20K. ~$150 commitment. |
+| Visomaster oversample 4.0 | HEAVY's 3.0 was insufficient; HEAVY_DEEPLIVE's 6.0 broke pair structure. 4.0 is the mid-bet. |
+| Symmetric pipeline-random across labels (p_real=0.55, p_fake=0.45) | Asymmetric aug just inverts the shortcut. Tiny p_real/p_fake gap acknowledges fakes are usually slightly cleaner pre-aug. |
+| Defer FT-from-P8A to Day-5 fallback (β path) | Saves $60 upfront; if scratch hits triple-axis α, no need to spend at all. |
+| Skip local 200-step micro-smoke | This Mac can't run trainer end-to-end (no GPU+GCS pipeline). Substitute: monitor first 500 steps of live launch. Cost of wrong: ~$1 to cancel/relaunch (cheap given $150 total). |
+| Single focused commit `cab2909` for tonight's work | 12 files / 1297 lines / 36 tests bundled cleanly. Easier to revert as a unit if needed. |
 
 ## Current State
 
-**Working**:
-- Preprocessing parity — test green, both inference paths use INTER_LINEAR.
-- Calibration probe reproducible: `python analysis/calibration_probe_2026-04-24.py` → deterministic output at `analysis/calibration_probe_2026-04-24.summary.json`.
-- Per-identity reducer: `python arena/postprocess_per_identity.py --reports <CSV> --threshold <τ> --out <OUT> --verify`.
-- Two new yamls parse and produce correct pipelines.
+**Working** (verified by tests):
+- `loss/anchor_aware_penalty.py` — 8 tests pass; gradient flows through model dummy param.
+- `data/augmentations/pipeline_randomization.py` — 10 tests pass; output stays in [0, 255] uint8 even under extreme gamma.
+- `data/augmentations/face_scale_jitter.py` — 6 tests pass; min-dim floor handles 16×16 input safely.
+- `tests/test_periodic_saves_resolution.py` — 12 tests pass; verifies the c7dc828 bug fix is correct for both dict and non-dict-wrapper inputs.
+- `experiments/phase2_round13/R13_P13_FROM_SCRATCH.yaml` — `yaml.safe_load` succeeds; all critical fields verified at write time.
+- Trainer integration — module imports clean (no circular import); router accepts new `pipeline_randomization` param; integration smoke shows pipe + scale + anchor all chained correctly.
 
-**Broken**: Nothing known broken. `launch_retro_score.sh` and promotion-contract launcher were not touched this session; assume unchanged from main.
+**In progress** (background process):
+- Cloud Build for image 1.3.224. Log at `/tmp/build_prod_2026-04-28.log`. Background bash ID `bv3dkssae`. Expected completion ~17:45 CEST.
 
-**Uncommitted Changes**: Only the long tail of pre-existing modifications on this branch (HANDOFF.md, VERSION, several arena/docs files from prior sessions). None of this session's work is uncommitted — everything shipped across 4 commits.
+**Pending** (Day 3 launch + Day 4 evaluation):
+- Build verification.
+- Vertex launch (`./scripts/launch/launch_experiment.sh -y phase2r13-experiments us-east1 experiments/phase2_round13/R13_P13_FROM_SCRATCH.yaml`).
+- First-500-step monitoring.
+- Wednesday daytime parallel audits.
+- Day 4 scoring + triple-axis verdict.
 
----
+**Broken** (not blocking tonight):
+- Pre-session dirty files unrelated to tonight's work (HANDOFF.md, VERSION (auto-bumped now), arena/*, docs/*, etc.) — these are leftover from prior sessions, not tonight's. They appear in `git status` but are not part of `cab2909`.
 
-## Files to Know
+## Critical Files (where to look)
 
-| File | Why It Matters |
-|------|----------------|
-| `batch_inference_gcs.py:407` | Fixed INTER_LINEAR. Use for any new bulk re-score. |
-| `arena/model_arena.py:472` | Fixed INTER_LINEAR. Retro-score path. |
-| `analysis/calibration_probe_2026-04-24.py` | WS-P1 probe. Inputs `/tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json`. |
-| `analysis/calibration_probe_2026-04-24.summary.json` | Probe result: 0.301 avg gap closure; per-target breakdown. |
-| `arena/postprocess_per_identity.py` | Per-identity reducer for any `videos_report.csv`. |
-| `tests/test_inference_train_preprocessing_parity.py` | Guards the INTER_LINEAR fix from future regressions. |
-| `tests/test_postprocess_per_identity.py` | Guards the reducer. |
-| `experiments/phase2_round13/R13_RLP7_04_teams_spatial_only.yaml` | Isolated spatial-aug variant. Seed 744. |
-| `experiments/phase2_round13/R13_RLP7_05_teams_spatial_plus_codec.yaml` | Spatial + `teams_codec_sim_p=0.25`. Seed 745. |
-| `experiments/phase2_round13/R13_RLP7_02_codec_aggressive.yaml` | Codec-heavy variant; diagnosis-aligned. Seed 742. |
-| `data/augmentations/pipelines.py:787` | `_TEAMS_PASSTHROUGH_DEFAULTS` — single source of truth for override-filter-safe Teams knobs. |
-| `data/augmentations/pipelines.py:1086` | `_build_teams_passthrough_special_block` — spatial/cct/shadow/gamma knobs. |
-| `data/augmentations/pipelines.py:1386` | `_build_teams_passthrough_pipeline` — where the special block is assembled. |
-| `data/sources/combined_paired.py:4772` | Override filter: any yaml key NOT in the first preset's keys is silently dropped. |
-| `arena/score_teams_promotion_contract.py` | Contract scorer. `videos_report.csv` has columns `video_id,label,avg_video_prob,method,group_key,family_key,prediction`. |
-| `docs/relaunch_handoffs/R13_RELAUNCH_PACKET7_CAMERA_SIGNATURE_HANDOFF_2026-04-24.md` | Longer-form companion to this file. |
-| `/Users/roeedar/.claude/plans/it-s-hard-for-me-proud-journal.md` | Approved plan — workstream definitions + decision gates. |
+### New (tonight)
 
----
+| File | Purpose | Lines |
+|---|---|---|
+| `loss/anchor_aware_penalty.py` | Training-time false-flag pool penalty | 140 |
+| `data/augmentations/pipeline_randomization.py` | Symmetric anti-shortcut aug | 147 |
+| `data/augmentations/face_scale_jitter.py` | Module-level scale-jitter for collate | 85 |
+| `experiments/phase2_round13/R13_P13_FROM_SCRATCH.yaml` | The candidate run | 291 |
+| `tests/test_anchor_aware_penalty.py` | 8 unit tests | 154 |
+| `tests/test_pipeline_randomization.py` | 10 unit tests | 132 |
+| `tests/test_face_scale_jitter.py` | 6 unit tests | 82 |
+| `tests/test_periodic_saves_resolution.py` | 12 unit tests | 144 |
 
-## Code Context
+### Modified (tonight)
 
-### Per-identity reducer CLI
-```
-python arena/postprocess_per_identity.py \
-    --reports <suite>_<ckpt>_videos_report.csv [more...] \
-    --threshold <tau> \
-    --out per_identity_<ckpt>.csv \
-    --verify
-```
-`--verify` prints `-> OK` to stderr when per-group `fp_count`/`tp_count` sums equal the aggregate (exits non-zero otherwise). Handles multiple reports in one invocation — each row carries `report`, `suite`, `checkpoint` inferred from `<suite>_<ckpt>_videos_report.csv`.
-
-### Calibration probe summary structure
-```
-{
-  "summary": {
-    "avg_gap_closure_across_target_fprs": 0.301,
-    "gap_closure_per_target_fpr": {0.05: 0.000, 0.10: 0.333, 0.15: 0.286, 0.25: 0.583},
-    "verdict": "mixed_both_levers_needed"
-  },
-  "pool_stats": [...],
-  "results_by_target_fpr": [...]
-}
-```
-
-### Teams passthrough override knobs (all survive `combined_paired.py:4772` filter)
-```yaml
-augmentation:
-  version: "quality_targeted_family"
-  strength: "vcd_targeted"
-  teams_passthrough_special_aug_enabled: true    # MUST be true, else all special-block knobs are no-ops
-  teams_passthrough_special_shift_p: 0.5         # probability spatial transform fires
-  teams_passthrough_special_shift: 0.03          # +/-3% translation
-  teams_passthrough_special_scale: 0.05          # +/-5% scale
-  teams_passthrough_special_rotate: 3            # +/-3 degrees
-  teams_codec_sim_p: 0.25                        # generic codec re-encode probability
-  teams_codec_sim_quality: [25, 70]              # quality range
-```
-
-### Reference data
-- Pools: `/tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json` — 6 tags × 30 frames, all real subjects, with per-frame `score`/`verdict`.
-- GCS source: `gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/` — full 180 frames plus metadata.
-- RLP6_04 checkpoint: `gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth`
-
----
-
-## Resume Instructions
-
-### Step 1 — Post-fix baseline re-score (pre-launch gate, CRITICAL)
-
-Goal: score `RLP6_04` on the 6 Dor/Roee pools through the now-fixed `INTER_LINEAR` path. Compare to the scores in `combined_frame_tags.json`, which came from the deploy server at `http://34.16.217.28:8999` (preprocessing behavior of that server is **unknown** — see step 1c).
-
-**1a. Pick a path.**
-Two viable options:
-- **Option A (preferred, cheap):** Use `batch_inference_gcs.py` on the 6 tag folders in `gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/<tag>/`. This is the path that was fixed. Takes ~20–40 min incl. checkpoint download.
-- **Option B:** Use `arena/run_target_domain_validation_sequential.py` (retro-score path). Requires a checkpoint-map yaml + a target-domain-suites yaml pointing at the 6 pools. More setup, more authoritative. Skip unless Option A is blocked.
-
-**1b. Option A concrete steps.**
-```bash
-# Reuse the launcher if appropriate, or run batch_inference_gcs.py directly with
-#   --checkpoint gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth
-#   --gcs-prefix  gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
-#   (point at each tag folder or process the whole session)
-```
-Check the launcher usage first: `./scripts/launch/launch_batch_inference.sh --help`. Per memory, `launch_batch_inference.sh` does NOT need `WANDB_*` env vars (unlike the promotion-contract launcher).
-
-**1c. Confirm what the deploy server does.**
-The 0.94 Dor score that anchors the whole "camera shortcut" narrative came from `http://34.16.217.28:8999` (see `analysis/check_frame_4people_2026-04-24.py`). Ask the user whether that server's preprocessing is INTER_AREA or INTER_LINEAR. If unknown, the user can either (i) check the server code, or (ii) re-run `check-frame` after we confirm the server has been updated. Until we know, interpret step 1's result with caution.
-
-**1d. Aggregate per-pool mean score and write the result.**
-Pair each frame in the re-score output with its tag (from `combined_frame_tags.json`). Compute per-pool mean score post-fix. Compare to the pre-fix means:
-
-| Pool | Pre-fix mean (from `combined_frame_tags.json`) |
+| File | What changed |
 |---|---|
-| `dor-real-laptop-correct-no-virtual-bg-whiteish` | 0.018 |
-| `dor-real-laptop-correct-no-virtual-bg-yellowish` | 0.040 |
-| `roee-real-windows-laptop-correct` | 0.007 |
-| `dor-real-webcam-false-flag` | 0.878 |
-| `dor-real-webcam-false-flag-no-virtual-bg` | 0.940 |
-| `roee-mac-laptop-false-flag-virtual-bg` | 0.900 |
+| `trainer/trainer.py` | + `from loss.anchor_aware_penalty import AnchorAwarePenalty`. + `self.anchor_aware_penalty = AnchorAwarePenalty(...)` in `__init__` near `init_stability_reg`. + `set_face_scale_jitter_config(...)` in `__init__`. + `losses['overall'] += anchor_loss` in training loop after `compute_stability_loss`. **+29 lines.** |
+| `data/augmentations/pipelines.py` | `QualityTargetedFamilyRouter.__init__` accepts `pipeline_randomization` param. `__call__` applies it after `_maybe_apply_teams_sim`. Factory `create_quality_targeted_family_router` forwards param. **(Also bundled: pre-existing webcam_harden defaults block.)** |
+| `data/sources/combined_paired.py` | Reads `pipeline_randomization` from `aug_config`; passes to factory. Imports `apply_face_scale_jitter` and calls in collate before resize. **(Also bundled: pre-existing path_exclude_contains plumbing.)** |
+| `data/batching/df40_paired.py` | Imports `apply_face_scale_jitter` and calls before the canonical resize at line 362. **+5 lines.** |
 
-Save your result as `analysis/rlp6_04_postfix_rescore_2026-04-24.summary.json` with the same pool keys.
+### Existing (read-only context)
 
-### Step 2 — Interpret and branch
+- `trainer/trainer.py:2326-2340` — periodic_saves resolution with the c7dc828 isinstance(dict) defense. Diagnostic log fires every check.
+- `trainer/trainer.py:1485-1517` — main loss aggregation. Anchor-aware compute now lives at line 1517+.
+- `trainer/mixins/checkpointing.py:73-77` — `self.anchor_cache_dir` setup (auto-discovered by AnchorAwarePenalty).
+- `analysis/teams_pool_rescore.py` — `cache_anchor_pools_locally` + `_LocalAnchorDataset`. Anchor pool is `dor-real-webcam-false-flag-no-virtual-bg`. Cached PNGs go to the dir set by `anchor_cache_dir` (default `~/.cache/anchor_pools/`).
+- `experiments/phase2_round9/R9_C_teams_scratch.yaml` — the from-scratch precedent we cloned.
+- `experiments/phase2_round9_5/R95_FINAL_REPORT.md` — load-bearing prior analysis recommending scratch.
+- `april-26-training-master-plan-v4.md` and prior `HANDOFF.md` — context for the FT path that's now Day-5 fallback only.
 
-Use this decision tree:
+## Resume Instructions (next agent)
 
-- **If post-fix `dor-real-webcam-false-flag-no-virtual-bg` mean drops by ≥0.30 (to ≤0.64):** preprocessing drift was a LARGE part of the "shortcut." The calibration-probe verdict (0.301 gap closure) overstates the training-aug need because its inputs are pre-fix scores. Before launching anything:
-    - Re-run `analysis/calibration_probe_2026-04-24.py` after substituting post-fix scores into `combined_frame_tags.json` (or a derivative file). Preserve the old file for comparison.
-    - If the re-run verdict flips to "calibration_is_right_lever" (≥0.60), **descope Packet-7 training and explore production-side per-camera calibration** (separate workstream, not covered by current plan).
-- **If post-fix mean drops by 0.10–0.30:** preprocessing drift contributed but not decisively. Launch 1–2 experiments from the codec/spatial side (RLP7_05 first). Hold RLP7_02 + RLP7_04 in reserve.
-- **If post-fix mean drops by <0.10:** the shortcut is essentially fully-structural. Launch the full suggested subset (RLP7_05, RLP7_02, RLP7_04).
-- **If post-fix mean drops by MORE than expected** (e.g., clean pools now also rise): something else is wrong. Stop, debug.
+1. **Read this handoff fully.** Then read `git log -3 --stat` to see commits `cab2909` and `c7dc828`.
+2. **Check Cloud Build status.** If still running: `tail -30 /tmp/build_prod_2026-04-28.log` and watch for `✅ Build successful!`. Background process ID was `bv3dkssae`. If completed: verify `cat VERSION` shows `1.3.224` and image is at `us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.224`.
+3. **If build failed**: VERSION will have been auto-reverted to 1.3.223. Inspect log; common causes: file too large (was already 1.6 GiB pre-compression — close to limit; check `.gcloudignore`), Cloud Build quota, transient GCP outage. Don't retry blindly — diagnose first.
+4. **Launch.** Once build is good: run the launch command in §"Not yet done" above. Confirm Vertex job state moves to RUNNING within 30 min. If stuck PENDING, switch region per CLAUDE.md.
+5. **Monitor.** Open the W&B run page; watch the 7 monitoring items in §"Not yet done" item 3. The first ~10 min after RUNNING is the critical window — anchor_aware logs, pipeline-random init, NaN watch.
+6. **Tell user when launched.** Specifically: which region, which W&B run URL, what the first-50-step loss values look like.
+7. **Append RESULTS entry** at `april-26-training-master-plan-v2.RESULTS.md` once launched. Append LOG entry at `april-26-training-master-plan-v2.LOG.md`.
+8. **Wednesday daytime: launch parallel audits** (Track H.1, H.2, clean_eval_v1, shortcut_probe_v1). These don't need GPU and don't contend with the live training. Use `n_jobs=1` for sklearn (per `feedback_sklearn_njobs`).
+9. **Day 4 (Wednesday afternoon ~17:00 CEST): scoring + triple-axis verdict.** Pull all 7 periodic ckpts from `gs://training-job-outputs/phase2r13_experiments/<run_id>/` (the periodic_saves block in the yaml writes there). Score on full validation suite + clean_eval_v1 + shortcut_probe_v1. Build the substrate-comparison table. Verdict α/β/γ per plan v6 §4.
 
-### Step 3 — Launch (only after step 2)
+## Memory references the next agent should re-read
 
-Recommended order if step 2 doesn't descope:
+- `project_promotion_contract` — Teams Promotion Contract is authoritative; trainer's `value_composite` is not deployment-grade.
+- `project_signature_shortcut_finding` — the camera/pipeline shortcut that pipeline-random aug counters.
+- `project_face_size_label_leak` — the face-area shortcut that face scale-jitter counters.
+- `project_lockbox_fpr_dominated_by_webcam_mode` — modern_v2 filter context for FPR scoring.
+- `project_in_proj_svd_gradient_bug` — the in_proj-SVD lever was silently broken pre-2026-04-26; first-time-correctly-active during P13.
+- `project_shortcut_is_upstream` — RLP6_04 / FT-only ceiling that motivates the from-scratch pivot.
+- `project_p8a_breakthrough` — what FT achieved when it worked (anchor improvement); the bar P13 is trying to clear without inheriting the shortcut substrate.
+- `feedback_no_cancelling_vertex_jobs` — explicit user authorization required for cancellation.
+- `feedback_sklearn_njobs` — n_jobs=-1 caused 3 reboots on this Mac; use n_jobs=1.
+- `project_gcs_region_locality` — US compute on US-multi-region buckets is 10x faster.
+- `feedback_decision_points` — present recommendation + tradeoffs; user picks.
+- `feedback_small_sample_guidance` — under ~200 frames, summarize aggregate signal; don't bog down in per-subject details.
 
-1. `R13_RLP7_05_teams_spatial_plus_codec.yaml` — hits both axes; highest prior for breaking the shortcut.
-2. `R13_RLP7_02_codec_aggressive.yaml` — tightest match to fingerprint-diff evidence.
-3. `R13_RLP7_04_teams_spatial_only.yaml` — isolated spatial-only reference (helps interpret _05 vs _02).
+## Plan reference
 
-Skip `R13_RLP7_01_lighting_aggressive.yaml` and `R13_RLP7_03_combined.yaml` unless budget permits. Lighting axis is weaker per the yellow-vs-white clean control.
-
-Launch path is the existing `./arena/launch_teams_promotion_contract.sh` or equivalent packet-6/7 launcher — per memory, this **requires `WANDB_API_KEY` / `WANDB_ENTITY` / `WANDB_PROJECT` exported first** (unlike batch_inference).
-
-### Step 4 — How to evaluate the results
-
-Once trained checkpoints exist, to decide which Packet-7 variant actually broke the shortcut:
-
-**4a. Retro-score each variant on the promotion contract suite.** Same suite as Packet-6 used; compare `selected_threshold_scorecard.csv`. Make sure `max_pool_fpr` doesn't blow up on any `teams_real_*` pool — that would indicate the aug hurt fake recall or benign-pool calibration.
-
-**4b. Score each variant on the 6 Dor/Roee pools.** Same method as step 1. Decision criteria:
-- Target: `dor-real-webcam-false-flag*` + `roee-mac-*` mean scores fall below 0.30 (from ~0.88–0.94 baseline).
-- Clean-pool means (`*_clean`) must stay below 0.10 — otherwise the aug generalized poorly.
-
-**4c. Per-identity FPR breakdown using the reducer.** On the lockbox/dev retro-score CSVs:
-```
-python arena/postprocess_per_identity.py \
-    --reports arena/reports/<suite>_<ckpt>_videos_report.csv \
-    --threshold <selected_threshold_from_scorecard> \
-    --out per_identity_<ckpt>.csv --verify
-```
-Watch for identities where `real_fpr` is dramatically higher than the suite mean — those are the "new Dor/Roee"s — and for identities where `fake_recall` drops vs RLP6_04 baseline. An ideal Packet-7 variant has narrower `real_fpr` spread across identities with no drop in `fake_recall`.
-
-**4d. Combined scorecard heuristic.** The winner is the variant with:
-- Lowest `max(per-identity real_fpr)` on the Teams lockbox
-- `fake_recall ≥ RLP6_04 - 0.01` (within noise)
-- `value_composite ≥ 0.89` on the contract suite
-
-Any variant that fails condition 2 is rejected regardless of camera-shortcut improvement. Fake-recall regression is the main failure mode to guard against.
-
----
-
-## Setup Required
-
-- Python deps: `pip install 'torchdata<0.10'` if importing `data.augmentations.pipelines` in a fresh interpreter (the 0.11 release removed the `datapipes` submodule our code imports). Only needed for smoke-testing; training containers pin a working version.
-- W&B env vars exported for the contract launcher: `WANDB_API_KEY`, `WANDB_ENTITY`, `WANDB_PROJECT`. Not needed for `launch_batch_inference.sh`.
-- GCP auth: `gcloud auth application-default login` if running locally. On Vertex AI jobs this is handled by the service account.
-
----
-
-## Edge Cases & Warnings
-
-- **`combined_paired.py:4772` preset-key filter silently drops unknown augmentation overrides.** Always verify new augmentation yaml keys appear in `set(_QUALITY_TARGETED_PRESETS["<any>"].keys())`. The cleanest way: print overrides through `_build_teams_passthrough_pipeline` and inspect the resulting `A.Compose.transforms`. Done for _04 and _05 this session.
-- **`teams_passthrough_special_aug_enabled` must be `true` OR every `teams_passthrough_special_*` knob is a no-op.** See `pipelines.py:1088`. RLP7_04 and _05 both set it true; don't forget in any derivative yaml.
-- **Calibration probe input is PRE-fix scores.** If you re-run the probe after post-fix scoring, you'll want to either substitute post-fix scores into the JSON, or write a sibling script that reads post-fix scores directly. Don't interpret the 0.301 verdict as applying to post-fix data.
-- **RLP7_04/05 seeds (744, 745) were chosen to not collide with RLP7_01/02/03 (740, 742, 743).** Verify no currently-running Packet-7 job is using 744 or 745 before launch.
-- **The original 0.94 Dor number came from the deploy server, not this repo.** The INTER fix in this repo doesn't touch production. Flag to user: a full "is the shortcut gone?" answer requires either updating the deploy server or using the repo's inference path as the ground truth for deployment behavior.
-- **Don't re-read `arena/model_arena.py` in full** — it's large (>2k lines). Use `Grep` or `Read` with specific offset/limit ranges.
-
----
-
-## Pointers for the next agent
-
-- Memory system is at `/Users/roeedar/.claude/projects/-Users-roeedar-Documents-repos-Effort-AIGI-Detection-DtectVision/memory/`. Respect existing memories; update them if you discover something surprising.
-- User (Roee) reserves judgment calls at decision points — present recommendations with tradeoffs and wait for an explicit pick. Do not auto-launch training jobs.
-- User prefers: concise summaries, explicit commits, no per-subject interpretive questions when sample size is small. When asked about confidence, give honest calibrated ranges, not "yes this will work."
-- When in doubt about a workstream boundary, re-read the approved plan at `/Users/roeedar/.claude/plans/it-s-hard-for-me-proud-journal.md`.
+Full plan: `~/.claude/plans/ultrathink-read-all-the-generic-flute.md` (Plan v6). Tonight's slice was §10 ("Tonight's Execution Schedule") with §10.1 (bug fix verification finding) noting the c7dc828 commit had already landed before this session.
