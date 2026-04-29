@@ -269,12 +269,26 @@ class ContractConfig:
     dev_fake_suites: Tuple[str, ...]
     lockbox_real_suite: str
     lockbox_fake_suite: str
-    # Budget-based τ-selection policy (2026-04-23). The original policy minimized
-    # primary real FPR with no budget, which on a sharp-prediction model drives τ
-    # to ~0.995 and crushes fake recall. With these set, the policy filters τ
-    # candidates by FPR ≤ budget, then maximizes dev_fake_macro_recall.
-    target_real_fpr: float = 0.02
-    target_stress_fpr: float = 0.05
+    # Budget-based τ-selection policy (2026-04-23, defaults relaxed 2026-04-27).
+    # The original policy minimized primary real FPR with no budget, which on a
+    # sharp-prediction model drives τ to ~0.995 and crushes fake recall.
+    # The 2026-04-23 budget-based policy filters τ candidates by FPR ≤ budget
+    # then maximizes dev_fake_macro_recall — but at FPR budget 2% the budget is
+    # itself unreachable below τ ≈ 0.99, so recall still gets crushed.
+    # 2026-04-27: bumped FPR budgets to match the operational acceptance of
+    # ≤ 7 % primary / ≤ 10 % stress (per RESULTS 2026-04-27 codec_hedge readout)
+    # and added a recall floor as an explicit safety belt.
+    target_real_fpr: float = 0.07
+    target_stress_fpr: float = 0.10
+    # Recall floor on dev_fake_macro_recall. When > 0, the policy additionally
+    # requires recall ≥ floor; rows that meet FPR budgets but fail the recall
+    # floor are penalized below rows that satisfy both. Default 0.70 (2026-04-29)
+    # because a Teams-deployment detector with macro fake recall < 70 % is not
+    # deployment-grade — and a 0.0 default lets the τ-tail-collapse failure mode
+    # silently re-fire on any wrapper that omits the flag (see
+    # docs/packet_retrospectives/threads/contract_policy_bug.md). Pass 0.0
+    # explicitly to opt out (e.g. for legacy-policy comparison runs).
+    target_fake_recall_min: float = 0.70
     # Readout-only suites: included in selected_threshold_scorecard.csv at the
     # selected τ but DO NOT influence τ selection. Used for OOD-real monitors
     # (e.g., teams_real_dor_dev) where we want a per-checkpoint readout without
@@ -453,17 +467,32 @@ def _threshold_sort_key(row: Dict[str, Any], contract: ContractConfig) -> Tuple[
         contract.target_real_fpr is not None and contract.target_real_fpr < 1.0
         and contract.target_stress_fpr is not None and contract.target_stress_fpr < 1.0
     )
-    if budget_active:
-        violates = (
+    recall_floor_active = (
+        contract.target_fake_recall_min is not None
+        and contract.target_fake_recall_min > 0.0
+    )
+    if budget_active or recall_floor_active:
+        fpr_violates = budget_active and (
             primary_fpr > contract.target_real_fpr + 1e-9
             or stress_fpr > contract.target_stress_fpr + 1e-9
         )
-        # Penalty 0 for budget-satisfying rows, 1 otherwise. Among satisfying rows,
-        # maximize dev_fake_macro_recall, then prefer higher τ (more conservative),
-        # then prefer lower primary FPR. Among violating rows, fall back to
-        # lex-minimize FPR so we still get something deterministic.
+        # macro_recall is sorted as -recall (higher_is_better=True), so the
+        # raw recall value is -macro_recall. Compare that to the floor.
+        raw_recall = -macro_recall if math.isfinite(macro_recall) else 0.0
+        recall_violates = recall_floor_active and (
+            raw_recall < contract.target_fake_recall_min - 1e-9
+        )
+        # Tier 0: satisfies both budgets. Tier 1: budget OK, recall floor failed.
+        # Tier 2: budget violated. Within each tier: maximize dev_fake_macro_recall,
+        # then prefer higher τ (more conservative), then prefer lower primary FPR.
+        if not fpr_violates and not recall_violates:
+            tier = 0
+        elif not fpr_violates and recall_violates:
+            tier = 1
+        else:
+            tier = 2
         return (
-            0 if not violates else 1,
+            tier,
             macro_recall,
             threshold,
             primary_fpr,
@@ -482,7 +511,28 @@ def _threshold_sort_key(row: Dict[str, Any], contract: ContractConfig) -> Tuple[
 
 
 def _promotion_summary_sort_key(row: Dict[str, Any], contract: ContractConfig) -> Tuple[float, ...]:
+    # Tier rows by whether they meet the recall floor on dev_fake_macro_recall
+    # (when the floor is active). Without this tiering, the cross-ckpt ranker
+    # picks the lowest-lockbox-FPR ckpt regardless of how degenerate its recall
+    # is — which is how P13_step2000 (3.6 % lockbox fake recall, 2.9 % dev fake
+    # macro recall) was crowned rank-1 on 2026-04-29.
+    recall_floor_active = (
+        contract.target_fake_recall_min is not None
+        and contract.target_fake_recall_min > 0.0
+    )
+    if recall_floor_active:
+        macro_recall_value = row.get("dev_fake_macro_recall")
+        try:
+            macro_recall_raw = float(macro_recall_value) if macro_recall_value is not None else 0.0
+        except (TypeError, ValueError):
+            macro_recall_raw = 0.0
+        if not math.isfinite(macro_recall_raw):
+            macro_recall_raw = 0.0
+        tier = 0 if macro_recall_raw >= contract.target_fake_recall_min - 1e-9 else 1
+    else:
+        tier = 0
     return (
+        tier,
         _sort_number(row.get("lockbox_real_fpr")),
         _sort_number(row.get("lockbox_fake_recall"), higher_is_better=True),
         _sort_number(row.get("dev_primary_real_fpr")),
@@ -631,6 +681,9 @@ def score_promotion_contract(
             "dev_fake_suites": list(contract.dev_fake_suites),
             "lockbox_real_suite": contract.lockbox_real_suite,
             "lockbox_fake_suite": contract.lockbox_fake_suite,
+            "target_real_fpr": contract.target_real_fpr,
+            "target_stress_fpr": contract.target_stress_fpr,
+            "target_fake_recall_min": contract.target_fake_recall_min,
         },
         "threshold_grid_rows": threshold_grid_rows,
         "selected_threshold_scorecard_rows": selected_threshold_scorecard_rows,
@@ -706,17 +759,34 @@ def main() -> None:
     parser.add_argument(
         "--target_real_fpr",
         type=float,
-        default=0.02,
+        default=0.07,
         help=(
             "FPR budget on the primary real dev suite for τ selection. "
+            "Default bumped to 0.07 (2026-04-27) to match operational acceptance; "
+            "the prior 0.02 default forced τ ≈ 0.99 and crushed fake recall. "
             "Set ≥1.0 to disable budget and use the legacy minimize-FPR policy."
         ),
     )
     parser.add_argument(
         "--target_stress_fpr",
         type=float,
-        default=0.05,
-        help="FPR budget on the worst real stress dev suite for τ selection.",
+        default=0.10,
+        help=(
+            "FPR budget on the worst real stress dev suite for τ selection. "
+            "Default bumped to 0.10 (2026-04-27) for the same reason as --target_real_fpr."
+        ),
+    )
+    parser.add_argument(
+        "--target_fake_recall_min",
+        type=float,
+        default=0.70,
+        help=(
+            "Recall floor on dev_fake_macro_recall. When > 0, the policy "
+            "additionally requires recall ≥ floor; rows that meet FPR budgets but "
+            "fail the recall floor rank below rows that satisfy both. Default 0.70 "
+            "(2026-04-29) because a detector with macro fake recall < 70 %% is not "
+            "deployment-grade. Pass 0.0 explicitly to opt out for legacy comparison."
+        ),
     )
     parser.add_argument(
         "--readout_only_suites",
@@ -737,6 +807,7 @@ def main() -> None:
         lockbox_fake_suite=str(args.lockbox_fake_suite).strip(),
         target_real_fpr=float(args.target_real_fpr),
         target_stress_fpr=float(args.target_stress_fpr),
+        target_fake_recall_min=float(args.target_fake_recall_min),
         readout_only_suites=_csv_list(args.readout_only_suites),
     )
 

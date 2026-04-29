@@ -460,6 +460,10 @@ def _write_promotion_contract_outputs(
         dev_fake_suites=tuple(_csv_list(args.promotion_dev_fake_suites)),
         lockbox_real_suite=str(args.promotion_lockbox_real_suite).strip(),
         lockbox_fake_suite=str(args.promotion_lockbox_fake_suite).strip(),
+        target_real_fpr=float(args.promotion_target_real_fpr),
+        target_stress_fpr=float(args.promotion_target_stress_fpr),
+        target_fake_recall_min=float(args.promotion_target_fake_recall_min),
+        readout_only_suites=tuple(_csv_list(args.promotion_readout_only_suites)),
     )
     payload = promotion.score_promotion_contract(
         report_root=str(args.output_gcs_folder).strip(),
@@ -985,6 +989,23 @@ def main() -> None:
     )
     parser.add_argument("--promotion_lockbox_real_suite", type=str, default="teams_real_all_lockbox")
     parser.add_argument("--promotion_lockbox_fake_suite", type=str, default="teams_fake_all_lockbox")
+    parser.add_argument("--promotion_target_real_fpr", type=float, default=0.02,
+                        help="FPR budget on the primary real dev suite for τ selection.")
+    parser.add_argument("--promotion_target_stress_fpr", type=float, default=0.05,
+                        help="FPR budget on the worst real stress dev suite for τ selection.")
+    parser.add_argument("--promotion_target_fake_recall_min", type=float, default=0.70,
+                        help=(
+                            "Recall floor on dev_fake_macro_recall. When > 0, candidates "
+                            "below the floor rank in a worse tier than candidates that "
+                            "meet it (both within-ckpt τ selection AND cross-ckpt summary). "
+                            "Default 0.70 (2026-04-29) — a detector with macro fake "
+                            "recall < 70 %% is not deployment-grade for Teams. Pass 0.0 "
+                            "explicitly to opt out for legacy-policy comparison runs "
+                            "(see docs/packet_retrospectives/threads/contract_policy_bug.md)."
+                        ))
+    parser.add_argument("--promotion_readout_only_suites", type=str,
+                        default="teams_real_dor_dev",
+                        help="CSV of suite names that appear in scorecard but do NOT influence τ.")
 
     # Defaults for optional suite keys
     parser.add_argument("--df40_mode", type=str, default="none",

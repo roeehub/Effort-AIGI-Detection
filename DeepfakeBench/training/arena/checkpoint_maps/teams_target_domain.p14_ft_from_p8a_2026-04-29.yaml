@@ -1,0 +1,49 @@
+# Day-5 promotion-contract validation map for R13_P14_FT_FROM_P8A.
+#
+# Run launched 2026-04-29 08:10 UTC (job 6761296121915506688, us-west4, image 1.3.228).
+# W&B run_id: jca7oq9t (project phase2r13-experiments).
+# 4,000 step FT-from-P8A run; reached step 4000 at 10:42:25 UTC 2026-04-29.
+# Periodic ckpts saved at steps {500, 1000, 1500, 2000, 3000, 3500, 4000}
+# (step 2500 missing — periodic_save did not fire that interval).
+#
+# In-domain val_holdout trajectory (load-bearing context):
+# - AUC peaked at step 500 (0.9846), drifted to 0.9781 at step 4000.
+# - EER best at step 500/2000 (0.0457), worst at step 3500 (0.0863).
+# - This is consistent with FT bending P8A's already-good in-domain fit toward
+#   the new objective (anchor-aware + pipeline-rand + face scale-jitter).
+#   Cross-domain trajectory is what the scorecard will reveal.
+#
+# Kill-switch criterion (per recommendation: in_proj-SVD now actually receives
+# gradient at LR 3e-5, so P14 may shift more than expected from prior FT runs):
+#   Flag any P14 ckpt where viso_dev_recall drops > 8pp below P8A's baseline.
+#   The earliest such step is the de-facto stop point for any P14-style FT.
+#
+# Decision-grade triple-axis verdict (Plan v6 §4.5):
+#   Axis 1 (90/5):       viso ≥ 90 AND deeplive ≥ 90 AND teams_fake_all ≥ 90
+#                        AND modern_v2 FPR ≤ 5 AND teams_real_all_dev FPR ≤ 7
+#   Axis 2 (clean_eval): recall ≥ 80 on clean_eval_v1
+#   Axis 3 (shortcut):   max-min Δprob ≤ 0.15 across shortcut_probe_v1 pairs
+#
+# P14 success bar (less ambitious than the 90/5 gates — see verdict_doc):
+#   viso_dev_recall ≥ P8A AND deeplive_dev_recall ≥ P8A AND axis3_max_delta < 0.52
+#   ("first candidate where both axes move in the right direction at once")
+#
+# Note: contract-policy fix (target_fake_recall_min) is committed; default is
+# now 0.70 (2026-04-29). No flag pass needed for production scorecards. To
+# reproduce a legacy-policy readout, pass --target_fake_recall_min 0.0.
+
+# === Reference baselines (already-resolved) ===
+P8A_REFERENCE_STEP5000:      "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+RLP6_04_BASELINE_STEP23500:  "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"
+
+# === P13 best-Axis3 ckpt (for P8A → P13 → P14 narrative comparison) ===
+P13_FROM_SCRATCH_STEP18000:  "gs://training-job-outputs/phase2r13_experiments/fi8aka7z/periodic_effort_20260428_step18000_auc0.9838_eer0.0305.pth"
+
+# === P14 periodic checkpoints (RESOLVED from gs://.../jca7oq9t/) ===
+P14_FT_FROM_P8A_STEP500:     "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step500_auc0.9846_eer0.0457.pth"
+P14_FT_FROM_P8A_STEP1000:    "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step1000_auc0.9832_eer0.0533.pth"
+P14_FT_FROM_P8A_STEP1500:    "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step1500_auc0.9811_eer0.0584.pth"
+P14_FT_FROM_P8A_STEP2000:    "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step2000_auc0.9845_eer0.0457.pth"
+P14_FT_FROM_P8A_STEP3000:    "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step3000_auc0.9785_eer0.0660.pth"
+P14_FT_FROM_P8A_STEP3500:    "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step3500_auc0.9752_eer0.0863.pth"
+P14_FT_FROM_P8A_STEP4000:    "gs://training-job-outputs/phase2r13_experiments/jca7oq9t/periodic_effort_20260429_step4000_auc0.9781_eer0.0812.pth"
