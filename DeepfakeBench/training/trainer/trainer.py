@@ -316,6 +316,75 @@ def _compute_value_composite(
     return out
 
 
+def _compute_per_bucket_recall_fpr(
+    method_preds,
+    method_labels,
+    real_source_names,
+    threshold=0.5,
+    log_prefix="mid_eval",
+):
+    """W&B Block B: per-dataset-bucket recall/FPR for mid-training observability.
+
+    Consumes the same per-method prediction/label dicts the trainer already
+    builds during validation (`method_preds`, `method_labels` in
+    ``_run_validation``); emits a flat dict suitable for direct merge into
+    ``wandb_log_dict``. Read-only with respect to existing data flow.
+
+    Keys emitted:
+      - Fake bucket (``method`` not in ``real_source_names``):
+          ``{log_prefix}/{method}/recall_fake``
+      - Real bucket (``method`` in ``real_source_names``):
+          ``{log_prefix}/{method}/recall_real``
+          ``{log_prefix}/{method}/fpr``
+
+    Buckets with zero samples are silently skipped — no NaN poisoning, no
+    raise. Pure numpy at logging time, so the helper carries zero autograd
+    risk (the eval loop is already ``inference=True`` + ``setEval()``).
+
+    Args:
+        method_preds: ``{bucket_name: list-or-array of float probabilities}``.
+        method_labels: ``{bucket_name: list-or-array of {0, 1} labels}``.
+        real_source_names: iterable of bucket names that are negative-class
+            real pools (matched against ``method_preds`` keys).
+        threshold: τ for the binarization step (default 0.5).
+        log_prefix: namespace prefix for emitted W&B keys.
+
+    Returns:
+        Dict ``{wandb_key: float}`` ready to merge into ``wandb_log_dict``.
+    """
+    real_set = set(real_source_names or [])
+    out = {}
+    for bucket, preds in method_preds.items():
+        labels = method_labels.get(bucket, [])
+        preds_arr = np.asarray(preds, dtype=float)
+        labels_arr = np.asarray(labels, dtype=int)
+        if preds_arr.size == 0 or labels_arr.size == 0:
+            continue
+        if preds_arr.size != labels_arr.size:
+            # Defensive: shape mismatch shouldn't happen given the trainer's
+            # parallel append pattern, but skip rather than raise so a logging
+            # path never blows up training.
+            continue
+
+        flagged = preds_arr >= float(threshold)
+        if bucket in real_set:
+            n_neg = int((labels_arr == 0).sum())
+            if n_neg == 0:
+                continue
+            n_flagged_neg = int(flagged[labels_arr == 0].sum())
+            fpr = float(n_flagged_neg) / float(n_neg)
+            out[f"{log_prefix}/{bucket}/fpr"] = float(fpr)
+            out[f"{log_prefix}/{bucket}/recall_real"] = float(1.0 - fpr)
+        else:
+            n_pos = int((labels_arr == 1).sum())
+            if n_pos == 0:
+                continue
+            n_flagged_pos = int(flagged[labels_arr == 1].sum())
+            recall_fake = float(n_flagged_pos) / float(n_pos)
+            out[f"{log_prefix}/{bucket}/recall_fake"] = float(recall_fake)
+    return out
+
+
 def _safe_wandb_table_key(log_prefix: str, suffix: str) -> str:
     # wandb wraps Table keys into artifact names like
     # 'run-<8charid>-<sanitized_key>-<32charhash>' (sanitization strips '/').
@@ -2865,6 +2934,30 @@ class Trainer(
                 wandb_log_dict[f'{log_prefix}/method/{method}/acc'] = per_method_accuracy
                 
                 self.logger.info(f"Method '{method}' per-method accuracy: {per_method_accuracy:.4f} ({correct_predictions}/{len(method_labels_array)})")
+
+        # --- W&B Block B: per-dataset-bucket recall/FPR for mid-training ---
+        # Adds keys of the form `{log_prefix}/per_bucket/<dataset>/recall_fake`
+        # (fake buckets) or `{log_prefix}/per_bucket/<dataset>/{recall_real,fpr}`
+        # (real buckets) at the same cadence as the existing eval cycle.
+        # Read-only on `method_preds`/`method_labels`; pure numpy at log time.
+        try:
+            per_bucket_metrics = _compute_per_bucket_recall_fpr(
+                method_preds=method_preds,
+                method_labels=method_labels,
+                real_source_names=real_source_names,
+                threshold=0.5,
+                log_prefix=f"{log_prefix}/per_bucket",
+            )
+            wandb_log_dict.update(per_bucket_metrics)
+            if per_bucket_metrics:
+                self.logger.info(
+                    f"Logged {len(per_bucket_metrics)} per-bucket recall/FPR metrics under '{log_prefix}/per_bucket/'"
+                )
+        except Exception as block_b_err:
+            # Observability MUST NEVER take down training. Log and continue.
+            self.logger.warning(
+                f"W&B Block B per-bucket logging failed for '{log_prefix}': {block_b_err}"
+            )
 
         # Create and log a simplified W&B Table with only meaningful metrics
         # --- Weakest-method tracking ---
