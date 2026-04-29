@@ -385,6 +385,106 @@ def _compute_per_bucket_recall_fpr(
     return out
 
 
+def _load_capture_mode_lookup(parquet_path):
+    """Load `clip_capture_mode` tags from a tag parquet, return a flat dict
+    `{gcs_uri: capture_mode_string}`.
+
+    Disabled-state contract: returning ``{}`` instead of raising lets the call
+    site `wandb_log_dict.update(...)` against an empty result without a
+    try/except. ``None`` path or missing file → ``{}``. The lockbox tags
+    parquet is the canonical source (memory
+    ``project_lockbox_fpr_dominated_by_webcam_mode.md``).
+    """
+    if parquet_path is None:
+        return {}
+    try:
+        import os
+        if not os.path.exists(parquet_path):
+            return {}
+        import pandas as pd
+        df = pd.read_parquet(parquet_path, columns=["gcs_uri", "clip_capture_mode"])
+        return {
+            str(uri): str(mode)
+            for uri, mode in zip(df["gcs_uri"].tolist(), df["clip_capture_mode"].tolist())
+            if uri is not None
+        }
+    except Exception:
+        return {}
+
+
+def _compute_per_capture_mode_recall_fpr(
+    method_preds,
+    method_labels,
+    method_paths,
+    capture_mode_lookup,
+    real_source_names,
+    threshold=0.5,
+    log_prefix="mid_eval/per_capture_mode",
+):
+    """Per-capture-mode recall/FPR for mid-training observability.
+
+    Why this lives here: lockbox FPR is ~10× higher in webcam mode than in
+    studio modes (memory ``project_lockbox_fpr_dominated_by_webcam_mode.md``).
+    Block B's per-bucket panels show *which dataset* is leaking; this helper
+    shows *which capture mode within a dataset* is leaking. Same threshold,
+    same numerics, finer cut.
+
+    Trainer feeds three parallel structures (one entry per validation video):
+      - ``method_preds[bucket][i]`` — averaged video probability
+      - ``method_labels[bucket][i]`` — {0, 1} label
+      - ``method_paths[bucket][i]`` — representative frame path (any frame in
+        the video; capture_mode is video-level)
+
+    Paths absent from the lookup count under ``unknown`` so a quiet coverage
+    drop is visible rather than silent. Buckets present in ``method_preds``
+    but missing from ``method_paths`` are skipped (defensive).
+
+    Keys emitted (one per ``mode`` ∈ values of the lookup ∪ {"unknown"}):
+      - ``{log_prefix}/<mode>/recall_fake`` — fraction of fake-bucket samples
+        flagged at τ
+      - ``{log_prefix}/<mode>/fpr`` — fraction of real-bucket samples flagged
+        at τ
+      - ``{log_prefix}/<mode>/recall_real`` — ``1 - fpr``
+
+    Pure numpy at logging time → zero autograd risk.
+    """
+    real_set = set(real_source_names or [])
+    lookup = capture_mode_lookup or {}
+    # mode -> {"fake": [...], "real": [...]} of float probs
+    by_mode = {}
+    for bucket, preds in method_preds.items():
+        labels = method_labels.get(bucket, [])
+        paths = method_paths.get(bucket, []) if method_paths else []
+        if not paths:
+            continue
+        n = min(len(preds), len(labels), len(paths))
+        if n == 0:
+            continue
+        is_real_bucket = bucket in real_set
+        for i in range(n):
+            mode = lookup.get(paths[i], "unknown")
+            slot = by_mode.setdefault(mode, {"fake": [], "real": []})
+            if is_real_bucket:
+                slot["real"].append(float(preds[i]))
+            else:
+                slot["fake"].append(float(preds[i]))
+
+    out = {}
+    for mode, slots in by_mode.items():
+        real_probs = np.asarray(slots["real"], dtype=float)
+        fake_probs = np.asarray(slots["fake"], dtype=float)
+        if real_probs.size > 0:
+            n_flagged = int((real_probs >= float(threshold)).sum())
+            fpr = float(n_flagged) / float(real_probs.size)
+            out[f"{log_prefix}/{mode}/fpr"] = float(fpr)
+            out[f"{log_prefix}/{mode}/recall_real"] = float(1.0 - fpr)
+        if fake_probs.size > 0:
+            n_flagged = int((fake_probs >= float(threshold)).sum())
+            recall_fake = float(n_flagged) / float(fake_probs.size)
+            out[f"{log_prefix}/{mode}/recall_fake"] = float(recall_fake)
+    return out
+
+
 def _safe_wandb_table_key(log_prefix: str, suffix: str) -> str:
     # wandb wraps Table keys into artifact names like
     # 'run-<8charid>-<sanitized_key>-<32charhash>' (sanitization strips '/').
@@ -2526,6 +2626,9 @@ class Trainer(
 
         method_labels = defaultdict(list)
         method_preds = defaultdict(list)
+        # Per-video representative path, parallel to method_preds/method_labels.
+        # Consumed by _compute_per_capture_mode_recall_fpr below.
+        method_paths = defaultdict(list)
         # A1 mirror: per-video jitter on val/holdout paths, same helper as OOD.
         method_jitter_per_video_val = defaultdict(list)
         all_preds, all_labels = [], []
@@ -2650,6 +2753,17 @@ class Trainer(
                 for idx, method_name in enumerate(batch_method_names):
                     method_labels[method_name].append(labels_np[idx])
                     method_preds[method_name].append(probs_np[idx])
+                    # Representative frame path (any frame; capture_mode is
+                    # video-level). Tolerate missing/empty frame_paths.
+                    rep_path = None
+                    fp = data_dict.get('frame_paths') if isinstance(data_dict, dict) else None
+                    if fp is not None and idx < len(fp):
+                        entry = fp[idx]
+                        if isinstance(entry, list) and entry:
+                            rep_path = str(entry[0])
+                        elif entry is not None and not isinstance(entry, list):
+                            rep_path = str(entry)
+                    method_paths[method_name].append(rep_path)
                 videos_processed += data_dict['image'].shape[0]
 
                 # --- NEW: Collect detailed data for reports if flag is enabled ---
@@ -2957,6 +3071,38 @@ class Trainer(
             # Observability MUST NEVER take down training. Log and continue.
             self.logger.warning(
                 f"W&B Block B per-bucket logging failed for '{log_prefix}': {block_b_err}"
+            )
+
+        # --- Per-capture-mode mid-eval (companion to Block B) ---
+        # Reads `mid_eval_capture_mode_parquet` from config (top-level, not
+        # nested — avoids the wandb-flattens-nested-dicts bug).
+        # Disabled when the config key is unset / file missing.
+        try:
+            parquet_path = self.config.get('mid_eval_capture_mode_parquet')
+            # hasattr — not truthiness — to distinguish "not loaded yet" from
+            # "loaded but empty" (so we don't re-read the parquet every cycle
+            # when the config key is unset).
+            if not hasattr(self, '_capture_mode_lookup_cache'):
+                self._capture_mode_lookup_cache = _load_capture_mode_lookup(parquet_path)
+            lookup = self._capture_mode_lookup_cache
+            if lookup:
+                per_mode_metrics = _compute_per_capture_mode_recall_fpr(
+                    method_preds=method_preds,
+                    method_labels=method_labels,
+                    method_paths=method_paths,
+                    capture_mode_lookup=lookup,
+                    real_source_names=real_source_names,
+                    threshold=0.5,
+                    log_prefix=f"{log_prefix}/per_capture_mode",
+                )
+                wandb_log_dict.update(per_mode_metrics)
+                if per_mode_metrics:
+                    self.logger.info(
+                        f"Logged {len(per_mode_metrics)} per-capture-mode metrics under '{log_prefix}/per_capture_mode/'"
+                    )
+        except Exception as capmode_err:
+            self.logger.warning(
+                f"Per-capture-mode logging failed for '{log_prefix}': {capmode_err}"
             )
 
         # Create and log a simplified W&B Table with only meaningful metrics
