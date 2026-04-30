@@ -1,0 +1,82 @@
+# .gcloudignore
+# ────────────────────────────────────────────────────────────────
+# Exclude files from `gcloud builds submit` source upload.
+# Without this, gcloud falls back to .gitignore — which doesn't
+# exclude *.pth or local analysis caches, ballooning the upload
+# from ~800 MB to 5+ GiB and adding ~3 min to every build.
+#
+# Mirrors .dockerignore's exclusions for the largest local-only
+# artifacts. The image's own contents are still controlled by
+# .dockerignore at docker-build time.
+# ────────────────────────────────────────────────────────────────
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / Editor
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & runtime outputs
+*.log
+*.jsonl
+wandb/
+tmp_wandb/
+vertex-output/
+runs/
+
+# Local analysis caches (huge, never needed in image)
+analysis/_features_cache_*/
+analysis/_fingerprint_cache*/
+analysis/lockbox_tagging/
+analysis/scorecard_*/
+analysis/embedding_triptych_*/outputs/
+analysis/face_size_invariance_*/outputs/
+analysis/domain_confusion_probe_*/outputs/
+analysis/intermediate_layer_probe_*/outputs/
+analysis/head_feature_decomposition_*/outputs/
+analysis/_logs_*/
+analysis/policy_reruns_*/
+*.npz
+*.gstmp
+
+# Model weights (loaded from GCS/HuggingFace at runtime)
+weights/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Datasets (loaded from GCS)
+dataset/HDTF/
+dataset/TalkVid/
+debug/
+data_analysis_plots/
+
+# Viewer cache
+.viewer_cache/
+*.png__thumb224
+
+# Scratch
+scratch/

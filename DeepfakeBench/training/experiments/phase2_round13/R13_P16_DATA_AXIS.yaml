@@ -1,0 +1,367 @@
+# ============================================================================
+# R13_P16_DATA_AXIS.yaml
+# Phase 2, Round 13 — FT-from-P8A + Teams-transport conjunction at CONSERVATIVE
+#                     family weight + single-lever discipline (no anti-shortcut
+#                     bundle), Move (B1) per HANDOFF 2026-04-30.
+#
+# CONTEXT (2026-04-30 evening):
+#   The 2026-04-30 evening promotion-contract scorecard for `mclioexb` (run id
+#   from R13_P14_FACE_SCALE_JITTER_ISOLATED) does NOT promote even under the
+#   v3-relaxed policy. The FT-from-P8A track + augmentation tuning has hit a
+#   ceiling below the contract gates on the current data substrate. The
+#   head/feature decomposition probe (analysis/head_feature_decomposition_2026-04-30/)
+#   refuted the head-side calibration cliff hypothesis: features fully
+#   determine the operating-point recall, head and scale do not.
+#
+#   STATE_2026-04-30.md catalogued three classes of P16 move; this yaml
+#   implements (B1) data-axis change. Per memory project_data_inventory_identity_diversity.md,
+#   ~2,300 unused identities sit in unused buckets including the
+#   `live-...-teams-v2` companion / proper-data wave families. The
+#   `visomaster_teams_enhanced` source (PLAN.md §7.3.1 Path A) IS the wired
+#   conjunction: enhancer-pass viso × Teams-v2 transport, the actual
+#   eval-substrate match.
+#
+# DELTAS FROM R13_P14_DATA_FIX (the closest structural template):
+#   1. visomaster_enhanced_fake family_weight  8.0 → 2.0
+#      DATA_FIX collapsed cross-method generalization at fw=8.0
+#      (other_fakes_tpr=0.047). 2.0 is conservative oversampling vs base
+#      visomaster_fake=4.0; ratio 0.5× rather than 2.0×.
+#   2. SINGLE-LEVER DISCIPLINE (anti-shortcut bundle DISABLED):
+#        face_scale_jitter.enabled         true → false
+#        anchor_aware.enabled              true → false
+#        pipeline_randomization.enabled    true → false
+#      Per memory project_face_scale_jitter_load_bearing.md and the new
+#      anti_shortcut_bundle_decomposition discipline rule: future packets
+#      stacking interventions must include a single-lever ablation slot.
+#      P16's single test variable is the data-axis change.
+#   3. Seed 737 → 4422 (distinct from P14 family).
+#
+# §10.5 GROUP-SPLIT DISCIPLINE (PLAN.md):
+#   The eval suite (visomaster_enhanced_macro_dev) is ONE Teams session
+#   (550 videos / one capture_session). Identity-only splits are insufficient.
+#   Joint group key = (identity, capture_session, source_bucket); ≥30% group
+#   holdout. NOTE: combined_paired's existing `holdout: mode: "identity"`
+#   is identity-only; the §10.5 joint-group audit is enforced via the
+#   companion manifest-overlap test at:
+#     tests/test_p16_data_axis_wiring.py
+#     analysis/p16_split_audit_2026-04-30/p16_split_audit.py
+#   The execution agent runs both before image rebuild. If the audit
+#   reports any overlap between training identities (resolver manifest) and
+#   eval-suite identities (proper_visomaster_target_domain_manifest), the
+#   launch is BLOCKED and combined_paired needs a code change to add a
+#   joint-group holdout mode (out of scope for P16 build).
+#
+# DO NOT LAUNCH without:
+#   (a) §10.5 audit green: zero (identity, capture_session) overlap with
+#       arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json
+#   (b) CPU smoke test green: 16 samples per family load with correct shapes
+#       and group-membership tags
+#   (c) Image rebuild via `./dev.sh build-prod -y`
+#   (d) Vertex region in {us-west4, us-east1, us-central1} per CLAUDE.md
+#   (e) Promotion-contract scorecard run with explicit
+#       `--promotion_target_fake_recall_min 0.30` flag (memory
+#       feedback_promotion_contract_launch.md re W&B env vars).
+#
+# Cost: ~$70 / ~8h Vertex.
+#
+# Seed: 4422
+# ============================================================================
+
+name: "R13_P16_DATA_AXIS"
+description: "FT-from-P8A_step5000 + visomaster_teams_enhanced fw=2.0 (conservative), no anti-shortcut bundle (single-lever discipline), no GRL"
+seed: 4422
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "p16-data-axis"
+    - "teams-transport-conjunction"
+    - "single-lever-discipline"
+    - "fork-p8a"
+    - "seed-4422"
+    - "section-10-5-audit-required"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 3.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 8
+total_training_steps: 4000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 200
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# === SINGLE-LEVER DISCIPLINE: anti-shortcut bundle DISABLED for P16 ===
+# Per anti_shortcut_bundle_decomposition: P14 bundle was net-negative against
+# its single load-bearing component (jitter@0.50 alone). P16 isolates the
+# data-axis variable. Re-enable in a successor packet only with explicit
+# single-lever ablation slot.
+
+anchor_aware:
+  enabled: false
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+face_scale_jitter:
+  enabled: false
+  scale_limit: 0.25
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: false
+    p_real: 0.55
+    p_fake: 0.45
+    jpeg_quality: [40, 95]
+    downscale_range: [0.85, 1.0]
+    chroma_blur_ksize: 3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 4422
+  seed: 4422
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  # DISABLED — broad enhancer-pass viso (no Teams transport). DATA_FIX retro
+  # rationale carried forward: P8A features rank-order viso fake-vs-real
+  # correctly across every bucket variant (Move 1 probe AUC 0.92-0.998).
+  # The Teams-transport conjunction (visomaster_teams_enhanced below) is the
+  # actual eval-substrate match.
+  visomaster_enhanced:
+    enabled: false
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    exclude_tiers: ["ARTIFACT"]
+
+  # DISABLED — bad data lane (April-17 face_parser_enabled bug residue).
+  # memory project_visomaster_hints_lanes_bad_data.md.
+  visomaster_hints_teams:
+    enabled: false
+
+  # === P16 LEVER: Teams-transport conjunction at CONSERVATIVE weight (fw=2.0). ===
+  # PLAN.md §7.3.1 Path A. Already wired at combined_paired.py:704; loader at
+  # data/sources/visomaster.py:1044 (discover_visomaster_teams_enhanced_samples).
+  # companion_domains=["teams_v2"] selects the Teams-recapture conjunction.
+  # `sampling_family_key: visomaster_enhanced_fake` routes to the family-weight
+  # bucket below.
+  visomaster_teams_enhanced:
+    enabled: true
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    companion_domains:
+      - "teams_v2"
+    include_statuses:
+      - "teams_v2_companion"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 4422
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      visomaster_enhanced_fake: 2.0      # CONSERVATIVE (DATA_FIX used 8.0 → collapse).
+                                          # 0.5× base visomaster_fake = mild oversampling.
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: true
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 12.0
+anneal_steps: 4000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 500
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 500
+    - 1000
+    - 1500
+    - 2000
+    - 2500
+    - 3000
+    - 3500
+    - 4000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 1000
+  keep_last_n: 3

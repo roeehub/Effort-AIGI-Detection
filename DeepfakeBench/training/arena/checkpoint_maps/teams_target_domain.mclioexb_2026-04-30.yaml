@@ -1,0 +1,16 @@
+# Promotion-contract validation map for R13_P14_FACE_SCALE_JITTER_ISOLATED
+# overnight winner (slot 3, run id mclioexb).
+#
+# Run context (2026-04-30):
+# - face_scale_jitter@0.50 isolation experiment (no anchor_aware,
+#   no pipeline_random); FT-from-P8A_step5000; seed 2273.
+# - Best-of-three on trainer-side value_composite (0.661).
+# - Step 500 picked by best value_composite (auc 0.9797, eer 0.0521).
+# - Trainer-side composite is NOT deployment-grade; this scorecard is.
+#
+# Note: contract-policy fix (target_fake_recall_min) default is 0.70
+# (commit 974e033, 2026-04-29). No flag pass needed for production
+# scorecards. To reproduce a legacy-policy readout, pass
+# --promotion_target_fake_recall_min 0.0.
+
+MCLIOEXB_STEP500: "gs://training-job-outputs/phase2r13_experiments/mclioexb/value_composite_effort_20260429_step500_auc0.9797_eer0.0521.pth"
