@@ -678,6 +678,23 @@ class Trainer(
             logger=self.logger,
         )
 
+        # Method-domain mode — flip combined_paired iterators to emit 12-class
+        # method-conditional GRL labels when the yaml config indicates Phase 3
+        # operation (quality_domain_count >= 12 with use_quality_domain_head).
+        # Default OFF (legacy 4-class). See data.sources.method_domain_map.
+        try:
+            from data.sources.combined_paired import set_method_domain_mode
+            quality_domain_count = int(self.config.get('quality_domain_count', 4))
+            use_qdh = bool(self.config.get('use_quality_domain_head', False))
+            method_mode = use_qdh and quality_domain_count >= 12
+            set_method_domain_mode(enabled=method_mode, log=self.logger)
+        except Exception as exc:
+            # Non-fatal: legacy yamls without these fields fall through to default off.
+            self.logger.warning(
+                "Method-domain mode setup failed (non-fatal, defaulting to legacy 4-class): %s",
+                exc,
+            )
+
     # --- Group-DRO methods are now provided by GroupDROMixin ---
     # The mixin provides: init_group_dro(), calculate_group_dro_loss(), get_group_dro_stats()
 
@@ -1114,7 +1131,23 @@ class Trainer(
             for k, v in state_dict.items():
                 name = k[7:] if k.startswith('module.') else k
                 new_state_dict[name] = v
-            
+
+            # NEW (P17): when intermediate_layer is set, the head dim differs
+            # from the checkpoint's head dim (768 vs 512). Drop head.* keys so
+            # the head re-initializes fresh. Backward-compatible: behavior is
+            # unchanged when intermediate_layer is None.
+            backbone_cfg = self.config.get('backbone', {}) if isinstance(self.config, dict) else {}
+            if backbone_cfg.get('intermediate_layer') is not None:
+                head_keys = [k for k in list(new_state_dict.keys()) if k.startswith('head.')]
+                for k in head_keys:
+                    del new_state_dict[k]
+                if head_keys:
+                    self.logger.info(
+                        f"P17 intermediate_layer={backbone_cfg['intermediate_layer']}: "
+                        f"dropped {len(head_keys)} head.* keys from checkpoint "
+                        f"(head dim changed; head will re-initialize)"
+                    )
+
             # Pre-flight check: detect size mismatches before load_state_dict
             # This gives a clearer error message (e.g., wrong backbone checkpoint)
             model_state = self.model.state_dict()

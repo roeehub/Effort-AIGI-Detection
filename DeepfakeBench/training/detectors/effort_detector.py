@@ -166,17 +166,42 @@ class OpenCLIPVisionModelWrapper(nn.Module):
     This wrapper standardizes the output format.
     """
     
-    def __init__(self, openclip_visual):
+    def __init__(self, openclip_visual, intermediate_layer=None):
         super().__init__()
         self.visual = openclip_visual
-    
+        # NEW (P17): if intermediate_layer is set, hook that resblock and
+        # capture its [CLS] token as the model's "pooled" output. The full
+        # forward still runs but the head reads the captured features.
+        self.intermediate_layer = intermediate_layer
+        self._captured = None
+        if intermediate_layer is not None:
+            blocks = openclip_visual.transformer.resblocks
+            assert 0 <= intermediate_layer < len(blocks), \
+                f"intermediate_layer={intermediate_layer} out of range [0, {len(blocks)})"
+            blocks[intermediate_layer].register_forward_hook(self._capture_hook)
+            logger.info(f"OpenCLIPVisionModelWrapper: intermediate-layer readout at block {intermediate_layer}")
+
+    def _capture_hook(self, module, inputs, output):
+        # OpenCLIP resblock output shape: (seq, batch, dim) by default.
+        # The [CLS] token is index 0 in the seq dimension.
+        if output.dim() == 3:
+            if output.shape[0] >= output.shape[1]:
+                cls = output[0]      # seq-first: take token 0
+            else:
+                cls = output[:, 0]   # batch-first
+        elif output.dim() == 2:
+            cls = output
+        else:
+            raise RuntimeError(f"unexpected resblock output shape: {output.shape}")
+        self._captured = cls
+
     def forward(self, pixel_values, **kwargs):
         """
         Forward pass that returns HuggingFace-compatible output dict.
-        
+
         Args:
             pixel_values: Input images tensor [B, C, H, W]
-            
+
         Returns:
             dict with 'pooler_output' key containing the pooled features
         """
@@ -184,11 +209,16 @@ class OpenCLIPVisionModelWrapper(nn.Module):
         # The visual encoder's forward method signature varies by version
         # Most OpenCLIP models: visual(x) returns the pooled CLS token
         pooled_output = self.visual(pixel_values)
-        
+
+        # NEW (P17): if intermediate-layer hook is active, return that as the
+        # primary "pooler_output" — head reads from intermediate features.
+        if self.intermediate_layer is not None and self._captured is not None:
+            return {
+                'pooler_output': self._captured.clone(),
+                'final_pooler_output': pooled_output,  # kept for diagnostics
+            }
         return {
             'pooler_output': pooled_output,
-            # Note: We don't have last_hidden_state easily accessible
-            # If needed in future, we'd need to modify the forward pass
         }
     
     def named_modules(self, *args, **kwargs):
@@ -235,16 +265,37 @@ class GradientReversalLayer(nn.Module):
 
 class QualityDomainHead(nn.Module):
     """
-    Small MLP that predicts quality domain from backbone features.
+    Small MLP that predicts quality domain (or method-domain) from backbone
+    features. Attached via a gradient reversal layer so the backbone learns to
+    REMOVE that information from its representations.
 
-    Attached via a gradient reversal layer so the backbone learns to
-    REMOVE quality information from its representations.
+    Number of output domains is controlled by the ``num_domains`` constructor
+    arg (set from the yaml ``quality_domain_count`` field). The labels passed
+    in must lie in [0, num_domains).
 
-    Quality domain IDs:
+    Two domain conventions are supported in the codebase:
+
+    LEGACY 4-class (matches `DOMAIN_MAP` below; matches
+    ``data.sources.combined_paired.QUALITY_DOMAIN_MAP``):
         0 = clean_academic  (DF40 reals — soft, smooth, low-noise)
         1 = webcam_codec    (VCD reals, external webcam — sharp, noisy, codec artifacts)
         2 = studio_capture  (DeepLive/VisoMaster reals — studio lighting, variable quality)
         3 = social_media    (YouTube reals — heavier compression, variable resolution)
+
+    NEW 12-class (Phase 3 method-conditional GRL; canonical map at
+    ``data.sources.method_domain_map.METHOD_DOMAIN_NAMES``):
+        0 = df40, 1 = deeplive_basic, 2 = deeplive_enhanced (Phase 1A axis),
+        3 = deeplive_teams, 4 = visomaster_inswapper, 5 = visomaster_ghost,
+        6 = visomaster_other, 7 = visomaster_enhanced (reserved),
+        8 = visomaster_teams_recap (reserved),
+        9 = proper_visomaster_clean (reserved),
+        10 = external_vcd_real, 11 = realpool_real.
+
+    The 4-class DOMAIN_MAP attribute below is kept for backwards-compat
+    consistency with ``QUALITY_DOMAIN_MAP`` in combined_paired.py (legacy
+    callers + the test_domain_map_consistency check). New code should use
+    ``data.sources.method_domain_map.lookup_method_domain_with_label`` and pass
+    ``quality_domain_count: 12`` in the yaml.
     """
 
     DOMAIN_MAP = {
@@ -338,6 +389,14 @@ class EffortDetector(nn.Module):
         self.mixup_alpha = config.get('mixup_alpha', 0.0)
         if self.mixup_alpha > 0:
             logger.info(f"Embedding-space mixup ENABLED: alpha={self.mixup_alpha}")
+
+        # Feature-norm regularization (packet-6B 2026-04-23): pulls real and fake
+        # feature-norm distributions toward each other so ‖feat‖ stops being a
+        # usable cue. Targets the diagnosed shortcut where low-norm enhancement-
+        # style real frames get classified as fake. Default 0 = off.
+        self.feat_norm_reg_lambda = config.get('feat_norm_reg_lambda', 0.0)
+        if self.feat_norm_reg_lambda > 0:
+            logger.info(f"Feature-norm regularization ENABLED: lambda={self.feat_norm_reg_lambda}")
 
         # Controlled initialization of the loss function
         # If ArcFace is used, we MUST use CrossEntropyLoss, not FocalLoss.
@@ -756,14 +815,32 @@ class EffortDetector(nn.Module):
                 logger.info(f"✓ Unfroze visual.ln_post")
             else:
                 logger.warning("unfreeze_final_ln=True but visual.ln_post not found")
+
+        # P17 frozen intermediate-layer readout: SVD residual components are
+        # trainable by default after SVD wrapping. Freeze them explicitly when
+        # the experiment is intended to train only the new head.
+        if backbone_config.get('freeze_svd_residuals', False):
+            frozen_params = 0
+            frozen_tensors = 0
+            for name, param in visual_encoder.named_parameters():
+                if any(svd_name in name for svd_name in ('U_residual', 'S_residual', 'V_residual')):
+                    param.requires_grad = False
+                    frozen_params += param.numel()
+                    frozen_tensors += 1
+            logger.info(
+                "Frozen SVD residual backbone params: "
+                f"{frozen_params:,} parameters across {frozen_tensors} tensors"
+            )
         
         # === DIAGNOSTIC: Verify SVD layer dimensions (Jan 11, 2026) ===
         # This helps catch mismatched rank configs (e.g., rank=511 for 768-dim layers)
         log_svd_layer_dimensions(visual_encoder, configured_rank=self.rank)
         
         # Wrap to make output compatible with HuggingFace format
-        wrapped_encoder = OpenCLIPVisionModelWrapper(visual_encoder)
-        
+        # NEW (P17): pass intermediate_layer through if set in yaml
+        intermediate_layer = backbone_config.get('intermediate_layer', None)
+        wrapped_encoder = OpenCLIPVisionModelWrapper(visual_encoder, intermediate_layer=intermediate_layer)
+
         return wrapped_encoder
 
     def features(self, data_dict: dict) -> torch.tensor:
@@ -949,6 +1026,26 @@ class EffortDetector(nn.Module):
                 )
                 quality_loss = quality_loss_raw * self.quality_domain_loss_weight
 
+        # --- Feature-norm regularization (aux loss) ---
+        # Penalize divergence between real-side and fake-side feature norms so the
+        # model can't use ‖feat‖ as a shortcut cue. Diagnosis (2026-04-23 dor): the
+        # current model places enhancement-style reals (low ‖feat‖) inside the fake
+        # cluster purely on norm; this loss pulls the two distributions together.
+        feat_norm_loss = torch.tensor(0.0, device=device)
+        if self.feat_norm_reg_lambda > 0 and self.training:
+            feat = pred_dict.get('feat', None)
+            if feat is not None and feat.dim() == 2 and feat.shape[0] == label.shape[0]:
+                feat_norms = feat.norm(dim=-1)
+                mask_real_fn = label == 0
+                mask_fake_fn = label == 1
+                if mask_real_fn.sum() > 0 and mask_fake_fn.sum() > 0:
+                    real_norms = feat_norms[mask_real_fn]
+                    fake_norms = feat_norms[mask_fake_fn]
+                    feat_norm_loss = (
+                        (real_norms.mean() - fake_norms.mean()).pow(2)
+                        + 0.1 * (real_norms.var() + fake_norms.var())
+                    )
+
         # --- Main Loss Calculation based on reduction type ---
         # Check for embedding-space mixup metadata
         _has_mixup = '_mixup_lam' in pred_dict
@@ -964,10 +1061,12 @@ class EffortDetector(nn.Module):
             else:
                 cls_loss = self.loss_func(pred, label)  # Classification loss ONLY
 
-            # Combined loss = classification + regularization + quality reversal
+            # Combined loss = classification + regularization + quality reversal + feat-norm reg
             overall_loss = cls_loss + reg_term if self.training else cls_loss
             if self.training:
                 overall_loss = overall_loss + quality_loss
+                if self.feat_norm_reg_lambda > 0:
+                    overall_loss = overall_loss + self.feat_norm_reg_lambda * feat_norm_loss
 
             # For logging, calculate separate real/fake losses
             mask_real = label == 0
@@ -992,6 +1091,7 @@ class EffortDetector(nn.Module):
                 'quality_domain_has_logits': quality_domain_has_logits.detach(),
                 'quality_domain_has_labels': quality_domain_has_labels.detach(),
                 'quality_domain_unique_count': quality_domain_unique_count.detach(),
+                'feat_norm_loss': feat_norm_loss.detach(),
             }
 
         elif reduction == 'none':
@@ -1007,10 +1107,12 @@ class EffortDetector(nn.Module):
             else:
                 per_sample_cls_loss = self.loss_func(pred, label, reduction='none')
 
-            # Add scalar regularization term + quality loss (PyTorch broadcasts this correctly)
+            # Add scalar regularization term + quality loss + feat-norm reg (PyTorch broadcasts)
             per_sample_loss = per_sample_cls_loss + reg_term if self.training else per_sample_cls_loss
             if self.training:
                 per_sample_loss = per_sample_loss + quality_loss
+                if self.feat_norm_reg_lambda > 0:
+                    per_sample_loss = per_sample_loss + self.feat_norm_reg_lambda * feat_norm_loss
 
             # For logging, calculate the mean of the per-sample losses for each class
             mask_real = label == 0
@@ -1035,6 +1137,7 @@ class EffortDetector(nn.Module):
                 'quality_domain_has_logits': quality_domain_has_logits.detach(),
                 'quality_domain_has_labels': quality_domain_has_labels.detach(),
                 'quality_domain_unique_count': quality_domain_unique_count.detach(),
+                'feat_norm_loss': feat_norm_loss.detach(),
             }
         else:
             raise ValueError(f"Unsupported reduction type: '{reduction}'. Must be 'mean' or 'none'.")

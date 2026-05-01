@@ -54,6 +54,7 @@ from torch.utils.data import DataLoader, IterableDataset
 
 from . import register_data_source, DataPipelineResult
 from utils.grouping import DEFAULT_ENHANCED_STRATEGIES, infer_family_key, normalize_method_name
+from data.sources.method_domain_map import lookup_method_domain_with_label
 
 logger = logging.getLogger(__name__)
 DEFAULT_PARALLEL_GCS_DOWNLOAD_WORKERS = 4
@@ -62,7 +63,13 @@ DEFAULT_PARALLEL_GCS_DOWNLOAD_WORKERS = 4
 # =============================================================================
 # Quality Domain Mapping (for gradient-reversal quality-invariance head)
 # =============================================================================
-# Must stay in sync with QualityDomainHead.DOMAIN_MAP in effort_detector.py.
+# LEGACY 4-class — kept for backward compat with existing callers + the
+# detector-side QualityDomainHead.DOMAIN_MAP consistency test
+# (test_unpaired_reals_and_grl::TestQualityDomainHead::test_domain_map_consistency).
+# When the yaml's quality_domain_count == 4, samples will be assigned IDs 0–3
+# via _quality_domain_for_source. When count > 4 (e.g., the 12-class Phase 3
+# method-conditional GRL), samples should be assigned via
+# _method_domain_for_sample below.
 QUALITY_DOMAIN_MAP = {
     "df40": 0,           # clean_academic — soft, smooth, low-noise
     "external": 1,       # webcam_codec — sharp, noisy, codec artefacts (VCD / webcam)
@@ -83,7 +90,57 @@ QUALITY_DOMAIN_MAP = {
 
 
 def _quality_domain_for_source(source: str) -> int:
-    """Map a sample source string to its quality domain ID."""
+    """LEGACY 4-class lookup — kept for backward compat with callers that
+    don't have method+label in scope. New iterator code should use
+    _domain_for_sample below to support the 12-bucket method-conditional GRL
+    map (Phase 3, P18 onwards)."""
+    return QUALITY_DOMAIN_MAP.get(source, 0)
+
+
+# Module-level mode flag. Default OFF (legacy 4-class labels). The trainer
+# init flips this to True when the yaml has the 12-class method-conditional
+# GRL config (specifically: quality_domain_count == 12 or higher AND
+# use_quality_domain_head == True). Iterators check this flag at every
+# `_domain_for_sample` call.
+_METHOD_DOMAIN_MODE: bool = False
+
+
+def set_method_domain_mode(enabled: bool, log: Optional[logging.Logger] = None) -> None:
+    """Toggle between legacy 4-class GRL labels and Phase 3 12-class
+    method-conditional GRL labels. Trainer should call this exactly once at
+    init based on the yaml config. Idempotent."""
+    global _METHOD_DOMAIN_MODE
+    prev = _METHOD_DOMAIN_MODE
+    _METHOD_DOMAIN_MODE = bool(enabled)
+    log = log or logger
+    if prev != _METHOD_DOMAIN_MODE:
+        if _METHOD_DOMAIN_MODE:
+            log.info(
+                "Method-domain mode ENABLED — iterators will emit 12-class "
+                "method-conditional GRL labels per "
+                "data.sources.method_domain_map.lookup_method_domain_with_label."
+            )
+        else:
+            log.info(
+                "Method-domain mode DISABLED — iterators will emit legacy "
+                "4-class quality-domain GRL labels per QUALITY_DOMAIN_MAP."
+            )
+
+
+def get_method_domain_mode() -> bool:
+    """Read-only snapshot of the current dispatch mode."""
+    return _METHOD_DOMAIN_MODE
+
+
+def _domain_for_sample(method: str, source: str, label: int) -> int:
+    """Dispatching GRL-label lookup. Returns 4-class legacy ID (when
+    _METHOD_DOMAIN_MODE is False) or 12-class method-conditional ID (when
+    True). All iterator call sites should use this function rather than
+    _quality_domain_for_source directly so the dispatch is centralized."""
+    if _METHOD_DOMAIN_MODE:
+        return lookup_method_domain_with_label(
+            method=method, source=source, label=label
+        )
     return QUALITY_DOMAIN_MAP.get(source, 0)
 
 
@@ -2759,9 +2816,9 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source('df40'),
+                'quality_domain': _domain_for_sample(unified_sample.method, 'df40', 0),
             }
-            
+
             # Fake frame (no landmarks for DF40)
             fake_img = fake_frames[i]
             if self.transform:
@@ -2770,7 +2827,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                     None,
                     {'label': 1, 'source': 'df40', 'method': unified_sample.method},
                 )
-            
+
             yield {
                 'image': fake_img,
                 'label': 1,
@@ -2780,7 +2837,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source('df40'),
+                'quality_domain': _domain_for_sample(unified_sample.method, 'df40', 1),
             }
     
     def _iterate_deeplive_sample(
@@ -2838,9 +2895,9 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source('deeplive'),
+                'quality_domain': _domain_for_sample(unified_sample.method, 'deeplive', 0),
             }
-            
+
             # Fake frame (with landmarks if available)
             fake_img = fake_frames[i]
             if self.transform:
@@ -2849,7 +2906,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                     fake_lm,
                     {'label': 1, 'source': 'deeplive', 'method': unified_sample.method},
                 )
-            
+
             yield {
                 'image': fake_img,
                 'label': 1,
@@ -2859,7 +2916,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source('deeplive'),
+                'quality_domain': _domain_for_sample(unified_sample.method, 'deeplive', 1),
             }
 
     def _iterate_visomaster_sample(
@@ -2911,9 +2968,9 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 0),
             }
-            
+
             # Fake frame
             fake_img = fake_frames[i]
             if self.transform:
@@ -2922,7 +2979,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                     None,
                     {'label': 1, 'source': src, 'method': unified_sample.method},
                 )
-            
+
             yield {
                 'image': fake_img,
                 'label': 1,
@@ -2932,7 +2989,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 1),
             }
 
     def _iterate_visomaster_enhanced_sample(
@@ -2983,7 +3040,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source('visomaster_enhanced'),
+                'quality_domain': _domain_for_sample(unified_sample.method, 'visomaster_enhanced', 0),
             }
 
             # Enhanced fake frame
@@ -3004,7 +3061,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source('visomaster_enhanced'),
+                'quality_domain': _domain_for_sample(unified_sample.method, 'visomaster_enhanced', 1),
             }
 
     def _iterate_visomaster_teams_enhanced_sample(
@@ -3045,16 +3102,14 @@ class CombinedPairedIterableDataset(IterableDataset):
             parallel_download_workers=self.config.visomaster_parallel_download_workers,
         )
 
-        real_quality_domain = (
-            _quality_domain_for_source('deeplive_teams')
-            if sample.companion_domain == 'teams_v2'
-            else _quality_domain_for_source('visomaster')
+        real_source = (
+            'deeplive_teams' if sample.companion_domain == 'teams_v2' else 'visomaster'
         )
-        fake_quality_domain = (
-            real_quality_domain
-            if branch == "original"
-            else _quality_domain_for_source('visomaster_enhanced')
+        real_quality_domain = _domain_for_sample(method_name, real_source, 0)
+        fake_source = (
+            real_source if branch == "original" else 'visomaster_enhanced'
         )
+        fake_quality_domain = _domain_for_sample(method_name, fake_source, 1)
 
         src = 'visomaster_teams_enhanced'
         method_id = self.method_mapping.get(method_name, -1)
@@ -3162,7 +3217,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 0),
             }
 
             # Fake frame
@@ -3183,7 +3238,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 1),
             }
 
     def _iterate_proper_data_sample(
@@ -3243,12 +3298,12 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'generator_family': sample.generator_family,
                 'generator_method': sample.generator_method,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
             }
 
             yield {
                 'image': real_img,
                 'label': 0,
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 0),
                 **shared_meta,
             }
 
@@ -3263,6 +3318,7 @@ class CombinedPairedIterableDataset(IterableDataset):
             yield {
                 'image': fake_img,
                 'label': 1,
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 1),
                 **shared_meta,
             }
 
@@ -3319,7 +3375,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 0),
             }
 
             # Fake frame (no landmarks for Teams)
@@ -3340,7 +3396,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'method_id': self.method_mapping.get(unified_sample.method, -1),
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
-                'quality_domain': _quality_domain_for_source(src),
+                'quality_domain': _domain_for_sample(unified_sample.method, src, 1),
             }
 
     def _iterate_unpaired_real_sample(
@@ -3396,7 +3452,9 @@ class CombinedPairedIterableDataset(IterableDataset):
                 "method_id": self.method_mapping.get(unified_sample.method, -1),
                 "sample_id": unified_sample.sample_id,
                 "frame_idx": i,
-                "quality_domain": _quality_domain_for_source(unified_sample.source),
+                "quality_domain": _domain_for_sample(
+                    unified_sample.method, unified_sample.source, 0
+                ),
             }
 
 
