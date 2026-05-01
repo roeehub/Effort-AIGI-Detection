@@ -1,8 +1,8 @@
-# Handoff — Phase 1 + Phase 2 done. P18 yamls drafted, code-blocked.
+# Handoff — Phase 1 + Phase 2 + Phase 3 done. P18 launched.
 
-**Generated**: 2026-05-01 19:30 CEST (updated; P17 verdict generated 18:00).
+**Generated**: 2026-05-01 20:00 CEST (P17 verdict 18:00; v3 verify SUCCEEDED 19:49; P18 launch 20:00).
 **Branch**: `teams-relaunch-root-2026-04-17`
-**Status**: P17 chapter complete. Phase 1 diagnostic battery (CPU only) done. Phase 2 readiness work done; contract v3 verify on Vertex (job `5427016015462531072` us-east1, RUNNING since 19:18, ETA ~3h). P18 (next packet) yamls drafted, blocked on ~½ day code changes. No Phase 3 launch yet — pending user authorization on the code work.
+**Status**: All Phase 1/2/3 work landed in this session. **P18 launched on Vertex** (treatment + control, us-east1; ETA ~8h). Image 1.3.240 includes the full method-conditional GRL infrastructure. Contract v3 verified in production. Awaiting P18 results.
 
 > **READ FIRST**: [`docs/relaunch_handoffs/PHASE1_2_COMPLETE_STATUS_2026-05-01.md`](docs/relaunch_handoffs/PHASE1_2_COMPLETE_STATUS_2026-05-01.md) — comprehensive status, all decisions, what to do next.
 >
@@ -36,9 +36,27 @@ This handoff is scoped to the latest concluded experiment (P17). To reason about
 11. `docs/relaunch_handoffs/R13_RELAUNCH_TRAINING_SOURCE_OF_TRUTH_2026-04-21.md` — original R13 wiring/architecture reference.
 12. `analysis/intermediate_layer_probe_2026-04-30/trajectory_and_direction_2026-05-01.py` + `outputs/*.json` — the actual P17 analysis code and raw data, if reproducing or extending.
 
+## P18 jobs in flight
+
+| Job | ID | Region | Display name | State |
+|---|---|---|---|---|
+| **Treatment** (R13_P18_METHOD_DOMAIN_GRL) | `820959496569356288` | us-east1 | `exp-R13_P18_METHOD_DOMAIN_GRL-20260501-195958` | PENDING (submitted 20:00) |
+| **Control** (R13_P18_NO_GRL_CONTROL) | `456167926752346112` | us-east1 | `exp-R13_P18_NO_GRL_CONTROL-20260501-200010` | PENDING (submitted 20:00) |
+
+ETA ~8h to completion. State monitor: `bchkx9c7r` (fires on terminal states).
+
+W&B project: `phase2-experiments`.
+Checkpoint paths: `gs://training-job-outputs/phase2r13_experiments/<wandb_run_id>/`.
+
+If either job stays PENDING > 30 min, switch one to us-west4 or us-central1 per CLAUDE.md.
+
+## v3 verify (closed)
+
+`5427016015462531072` (us-east1) SUCCEEDED 2026-05-01 19:49 (31 min). Image 1.3.240 (current) inherits commit `974e033`'s default flip — `target_fake_recall_min=0.7` engaged. P8A_step5000 under v3 default: τ=0.991, dev_fake_macro_recall=0.136, lockbox_fake_recall=0.237 — model can't meet the 0.70 floor on the canonical asis substrate. That's a model-quality issue, not a policy issue. Output: `gs://training-job-outputs/test_results/teams_promotion_contract/p8a_v3_verify_2026-05-01/`.
+
 ## TL;DR
 
-P17 closed the layer-X readout chapter. Phase 1's CPU diagnostic battery + Phase 2's readiness work re-pointed the next-packet design:
+P17 closed the layer-X readout chapter. Phase 1's CPU diagnostic battery + Phase 2's readiness work re-pointed the next-packet design, which then landed as P18:
 
 1. **The trained head's modal axis is `is_dor_shkedi`/`is_deeplive_enhanced` cluster, NOT capture-mode.** P15 GRL @ static λ=0.20 didn't bite because it was reversing a gradient the encoder wasn't using. Ramped λ on capture-mode is also doomed.
 2. **Eval substrate FPR underestimates production FPR by ~10–13 pp pooled, +40 pp on webcam.** Move 1.5 (190 frames) and 2B retag (839 frames) replicate at scale; modern_v2 absorbs to +2.14 pp; `PC_Generator__s15` reals jump 20.69%→89.66% under tight crops.
