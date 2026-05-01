@@ -1,8 +1,10 @@
-# Handoff — P18 verdict γ. Pivot to Move 4 paired same-identity contrastive.
+# Handoff — P18 verdict UNDER REVISION. Read corrective handoff first.
 
-**Generated**: 2026-05-01 22:45 CEST (P17 verdict 18:00; v3 verify SUCCEEDED 19:49; P18 launch 20:00; control SUCCEEDED 22:24; treatment SUCCEEDED 22:38; verdict 22:45).
+**Generated**: 2026-05-02 00:55 CEST (after corrective probe).
 **Branch**: `teams-relaunch-root-2026-04-17`
-**Status**: P18 verdict γ landed. 12-class method-conditional GRL did NOT bite the encoder's [CLS] manifold (treatment macro-OVR AUC 0.9954 vs control 0.9955 vs P8A 0.998 — within noise). Architectural-lever space exhausted for FT-from-P8A workflows. **Recommendation: pivot to Move 4** paired same-identity contrastive (~2-3 days new code + ~$60-120 Vertex).
+**Status**: ⚠️ Prior P18 verdict ("γ no bite") was based on a probe that couldn't have detected biting (wrong axis + granularity). Corrective probe shows treatment vs control delta on the actual Phase 1A shortcut axis (within-bucket-3 dor-vs-other LR @ [CLS] = 0.9536 vs 0.9965; lockbox dor real FPR @ τ=0.5 = 40% vs 92%) — directionally consistent with β partial bite, but at n_dor=9 / n_lockbox_dor=25 the result is statistically fragile. Honest verdict: **inconclusive pending more diagnostics**. Read the corrective handoff before acting.
+
+> **READ FIRST**: [`docs/relaunch_handoffs/HANDOFF_2026-05-02_P18_CORRECTIVE.md`](docs/relaunch_handoffs/HANDOFF_2026-05-02_P18_CORRECTIVE.md) — full experimental arc, both verdicts laid out, methodological caveats, concrete diagnostics-needed list (A through G), and operational-state summary.
 
 > **READ FIRST**: [`docs/relaunch_handoffs/PHASE1_2_COMPLETE_STATUS_2026-05-01.md`](docs/relaunch_handoffs/PHASE1_2_COMPLETE_STATUS_2026-05-01.md) — comprehensive status, all decisions, what to do next.
 >

@@ -1,0 +1,36 @@
+{
+  "label": "rgt4kw2u__step4000_FINAL",
+  "arm": "control",
+  "fresh_lr_l3_dev_to_lockbox_auc": 0.9526595744680851,
+  "p8a_baseline_fresh_lr_l3_lockbox_auc": 0.9495,
+  "fresh_lr_direction_cos_substrate_axes": {
+    "is_lockbox": 0.5523756518393699,
+    "is_webcam": -0.15761920508342128,
+    "is_dor_shkedi": 0.2891306664250296,
+    "is_deeplive_enhanced": 0.24253220823137062,
+    "is_teams_capture": 0.675196008168782
+  },
+  "within_bucket3_dor_vs_other_cls_auc": 0.9965277777777778,
+  "within_bucket3_dor_vs_other_l3_auc": 0.8194444444444444,
+  "within_bucket3_meta": {
+    "n_dor": 9,
+    "n_other": 256,
+    "label_real_vs_fake": {
+      "1": 265
+    }
+  },
+  "per_frame_score_summary": {
+    "lockbox_real_dor_n": 25,
+    "lockbox_real_dor_mean_prob_fake": 0.5492399023614586,
+    "lockbox_real_dor_median": 0.5507765942279875,
+    "lockbox_real_nondor_n": 15,
+    "lockbox_real_nondor_mean_prob_fake": 0.5352900538955397,
+    "lockbox_real_nondor_median": 0.5251068328369083,
+    "lockbox_real_dor_fpr_at_tau_0.5": 0.92,
+    "lockbox_real_dor_fpr_at_tau_0.92": 0.0,
+    "lockbox_real_dor_fpr_at_tau_0.9741": 0.0,
+    "lockbox_real_nondor_fpr_at_tau_0.5": 0.8,
+    "lockbox_real_nondor_fpr_at_tau_0.92": 0.0,
+    "lockbox_real_nondor_fpr_at_tau_0.9741": 0.0
+  }
+}
