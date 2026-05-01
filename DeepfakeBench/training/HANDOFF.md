@@ -1,8 +1,8 @@
-# Handoff — Phase 1 + Phase 2 + Phase 3 done. P18 launched.
+# Handoff — P18 verdict γ. Pivot to Move 4 paired same-identity contrastive.
 
-**Generated**: 2026-05-01 20:00 CEST (P17 verdict 18:00; v3 verify SUCCEEDED 19:49; P18 launch 20:00).
+**Generated**: 2026-05-01 22:45 CEST (P17 verdict 18:00; v3 verify SUCCEEDED 19:49; P18 launch 20:00; control SUCCEEDED 22:24; treatment SUCCEEDED 22:38; verdict 22:45).
 **Branch**: `teams-relaunch-root-2026-04-17`
-**Status**: All Phase 1/2/3 work landed in this session. **P18 launched on Vertex** (treatment + control, us-east1; ETA ~8h). Image 1.3.240 includes the full method-conditional GRL infrastructure. Contract v3 verified in production. Awaiting P18 results.
+**Status**: P18 verdict γ landed. 12-class method-conditional GRL did NOT bite the encoder's [CLS] manifold (treatment macro-OVR AUC 0.9954 vs control 0.9955 vs P8A 0.998 — within noise). Architectural-lever space exhausted for FT-from-P8A workflows. **Recommendation: pivot to Move 4** paired same-identity contrastive (~2-3 days new code + ~$60-120 Vertex).
 
 > **READ FIRST**: [`docs/relaunch_handoffs/PHASE1_2_COMPLETE_STATUS_2026-05-01.md`](docs/relaunch_handoffs/PHASE1_2_COMPLETE_STATUS_2026-05-01.md) — comprehensive status, all decisions, what to do next.
 >
@@ -36,19 +36,21 @@ This handoff is scoped to the latest concluded experiment (P17). To reason about
 11. `docs/relaunch_handoffs/R13_RELAUNCH_TRAINING_SOURCE_OF_TRUTH_2026-04-21.md` — original R13 wiring/architecture reference.
 12. `analysis/intermediate_layer_probe_2026-04-30/trajectory_and_direction_2026-05-01.py` + `outputs/*.json` — the actual P17 analysis code and raw data, if reproducing or extending.
 
-## P18 jobs in flight
+## P18 verdict (closed)
 
-| Job | ID | Region | Display name | State |
-|---|---|---|---|---|
-| **Treatment** (R13_P18_METHOD_DOMAIN_GRL) | `820959496569356288` | us-east1 | `exp-R13_P18_METHOD_DOMAIN_GRL-20260501-195958` | PENDING (submitted 20:00) |
-| **Control** (R13_P18_NO_GRL_CONTROL) | `456167926752346112` | us-east1 | `exp-R13_P18_NO_GRL_CONTROL-20260501-200010` | PENDING (submitted 20:00) |
+> **READ FIRST**: [`docs/relaunch_handoffs/P18_VERDICT_2026-05-01.md`](docs/relaunch_handoffs/P18_VERDICT_2026-05-01.md) — full verdict + Move 4 packet design.
 
-ETA ~8h to completion. State monitor: `bchkx9c7r` (fires on terminal states).
+| Metric | Treatment | Control | P8A baseline |
+|---|---:|---:|---:|
+| **Encoder [CLS] 12-class macro-OVR AUC** | **0.9954** | **0.9955** | 0.998 |
+| Per-bucket AUC: deeplive_enhanced (Phase 1A axis) | 0.9999 | 0.9998 | 0.9999 |
+| Per-bucket AUC: deeplive_teams | 0.9927 | 0.9939 | 0.9973 |
+| Per-bucket AUC: realpool_real | 0.9934 | 0.9929 | 0.9969 |
+| Final periodic-step val AUC | 0.9907 | 0.9871 | 0.9926 |
 
-W&B project: `phase2-experiments`.
-Checkpoint paths: `gs://training-job-outputs/phase2r13_experiments/<wandb_run_id>/`.
+12-class GRL with λ ramping to 0.95 produced an encoder essentially indistinguishable from no-GRL control on the GRL's own target axis. The encoder still discriminates `deeplive_enhanced` (the Phase 1A bucket) at AUC 0.9999. **Three consecutive single-axis architectural-lever failures** for FT-from-P8A: P15 GRL @ static λ (capture-mode axis, didn't bite), mclioexb / P14 bundle (didn't promote), P18 ramped GRL on Phase-1A-correct axis (didn't bite). Architectural-lever space is now exhausted for this workflow.
 
-If either job stays PENDING > 30 min, switch one to us-west4 or us-central1 per CLAUDE.md.
+Vertex jobs: treatment `820959496569356288` SUCCEEDED 22:38 (W&B `xpbvc1e4`); control `456167926752346112` SUCCEEDED 22:24 (W&B `rgt4kw2u`).
 
 ## v3 verify (closed)
 
