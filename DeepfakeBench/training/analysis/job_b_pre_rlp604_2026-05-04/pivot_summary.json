@@ -1,0 +1,171 @@
+{
+  "ckpts": [
+    "R12G_STEP14000",
+    "RLP3_05_STEP2500",
+    "RLP5_07_STEP20500",
+    "RLP6_04_STEP23500"
+  ],
+  "suites": {
+    "proper_real_clean_dev": {
+      "kind": "real",
+      "n_videos": 1443,
+      "values": {
+        "R12G_STEP14000": 0.024255,
+        "RLP3_05_STEP2500": 0.013167,
+        "RLP5_07_STEP20500": 0.018711,
+        "RLP6_04_STEP23500": 0.011088
+      }
+    },
+    "proper_real_clean_lockbox": {
+      "kind": "real",
+      "n_videos": 382,
+      "values": {
+        "R12G_STEP14000": 0.036649,
+        "RLP3_05_STEP2500": 0.010471,
+        "RLP5_07_STEP20500": 0.044503,
+        "RLP6_04_STEP23500": 0.005236
+      }
+    },
+    "proper_real_teams_dev": {
+      "kind": "real",
+      "n_videos": 1444,
+      "values": {
+        "R12G_STEP14000": 0.002078,
+        "RLP3_05_STEP2500": 0.002078,
+        "RLP5_07_STEP20500": 0.01108,
+        "RLP6_04_STEP23500": 0.011773
+      }
+    },
+    "proper_real_teams_lockbox": {
+      "kind": "real",
+      "n_videos": 382,
+      "values": {
+        "R12G_STEP14000": 0.0,
+        "RLP3_05_STEP2500": 0.0,
+        "RLP5_07_STEP20500": 0.020942,
+        "RLP6_04_STEP23500": 0.010471
+      }
+    },
+    "proper_visomaster_clean_dev": {
+      "kind": "fake",
+      "n_videos": 262,
+      "values": {
+        "R12G_STEP14000": 1.0,
+        "RLP3_05_STEP2500": 0.992366,
+        "RLP5_07_STEP20500": 0.992366,
+        "RLP6_04_STEP23500": 0.992366
+      }
+    },
+    "proper_visomaster_clean_lockbox": {
+      "kind": "fake",
+      "n_videos": 80,
+      "values": {
+        "R12G_STEP14000": 1.0,
+        "RLP3_05_STEP2500": 1.0,
+        "RLP5_07_STEP20500": 1.0,
+        "RLP6_04_STEP23500": 1.0
+      }
+    },
+    "proper_visomaster_enhanced_clean_dev": {
+      "kind": "fake",
+      "n_videos": 1180,
+      "values": {
+        "R12G_STEP14000": 0.983898,
+        "RLP3_05_STEP2500": 0.966949,
+        "RLP5_07_STEP20500": 0.985593,
+        "RLP6_04_STEP23500": 0.985593
+      }
+    },
+    "proper_visomaster_enhanced_clean_lockbox": {
+      "kind": "fake",
+      "n_videos": 302,
+      "values": {
+        "R12G_STEP14000": 0.996689,
+        "RLP3_05_STEP2500": 0.970199,
+        "RLP5_07_STEP20500": 0.996689,
+        "RLP6_04_STEP23500": 0.986755
+      }
+    },
+    "proper_visomaster_teams_dev": {
+      "kind": "fake",
+      "n_videos": 262,
+      "values": {
+        "R12G_STEP14000": 0.648855,
+        "RLP3_05_STEP2500": 0.767176,
+        "RLP5_07_STEP20500": 0.950382,
+        "RLP6_04_STEP23500": 0.935115
+      }
+    },
+    "proper_visomaster_teams_lockbox": {
+      "kind": "fake",
+      "n_videos": 80,
+      "values": {
+        "R12G_STEP14000": 0.6,
+        "RLP3_05_STEP2500": 0.75,
+        "RLP5_07_STEP20500": 0.9375,
+        "RLP6_04_STEP23500": 0.9
+      }
+    },
+    "proper_visomaster_enhanced_teams_dev": {
+      "kind": "fake",
+      "n_videos": 1182,
+      "values": {
+        "R12G_STEP14000": 0.096447,
+        "RLP3_05_STEP2500": 0.120981,
+        "RLP5_07_STEP20500": 0.947547,
+        "RLP6_04_STEP23500": 0.853638
+      }
+    },
+    "proper_visomaster_enhanced_teams_lockbox": {
+      "kind": "fake",
+      "n_videos": 302,
+      "values": {
+        "R12G_STEP14000": 0.092715,
+        "RLP3_05_STEP2500": 0.125828,
+        "RLP5_07_STEP20500": 0.966887,
+        "RLP6_04_STEP23500": 0.897351
+      }
+    },
+    "proper_fake_clean_all_dev": {
+      "kind": "fake",
+      "n_videos": 1442,
+      "values": {
+        "R12G_STEP14000": 0.986824,
+        "RLP3_05_STEP2500": 0.971567,
+        "RLP5_07_STEP20500": 0.986824,
+        "RLP6_04_STEP23500": 0.986824
+      }
+    },
+    "proper_fake_clean_all_lockbox": {
+      "kind": "fake",
+      "n_videos": 382,
+      "values": {
+        "R12G_STEP14000": 0.997382,
+        "RLP3_05_STEP2500": 0.97644,
+        "RLP5_07_STEP20500": 0.997382,
+        "RLP6_04_STEP23500": 0.989529
+      }
+    },
+    "proper_fake_teams_all_dev": {
+      "kind": "fake",
+      "n_videos": 1444,
+      "values": {
+        "R12G_STEP14000": 0.196676,
+        "RLP3_05_STEP2500": 0.238227,
+        "RLP5_07_STEP20500": 0.948061,
+        "RLP6_04_STEP23500": 0.868421
+      }
+    },
+    "proper_fake_teams_all_lockbox": {
+      "kind": "fake",
+      "n_videos": 382,
+      "values": {
+        "R12G_STEP14000": 0.198953,
+        "RLP3_05_STEP2500": 0.256545,
+        "RLP5_07_STEP20500": 0.960733,
+        "RLP6_04_STEP23500": 0.897906
+      }
+    }
+  },
+  "metric": "tau=0.5 (no FPR calibration); real fields = real_fpr_at_0p5; fake fields = fake_recall_at_0p5"
+}

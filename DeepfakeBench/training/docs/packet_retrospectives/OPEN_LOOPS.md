@@ -1,6 +1,6 @@
 # OPEN_LOOPS — Mechanically Generated Issue Inventory
 
-> ⚙ **GENERATED on 2026-05-04** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
+> ⚙ **GENERATED on 2026-05-05** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
 
 ## Summary
 
@@ -115,7 +115,7 @@
 - **first_seen**: 2026-04-29
 - **last_verified**: 2026-04-29
 - **close_criterion**: the contract scorer's clip-level recall numbers are reconciled with the frame-level AUCs from cached predictions — either (a) the corrected contract policy with `target_fake_recall_min=0.30` produces clip-level recalls within ~5pp of `(1 - threshold-implied-FNR)` from the frame-level distribution, OR (b) the contract scorer is documented as measuring something genuinely different from the frame-level signal (e.g. clip-aggregation thresholds, video-level voting policy) and the headline reporting is normalized so future agents do not compare clip-level recall to AUC-implied recall.
-- **source**: `threads/viso_bucket_gap.md:97`
+- **source**: `threads/viso_bucket_gap.md:138`
 
 ### `shortcut-block-criterion-may-be-scorer-artifact-bound`
 - **status**: open
@@ -251,9 +251,9 @@
 - **status**: in-progress
 - **severity**: high
 - **first_seen**: 2026-05-04
-- **last_verified**: 2026-05-04
+- **last_verified**: 2026-05-05
 - **close_criterion**: Packet A (`R13_PA_VISOMASTER_ENHANCED_DATA.yaml`, run `3140330896851206144`, JOB_STATE_RUNNING in us-east1) and/or Packet C-codec (`R13_PC_CODEC_PLUS_DATA.yaml`, run `1202657157175050240`, JOB_STATE_RUNNING in us-east1) complete training, the resulting checkpoints are scored under both the F0 (full eval substrate) and F4 (substrate-cleaning, `analysis/substrate_cleaning_eval_2026-05-05/`) lenses, and a documented verdict is recorded for whether enabling `visomaster_enhanced + visomaster_teams_enhanced` data sources at fw=4.0 lifts visomaster_enhanced_macro_dev recall above the E2B_3200 baseline (8.4% F0 / 30.9% F4) at deployment-honest single-τ at 5% FPR ceiling. The verdict closes EITHER as (a) data-axis lever is dispositive (Packet A/C-codec materially beats E2B on viso recall under deployment policy), OR (b) data-axis lever as cleanly tested still does not lift, in which case memory `project_data_axis_lever_pulled_twice_no_lift.md` is amended to "pulled three times" with the bundle-confound caveat lifted from the prior two attempts. Either outcome closes the loop.
-- **source**: `threads/viso_bucket_gap.md:88`
+- **source**: `threads/viso_bucket_gap.md:127`
 
 ### `enhanced-vs-unenhanced-val-pool-confound`
 - **status**: in-progress
