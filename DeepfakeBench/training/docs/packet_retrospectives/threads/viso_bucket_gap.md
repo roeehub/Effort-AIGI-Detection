@@ -85,6 +85,39 @@ Both runs are FT-from-E2B (the new anchor candidate per `project_e2b_breaks_deep
 
 This is the clean retest the 2026-04-30 framing said wasn't scheduled. Verdict ETA ~24h via promotion-contract scorecard once both jobs complete; F4 substrate-cleaning re-eval pipeline is also ready (`analysis/substrate_cleaning_eval_2026-05-05/run_clean_eval.py`, reproduces Job 14 numbers within 0.5pp).
 
+### 2026-05-05 morning update — P8A on HDTF DISPOSITIVELY confirms substrate-specific framing
+
+**Source**: `analysis/p8a_on_hdtf_2026-05-05/FINDINGS.md`. Vertex job `4232735281465262080` (us-east1, image 1.3.257), launched 2026-05-04 22:14 UTC; teams + real suites complete by 22:56, clean variants pending.
+
+**Headline**: P8A_step5000 reaches **93.57% recall on `proper_visomaster_enhanced_teams_dev` (n=1182)** at τ=0.5 with 0.97% FPR on `proper_real_teams_dev`. Compare to **27% recall on `visomaster_enhanced_macro_dev` (v2 production substrate, n=550)** at FPR=10% (per F4 reference data + PSERIES_FACTS).
+
+**Same model, same enhancer × teams transport conjunction, different substrate → 3.5× recall difference at comparable FPR.**
+
+This dispositively confirms the substrate-specific framing. The "viso ceiling is structural across architectures" claim from `project_viso_ceiling_unbroken_10_packets.md` is now empirically refuted as a UNIVERSAL claim; the ceiling is conditional on the v2 production substrate.
+
+**P8A vs RLP6_04 on the same HDTF substrate** (extends Job B):
+
+| Suite (n) | RLP6_04 | P8A | Δ |
+|---|---:|---:|---:|
+| proper_visomaster_enhanced_teams_dev (1182) | 85.36% | **93.57%** | **+8.21pp** |
+| proper_visomaster_enhanced_teams_lockbox (302) | 89.74% | 95.03% | +5.29pp |
+| proper_visomaster_teams_dev (262) | 93.51% | 94.27% | +0.76pp |
+| proper_visomaster_teams_lockbox (80) | 90.00% | 95.00% | +5.00pp |
+| proper_fake_teams_all_dev (1444) | 86.84% | 93.70% | +6.86pp |
+| proper_fake_teams_all_lockbox (382) | 89.79% | 95.03% | +5.24pp |
+| proper_real_clean_dev (1443) FPR | 1.11% | **0.42%** | -0.69pp (better) |
+| proper_real_clean_lockbox (382) FPR | 0.52% | **0.00%** | -0.52pp (better) |
+
+**P8A is BETTER than RLP6_04 on every cell** — the FT chain RLP6_04 → P8A added 5-8pp on viso enhanced+teams while reducing real FPR. Trajectory hypothesis (ckpt erosion) is dispositively refuted.
+
+**Mechanism**: see `analysis/pa_pc_eval_2026-05-05/IQ_VALLEY_FINDING.md` and `per_ckpt_iq_signatures.md`. The 364/550 unreachable v2 frames are at midrange Lap (p50=33), in the IQ-shortcut valley between P8A's high-Lap sweet spot (r=+0.51) and E2B's low-Lap inverted sweet spot (r=-0.25). On HDTF substrate, the Lap distribution is in P8A's sweet spot range → high recall.
+
+**Memory updates**:
+- `project_viso_ceiling_unbroken_10_packets.md` scoping note upgraded from inference to head-to-head measured.
+- `project_job_b_findings_universal_vs_trajectory_2026-05-04.md` extended with P8A-on-HDTF data point.
+
+**Caveat**: production-relevant numbers are still v2 substrate numbers IF production traffic looks like v2 (Dor + chronic-6 + low-Lap teams). If production traffic looks like HDTF (varied identities, sharper IQ), the model is much better than v2 numbers suggest. Memory `project_v2_substrate_is_dor_diverse_swap.md` flagged that v2 is internal-test-substrate-specific (Dor in his standard setup); chronic-6 are EVAL test identities. Production users would not be the same 6 identities.
+
 ### 2026-05-04 late night update — Job B verdict (universal-vs-trajectory) closes; viso ceiling reframed as substrate-specific
 
 **Source**: `analysis/job_b_pre_rlp604_2026-05-04/FINDINGS.md` (full writeup) + `pivot_summary.json` + `scorecard.csv`. Vertex job `9082408392701509632` (us-east1, image 1.3.255) reached `JOB_STATE_FAILED` 18:44:42 UTC on 2026-05-04 at the contract-scoring tail (404 because the `proper_data_future` suite manifest does not contain `teams_real_all_dev`, which `score_teams_promotion_contract.py:748` hardcodes as the default `--dev_real_suite`); the validation phase succeeded for all 64 (suite × ckpt) pairs and the per-suite reports were uploaded cleanly. This update is built from those reports.

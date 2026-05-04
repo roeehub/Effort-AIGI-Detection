@@ -1,0 +1,60 @@
+Validation Summary Report for: td_proper_visomaster_teams_lockbox_p8a_reference_step5000
+Run Name: TargetDomain proper_visomaster_teams_lockbox P8A_REFERENCE_STEP5000
+Generated on: 2026-05-04 22:46:54
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 80
+Accuracy: 0.9500
+True Positives (Correctly identified Fake): 76
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 4
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_visomaster_teams__cscs (FAKE) -----
+Total Videos: 3
+Accuracy: 1.0000 (3/3 correct)
+
+----- Method: proper_visomaster_teams__ghostface_v1 (FAKE) -----
+Total Videos: 3
+Accuracy: 1.0000 (3/3 correct)
+
+----- Method: proper_visomaster_teams__ghostface_v2 (FAKE) -----
+Total Videos: 14
+Accuracy: 0.8571 (12/14 correct)
+
+----- Method: proper_visomaster_teams__ghostface_v3 (FAKE) -----
+Total Videos: 9
+Accuracy: 1.0000 (9/9 correct)
+
+----- Method: proper_visomaster_teams__instyleswapper256_a (FAKE) -----
+Total Videos: 11
+Accuracy: 1.0000 (11/11 correct)
+
+----- Method: proper_visomaster_teams__instyleswapper256_b (FAKE) -----
+Total Videos: 9
+Accuracy: 1.0000 (9/9 correct)
+
+----- Method: proper_visomaster_teams__instyleswapper256_c (FAKE) -----
+Total Videos: 12
+Accuracy: 1.0000 (12/12 correct)
+
+----- Method: proper_visomaster_teams__inswapper128 (FAKE) -----
+Total Videos: 6
+Accuracy: 1.0000 (6/6 correct)
+
+----- Method: proper_visomaster_teams__simswap512 (FAKE) -----
+Total Videos: 13
+Accuracy: 0.8462 (11/13 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_visomaster_teams_fake (family=proper_visomaster_teams_fake): n=80, acc=0.9500, tpr=0.9500, fpr=0.0000, fnr=0.0500
+
+Best-group accuracy: proper_visomaster_teams_fake = 0.9500
+Worst-group accuracy: proper_visomaster_teams_fake = 0.9500
+Best-vs-worst group accuracy gap: 0.0000
