@@ -111,9 +111,87 @@ If verdict on PA/PC is (b) "data lever doesn't lift v2 viso":
 
 The dispositive finding here makes (4) a viable deployment story IF the user is comfortable that production traffic ≠ v2 internal-test substrate.
 
-## Pending: clean-variant suites (job still running)
+## Complete table (all 16 suites, τ=0.5)
 
-When the remaining 6 suites complete (proper_fake_clean_all_*, proper_visomaster_clean_*, proper_visomaster_enhanced_clean_*), this doc will be extended. The clean-variant numbers should mirror Job B's near-100% recall on these.
+Job state: `JOB_STATE_FAILED` at the contract-scoring tail (same `teams_real_all_dev` 404 as Job B); validation reports complete and intact.
+
+### Reals (FPR — lower is better)
+
+| Suite | n | TN | FP | FPR |
+|---|---:|---:|---:|---:|
+| proper_real_clean_dev | 1443 | 1437 | 6 | 0.42% |
+| proper_real_clean_lockbox | 382 | 382 | 0 | 0.00% |
+| proper_real_teams_dev | 1444 | 1430 | 14 | 0.97% |
+| proper_real_teams_lockbox | 382 | 377 | 5 | 1.31% |
+
+### Visomaster fakes (recall — higher is better)
+
+| Suite | n | TP | FN | Recall |
+|---|---:|---:|---:|---:|
+| proper_visomaster_clean_dev | 262 | 258 | 4 | 98.47% |
+| proper_visomaster_clean_lockbox | 80 | 79 | 1 | 98.75% |
+| proper_visomaster_enhanced_clean_dev | 1180 | 1159 | 21 | 98.22% |
+| proper_visomaster_enhanced_clean_lockbox | 302 | 296 | 6 | 98.01% |
+| proper_visomaster_teams_dev | 262 | 247 | 15 | 94.27% |
+| proper_visomaster_teams_lockbox | 80 | 76 | 4 | 95.00% |
+| **proper_visomaster_enhanced_teams_dev** | 1182 | 1106 | 76 | **93.57%** |
+| proper_visomaster_enhanced_teams_lockbox | 302 | 287 | 15 | 95.03% |
+
+### Umbrella all-fakes
+
+| Suite | n | TP | FN | Recall |
+|---|---:|---:|---:|---:|
+| proper_fake_clean_all_dev | 1442 | 1417 | 25 | 98.27% |
+| proper_fake_clean_all_lockbox | 382 | 375 | 7 | 98.17% |
+| proper_fake_teams_all_dev | 1444 | 1353 | 91 | 93.70% |
+| proper_fake_teams_all_lockbox | 382 | 363 | 19 | 95.03% |
+
+## Full P8A vs RLP6_04 comparison on HDTF (extends the bolded cell above)
+
+| Suite (n) | RLP6_04 (Job B) | P8A | Δ (P8A − RLP6_04) |
+|---|---:|---:|---:|
+| viso clean dev (262) | 99.24% | 98.47% | -0.77pp |
+| viso clean lockbox (80) | 100.00% | 98.75% | -1.25pp |
+| viso enhanced clean dev (1180) | 98.56% | 98.22% | -0.34pp |
+| viso enhanced clean lockbox (302) | 98.68% | 98.01% | -0.67pp |
+| viso teams dev (262) | 93.51% | 94.27% | +0.76pp |
+| viso teams lockbox (80) | 90.00% | 95.00% | +5.00pp |
+| **viso enhanced teams dev (1182)** | 85.36% | **93.57%** | **+8.21pp** |
+| viso enhanced teams lockbox (302) | 89.74% | 95.03% | +5.29pp |
+| fake clean all dev (1442) | 98.68% | 98.27% | -0.41pp |
+| fake clean all lockbox (382) | 98.95% | 98.17% | -0.78pp |
+| fake teams all dev (1444) | 86.84% | 93.70% | +6.86pp |
+| fake teams all lockbox (382) | 89.79% | 95.03% | +5.24pp |
+| real clean dev (1443) FPR | 1.11% | **0.42%** | -0.69pp |
+| real clean lockbox (382) FPR | 0.52% | **0.00%** | -0.52pp |
+| real teams dev (1444) FPR | 1.18% | 0.97% | -0.21pp |
+| real teams lockbox (382) FPR | 1.05% | 1.31% | +0.26pp |
+
+**Pattern**: P8A and RLP6_04 are essentially tied on HDTF clean variants (both ~98% recall, near-ceiling). P8A wins decisively on the teams-transport cells (+5 to +8pp on viso, +6-8pp on the umbrella) and on real-clean FPR. The FT chain RLP6_04 → P8A clearly invested in teams-transport robustness.
+
+## Substrate-vs-trajectory final verdict
+
+**Trajectory hypothesis**: REFUTED. Chain endpoint P8A beats chain member RLP6_04 on every viso teams cell. Chain ADDED capability through HDTF substrate.
+
+**Substrate hypothesis**: CONFIRMED at head-to-head measurement. Same model on different substrate gives:
+- HDTF proper viso enhanced+teams: **93.57%** at FPR=0.97%
+- v2 production substrate (visomaster_enhanced_macro_dev): **27%** at FPR=10% (per F4 reference)
+
+**The 3.5× recall gap is purely substrate-driven.**
+
+## Mechanism (per `analysis/pa_pc_eval_2026-05-05/IQ_VALLEY_FINDING.md`)
+
+The 364/550 unreachable v2 frames are at midrange Lap (p50=33), in the IQ-shortcut valley between:
+- P8A's high-Lap sweet spot (r=+0.508 on viso fakes, catches sharp)
+- E2B's low-Lap inverted sweet spot (r=-0.254, catches blurry)
+- E3's Lap-agnostic profile (r=-0.011)
+
+HDTF substrate has Lap distribution in P8A's sweet spot (per `project_image_quality_shortcut`: training viso Lap 132-407). v2 substrate has Lap distribution in the valley (per IQ-valley analysis: missed-all p50=33).
+
+Other contributors to v2 difficulty (per memories `project_v2_substrate_is_dor_diverse_swap`, `project_eval_substrate_reframe_2026-05-04`):
+- Identity skew: v2 = Dor (chronic FP-prone). HDTF = varied identities.
+- Chronic-6 reals pollute v2's FPR calculation (per Job 14: 80-95% of FPs from 6 identities).
+- Swap-model coverage: v2 has 16 swap families; some not in training distribution.
 
 ## Cross-references
 
