@@ -1,0 +1,31 @@
+# Promotion-contract validation map for Packets A + C-codec + baselines
+#
+# Authored 2026-05-05 to evaluate Packet A (R13_PA_VISOMASTER_ENHANCED_DATA, run 26u8bn1t)
+# and Packet C-codec (R13_PC_CODEC_PLUS_DATA, run 0ujswaad) against the production
+# teams promotion contract. Both packets FT from E2B_TOP_N_STEP3200.
+#
+# Close-criterion question (per docs/packet_retrospectives/threads/viso_bucket_gap.md
+# `data-axis-clean-single-lever-retest-in-progress` loop): does enabling
+# `visomaster_enhanced + visomaster_teams_enhanced` data sources at fw=4.0 lift
+# visomaster_enhanced_macro_dev recall above the E2B_TOP_N_STEP3200 baseline
+# (8.4% F0 / 30.9% F4) at deployment-honest single-τ at 5% FPR ceiling?
+#
+# Baselines included for direct comparison:
+#   - P8A_REFERENCE_STEP5000: production anchor (27% viso ceiling)
+#   - E2B_TOP_N_STEP3200: FT base for both PA and PC-codec
+#
+# PA / PC-codec checkpoint selection:
+#   - top_n step5600 / top_n step7400: each packet's highest-AUC top_n (best by AUC)
+#   - top_n step3800 / top_n step5400: mid-trajectory top_n (cross-step robustness)
+#   - periodic step5000 (both): trajectory anchor for cross-packet comparison
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:            "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+PA_TOP_N_STEP5600:             "gs://training-job-outputs/best_checkpoints/26u8bn1t/top_n_effort_20260504_step5600_auc0.9909_eer0.0282.pth"
+PA_TOP_N_STEP3800:             "gs://training-job-outputs/best_checkpoints/26u8bn1t/top_n_effort_20260504_step3800_auc0.9892_eer0.0402.pth"
+PA_PERIODIC_STEP5000:          "gs://training-job-outputs/best_checkpoints/26u8bn1t/periodic_effort_20260504_step5000_auc0.9869_eer0.0322.pth"
+
+PC_TOP_N_STEP7400:             "gs://training-job-outputs/best_checkpoints/0ujswaad/top_n_effort_20260504_step7400_auc0.9871_eer0.0415.pth"
+PC_TOP_N_STEP5400:             "gs://training-job-outputs/best_checkpoints/0ujswaad/top_n_effort_20260504_step5400_auc0.9863_eer0.0459.pth"
+PC_PERIODIC_STEP5000:          "gs://training-job-outputs/best_checkpoints/0ujswaad/periodic_effort_20260504_step5000_auc0.9862_eer0.0415.pth"
