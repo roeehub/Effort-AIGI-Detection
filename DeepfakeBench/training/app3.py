@@ -57,6 +57,45 @@ def _resolve_device() -> torch.device:
 device = _resolve_device()
 DEBUG_FRAME_DIR = "./debug_frames"
 
+# ──────────────────────────────────────────
+# Quality gate (deployment packet 2026-05-04)
+# ──────────────────────────────────────────
+# Lightweight per-frame gate. Frames that fail any criterion are rejected as
+# "out of operational envelope" and get the default-real probability instead
+# of going through the model. The gate criteria match the deployment packet at
+# `analysis/deeplive_deployment_24h_2026-05-05/DEPLOYMENT_PACKET_DEEPLIVE.md`:
+#   - min(width, height) >= QUALITY_GATE_MIN_DIM (rejects thumbnails)
+#   - laplacian_var >= QUALITY_GATE_MIN_LAP_VAR (rejects extreme blur)
+#   - is_no_face is enforced upstream by YOLO returning None on recrop=True paths
+QUALITY_GATE_DEFAULT_PROB = 0.25
+QUALITY_GATE_MIN_DIM = 150
+QUALITY_GATE_MIN_LAP_VAR = 8.0
+
+
+def quality_gate(img_bgr: Optional[np.ndarray], frame_id: str = "frame") -> tuple:
+    """Per-frame deployment quality gate.
+
+    Returns (passes, reason). When passes=False, the caller should NOT run the
+    model on this frame; instead emit prob=QUALITY_GATE_DEFAULT_PROB (0.25,
+    treated as REAL by the standard threshold=0.5) and log the gate hit so the
+    rejection is auditable in production logs.
+
+    Cheap to compute: one cvtColor + one Laplacian pass on the input image.
+    """
+    if img_bgr is None or img_bgr.size == 0:
+        return False, "empty_or_none_image"
+    h, w = img_bgr.shape[:2]
+    if min(h, w) < QUALITY_GATE_MIN_DIM:
+        return False, f"min_dim={min(h, w)}<{QUALITY_GATE_MIN_DIM}"
+    try:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    except Exception as e:
+        return False, f"gate_compute_failed:{e!r}"
+    if lap_var < QUALITY_GATE_MIN_LAP_VAR:
+        return False, f"laplacian_var={lap_var:.2f}<{QUALITY_GATE_MIN_LAP_VAR}"
+    return True, None
+
 
 # ──────────────────────────────────────────
 # GCS Asset Downloading Utilities
@@ -265,10 +304,46 @@ def load_detector(cfg: dict, weights: str) -> nn.Module:
             model.head.s.data.fill_(current_s)
             logger.info(f"  Restored ArcFace s parameter: {current_s}")
     
-    # Load state dict with module prefix handling
+    # Load state dict with module prefix handling. Capture the IncompatibleKeys
+    # return value so missing/unexpected keys are surfaced explicitly. With
+    # strict=False (kept for backwards compat with old checkpoint formats),
+    # mismatches are otherwise silent and could hide architecture confusion.
     state = {k.replace("module.", ""): v for k, v in state_dict.items()}
-    model.load_state_dict(state, strict=False)
+    incompatible = model.load_state_dict(state, strict=False)
+    missing = list(getattr(incompatible, "missing_keys", []) or [])
+    unexpected = list(getattr(incompatible, "unexpected_keys", []) or [])
+    if missing:
+        logger.warning(
+            "⚠️  load_state_dict: %d MISSING key(s) (model expected, ckpt did not provide; "
+            "these layers run with random init): %s%s",
+            len(missing),
+            missing[:10],
+            " ..." if len(missing) > 10 else "",
+        )
+    if unexpected:
+        logger.warning(
+            "⚠️  load_state_dict: %d UNEXPECTED key(s) (ckpt provided, model did not need; "
+            "these weights are silently dropped): %s%s",
+            len(unexpected),
+            unexpected[:10],
+            " ..." if len(unexpected) > 10 else "",
+        )
+    if not missing and not unexpected:
+        logger.info("✅ load_state_dict: all keys matched (no missing, no unexpected)")
     model.eval()
+
+    # Final loaded-config summary so the operator can confirm what actually
+    # loaded vs what env vars / yaml said. The checkpoint's saved model_config
+    # OVERRIDES env vars and yaml (lines above) — this summary makes that
+    # override explicit, since silent overrides previously produced confusion
+    # about whether ArcFace was actually active at inference.
+    logger.info(
+        "📋 FINAL loaded config: model_name=%s use_arcface_head=%s arcface_m=%s arcface_s=%s",
+        cfg.get("model_name"),
+        cfg.get("use_arcface_head"),
+        cfg.get("arcface_m"),
+        cfg.get("arcface_s"),
+    )
     logger.info("✅ Model loaded and set to evaluation mode")
     return model
 
@@ -533,27 +608,38 @@ def require_yolo(request: Request) -> None:
 
 
 # --- Utility function to get model for endpoints ---
-def get_model_for_request(request: Request, model_type: str) -> nn.Module:
-    """Gets the requested model from app state and handles errors."""
-    available = request.app.state.models
+def get_model_for_request(request: Request, model_type: Optional[str]) -> nn.Module:
+    """Gets the requested model from app state.
 
-    if model_type not in ["base", "custom"]:
+    `model_type` is REQUIRED — every inference request must specify "custom"
+    (the user-uploaded checkpoint loaded via CHECKPOINT_GCS_PATH) or "base"
+    (the local CLIP-L14 baseline). The previous default ("base") and silent
+    auto-fallback to whichever model was loaded both removed 2026-05-04 — they
+    masked which model was actually scoring the request, which is operationally
+    confusing during A/B comparisons.
+    """
+    if model_type is None or model_type == "":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid 'model_type'. Choose 'base' or 'custom'."
+            detail="Query parameter 'model_type' is REQUIRED. Pass ?model_type=custom "
+                   "for the uploaded checkpoint, or ?model_type=base for the local "
+                   "CLIP-L14 baseline. No default — must be explicit on every request."
+        )
+    if model_type not in ("base", "custom"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid model_type={model_type!r}. Must be 'base' or 'custom'."
         )
 
-    # Auto-fallback: if requested model isn't loaded, try the other one
+    available = request.app.state.models
     if model_type not in available:
-        fallback = "custom" if model_type == "base" else "base"
-        if fallback in available:
-            logger.warning(f"'{model_type}' model not loaded. Falling back to '{fallback}'.")
-            model_type = fallback
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"No models are available. Requested '{model_type}' is not loaded."
-            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Requested model_type={model_type!r} is not loaded. "
+                   f"Loaded models: {sorted(available.keys())}. "
+                   f"For 'custom', set CHECKPOINT_GCS_PATH before startup. "
+                   f"For 'base', ensure weights/effort_clip_L14_trainOn_FaceForensic.pth exists."
+        )
 
     model = available[model_type]
     weights_path = request.app.state.loaded_weights_paths.get(model_type)
@@ -576,7 +662,7 @@ def ping() -> dict:
 async def check_frame(
         request: Request,
         file: UploadFile = File(...),
-        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        model_type: Optional[str] = Query(None, description="REQUIRED: 'base' or 'custom'. No default."),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
         recrop: bool = Query(False, description="Whether to perform face detection and cropping. If False, assumes image is already cropped"),
@@ -595,13 +681,29 @@ async def check_frame(
         if img_bgr is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot decode image")
 
+        # Quality gate (deployment packet 2026-05-04): reject thumbnails / extreme-blur
+        # frames before model inference. Gated frames return prob=0.25 (REAL by default
+        # threshold=0.5), and the gate hit is logged for debugging / audit.
+        gate_passes, gate_reason = quality_gate(img_bgr, frame_id=file.filename or "frame")
+        if not gate_passes:
+            logger.info(
+                "[QUALITY-GATE] /check_frame REJECTED %s (%s) → returning prob=%.2f",
+                file.filename or "[unnamed]", gate_reason, QUALITY_GATE_DEFAULT_PROB,
+            )
+            return InferResponse(pred_label="REAL", fake_prob=QUALITY_GATE_DEFAULT_PROB)
+
         if recrop:
             processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
             if processed_face_bgr is None:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                                    "Could not find a face in the image using the 'yolo' method")
+                # is_no_face branch of the quality gate (YOLO found nothing).
+                logger.info(
+                    "[QUALITY-GATE] /check_frame REJECTED %s (no_face_detected) → returning prob=%.2f",
+                    file.filename or "[unnamed]", QUALITY_GATE_DEFAULT_PROB,
+                )
+                return InferResponse(pred_label="REAL", fake_prob=QUALITY_GATE_DEFAULT_PROB)
         else:
-            processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_AREA)
+            # INTER_LINEAR matches training preprocessing (combined_paired.py:3518).
+            processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_LINEAR)
 
         if debug:
             os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
@@ -634,7 +736,7 @@ async def check_frame(
 async def check_frame_batch(
         request: Request,
         files: List[UploadFile] = File(...),
-        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        model_type: Optional[str] = Query(None, description="REQUIRED: 'base' or 'custom'. No default."),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
         recrop: bool = Query(False, description="Whether to perform face detection and cropping. If False, assumes frames are already cropped"),
@@ -667,8 +769,13 @@ async def check_frame_batch(
         # Prepare transform once
         transform = video_preprocessor._get_transform()
 
-        tensors = []
+        # Per-frame status tracking. The model is run only on frames that pass
+        # the quality gate; gated frames get prob=QUALITY_GATE_DEFAULT_PROB.
+        # Final probs list is in input order, with one entry per successfully
+        # decoded file (gated + model-scored).
+        per_frame_status = []   # list of dicts: {kind: 'gated'|'tensor'|'failed', tensor?, prob?, reason?}
         failed_frames = 0
+        gated_frames = 0
         total_frames = len(files)
 
         for i, f in enumerate(files):
@@ -677,19 +784,37 @@ async def check_frame_batch(
                 img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
                 if img_bgr is None:
                     logger.warning(f"Frame {i+1}/{total_frames}: Cannot decode image: {f.filename or '[unnamed]'}")
+                    per_frame_status.append({"kind": "failed"})
                     failed_frames += 1
+                    continue
+
+                # Quality gate: reject thumbnails / extreme blur before model
+                gate_passes, gate_reason = quality_gate(img_bgr, frame_id=f.filename or f"frame_{i+1}")
+                if not gate_passes:
+                    logger.info(
+                        "[QUALITY-GATE] /check_frame_batch frame %d/%d REJECTED %s (%s) → prob=%.2f",
+                        i + 1, total_frames, f.filename or "[unnamed]", gate_reason, QUALITY_GATE_DEFAULT_PROB,
+                    )
+                    per_frame_status.append({"kind": "gated", "prob": QUALITY_GATE_DEFAULT_PROB, "reason": gate_reason})
+                    gated_frames += 1
                     continue
 
                 if recrop:
                     # Same face extraction path as /check_frame (YOLO)
                     processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
                     if processed_face_bgr is None:
-                        logger.warning(f"Frame {i+1}/{total_frames}: Could not find a face in the image using the 'yolo' method: {f.filename or '[unnamed]'}")
-                        failed_frames += 1
+                        # is_no_face branch — gate-equivalent: emit default-real instead of failing
+                        logger.info(
+                            "[QUALITY-GATE] /check_frame_batch frame %d/%d REJECTED %s (no_face_detected) → prob=%.2f",
+                            i + 1, total_frames, f.filename or "[unnamed]", QUALITY_GATE_DEFAULT_PROB,
+                        )
+                        per_frame_status.append({"kind": "gated", "prob": QUALITY_GATE_DEFAULT_PROB, "reason": "no_face_detected"})
+                        gated_frames += 1
                         continue
                 else:
-                    # Use the frame as-is, assuming it's already cropped, but resize to model input size
-                    processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_AREA)
+                    # Use the frame as-is, assuming it's already cropped, but resize to model input size.
+                    # INTER_LINEAR matches training preprocessing (combined_paired.py:3518).
+                    processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_LINEAR)
 
                 if debug:
                     os.makedirs(DEBUG_FRAME_DIR, exist_ok=True)
@@ -702,38 +827,52 @@ async def check_frame_batch(
                 # To tensor (same as /check_frame) - convert to RGB and apply normalization
                 rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
                 image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
-                tensors.append(image_tensor)
+                per_frame_status.append({"kind": "tensor", "tensor": image_tensor})
 
             except Exception as e:
                 logger.warning(f"Frame {i+1}/{total_frames}: Processing failed: {e}")
+                per_frame_status.append({"kind": "failed"})
                 failed_frames += 1
                 continue
 
-        # Handle case where no frames were successfully processed
-        if not tensors:
-            logger.info(f"No frames could be processed successfully. Failed: {failed_frames}/{total_frames}")
+        # Run the model on the model-scored subset (if any), then assemble
+        # final per-frame probs list in original input order.
+        tensor_indices = [i for i, s in enumerate(per_frame_status) if s["kind"] == "tensor"]
+        model_probs = []
+        if tensor_indices:
+            tensors = [per_frame_status[i]["tensor"] for i in tensor_indices]
+            batch_tensor = torch.cat(tensors, dim=0).to(device)  # (N, C, H, W)
+            with torch.inference_mode():
+                preds = model({'image': batch_tensor}, inference=True)
+                raw_probs = preds["prob"].detach().squeeze().cpu().numpy().tolist()
+            if isinstance(raw_probs, float):
+                model_probs = [float(raw_probs)]
+            else:
+                model_probs = [float(p) for p in raw_probs]
+            for idx, prob in zip(tensor_indices, model_probs):
+                per_frame_status[idx]["prob"] = prob
+
+        # Final probs list — gated frames get QUALITY_GATE_DEFAULT_PROB; failed-decode frames are dropped.
+        probs_list = [s["prob"] for s in per_frame_status if s["kind"] in ("gated", "tensor")]
+        successful_frames = sum(1 for s in per_frame_status if s["kind"] == "tensor")
+
+        # Handle case where no frames were processed (all decode-failed)
+        if not probs_list:
+            logger.info(
+                f"No frames could be processed. Failed: {failed_frames}/{total_frames}, gated: {gated_frames}"
+            )
             return BatchInferResponse(pred_label="REAL", confidence=0.0, probs=[])
 
-        # Batch the frames to a single forward pass when possible
-        batch_tensor = torch.cat(tensors, dim=0).to(device)  # (N, C, H, W)
-        successful_frames = len(tensors)
-
-        with torch.inference_mode():
-            preds = model({'image': batch_tensor}, inference=True)  # same call signature as /check_frame
-            # Expect preds["prob"] to be shape (N,) or (N,1)
-            probs = preds["prob"].detach().squeeze().cpu().numpy().tolist()
-
-        # Normalize to list[float]
-        if isinstance(probs, float):
-            probs_list = [float(probs)]
-        else:
-            probs_list = [float(p) for p in probs]
-
-        # 'mean' strategy over successfully processed frames
-        confidence = float(np.mean(probs_list)) if probs_list else 0.0
+        # 'mean' strategy across the union of model-scored and gated frames.
+        # Gated frames at 0.25 will pull confidence DOWN, which is the desired
+        # behavior (uncertain inputs default to real).
+        confidence = float(np.mean(probs_list))
         pred_label = "FAKE" if confidence >= threshold else "REAL"
 
-        logger.info(f"Batch inference complete: {successful_frames}/{total_frames} frames processed successfully, {failed_frames} failed")
+        logger.info(
+            f"Batch inference complete: {successful_frames}/{total_frames} model-scored, "
+            f"{gated_frames} gated (defaulted to {QUALITY_GATE_DEFAULT_PROB}), {failed_frames} decode-failed"
+        )
 
         return BatchInferResponse(pred_label=pred_label, confidence=confidence, probs=probs_list)
 
@@ -748,11 +887,17 @@ async def check_frame_batch(
 async def check_video(
         request: Request,
         file: UploadFile = File(...),
-        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
-        threshold: float = Query(0.75, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
+        model_type: Optional[str] = Query(None, description="REQUIRED: 'base' or 'custom'. No default."),
+        threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         debug: bool = False,
         debug_frames_count: int = Query(2, ge=1, description="Number of frames to save when debug is enabled")
 ) -> VideoAnalysisResponse:
+    # NOTE (2026-05-04): per-frame quality gate is NOT applied here. The
+    # video_preprocessor returns a tensor of already-cropped 224×224 faces, so
+    # the min(W,H)<150 check would fire on every frame (false positive). To
+    # gate per-frame inside video, video_preprocessor.py needs to expose the
+    # pre-resize face crop and laplacian_var per frame; left as TODO. For now,
+    # video endpoints score every extracted face through the model.
     ext = Path(file.filename).suffix.lower()
     if ext not in {".mp4", ".mov", ".mkv", ".avi", ".webm"}:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, f"Unsupported video format {ext!r}")
@@ -798,11 +943,12 @@ async def check_video(
 async def check_video_from_gcp(
         request_body: GCSPathRequest,
         request: Request,
-        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        model_type: Optional[str] = Query(None, description="REQUIRED: 'base' or 'custom'. No default."),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         debug: bool = False,
         debug_frames_count: int = Query(2, ge=1, description="Number of frames to save when debug is enabled")
 ) -> VideoAnalysisResponse:
+    # See /check_video for the per-frame quality-gate TODO. Same applies here.
     gcs_full_path = request_body.gcs_path
     logger.info(f"Received request to process video from GCS: {gcs_full_path}")
 
@@ -864,7 +1010,7 @@ async def check_video_from_gcp(
 async def check_gcs_frame_batch(
         request_body: GCSPathRequest,
         request: Request,
-        model_type: str = Query("base", description="Model to use: 'base' or 'custom'"),
+        model_type: Optional[str] = Query(None, description="REQUIRED: 'base' or 'custom'. No default."),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
 ) -> VideoAnalysisResponse:
     gcs_dir_path = request_body.gcs_path
@@ -895,6 +1041,7 @@ async def check_gcs_frame_batch(
                                 f"No valid image files found after downloading from {gcs_dir_path}")
 
         frame_probs = []
+        gated_count = 0
         transform = video_preprocessor._get_transform()
         with torch.inference_mode():
             for img_path in image_files:
@@ -903,13 +1050,35 @@ async def check_gcs_frame_batch(
                     logger.warning(f"Could not read image file: {img_path}, skipping.")
                     continue
 
-                # ASSUMPTION: Frames are pre-cropped, so we don't run face detection
-                rgb_face = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                # Quality gate: reject thumbnails / extreme blur before model.
+                gate_passes, gate_reason = quality_gate(img_bgr, frame_id=img_path.name)
+                if not gate_passes:
+                    logger.info(
+                        "[QUALITY-GATE] /check_gcs_frame_batch REJECTED %s (%s) → prob=%.2f",
+                        img_path.name, gate_reason, QUALITY_GATE_DEFAULT_PROB,
+                    )
+                    frame_probs.append(QUALITY_GATE_DEFAULT_PROB)
+                    gated_count += 1
+                    continue
+
+                # ASSUMPTION: Frames are pre-cropped face images. Resize to model
+                # input size with INTER_LINEAR (matches training preprocessing per
+                # combined_paired.py:3518). Previously the resize was missing —
+                # any non-224×224 input would interpolate positional embeddings
+                # in the ViT and produce undefined behavior.
+                resized_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_LINEAR)
+                rgb_face = cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB)
                 image_tensor = transform(rgb_face).unsqueeze(0).to(device)
 
                 preds = model({'image': image_tensor}, inference=True)
                 prob = preds["prob"].squeeze().cpu().item()
                 frame_probs.append(prob)
+
+        if gated_count:
+            logger.info(
+                "GCS frame batch: %d/%d frames gated (defaulted to %.2f)",
+                gated_count, len(image_files), QUALITY_GATE_DEFAULT_PROB,
+            )
 
     except HTTPException:
         raise

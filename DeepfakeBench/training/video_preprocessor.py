@@ -187,7 +187,10 @@ def extract_yolo_face(frame_bgr: np.ndarray, conf_threshold: float = YOLO_CONF_T
 
     cropped_face = frame_bgr[sq_y0:sq_y1, sq_x0:sq_x1]
     if cropped_face.size == 0: return None
-    return cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
+    # INTER_LINEAR matches training preprocessing (combined_paired.py:3518). INTER_AREA
+    # caused silent train/eval drift in the retro-scoring path (fixed 2026-04-24 in
+    # arena/model_arena.py and batch_inference_gcs.py). Same fix applied here.
+    return cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_LINEAR)
 
 
 # --- Method 3: YOLO + Haar (Best-Effort Alignment) ---
@@ -233,7 +236,8 @@ def extract_yolo_haar_face(frame_bgr: np.ndarray, conf_threshold: float = YOLO_C
     if final_crop is None or final_crop.size == 0:
         return extract_yolo_face(frame_bgr, conf_threshold)
 
-    return cv2.resize(final_crop, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
+    # INTER_LINEAR matches training preprocessing (see extract_yolo_face for context).
+    return cv2.resize(final_crop, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_LINEAR)
 
 
 # ──────────────────────────
@@ -329,7 +333,8 @@ def _find_and_prepare_faces(
                     sq_y1 = min(h, int(center_y + side_length / 2))
                     cropped_face = frame_bgr[sq_y0:sq_y1, sq_x0:sq_x1]
                     if cropped_face.size > 0:
-                        face = cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_AREA)
+                        # INTER_LINEAR matches training preprocessing (see extract_yolo_face).
+                        face = cv2.resize(cropped_face, (MODEL_IMG_SIZE, MODEL_IMG_SIZE), interpolation=cv2.INTER_LINEAR)
                 elif pre_method == 'yolo_haar':
                     face = extract_yolo_haar_face(frame_bgr)
 
