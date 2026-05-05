@@ -1,0 +1,63 @@
+{
+  "ckpt_name": "pc_periodic_step5000_full3",
+  "real_csv": "analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_all_dev_pc_periodic_step5000_frames_report.csv",
+  "fake_csvs": {
+    "visomaster_enhanced_macro_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/visomaster_enhanced_macro_dev_pc_periodic_step5000_frames_report.csv",
+    "deeplive_enhanced_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/deeplive_enhanced_dev_pc_periodic_step5000_frames_report.csv",
+    "teams_fake_all_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/teams_fake_all_dev_pc_periodic_step5000_frames_report.csv"
+  },
+  "target_fpr": 0.1,
+  "n_real_frames_F0": 4564,
+  "n_real_frames_F4": 2091,
+  "pct_real_kept_F4": 45.82,
+  "tau_F0_calibrated": 0.7026,
+  "tau_F4_at_FPR_5pct": 0.7074,
+  "tau_F4_at_FPR_10pct": 0.341,
+  "fpr_F0_pct": 10.01,
+  "fpr_F4_pct": 5.21,
+  "fpr_at_tau_0_5_F0_pct": 15.29,
+  "fpr_at_tau_0_5_F4_pct": 7.8,
+  "per_suite": [
+    {
+      "ckpt": "pc_periodic_step5000_full3",
+      "fake_suite": "visomaster_enhanced_macro_dev",
+      "n_fake_frames": 550,
+      "tau_F0_calibrated_at_target_fpr": 0.7026,
+      "tau_F4_calibrated_at_FPR=10%": 0.341,
+      "tau_F4_calibrated_at_FPR=5%": 0.7074,
+      "recall_at_tau_F0_pct": 8.0,
+      "recall_at_tau_F4_FPR10_pct": 26.18,
+      "recall_at_tau_F4_FPR5_pct": 7.82,
+      "lift_abs_pp_F0_to_F4_FPR10": 18.18
+    },
+    {
+      "ckpt": "pc_periodic_step5000_full3",
+      "fake_suite": "deeplive_enhanced_dev",
+      "n_fake_frames": 545,
+      "tau_F0_calibrated_at_target_fpr": 0.7026,
+      "tau_F4_calibrated_at_FPR=10%": 0.341,
+      "tau_F4_calibrated_at_FPR=5%": 0.7074,
+      "recall_at_tau_F0_pct": 56.33,
+      "recall_at_tau_F4_FPR10_pct": 91.74,
+      "recall_at_tau_F4_FPR5_pct": 55.78,
+      "lift_abs_pp_F0_to_F4_FPR10": 35.41
+    },
+    {
+      "ckpt": "pc_periodic_step5000_full3",
+      "fake_suite": "teams_fake_all_dev",
+      "n_fake_frames": 3039,
+      "tau_F0_calibrated_at_target_fpr": 0.7026,
+      "tau_F4_calibrated_at_FPR=10%": 0.341,
+      "tau_F4_calibrated_at_FPR=5%": 0.7074,
+      "recall_at_tau_F0_pct": 72.06,
+      "recall_at_tau_F4_FPR10_pct": 84.44,
+      "recall_at_tau_F4_FPR5_pct": 71.87,
+      "lift_abs_pp_F0_to_F4_FPR10": 12.37
+    }
+  ],
+  "outputs": {
+    "real_cleaned_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/pc_periodic_step5000_full3_real_cleaned.csv",
+    "per_filter_fpr_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/pc_periodic_step5000_full3_per_filter_fpr.csv",
+    "per_suite_recall_lift_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/pc_periodic_step5000_full3_per_suite_recall_lift.csv"
+  }
+}

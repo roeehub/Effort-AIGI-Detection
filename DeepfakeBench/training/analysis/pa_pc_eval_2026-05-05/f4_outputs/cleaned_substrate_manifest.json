@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "created_utc": "2026-05-05T01:32:17.968498+00:00",
+  "created_utc": "2026-05-05T02:08:44.238632+00:00",
   "source_parquet": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/lockbox_tagging/full_tags_2026-04-27.parquet",
   "parquet_n_rows": 7334,
   "filter_rules": {
