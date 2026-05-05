@@ -83,6 +83,7 @@ correlation_penalty:
   axes:
     - sharpness_laplacian
     - luma_mean
+    - face_area_fraction
 
 anchor_aware:
   enabled: false
@@ -136,6 +137,8 @@ combined_paired:
   identity_balanced_sampling: true
   split_seed: 5051
   seed: 5051
+
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
 
   # SMOKE: DF40 DISABLED to skip the 1.4M-pair JSON download.
   df40:

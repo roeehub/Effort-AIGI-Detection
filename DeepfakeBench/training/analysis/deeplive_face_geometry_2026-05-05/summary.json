@@ -1,0 +1,130 @@
+{
+  "wall_clock_seconds": 2317.2,
+  "compute_seconds": 2275.3,
+  "n_total_processed": 65202,
+  "n_with_face": 65128,
+  "coverage_overall": 0.998865,
+  "n_errors": 0,
+  "error_kind_counts": {},
+  "sample_errors": [],
+  "by_strategy_label": {
+    "edge_cases|label=0": {
+      "n_frames": 6935,
+      "n_with_face": 6920,
+      "coverage": 0.9978370583994232
+    },
+    "edge_cases|label=1": {
+      "n_frames": 6959,
+      "n_with_face": 6939,
+      "coverage": 0.9971260238540021
+    },
+    "edge_cases_enhanced|label=0": {
+      "n_frames": 6935,
+      "n_with_face": 6920,
+      "coverage": 0.9978370583994232
+    },
+    "edge_cases_enhanced|label=1": {
+      "n_frames": 6959,
+      "n_with_face": 6948,
+      "coverage": 0.9984193131197011
+    },
+    "minimal_processing|label=0": {
+      "n_frames": 6790,
+      "n_with_face": 6787,
+      "coverage": 0.9995581737849779
+    },
+    "minimal_processing|label=1": {
+      "n_frames": 6798,
+      "n_with_face": 6795,
+      "coverage": 0.999558693733451
+    },
+    "minimal_processing_enhanced|label=0": {
+      "n_frames": 6790,
+      "n_with_face": 6787,
+      "coverage": 0.9995581737849779
+    },
+    "minimal_processing_enhanced|label=1": {
+      "n_frames": 6798,
+      "n_with_face": 6795,
+      "coverage": 0.999558693733451
+    },
+    "quality_enhancement|label=0": {
+      "n_frames": 5118,
+      "n_with_face": 5118,
+      "coverage": 1.0
+    },
+    "quality_enhancement|label=1": {
+      "n_frames": 5120,
+      "n_with_face": 5119,
+      "coverage": 0.9998046875
+    }
+  },
+  "by_strategy": {
+    "edge_cases": {
+      "n_frames": 13894,
+      "n_with_face": 13859,
+      "coverage": 0.997480927018857,
+      "median": 0.4086937734351537,
+      "p10": 0.35095949575857155,
+      "p25": 0.3765766874617842,
+      "p75": 0.44385389766111005,
+      "p90": 0.484817564979077
+    },
+    "edge_cases_enhanced": {
+      "n_frames": 13894,
+      "n_with_face": 13868,
+      "coverage": 0.9981286886425795,
+      "median": 0.40581000824898117,
+      "p10": 0.3493025360738936,
+      "p25": 0.37450606864580455,
+      "p75": 0.4404260260453965,
+      "p90": 0.4804699367676719
+    },
+    "minimal_processing": {
+      "n_frames": 13588,
+      "n_with_face": 13582,
+      "coverage": 0.9995584339122755,
+      "median": 0.40494006253618564,
+      "p10": 0.3507485796675388,
+      "p25": 0.37665562536097014,
+      "p75": 0.4401240680461128,
+      "p90": 0.48066674847439256
+    },
+    "minimal_processing_enhanced": {
+      "n_frames": 13588,
+      "n_with_face": 13582,
+      "coverage": 0.9995584339122755,
+      "median": 0.40224202334434817,
+      "p10": 0.34920149077340146,
+      "p25": 0.3745584630698986,
+      "p75": 0.43686479385903587,
+      "p90": 0.4768057192609371
+    },
+    "quality_enhancement": {
+      "n_frames": 10238,
+      "n_with_face": 10237,
+      "coverage": 0.9999023246727876,
+      "median": 0.40903674499530895,
+      "p10": 0.3538896984425605,
+      "p25": 0.37875297038924205,
+      "p75": 0.43776855510325624,
+      "p90": 0.46843515367565997
+    }
+  },
+  "workers": 8,
+  "bucket": "live-deepfake-methods-real-and-fake-frames-cropped",
+  "strategies": [
+    "edge_cases",
+    "edge_cases_enhanced",
+    "minimal_processing",
+    "minimal_processing_enhanced",
+    "quality_enhancement"
+  ],
+  "output_parquet": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet",
+  "schema": {
+    "frame_path": "object",
+    "face_area_fraction": "float64",
+    "strategy": "object",
+    "label": "int64"
+  }
+}

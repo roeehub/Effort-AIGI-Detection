@@ -1088,8 +1088,37 @@ class EffortDetector(nn.Module):
                 # P(fake) — softmax over class dim, take fake column
                 score = pred.softmax(dim=-1)[:, 1]
                 axis_values = compute_pixel_axes(data_dict['image'])
-                corr_penalty_loss, corr_per_axis_r = self.corr_penalty(score, axis_values)
-                overall_loss = overall_loss + corr_penalty_loss
+                # Merge data_dict-sourced axes (e.g., face_area_fraction from
+                # the dataloader's per-sample lookup table) with pixel-derived
+                # axes. Skip an axis if its data_dict value is missing or has
+                # all-NaN values in this batch (e.g., a batch with no deeplive
+                # samples when face_area_fraction is deeplive-only).
+                for axis_name in self.corr_penalty.axes:
+                    if axis_name in axis_values:
+                        continue  # already pixel-derived
+                    if axis_name not in data_dict:
+                        continue  # caller must include in config; absence is logged below
+                    raw = data_dict[axis_name]
+                    if not isinstance(raw, torch.Tensor):
+                        raw = torch.as_tensor(raw)
+                    raw = raw.to(device=score.device, dtype=score.dtype)
+                    if raw.numel() == 0 or torch.isnan(raw).all():
+                        continue
+                    # If some entries are NaN, mask them out of the correlation
+                    # by zero-mean replacement (centered cosine treats this OK).
+                    if torch.isnan(raw).any():
+                        finite = ~torch.isnan(raw)
+                        raw = torch.where(finite, raw, raw[finite].mean())
+                    axis_values[axis_name] = raw
+                # Filter the configured-axis list to ones we actually have values for
+                available_axes = [ax for ax in self.corr_penalty.axes if ax in axis_values]
+                if available_axes:
+                    # Build a temporary CorrelationPenalty with only available axes
+                    # so callers always see a working subset rather than a KeyError.
+                    from loss.correlation_penalty import CorrelationPenalty as _CP
+                    cp_active = _CP(axes=available_axes, lambda_=self.corr_penalty.lambda_)
+                    corr_penalty_loss, corr_per_axis_r = cp_active(score, axis_values)
+                    overall_loss = overall_loss + corr_penalty_loss
 
             # For logging, calculate separate real/fake losses
             mask_real = label == 0
@@ -1146,8 +1175,29 @@ class EffortDetector(nn.Module):
                 from loss.correlation_penalty import compute_pixel_axes
                 score = pred.softmax(dim=-1)[:, 1]
                 axis_values = compute_pixel_axes(data_dict['image'])
-                corr_penalty_loss, corr_per_axis_r = self.corr_penalty(score, axis_values)
-                per_sample_loss = per_sample_loss + corr_penalty_loss
+                # Merge data_dict-sourced axes (face_area_fraction etc.); see
+                # symmetric block above for the rationale.
+                for axis_name in self.corr_penalty.axes:
+                    if axis_name in axis_values:
+                        continue
+                    if axis_name not in data_dict:
+                        continue
+                    raw = data_dict[axis_name]
+                    if not isinstance(raw, torch.Tensor):
+                        raw = torch.as_tensor(raw)
+                    raw = raw.to(device=score.device, dtype=score.dtype)
+                    if raw.numel() == 0 or torch.isnan(raw).all():
+                        continue
+                    if torch.isnan(raw).any():
+                        finite = ~torch.isnan(raw)
+                        raw = torch.where(finite, raw, raw[finite].mean())
+                    axis_values[axis_name] = raw
+                available_axes = [ax for ax in self.corr_penalty.axes if ax in axis_values]
+                if available_axes:
+                    from loss.correlation_penalty import CorrelationPenalty as _CP
+                    cp_active = _CP(axes=available_axes, lambda_=self.corr_penalty.lambda_)
+                    corr_penalty_loss, corr_per_axis_r = cp_active(score, axis_values)
+                    per_sample_loss = per_sample_loss + corr_penalty_loss
 
             # For logging, calculate the mean of the per-sample losses for each class
             mask_real = label == 0

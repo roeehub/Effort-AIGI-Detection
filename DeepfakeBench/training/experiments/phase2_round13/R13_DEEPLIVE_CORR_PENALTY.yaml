@@ -107,9 +107,13 @@ correlation_penalty:
   enabled: true
   lambda: 1.0  # Phase 2 prototype proved stable; lambda>=10 oscillates.
   axes:
-    - sharpness_laplacian  # Lap-variance on luma channel; documented shortcut
-                           # (P8A r=+0.51, E2B r=+0.58 on lockbox reals)
-    - luma_mean            # mean Y-channel; secondary IQ shortcut
+    - sharpness_laplacian   # Lap-variance on luma channel; documented shortcut
+                            # (P8A r=+0.51, E2B r=+0.58 on lockbox reals)
+    - luma_mean             # mean Y-channel; secondary IQ shortcut
+    - face_area_fraction    # per-sample face area (bbox / image); documented
+                            # shortcut (face-size label leak, crop-tightness gap)
+                            # — sourced from the parquet below via dataloader
+                            # lookup; falls back to NaN-skip if absent
 
 # --- Anchor-aware: DISABLED (single-lever discipline). ---
 anchor_aware:
@@ -166,6 +170,12 @@ combined_paired:
   identity_balanced_sampling: true
   split_seed: 5051
   seed: 5051
+
+  # Per-sample face_area_fraction lookup, built by the CPU pre-tag job at
+  # `analysis/deeplive_face_geometry_2026-05-05/`. Read once at dataloader
+  # construction; aggregated to per-sample mean. Absent samples emit NaN
+  # which the loss-side code skips gracefully.
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
 
   df40:
     enabled: true

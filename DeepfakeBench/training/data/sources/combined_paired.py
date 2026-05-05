@@ -2555,6 +2555,7 @@ class CombinedPairedIterableDataset(IterableDataset):
         seed: int = 42,
         visomaster_anchor_indices: Optional[List[int]] = None,
         method_mapping: Optional[Dict[str, int]] = None,
+        face_area_parquet_path: Optional[str] = None,
     ):
         self.samples = samples
         self.df40_dataset = df40_dataset
@@ -2570,6 +2571,38 @@ class CombinedPairedIterableDataset(IterableDataset):
         self._enhanced_strategy_names = tuple(
             config.enhanced_strategy_names or DEFAULT_ENHANCED_STRATEGIES
         )
+
+        # Face-area-fraction lookup for the correlation-penalty loss
+        # (added 2026-05-05). The parquet is built by a CPU pre-tag job
+        # over the deeplive bucket; here we aggregate per-sample mean.
+        # If absent, _face_area_for returns NaN — the loss-side code skips
+        # NaN-only batches gracefully.
+        self._face_area_per_sample: Dict[str, float] = {}
+        if face_area_parquet_path:
+            try:
+                import pandas as pd
+                df = pd.read_parquet(face_area_parquet_path)
+                if 'sample_id' not in df.columns:
+                    # Derive sample_id from frame_path: strip the
+                    # `.../samples/<sample_id>/frames/...` middle component.
+                    import re
+                    pat = re.compile(r"/samples/([^/]+)/frames/")
+                    def _extract(path: str) -> Optional[str]:
+                        m = pat.search(path)
+                        return m.group(1) if m else None
+                    df['sample_id'] = df['frame_path'].map(_extract)
+                # Per-sample mean (skip NaNs); samples with all-NaN frames stay missing.
+                grouped = df.dropna(subset=['face_area_fraction']).groupby('sample_id')['face_area_fraction'].mean()
+                self._face_area_per_sample = grouped.to_dict()
+                logger.info(
+                    f"Loaded face_area_fraction lookup: {len(self._face_area_per_sample)} samples "
+                    f"from {face_area_parquet_path}"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"Failed to load face_area_fraction parquet at "
+                    f"{face_area_parquet_path}: {exc}. Face-area axis will be NaN at training."
+                )
         
         # Group samples by identity for identity-balanced sampling
         self._samples_by_identity: Dict[str, List[UnifiedPairedSample]] = defaultdict(list)
@@ -2886,6 +2919,9 @@ class CombinedPairedIterableDataset(IterableDataset):
                     {'label': 0, 'source': 'deeplive', 'method': unified_sample.method},
                 )
             
+            face_area_value = float(
+                self._face_area_per_sample.get(unified_sample.sample_id, float('nan'))
+            )
             yield {
                 'image': real_img,
                 'label': 0,
@@ -2896,6 +2932,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
                 'quality_domain': _domain_for_sample(unified_sample.method, 'deeplive', 0),
+                'face_area_fraction': face_area_value,
             }
 
             # Fake frame (with landmarks if available)
@@ -2917,6 +2954,7 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'sample_id': unified_sample.sample_id,
                 'frame_idx': frame_idx,
                 'quality_domain': _domain_for_sample(unified_sample.method, 'deeplive', 1),
+                'face_area_fraction': face_area_value,
             }
 
     def _iterate_visomaster_sample(
@@ -3495,10 +3533,12 @@ def combined_paired_collate_fn(
     video_method_ids = []
     video_quality_domains = []
     
+    video_face_area_fraction = []  # per-video face_area_fraction (NaN if absent)
+
     for video_key, frames in groups.items():
         if len(frames) == 0:
             continue
-        
+
         frame_tensors = []
         for item in frames:
             img = item['image']
@@ -3528,6 +3568,8 @@ def combined_paired_collate_fn(
         # Preserve method_id for Group DRO (all frames in a group share the same method)
         video_method_ids.append(frames[0].get('method_id', -1))
         video_quality_domains.append(frames[0].get('quality_domain', 0))
+        # Optional per-video face_area_fraction (deeplive only); NaN if absent
+        video_face_area_fraction.append(float(frames[0].get('face_area_fraction', float('nan'))))
     
     if len(video_images) == 0:
         return {
@@ -3558,6 +3600,7 @@ def combined_paired_collate_fn(
         'video_id': video_ids,
         'method_id': method_ids,
         'quality_domain': quality_domains,
+        'face_area_fraction': torch.tensor(video_face_area_fraction, dtype=torch.float32),
     }
 
 
@@ -4486,6 +4529,7 @@ def create_combined_paired_pipeline(
         seed=run_seed,
         visomaster_anchor_indices=visomaster_anchor_indices if visomaster_enabled else None,
         method_mapping=method_mapping,
+        face_area_parquet_path=combined_config.get('face_area_parquet_path'),
     )
     persistent_workers = batching_config.num_workers > 0
     
@@ -4510,6 +4554,7 @@ def create_combined_paired_pipeline(
         seed=run_seed,
         visomaster_anchor_indices=visomaster_anchor_indices if visomaster_enabled else None,
         method_mapping=method_mapping,
+        face_area_parquet_path=combined_config.get('face_area_parquet_path'),
     )
     
     val_loader_raw = DataLoader(
@@ -4532,6 +4577,7 @@ def create_combined_paired_pipeline(
         seed=run_seed,
         visomaster_anchor_indices=visomaster_anchor_indices if visomaster_enabled else None,
         method_mapping=method_mapping,
+        face_area_parquet_path=combined_config.get('face_area_parquet_path'),
     )
     
     test_loader_raw = DataLoader(
