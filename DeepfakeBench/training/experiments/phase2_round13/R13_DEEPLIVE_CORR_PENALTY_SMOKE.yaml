@@ -1,0 +1,239 @@
+# ============================================================================
+# R13_DEEPLIVE_CORR_PENALTY_SMOKE.yaml
+# Phase 2, Round 13 — SMOKE for the deeplive correlation-penalty experiment.
+#
+# Purpose: minimum-cost end-to-end run that confirms:
+#   1. The new correlation_penalty config block is parsed and the loss is
+#      wired into get_losses (look for `Correlation penalty ENABLED` in logs).
+#   2. The pixel axes (sharpness_laplacian, luma_mean) are computed per batch
+#      without crashing on the actual training pipeline's tensors.
+#   3. Per-axis correlation values appear in W&B as `corr_r_sharpness_laplacian`
+#      and `corr_r_luma_mean`; `corr_penalty_loss` is non-zero on most steps.
+#   4. Gradient flow through the penalty: training proceeds; loss is finite;
+#      no NaN explosions in early steps.
+#
+# Smoke shape (vs full R13_DEEPLIVE_CORR_PENALTY.yaml):
+#   - 100 total_training_steps (not 2500)
+#   - DF40 disabled (skip the 1.4M-pair JSON download)
+#   - Visomaster sources disabled (matches full)
+#   - external_real: same small size
+#   - All other settings IDENTICAL to full so the smoke validates the actual
+#     production code path, not a divergent recipe.
+#
+# Cost: ~$1-3 Vertex (us-east1, ~5-10 min). NOT for promotion — smoke only.
+# ============================================================================
+
+name: "R13_DEEPLIVE_CORR_PENALTY_SMOKE"
+description: "100-step smoke for R13_DEEPLIVE_CORR_PENALTY: validates correlation_penalty wiring + per-axis r logging + gradient flow on the deeplive bucket alone (df40 disabled to skip pair-JSON download)."
+seed: 5051
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "smoke-test"
+    - "deeplive-ship-smoke"
+    - "correlation-penalty"
+    - "deeplive-only"
+    - "df40-disabled"
+    - "no-visomaster"
+    - "seed-5051"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 1
+total_training_steps: 100
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 10
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+correlation_penalty:
+  enabled: true
+  lambda: 1.0
+  axes:
+    - sharpness_laplacian
+    - luma_mean
+
+anchor_aware:
+  enabled: false
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+face_scale_jitter:
+  enabled: false
+  scale_limit: 0.50
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 5051
+  seed: 5051
+
+  # SMOKE: DF40 DISABLED to skip the 1.4M-pair JSON download.
+  df40:
+    enabled: false
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: false
+  visomaster_enhanced:
+    enabled: false
+  visomaster_teams_enhanced:
+    enabled: false
+  visomaster_hints_teams:
+    enabled: false
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 5051
+      max_frames_per_identity: 15
+      max_total_samples: 200    # SMOKE: tiny pool
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.0
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 50    # SMOKE: smaller
+
+  # SMOKE: OOD monitoring DISABLED to keep the smoke fast.
+  ood_monitoring:
+    enabled: false
+
+use_arcface_head: false
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 6.0
+anneal_steps: 1
+
+# SMOKE: evaluate at step 50 to verify eval flow runs end-to-end.
+evaluate_every_steps: 50
+test_batch_size: 32
+
+early_stopping_enabled: false
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 50
+    - 100
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

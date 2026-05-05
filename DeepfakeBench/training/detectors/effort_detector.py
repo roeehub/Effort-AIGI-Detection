@@ -458,7 +458,7 @@ class EffortDetector(nn.Module):
     def _setup_loss_function(self, config: dict, logger) -> None:
         """
         Sets up the loss function based on configuration.
-        
+
         This is called from __init__ if not using ArcFace head.
         """
         self.use_focal_loss = config.get('use_focal_loss', False)
@@ -470,6 +470,17 @@ class EffortDetector(nn.Module):
         else:
             logger.info("Using standard CrossEntropyLoss")
             self.loss_func = CrossEntropyLossWithReduction(label_smoothing=self.label_smoothing)
+
+        # Optional: shortcut-avoidance correlation penalty (added 2026-05-05)
+        from loss.correlation_penalty import build_correlation_penalty_from_config
+        self.corr_penalty = build_correlation_penalty_from_config(config)
+        if self.corr_penalty is not None:
+            logger.info(
+                f"Correlation penalty ENABLED: lambda={self.corr_penalty.lambda_}, "
+                f"axes={self.corr_penalty.axes}"
+            )
+        else:
+            logger.info("Correlation penalty disabled (no `correlation_penalty.enabled: true` in config)")
 
     def _setup_tracking_vars(self) -> None:
         """Initialize tracking variables for metrics."""
@@ -1068,6 +1079,18 @@ class EffortDetector(nn.Module):
                 if self.feat_norm_reg_lambda > 0:
                     overall_loss = overall_loss + self.feat_norm_reg_lambda * feat_norm_loss
 
+            # Correlation-penalty regularizer (added 2026-05-05) — penalize batch
+            # Pearson(score, axis) for each configured nuisance axis.
+            corr_penalty_loss = torch.tensor(0.0, device=device)
+            corr_per_axis_r: dict = {}
+            if self.training and self.corr_penalty is not None:
+                from loss.correlation_penalty import compute_pixel_axes
+                # P(fake) — softmax over class dim, take fake column
+                score = pred.softmax(dim=-1)[:, 1]
+                axis_values = compute_pixel_axes(data_dict['image'])
+                corr_penalty_loss, corr_per_axis_r = self.corr_penalty(score, axis_values)
+                overall_loss = overall_loss + corr_penalty_loss
+
             # For logging, calculate separate real/fake losses
             mask_real = label == 0
             mask_fake = label == 1
@@ -1092,6 +1115,8 @@ class EffortDetector(nn.Module):
                 'quality_domain_has_labels': quality_domain_has_labels.detach(),
                 'quality_domain_unique_count': quality_domain_unique_count.detach(),
                 'feat_norm_loss': feat_norm_loss.detach(),
+                'corr_penalty_loss': corr_penalty_loss.detach(),
+                **{f'corr_r_{ax}': r.detach() for ax, r in corr_per_axis_r.items()},
             }
 
         elif reduction == 'none':
@@ -1113,6 +1138,16 @@ class EffortDetector(nn.Module):
                 per_sample_loss = per_sample_loss + quality_loss
                 if self.feat_norm_reg_lambda > 0:
                     per_sample_loss = per_sample_loss + self.feat_norm_reg_lambda * feat_norm_loss
+
+            # Correlation-penalty regularizer (scalar, broadcasts across per-sample losses)
+            corr_penalty_loss = torch.tensor(0.0, device=device)
+            corr_per_axis_r: dict = {}
+            if self.training and self.corr_penalty is not None:
+                from loss.correlation_penalty import compute_pixel_axes
+                score = pred.softmax(dim=-1)[:, 1]
+                axis_values = compute_pixel_axes(data_dict['image'])
+                corr_penalty_loss, corr_per_axis_r = self.corr_penalty(score, axis_values)
+                per_sample_loss = per_sample_loss + corr_penalty_loss
 
             # For logging, calculate the mean of the per-sample losses for each class
             mask_real = label == 0
@@ -1138,6 +1173,8 @@ class EffortDetector(nn.Module):
                 'quality_domain_has_labels': quality_domain_has_labels.detach(),
                 'quality_domain_unique_count': quality_domain_unique_count.detach(),
                 'feat_norm_loss': feat_norm_loss.detach(),
+                'corr_penalty_loss': corr_penalty_loss.detach(),
+                **{f'corr_r_{ax}': r.detach() for ax, r in corr_per_axis_r.items()},
             }
         else:
             raise ValueError(f"Unsupported reduction type: '{reduction}'. Must be 'mean' or 'none'.")
