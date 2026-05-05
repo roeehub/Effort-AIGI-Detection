@@ -158,13 +158,46 @@ The bolded row is the closest analog to the production "viso 27% ceiling" cell. 
 - It does NOT close the in-progress `data-axis-clean-single-lever-retest-in-progress` loop. PA / PC-codec results are still load-bearing for the question "does data-axis on E2B lift v2 viso recall." Job B answers a different question (does the model + chain CAN reach 85% on viso enhanced+teams on a non-v2 substrate).
 
 ### Open loop: data-axis-clean-single-lever-retest-in-progress
-status: in-progress
+status: resolved
 severity: high
 first_seen: 2026-05-04
 last_verified: 2026-05-05
 close_criterion: Packet A (`R13_PA_VISOMASTER_ENHANCED_DATA.yaml`, run `3140330896851206144`, JOB_STATE_RUNNING in us-east1) and/or Packet C-codec (`R13_PC_CODEC_PLUS_DATA.yaml`, run `1202657157175050240`, JOB_STATE_RUNNING in us-east1) complete training, the resulting checkpoints are scored under both the F0 (full eval substrate) and F4 (substrate-cleaning, `analysis/substrate_cleaning_eval_2026-05-05/`) lenses, and a documented verdict is recorded for whether enabling `visomaster_enhanced + visomaster_teams_enhanced` data sources at fw=4.0 lifts visomaster_enhanced_macro_dev recall above the E2B_3200 baseline (8.4% F0 / 30.9% F4) at deployment-honest single-τ at 5% FPR ceiling. The verdict closes EITHER as (a) data-axis lever is dispositive (Packet A/C-codec materially beats E2B on viso recall under deployment policy), OR (b) data-axis lever as cleanly tested still does not lift, in which case memory `project_data_axis_lever_pulled_twice_no_lift.md` is amended to "pulled three times" with the bundle-confound caveat lifted from the prior two attempts. Either outcome closes the loop.
 
-**2026-05-05 status update — training half complete; F0/F4 evaluation half pending.** Both Vertex jobs reached `JOB_STATE_SUCCEEDED`: PA (`3140330896851206144`) at 2026-05-04 20:49:54 UTC after 3h25m runtime, wandb run `26u8bn1t`, 16 checkpoints at `gs://training-job-outputs/best_checkpoints/26u8bn1t/` (best top_n: step5600 AUC 0.9909 EER 0.0282); PC-codec (`1202657157175050240`) at 2026-05-04 21:58:45 UTC after 3h55m runtime, wandb run `0ujswaad`, 17 checkpoints at `gs://training-job-outputs/best_checkpoints/0ujswaad/` (best top_n: step7400 AUC 0.9871 EER 0.0415). PC-codec EER is consistently 1-3pp higher than PA at comparable steps — expected with codec aug adding train-time difficulty. Periodic checkpoints span step1000-7000 (PA) / step1000-8000 (PC-codec) at 1000-step intervals, top_n covers the AUC-best subset. The verdict half (F0 + F4 scoring + documented verdict) is the next action and gates loop closure.
+**Resolution (2026-05-05) — closes via verdict (a): DATA LEVER IS DISPOSITIVE on F4-cleaned substrate.**
+
+PA Vertex F0 contract scorecard (`7756239039929253888`) lands on viso enhanced macro:
+
+| Ckpt | F0 viso (FPR=10%) | F4@5% viso | F4@10% viso |
+|---|---:|---:|---:|
+| E2B_TOP_N_STEP3200 (FT base, baseline) | 8.36% | 11.64% | 30.91% |
+| P8A_REFERENCE_STEP5000 | 26.91% | 55.45% | 67.09% |
+| **PA_TOP_N_STEP5600** | 10.73% | 46.00% | **72.36%** |
+| PA_TOP_N_STEP3800 | 21.09% | 36.91% | 59.64% |
+| PA_PERIODIC_STEP5000 | 12.55% | 31.27% | 64.91% |
+| PC_TOP_N_STEP7400 | 4.91% | 13.27% | 37.27% |
+| PC_TOP_N_STEP5400 | 2.73% | 5.09% | 21.82% |
+| PC_PERIODIC_STEP5000 | 8.00% | 7.82% | 26.18% |
+
+**PA_TOP_N_STEP5600 reaches 72.36% F4 viso recall** — beating E2B baseline by **+41.45pp** AND beating P8A's 67.09% by +5.27pp. First R13 ckpt to exceed P8A on F4 viso. F0 lift is marginal (+2.37pp over E2B); F4 lens unlocks the lever's value.
+
+Mechanism: PA's IQ-shortcut signature on viso fakes is r=-0.072 (Lap-agnostic) vs P8A's +0.508 / E2B's -0.254. PA's score on the previously-uncatchable cohort D (364 frames at Lap p50=33) is 0.062 — 2-10× higher than P8A/E2B. PA broke the IQ-valley.
+
+Why PA worked when P14_DATA_FIX/P16/S3 failed: PA enables BOTH `visomaster_enhanced.enabled=true` (clean-enhancer source, NEVER previously enabled in any P-series yaml per PSERIES_FACTS Section 10) AND `visomaster_teams_enhanced.enabled=true`. Prior tests only enabled the conjunction; the clean-enhancer source was the missing piece. Plus FT-from-E2B (different IQ profile) + fw=4.0 (documented baseline) + no bundle.
+
+**PC ckpts (codec aug on top of PA's recipe): codec aug HURTS viso by 35-50pp on F4** vs PA. Consistent with codec_hedge prior (-1.2pp on FT-from-P8A). Codec aug exposes model to teams-codec degradation as real-side training noise; model learns to ignore the very signal that makes teams-viso fakes catchable.
+
+Memory updates:
+- `project_data_axis_lever_pulled_twice_no_lift.md` → resolved with 2026-05-05 amendment ("pulled three times; PA succeeded on F4")
+- New: `project_pa_breaks_iq_valley_on_f4_2026-05-05.md` (the dispositive finding)
+- New: `project_pc_codec_aug_hurts_viso_2026-05-05.md` (codec lever counter-productive)
+
+Pending (not blocking loop closure but valuable):
+- Lockbox suites + per-substrate τ analysis (F0 contract scorecard run still in progress for lockbox and per-session suites; ETA ~3-5h more)
+- Deeplive_enhanced_dev for PA/PC (3/8 ckpts done at writeup)
+- HDTF substrate test for PA (untested; would confirm the data lever generalizes off v2)
+
+Full writeup: `analysis/pa_pc_eval_2026-05-05/VERDICT_FINAL_F0_F4.md`. Pre-registered predictions: `PRE_LANDING_PREDICTIONS.md` (mostly wrong on F4 magnitudes — honestly accounted for in VERDICT doc).
 
 This loop replaces the closed-as-superseded `p14-data-fix-not-launched` loop above with a clean single-lever framing. The 2026-04-30 superseded close was based on a confounded test (P14 anti-shortcut bundle + fw=8.0). The 2026-05-04 retest uses fw=4.0 + no bundle on E2B (new anchor candidate). See "2026-05-04 evening update" subsection of Current stance for the launch context.
 

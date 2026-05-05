@@ -1,0 +1,50 @@
+{
+  "ckpt_name": "pc_top_n_step7400",
+  "real_csv": "analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_all_dev_pc_top_n_step7400_frames_report.csv",
+  "fake_csvs": {
+    "visomaster_enhanced_macro_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/visomaster_enhanced_macro_dev_pc_top_n_step7400_frames_report.csv",
+    "teams_fake_all_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/teams_fake_all_dev_pc_top_n_step7400_frames_report.csv"
+  },
+  "target_fpr": 0.1,
+  "n_real_frames_F0": 4564,
+  "n_real_frames_F4": 2091,
+  "pct_real_kept_F4": 45.82,
+  "tau_F0_calibrated": 0.7589,
+  "tau_F4_at_FPR_5pct": 0.3737,
+  "tau_F4_at_FPR_10pct": 0.0892,
+  "fpr_F0_pct": 10.01,
+  "fpr_F4_pct": 1.87,
+  "fpr_at_tau_0_5_F0_pct": 14.72,
+  "fpr_at_tau_0_5_F4_pct": 3.78,
+  "per_suite": [
+    {
+      "ckpt": "pc_top_n_step7400",
+      "fake_suite": "visomaster_enhanced_macro_dev",
+      "n_fake_frames": 550,
+      "tau_F0_calibrated_at_target_fpr": 0.7589,
+      "tau_F4_calibrated_at_FPR=10%": 0.0892,
+      "tau_F4_calibrated_at_FPR=5%": 0.3737,
+      "recall_at_tau_F0_pct": 4.91,
+      "recall_at_tau_F4_FPR10_pct": 37.27,
+      "recall_at_tau_F4_FPR5_pct": 13.27,
+      "lift_abs_pp_F0_to_F4_FPR10": 32.36
+    },
+    {
+      "ckpt": "pc_top_n_step7400",
+      "fake_suite": "teams_fake_all_dev",
+      "n_fake_frames": 3039,
+      "tau_F0_calibrated_at_target_fpr": 0.7589,
+      "tau_F4_calibrated_at_FPR=10%": 0.0892,
+      "tau_F4_calibrated_at_FPR=5%": 0.3737,
+      "recall_at_tau_F0_pct": 67.56,
+      "recall_at_tau_F4_FPR10_pct": 88.19,
+      "recall_at_tau_F4_FPR5_pct": 79.2,
+      "lift_abs_pp_F0_to_F4_FPR10": 20.63
+    }
+  ],
+  "outputs": {
+    "real_cleaned_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/pc_top_n_step7400_real_cleaned.csv",
+    "per_filter_fpr_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/pc_top_n_step7400_per_filter_fpr.csv",
+    "per_suite_recall_lift_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/pc_top_n_step7400_per_suite_recall_lift.csv"
+  }
+}

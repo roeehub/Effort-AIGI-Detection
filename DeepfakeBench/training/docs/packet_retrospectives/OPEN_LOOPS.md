@@ -5,8 +5,8 @@
 ## Summary
 
 - **Open**: 27
-- **In progress**: 4
-- **Resolved**: 8
+- **In progress**: 3
+- **Resolved**: 9
 - **Superseded**: 1
 
 ## Entries
@@ -115,7 +115,7 @@
 - **first_seen**: 2026-04-29
 - **last_verified**: 2026-04-29
 - **close_criterion**: the contract scorer's clip-level recall numbers are reconciled with the frame-level AUCs from cached predictions — either (a) the corrected contract policy with `target_fake_recall_min=0.30` produces clip-level recalls within ~5pp of `(1 - threshold-implied-FNR)` from the frame-level distribution, OR (b) the contract scorer is documented as measuring something genuinely different from the frame-level signal (e.g. clip-aggregation thresholds, video-level voting policy) and the headline reporting is normalized so future agents do not compare clip-level recall to AUC-implied recall.
-- **source**: `threads/viso_bucket_gap.md:138`
+- **source**: `threads/viso_bucket_gap.md:204`
 
 ### `shortcut-block-criterion-may-be-scorer-artifact-bound`
 - **status**: open
@@ -229,7 +229,7 @@
 - **close_criterion**: at least one of the three candidate mechanisms (decision-boundary / intermediate-layer / test-substrate) is empirically supported on a probe whose design isolates that mechanism, AND the supported mechanism produces a measurable signature on `mclioexb` that does NOT also appear on `9lmvb5b4` step 5000 baseline at comparable magnitude — i.e., the mechanism is specific to the value_composite winner, not a feature shared with the FT base
 - **source**: `threads/jitter_winner_mechanism_unknown.md:113`
 
-### In progress (4)
+### In progress (3)
 
 ### `shortcut-deployment-block`
 - **status**: in-progress
@@ -247,14 +247,6 @@
 - **close_criterion**: the `score_teams_promotion_contract.py` runner enforces a recall floor or τ ceiling that prevents `selected_threshold ≈ 0.995` configurations passing silently
 - **source**: `threads/promotion_contract_evolution.md:160`
 
-### `data-axis-clean-single-lever-retest-in-progress`
-- **status**: in-progress
-- **severity**: high
-- **first_seen**: 2026-05-04
-- **last_verified**: 2026-05-05
-- **close_criterion**: Packet A (`R13_PA_VISOMASTER_ENHANCED_DATA.yaml`, run `3140330896851206144`, JOB_STATE_RUNNING in us-east1) and/or Packet C-codec (`R13_PC_CODEC_PLUS_DATA.yaml`, run `1202657157175050240`, JOB_STATE_RUNNING in us-east1) complete training, the resulting checkpoints are scored under both the F0 (full eval substrate) and F4 (substrate-cleaning, `analysis/substrate_cleaning_eval_2026-05-05/`) lenses, and a documented verdict is recorded for whether enabling `visomaster_enhanced + visomaster_teams_enhanced` data sources at fw=4.0 lifts visomaster_enhanced_macro_dev recall above the E2B_3200 baseline (8.4% F0 / 30.9% F4) at deployment-honest single-τ at 5% FPR ceiling. The verdict closes EITHER as (a) data-axis lever is dispositive (Packet A/C-codec materially beats E2B on viso recall under deployment policy), OR (b) data-axis lever as cleanly tested still does not lift, in which case memory `project_data_axis_lever_pulled_twice_no_lift.md` is amended to "pulled three times" with the bundle-confound caveat lifted from the prior two attempts. Either outcome closes the loop.
-- **source**: `threads/viso_bucket_gap.md:127`
-
 ### `enhanced-vs-unenhanced-val-pool-confound`
 - **status**: in-progress
 - **severity**: medium
@@ -263,7 +255,15 @@
 - **close_criterion**: a packet trains an enhanced-proper arm and measures it against a validation pool that explicitly contains enhanced-proper rows, with dose matched to the unenhanced arm — so "enhanced hurts" / "enhanced helps" is readable without the pool-composition + dose confound
 - **source**: `threads/gate_alignment_story.md:91`
 
-### Resolved (8)
+### Resolved (9)
+
+### `data-axis-clean-single-lever-retest-in-progress`
+- **status**: resolved
+- **severity**: high
+- **first_seen**: 2026-05-04
+- **last_verified**: 2026-05-05
+- **close_criterion**: Packet A (`R13_PA_VISOMASTER_ENHANCED_DATA.yaml`, run `3140330896851206144`, JOB_STATE_RUNNING in us-east1) and/or Packet C-codec (`R13_PC_CODEC_PLUS_DATA.yaml`, run `1202657157175050240`, JOB_STATE_RUNNING in us-east1) complete training, the resulting checkpoints are scored under both the F0 (full eval substrate) and F4 (substrate-cleaning, `analysis/substrate_cleaning_eval_2026-05-05/`) lenses, and a documented verdict is recorded for whether enabling `visomaster_enhanced + visomaster_teams_enhanced` data sources at fw=4.0 lifts visomaster_enhanced_macro_dev recall above the E2B_3200 baseline (8.4% F0 / 30.9% F4) at deployment-honest single-τ at 5% FPR ceiling. The verdict closes EITHER as (a) data-axis lever is dispositive (Packet A/C-codec materially beats E2B on viso recall under deployment policy), OR (b) data-axis lever as cleanly tested still does not lift, in which case memory `project_data_axis_lever_pulled_twice_no_lift.md` is amended to "pulled three times" with the bundle-confound caveat lifted from the prior two attempts. Either outcome closes the loop.
+- **source**: `threads/viso_bucket_gap.md:160`
 
 ### `hints-as-supervision-hypothesis`
 - **status**: resolved
