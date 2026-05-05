@@ -125,12 +125,72 @@ Loop `data-axis-clean-single-lever-retest-in-progress` was flipped to `resolved`
 
 Thread `viso_bucket_gap.md` extended with three subsections this session: 2026-05-05 morning (P8A on HDTF), 2026-05-05 mid-morning (PA F4 verdict). The walkback is in the separate `analysis/pa_pc_eval_2026-05-05/CRITICAL_WALKBACK_PA_DOES_NOT_GENERALIZE.md` doc — should be promoted to the thread when next session has time.
 
-## Pending data (still in flight at this writeup)
+## Pending data (still in flight at this writeup) — UPDATE
 
-- PA+PC F0 contract scorecard (job 7756239039929253888): ~3-4 more hours; will deliver lockbox + per-session suites + per-substrate τ for all 8 ckpts.
-- PA+E2B on HDTF (job 4985399369189556224): ~1 more hour; will deliver remaining 8 HDTF suites (clean variants + visomaster_enhanced_clean variants).
-- Per-substrate τ for PC ckpts: blocked on lockbox_fake completion.
-- Deeplive on HDTF for PA + E2B: not yet measured.
+**Both Vertex jobs now terminal**:
+- PA+PC F0 contract scorecard (job `7756239039929253888`): **JOB_STATE_FAILED** at 03:53 UTC after 5h22m on "Replicas low on disk: workerpool0. Specify a larger bootDiskSizeGb." 159/232 (suite,ckpt) pairs done. Critical suites complete: teams_real/fake_all_dev/lockbox, viso_enhanced_macro_dev, deeplive_enhanced_dev, teams_real_dor_dev, teams_real_poor_quality/lighting_dev. Per-session suites NOT done (the last batch the runner was working on when disk filled).
+- PA+E2B on HDTF (job `4985399369189556224`): **JOB_STATE_RUNNING** still (16 of 16 suites complete for both ckpts at 03:51; contract-tail running). Will end JOB_STATE_FAILED at the same `teams_real_all_dev` 404 issue as Job B and P8A-on-HDTF — validation reports already complete.
+
+**For future packets**: bump `bootDiskSizeGb` from default to 400+ when scoring 8+ ckpts × 29 suites. Default 200 GB filled with 8 ckpts × 29 suites worth of artifacts.
+
+## Per-substrate τ table (FULL, all 8 ckpts) — added 04:00 UTC
+
+This is the deployable single-τ readout (single global τ tuned to keep worst-substrate FPR within ceiling, per `feedback_per_mode_tau_not_deployable.md`).
+
+### At MODERATE (worst-substrate FPR ≤ 10%) — most readable readout
+
+| Ckpt | viso_dev | deeplive_dev | teams_fake_dev | teams_fake_lockbox | tau |
+|---|---:|---:|---:|---:|---:|
+| P8A | 1.64% | 4.04% | 46.96% | 24.94% | 0.9891 |
+| E2B | 4.18% | 40.73% | 59.79% | 33.18% | 0.9227 |
+| PA top_n_5600 | 1.45% | 0.55% | 33.60% | 5.88% | 0.9907 |
+| **PA top_n_3800** | 4.00% | **48.07%** | **61.34%** | 35.29% | 0.8773 |
+| PA periodic_5000 | 3.09% | 4.40% | 44.75% | 22.82% | 0.9846 |
+| PC top_n_7400 | 1.45% | 4.59% | 45.71% | 43.53% | 0.9832 |
+| PC top_n_5400 | 0.36% | 7.34% | 34.62% | 12.24% | 0.9908 |
+| **PC periodic_5000** | 1.45% | 9.54% | 49.65% | **41.88%** | 0.9761 |
+
+Best per cell: PA top_n_3800 wins on dev cells; PC periodic_5000 wins teams_fake_lockbox.
+
+### At LOOSE (worst-substrate FPR ≤ 20%)
+
+| Ckpt | viso_dev | deeplive_dev | teams_fake_dev | teams_fake_lockbox |
+|---|---:|---:|---:|---:|
+| **P8A** | **20.91%** | 31.01% | 64.96% | 46.82% |
+| E2B | 4.73% | 66.79% | 69.10% | 52.47% |
+| PA top_n_5600 | 4.00% | 16.33% | 53.44% | 20.47% |
+| **PA top_n_3800** | 10.55% | **81.83%** | **76.97%** | 64.47% |
+| PA periodic_5000 | 6.00% | 24.04% | 58.54% | 38.59% |
+| PC top_n_7400 | 2.18% | 14.31% | 54.75% | 67.06% |
+| PC top_n_5400 | 0.91% | 18.17% | 46.50% | 32.71% |
+| **PC periodic_5000** | 4.18% | 27.16% | 61.57% | **72.47%** |
+
+P8A wins on viso (its high-Lap sweet spot finally pays off); PA top_n_3800 dominates deeplive + teams_fake_dev; PC periodic_5000 dominates teams_fake_lockbox (codec aug helps on lockbox-style real distribution).
+
+**No single ckpt wins all 4 cells at any FPR ceiling.** An ensemble could in principle combine — but Job 12 showed label-free score-fusion ensembles cap below the per-cell best.
+
+## Surprise positive: PC's teams_fake_lockbox specialty
+
+PC periodic_5000 at LOOSE = 72.47% on teams_fake_lockbox — BEST of any ckpt. Codec aug helps on lockbox-style real distribution.
+
+This is consistent with codec aug's design intent (improve robustness to teams transport degradation), but the gain is restricted to teams_fake_lockbox; on viso_dev, teams_fake_dev, and other suites PC underperforms PA.
+
+## teams_real_dor_dev FPR (P8A's signature invariance test, at τ=0.5)
+
+| Ckpt | n=50 | FP | FPR |
+|---|---:|---:|---:|
+| P8A | 50 | 15 | 30% |
+| E2B | 50 | 12 | 24% |
+| **PA top_n_5600** | 50 | **22** | 44% |
+| PA top_n_3800 | 50 | 25 | 50% |
+| **PA periodic_5000** | 50 | **48** | **96%** |
+| PC top_n_7400 | 50 | 3 | 6% |
+| PC top_n_5400 | 50 | 3 | 6% |
+| PC periodic_5000 | 50 | 11 | 22% |
+
+At τ=0.5, all PA ckpts over-fire on Dor reals; PC ckpts UNDER-fire (consistent with their general blanket-conservatism on teams content). At calibrated τ, the picture changes — but the τ=0.5 readout shows PA's saturation problem clearly.
+
+PA periodic_5000 at τ=0.5 calls 96% of Dor reals fake. This is the saturation behavior I predicted in `preliminary_score_distributions.md` — late-step PA saturates so heavily that even Dor reals get high scores.
 
 ## Cost summary (estimate)
 
