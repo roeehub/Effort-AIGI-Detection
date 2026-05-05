@@ -115,7 +115,7 @@
 - **first_seen**: 2026-04-29
 - **last_verified**: 2026-04-29
 - **close_criterion**: the contract scorer's clip-level recall numbers are reconciled with the frame-level AUCs from cached predictions — either (a) the corrected contract policy with `target_fake_recall_min=0.30` produces clip-level recalls within ~5pp of `(1 - threshold-implied-FNR)` from the frame-level distribution, OR (b) the contract scorer is documented as measuring something genuinely different from the frame-level signal (e.g. clip-aggregation thresholds, video-level voting policy) and the headline reporting is normalized so future agents do not compare clip-level recall to AUC-implied recall.
-- **source**: `threads/viso_bucket_gap.md:204`
+- **source**: `threads/viso_bucket_gap.md:207`
 
 ### `shortcut-block-criterion-may-be-scorer-artifact-bound`
 - **status**: open
