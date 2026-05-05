@@ -42,6 +42,7 @@ TRAINER_NESTED_KEYS = [
     "lesson_data_control",
     "lesson_gate",
     "dataset_methods",
+    "correlation_penalty",
 ]
 
 

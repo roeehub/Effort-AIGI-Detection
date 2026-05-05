@@ -301,6 +301,19 @@ def main():
             print(f"  ✅ Applied face_scale_jitter: enabled={fsj.get('enabled')} scale_limit={fsj.get('scale_limit')}")
             logger.info(f"  Applied face_scale_jitter: enabled={fsj.get('enabled')} scale_limit={fsj.get('scale_limit')}")
 
+        # Apply correlation_penalty config directly (nested dict — W&B flattens; must copy).
+        # Detector reads self.config.get('correlation_penalty') in
+        # detectors/effort_detector.py:_setup_loss_function and constructs
+        # loss/correlation_penalty.CorrelationPenalty. Without this re-apply,
+        # the detector reads None and silently logs "Correlation penalty disabled"
+        # — the shortcut-avoidance loss term becomes a no-op.
+        # Caught by the R13_DEEPLIVE_CORR_PENALTY_SMOKE.yaml smoke 2026-05-05.
+        if 'correlation_penalty' in single_cfg:
+            config['correlation_penalty'] = single_cfg['correlation_penalty']
+            cp = single_cfg['correlation_penalty']
+            print(f"  ✅ Applied correlation_penalty: enabled={cp.get('enabled')} lambda={cp.get('lambda')} axes={cp.get('axes')}")
+            logger.info(f"  Applied correlation_penalty: enabled={cp.get('enabled')} lambda={cp.get('lambda')} axes={cp.get('axes')}")
+
         # Apply periodic_saves config directly (nested dict — W&B flattens; must copy).
         # Trainer reads self.config.get('periodic_saves') at trainer.py:2374 to decide
         # whether to save checkpoints at fixed step_list values. Without this, no
