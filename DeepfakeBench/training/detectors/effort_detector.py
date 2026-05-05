@@ -1092,7 +1092,10 @@ class EffortDetector(nn.Module):
                 # the dataloader's per-sample lookup table) with pixel-derived
                 # axes. Skip an axis if its data_dict value is missing or has
                 # all-NaN values in this batch (e.g., a batch with no deeplive
-                # samples when face_area_fraction is deeplive-only).
+                # samples when face_area_fraction is deeplive-only). Per-video
+                # axes are repeat_interleaved to per-frame so they line up with
+                # `score` which is per-frame after the [B*T, 2] reshape.
+                score_n = score.shape[0]
                 for axis_name in self.corr_penalty.axes:
                     if axis_name in axis_values:
                         continue  # already pixel-derived
@@ -1104,11 +1107,18 @@ class EffortDetector(nn.Module):
                     raw = raw.to(device=score.device, dtype=score.dtype)
                     if raw.numel() == 0 or torch.isnan(raw).all():
                         continue
+                    # Per-video -> per-frame: repeat_interleave to match score length.
+                    if raw.shape[0] != score_n and score_n % raw.shape[0] == 0:
+                        t_repeat = score_n // raw.shape[0]
+                        raw = raw.repeat_interleave(t_repeat)
                     # If some entries are NaN, mask them out of the correlation
                     # by zero-mean replacement (centered cosine treats this OK).
                     if torch.isnan(raw).any():
                         finite = ~torch.isnan(raw)
-                        raw = torch.where(finite, raw, raw[finite].mean())
+                        if finite.any():
+                            raw = torch.where(finite, raw, raw[finite].mean())
+                        else:
+                            continue
                     axis_values[axis_name] = raw
                 # Filter the configured-axis list to ones we actually have values for
                 available_axes = [ax for ax in self.corr_penalty.axes if ax in axis_values]

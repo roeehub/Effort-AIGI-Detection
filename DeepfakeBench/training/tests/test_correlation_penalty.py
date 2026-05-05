@@ -90,6 +90,13 @@ class TestComputePixelAxes:
         with pytest.raises(ValueError):
             compute_pixel_axes(torch.rand(3, 32, 32))  # missing batch dim
 
+    def test_accepts_5d_video_batch(self):
+        # combined_paired collate emits [B, T, 3, H, W]; we should flatten to [B*T, 3, H, W]
+        img = torch.rand(4, 8, 3, 32, 32)
+        axes = compute_pixel_axes(img)
+        assert axes["sharpness_laplacian"].shape == (32,)  # B*T = 4*8
+        assert axes["luma_mean"].shape == (32,)
+
 
 class TestCorrelationPenalty:
     def test_zero_lambda_returns_zero(self):

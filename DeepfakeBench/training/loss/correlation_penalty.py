@@ -64,16 +64,23 @@ def compute_pixel_axes(image: torch.Tensor) -> Dict[str, torch.Tensor]:
       - `luma_mean`: mean Y-channel value via Rec. 601 weights.
 
     Args:
-        image: [B, 3, H, W] float tensor. Range can be [0, 1] or normalized
-            ImageNet stats — the correlation is scale-invariant so absolute
-            range does not matter for the regularizer.
+        image: [B, 3, H, W] OR [B, T, 3, H, W] float tensor. The combined-paired
+            collate emits a video-style 5-D tensor; we flatten to per-frame
+            so axis values match the per-frame score that get_losses computes
+            after pred.softmax(dim=-1)[:, 1] over the [B*T, 2] logits.
+            Range can be [0, 1] or normalized ImageNet stats — the correlation
+            is scale-invariant so absolute range does not matter.
 
     Returns:
         dict with keys 'sharpness_laplacian', 'luma_mean'; each value is a
-        [B] tensor.
+        [B] (or [B*T] for 5-D input) tensor.
     """
+    if image.dim() == 5:
+        # [B, T, 3, H, W] -> [B*T, 3, H, W]
+        bsz, tlen = image.shape[0], image.shape[1]
+        image = image.reshape(bsz * tlen, *image.shape[2:])
     if image.dim() != 4 or image.shape[1] != 3:
-        raise ValueError(f"compute_pixel_axes expects [B, 3, H, W]; got {tuple(image.shape)}")
+        raise ValueError(f"compute_pixel_axes expects [B, 3, H, W] or [B, T, 3, H, W]; got {tuple(image.shape)}")
 
     # Rec. 601 luma — works on either [0,1] or normalized inputs
     luma = 0.299 * image[:, 0] + 0.587 * image[:, 1] + 0.114 * image[:, 2]  # [B, H, W]
