@@ -1,0 +1,50 @@
+{
+  "ckpt_name": "e2b_top_n_step3200",
+  "real_csv": "analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_all_dev_e2b_top_n_step3200_frames_report.csv",
+  "fake_csvs": {
+    "visomaster_enhanced_macro_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/visomaster_enhanced_macro_dev_e2b_top_n_step3200_frames_report.csv",
+    "teams_fake_all_dev": "analysis/pa_pc_eval_2026-05-05/raw_reports/teams_fake_all_dev_e2b_top_n_step3200_frames_report.csv"
+  },
+  "target_fpr": 0.1,
+  "n_real_frames_F0": 4564,
+  "n_real_frames_F4": 2091,
+  "pct_real_kept_F4": 45.82,
+  "tau_F0_calibrated": 0.5064,
+  "tau_F4_at_FPR_5pct": 0.3612,
+  "tau_F4_at_FPR_10pct": 0.0668,
+  "fpr_F0_pct": 10.01,
+  "fpr_F4_pct": 3.16,
+  "fpr_at_tau_0_5_F0_pct": 10.08,
+  "fpr_at_tau_0_5_F4_pct": 3.16,
+  "per_suite": [
+    {
+      "ckpt": "e2b_top_n_step3200",
+      "fake_suite": "visomaster_enhanced_macro_dev",
+      "n_fake_frames": 550,
+      "tau_F0_calibrated_at_target_fpr": 0.5064,
+      "tau_F4_calibrated_at_FPR=10%": 0.0668,
+      "tau_F4_calibrated_at_FPR=5%": 0.3612,
+      "recall_at_tau_F0_pct": 8.36,
+      "recall_at_tau_F4_FPR10_pct": 30.91,
+      "recall_at_tau_F4_FPR5_pct": 11.64,
+      "lift_abs_pp_F0_to_F4_FPR10": 22.55
+    },
+    {
+      "ckpt": "e2b_top_n_step3200",
+      "fake_suite": "teams_fake_all_dev",
+      "n_fake_frames": 3039,
+      "tau_F0_calibrated_at_target_fpr": 0.5064,
+      "tau_F4_calibrated_at_FPR=10%": 0.0668,
+      "tau_F4_calibrated_at_FPR=5%": 0.3612,
+      "recall_at_tau_F0_pct": 79.4,
+      "recall_at_tau_F4_FPR10_pct": 87.13,
+      "recall_at_tau_F4_FPR5_pct": 82.2,
+      "lift_abs_pp_F0_to_F4_FPR10": 7.73
+    }
+  ],
+  "outputs": {
+    "real_cleaned_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/e2b_top_n_step3200_real_cleaned.csv",
+    "per_filter_fpr_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/e2b_top_n_step3200_per_filter_fpr.csv",
+    "per_suite_recall_lift_csv": "analysis/pa_pc_eval_2026-05-05/f4_outputs/e2b_top_n_step3200_per_suite_recall_lift.csv"
+  }
+}
