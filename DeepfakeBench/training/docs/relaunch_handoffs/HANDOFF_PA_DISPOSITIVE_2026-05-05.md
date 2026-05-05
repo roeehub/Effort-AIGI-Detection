@@ -6,7 +6,17 @@
 
 ---
 
-## TL;DR (3 lines)
+> **⚠ CRITICAL WALKBACK ADDED 2026-05-05 ~03:00 UTC**: The "PA dispositive" verdict in this handoff was REVERSED later in the same session. PA + E2B on HDTF substrate (job `4985399369189556224`) showed PA top_n_5600 catches only **7.87% on `proper_visomaster_enhanced_teams_dev` (n=1182)** vs P8A's 93.57% on the same cell. **PA's F4 v2 lift is v2-substrate-bound, likely partial memorization** (PA's `visomaster_enhanced.enabled` source overlaps with v2 substrate's identity space, Dor-dominant). For deployment, **P8A_REFERENCE_STEP5000 remains the safer choice**. See `analysis/pa_pc_eval_2026-05-05/CRITICAL_WALKBACK_PA_DOES_NOT_GENERALIZE.md` for the full walkback. The TL;DR below is HISTORICAL; read the walkback for the corrected reading.
+
+## TL;DR (corrected 2026-05-05 ~03:00 UTC)
+
+1. PA top_n_5600 wins F4@10% **on v2 only**: viso 72%, deeplive 100%, teams_fake 95%. **DOES NOT generalize**: on HDTF substrate, PA viso = 7.87% vs P8A's 93.57%.
+2. The data lever's apparent F4 lift on v2 is partly substrate-overlap (PA trained on visomaster_enhanced which sources from v2's bucket; eval bucket shares Dor-dominant substrate per `project_v2_substrate_is_dor_diverse_swap`).
+3. PC codec aug HURTS viso 35-50pp vs PA on F4 v2 (still empirically refuted on viso, regardless of substrate framing).
+4. **For deployment: P8A_REFERENCE_STEP5000 remains the best generalist**. PA carries cross-distribution risk.
+5. **For future packets**: cross-substrate validation MUST be part of any data-axis close criterion. F4 v2 lift alone is insufficient evidence of generalizable improvement.
+
+## ORIGINAL TL;DR (HISTORICAL — read with walkback above)
 
 1. **PA_TOP_N_STEP5600 is the new best R13 ckpt** — beats P8A on viso (+5pp), deeplive (+7.5pp), and teams_fake (+2.6pp) at F4 FPR=10%. First ckpt to clear all 3 fake suites simultaneously.
 2. **The data lever IS dispositive** when cleanly tested — but only on F4-cleaned substrate; F0 lift is marginal because chronic-6 FPR pollution dominates F0.
