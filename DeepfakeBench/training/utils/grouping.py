@@ -11,7 +11,14 @@ from typing import Iterable, Optional, Sequence, Tuple, Union
 
 
 DEFAULT_ENHANCED_STRATEGIES = (
-    "quality_enhancement",
+    # NOTE: `quality_enhancement` was removed 2026-05-05 — its bucket manifests
+    # show NO `enhancement: GFPGAN_sample` field (unlike `*_enhanced` strategies
+    # which carry explicit GFPGAN tagging). It was incorrectly grouped with
+    # GFPGAN-applied strategies in commit 38558ee5 (2026-03-19); fix landed
+    # 2026-05-05 after visual + manifest verification.
+    # See: docs/packet_retrospectives/threads/quality_enhancement_strategy_misrouting.md
+    # Before adding any strategy here: verify its bucket manifest has
+    # `enhancement: GFPGAN_sample` (or equivalent enhancer tag).
     "edge_cases_enhanced",
     "minimal_processing_enhanced",
 )
@@ -280,15 +287,21 @@ def infer_family_key(
     }:
         return "deeplive_non_enhanced_fake"
 
+    # NOTE 2026-05-05: `deeplive_quality_enhancement_fake` was REMOVED from
+    # this set. Its bucket manifests show no GFPGAN tag — it is a base
+    # strategy, NOT an enhanced one. Now falls through to the generic
+    # deeplive_*_fake branch below and is correctly routed to
+    # `deeplive_non_enhanced_fake`. The `or "quality_enhancement" in group_key`
+    # disjunct in the fallback was also removed for the same reason.
+    # See: docs/packet_retrospectives/threads/quality_enhancement_strategy_misrouting.md
     if group_key in {
-        "deeplive_quality_enhancement_fake",
         "deeplive_edge_cases_enhanced_fake",
         "deeplive_minimal_processing_enhanced_fake",
     }:
         return "deeplive_enhanced_fake"
 
     if group_key.startswith("deeplive_") and group_key.endswith("_fake"):
-        if "enhanced" in group_key or "quality_enhancement" in group_key:
+        if "enhanced" in group_key:
             return "deeplive_enhanced_fake"
         return "deeplive_non_enhanced_fake"
 
