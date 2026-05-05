@@ -5,7 +5,7 @@
 ## Summary
 
 - **Open**: 27
-- **In progress**: 3
+- **In progress**: 4
 - **Resolved**: 9
 - **Superseded**: 1
 
@@ -229,7 +229,7 @@
 - **close_criterion**: at least one of the three candidate mechanisms (decision-boundary / intermediate-layer / test-substrate) is empirically supported on a probe whose design isolates that mechanism, AND the supported mechanism produces a measurable signature on `mclioexb` that does NOT also appear on `9lmvb5b4` step 5000 baseline at comparable magnitude — i.e., the mechanism is specific to the value_composite winner, not a feature shared with the FT base
 - **source**: `threads/jitter_winner_mechanism_unknown.md:113`
 
-### In progress (3)
+### In progress (4)
 
 ### `shortcut-deployment-block`
 - **status**: in-progress
@@ -254,6 +254,14 @@
 - **last_verified**: 2026-04-29
 - **close_criterion**: a packet trains an enhanced-proper arm and measures it against a validation pool that explicitly contains enhanced-proper rows, with dose matched to the unenhanced arm — so "enhanced hurts" / "enhanced helps" is readable without the pool-composition + dose confound
 - **source**: `threads/gate_alignment_story.md:91`
+
+### `quality-enhancement-strategy-misrouted-fix-pending`
+- **status**: in-progress
+- **severity**: medium
+- **first_seen**: 2026-05-05
+- **last_verified**: 2026-05-05
+- **close_criterion**: routing fix is applied — `quality_enhancement` is removed from `DEFAULT_ENHANCED_STRATEGIES` in `utils/grouping.py:13-17` AND from every R13 yaml's `enhanced_strategy_names` override (~15 yamls under `experiments/phase2_round13/`); a unit test asserts `infer_family_key` returns `deeplive_non_enhanced_fake` for a `quality_enhancement` fake input; image is rebuilt via `./dev.sh build-prod -y` (auto-bumps VERSION); and a critical-reading banner is added to the README and to historical packet retros (P8A, E2B, PA, PC) noting they trained on the contaminated routing. Validation re-run on at least one FT-from-base packet measuring the delta in deeplive enhanced-vs-non-enhanced family balance is recommended but not required for closure (could be folded into the in-scoping deeplive ship experiment instead). Verification step (visual inspection) is COMPLETE 2026-05-05 evening — user reported "quality enhancement is non-GFPGAN like we suspected." Bug confirmed; fix pending authorization.
+- **source**: `threads/quality_enhancement_strategy_misrouting.md:175`
 
 ### Resolved (9)
 

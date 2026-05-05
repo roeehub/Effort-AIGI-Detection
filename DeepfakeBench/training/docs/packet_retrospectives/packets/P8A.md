@@ -1,5 +1,7 @@
 # Packet P8A · CLIP-backbone unfreeze breaks the camera-signature anchor ceiling (with a per-method fake-recall regression)
 
+> **⚠ Critical-reading note (added 2026-05-05)**: P8A was trained with the `quality_enhancement` routing bug active (commit 38558ee5 → fixed 2026-05-05). At training time, ~5,120 deeplive `quality_enhancement_*` frames were routed to the `deeplive_enhanced_fake` family at weight 3.0 (instead of the correct `deeplive_non_enhanced_fake` family at weight 2.5). All numerical results below are conditional on that contamination. The anchor-pool / FPR / fake-recall framing within P8A remains internally valid (relative readings are uniform across the chain); claims about *how* P8A handles GFPGAN-enhanced fakes specifically need revisiting once a post-fix retraining run lands. See [`quality_enhancement_strategy_misrouting`](../threads/quality_enhancement_strategy_misrouting.md) for full evidence and fix details.
+
 > **Template contract**: fill every section. If a section truly has no content, write `*(none — reason)*` rather than deleting the heading. Keep the status-card table intact.
 
 ## Status card
