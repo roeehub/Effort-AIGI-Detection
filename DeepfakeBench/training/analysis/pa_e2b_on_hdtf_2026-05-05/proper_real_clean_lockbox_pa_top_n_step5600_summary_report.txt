@@ -1,0 +1,28 @@
+Validation Summary Report for: td_proper_real_clean_lockbox_pa_top_n_step5600
+Run Name: TargetDomain proper_real_clean_lockbox PA_TOP_N_STEP5600
+Generated on: 2026-05-05 02:14:59
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 382
+Accuracy: 0.9948
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 380
+False Positives (Real misclassified as Fake): 2
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_real_clean (REAL) -----
+Total Videos: 382
+Accuracy: 0.9948 (380/382 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_real_clean (family=proper_real_clean): n=382, acc=0.9948, tpr=0.0000, fpr=0.0052, fnr=0.0000
+
+Best-group accuracy: proper_real_clean = 0.9948
+Worst-group accuracy: proper_real_clean = 0.9948
+Best-vs-worst group accuracy gap: 0.0000

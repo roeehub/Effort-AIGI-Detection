@@ -1,0 +1,28 @@
+Validation Summary Report for: td_proper_real_clean_dev_pa_top_n_step5600
+Run Name: TargetDomain proper_real_clean_dev PA_TOP_N_STEP5600
+Generated on: 2026-05-05 02:10:07
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1443
+Accuracy: 0.9931
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 1433
+False Positives (Real misclassified as Fake): 10
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_real_clean (REAL) -----
+Total Videos: 1443
+Accuracy: 0.9931 (1433/1443 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_real_clean (family=proper_real_clean): n=1443, acc=0.9931, tpr=0.0000, fpr=0.0069, fnr=0.0000
+
+Best-group accuracy: proper_real_clean = 0.9931
+Worst-group accuracy: proper_real_clean = 0.9931
+Best-vs-worst group accuracy gap: 0.0000

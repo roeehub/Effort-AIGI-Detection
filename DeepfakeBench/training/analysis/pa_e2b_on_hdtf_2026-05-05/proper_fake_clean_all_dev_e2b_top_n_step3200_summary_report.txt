@@ -1,0 +1,313 @@
+Validation Summary Report for: td_proper_fake_clean_all_dev_e2b_top_n_step3200
+Run Name: TargetDomain proper_fake_clean_all_dev E2B_TOP_N_STEP3200
+Generated on: 2026-05-05 03:19:52
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1442
+Accuracy: 0.8239
+True Positives (Correctly identified Fake): 1188
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 254
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_visomaster_clean__cscs (FAKE) -----
+Total Videos: 9
+Accuracy: 1.0000 (9/9 correct)
+
+----- Method: proper_visomaster_clean__ghostface_v1 (FAKE) -----
+Total Videos: 38
+Accuracy: 0.9474 (36/38 correct)
+
+----- Method: proper_visomaster_clean__ghostface_v2 (FAKE) -----
+Total Videos: 27
+Accuracy: 0.9630 (26/27 correct)
+
+----- Method: proper_visomaster_clean__ghostface_v3 (FAKE) -----
+Total Videos: 29
+Accuracy: 0.9655 (28/29 correct)
+
+----- Method: proper_visomaster_clean__instyleswapper256_a (FAKE) -----
+Total Videos: 30
+Accuracy: 1.0000 (30/30 correct)
+
+----- Method: proper_visomaster_clean__instyleswapper256_b (FAKE) -----
+Total Videos: 32
+Accuracy: 1.0000 (32/32 correct)
+
+----- Method: proper_visomaster_clean__instyleswapper256_c (FAKE) -----
+Total Videos: 31
+Accuracy: 1.0000 (31/31 correct)
+
+----- Method: proper_visomaster_clean__inswapper128 (FAKE) -----
+Total Videos: 36
+Accuracy: 1.0000 (36/36 correct)
+
+----- Method: proper_visomaster_clean__simswap512 (FAKE) -----
+Total Videos: 30
+Accuracy: 0.8333 (25/30 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_codeformer (FAKE) -----
+Total Videos: 2
+Accuracy: 1.0000 (2/2 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_gfpgan_v1_4 (FAKE) -----
+Total Videos: 8
+Accuracy: 1.0000 (8/8 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_gpen_1024 (FAKE) -----
+Total Videos: 1
+Accuracy: 1.0000 (1/1 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_gpen_2048 (FAKE) -----
+Total Videos: 4
+Accuracy: 1.0000 (4/4 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_gpen_256 (FAKE) -----
+Total Videos: 9
+Accuracy: 1.0000 (9/9 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_gpen_512 (FAKE) -----
+Total Videos: 4
+Accuracy: 1.0000 (4/4 correct)
+
+----- Method: proper_visomaster_enhanced_clean__cscs_restoreformer (FAKE) -----
+Total Videos: 7
+Accuracy: 1.0000 (7/7 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_codeformer (FAKE) -----
+Total Videos: 17
+Accuracy: 1.0000 (17/17 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_gfpgan_v1_4 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.9500 (19/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_gpen_1024 (FAKE) -----
+Total Videos: 24
+Accuracy: 0.7917 (19/24 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_gpen_2048 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.6957 (16/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_gpen_256 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.7391 (17/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_gpen_512 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.8421 (16/19 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v1_restoreformer (FAKE) -----
+Total Videos: 22
+Accuracy: 0.8636 (19/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_codeformer (FAKE) -----
+Total Videos: 18
+Accuracy: 0.9444 (17/18 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_gfpgan_v1_4 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.9524 (20/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_gpen_1024 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.5789 (11/19 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_gpen_2048 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.7000 (14/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_gpen_256 (FAKE) -----
+Total Videos: 18
+Accuracy: 0.8889 (16/18 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_gpen_512 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.8636 (19/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v2_restoreformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.9000 (18/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_codeformer (FAKE) -----
+Total Videos: 21
+Accuracy: 1.0000 (21/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_gfpgan_v1_4 (FAKE) -----
+Total Videos: 21
+Accuracy: 1.0000 (21/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_gpen_1024 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.6842 (13/19 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_gpen_2048 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.7727 (17/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_gpen_256 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.8182 (18/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_gpen_512 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.7391 (17/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__ghostface_v3_restoreformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.9000 (18/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_codeformer (FAKE) -----
+Total Videos: 18
+Accuracy: 1.0000 (18/18 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_gfpgan_v1_4 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.9545 (21/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_gpen_1024 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.7000 (14/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_gpen_2048 (FAKE) -----
+Total Videos: 18
+Accuracy: 0.7778 (14/18 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_gpen_256 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.8000 (16/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_gpen_512 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.6000 (12/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_a_restoreformer (FAKE) -----
+Total Videos: 22
+Accuracy: 1.0000 (22/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_codeformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.9500 (19/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_gfpgan_v1_4 (FAKE) -----
+Total Videos: 25
+Accuracy: 0.8800 (22/25 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_gpen_1024 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.7895 (15/19 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_gpen_2048 (FAKE) -----
+Total Videos: 14
+Accuracy: 0.9286 (13/14 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_gpen_256 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.9500 (19/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_gpen_512 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.6364 (14/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_b_restoreformer (FAKE) -----
+Total Videos: 21
+Accuracy: 0.9048 (19/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_codeformer (FAKE) -----
+Total Videos: 24
+Accuracy: 0.7917 (19/24 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_gfpgan_v1_4 (FAKE) -----
+Total Videos: 20
+Accuracy: 1.0000 (20/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_gpen_1024 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.5217 (12/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_gpen_2048 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.7391 (17/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_gpen_256 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.9048 (19/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_gpen_512 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.3913 (9/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__instyleswapper256_c_restoreformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.9000 (18/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_codeformer (FAKE) -----
+Total Videos: 22
+Accuracy: 0.9545 (21/22 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_gfpgan_v1_4 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.7368 (14/19 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_gpen_1024 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.5238 (11/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_gpen_2048 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.5000 (10/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_gpen_256 (FAKE) -----
+Total Videos: 18
+Accuracy: 0.7778 (14/18 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_gpen_512 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.6522 (15/23 correct)
+
+----- Method: proper_visomaster_enhanced_clean__inswapper128_restoreformer (FAKE) -----
+Total Videos: 17
+Accuracy: 0.9412 (16/17 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_codeformer (FAKE) -----
+Total Videos: 21
+Accuracy: 0.6190 (13/21 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_gfpgan_v1_4 (FAKE) -----
+Total Videos: 15
+Accuracy: 0.8667 (13/15 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_gpen_1024 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.3500 (7/20 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_gpen_2048 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.5263 (10/19 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_gpen_256 (FAKE) -----
+Total Videos: 25
+Accuracy: 0.6000 (15/25 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_gpen_512 (FAKE) -----
+Total Videos: 17
+Accuracy: 0.5882 (10/17 correct)
+
+----- Method: proper_visomaster_enhanced_clean__simswap512_restoreformer (FAKE) -----
+Total Videos: 19
+Accuracy: 0.8421 (16/19 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_visomaster_clean_fake (family=proper_visomaster_clean_fake): n=262, acc=0.9656, tpr=0.9656, fpr=0.0000, fnr=0.0344
+proper_visomaster_enhanced_clean_fake (family=proper_visomaster_enhanced_clean_fake): n=1180, acc=0.7924, tpr=0.7924, fpr=0.0000, fnr=0.2076
+
+Best-group accuracy: proper_visomaster_clean_fake = 0.9656
+Worst-group accuracy: proper_visomaster_enhanced_clean_fake = 0.7924
+Best-vs-worst group accuracy gap: 0.1733
