@@ -68,8 +68,64 @@ DEBUG_FRAME_DIR = "./debug_frames"
 #   - laplacian_var >= QUALITY_GATE_MIN_LAP_VAR (rejects extreme blur)
 #   - is_no_face is enforced upstream by YOLO returning None on recrop=True paths
 QUALITY_GATE_DEFAULT_PROB = 0.25
-QUALITY_GATE_MIN_DIM = 150
+QUALITY_GATE_MIN_DIM = 80
 QUALITY_GATE_MIN_LAP_VAR = 8.0
+
+
+def pretty_print_batch(
+    files: List,
+    per_frame_status: List[Dict[str, Any]],
+    confidence: float,
+    threshold: float,
+    pred_label: str,
+) -> None:
+    """ANSI-coloured per-frame readout, printed to the same logger.
+
+    Emits a single multi-line block. Per-frame lines are GREEN when prob<threshold
+    (REAL) and RED when prob>=threshold (FAKE). Gated frames are shown in DIM.
+    The final mean line is colour-keyed by the batch verdict.
+    """
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    DIM = "\033[2m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+
+    total = len(files)
+    bar_w = 16
+
+    lines = []
+    sep = "═" * 78
+    lines.append(sep)
+    head_color = RED if pred_label == "FAKE" else GREEN
+    lines.append(
+        f"{BOLD}[BATCH {total}] threshold={threshold:.2f}  "
+        f"mean={head_color}{confidence:.3f}{RESET}{BOLD} → {head_color}{pred_label}{RESET}"
+    )
+    lines.append("─" * 78)
+
+    for i, (f, s) in enumerate(zip(files, per_frame_status)):
+        name = (f.filename or f"frame_{i}")[:28].ljust(28)
+        kind = s.get("kind")
+        if kind == "failed":
+            lines.append(f"  {DIM}{name}  [decode failed]{RESET}")
+            continue
+        prob = s.get("prob")
+        if prob is None:
+            lines.append(f"  {DIM}{name}  [no prob]{RESET}")
+            continue
+        filled = int(round(prob * bar_w))
+        bar = "█" * filled + "░" * (bar_w - filled)
+        if kind == "gated":
+            reason = s.get("reason", "gated")
+            lines.append(f"  {DIM}{name}  {bar}  {prob:.3f}  GATED  ({reason}){RESET}")
+        else:
+            color = RED if prob >= threshold else GREEN
+            verdict = "FAKE" if prob >= threshold else "REAL"
+            lines.append(f"  {name}  {color}{bar}  {prob:.3f}  {verdict}{RESET}")
+
+    lines.append(sep)
+    logger.info("\n" + "\n".join(lines))
 
 
 def quality_gate(img_bgr: Optional[np.ndarray], frame_id: str = "frame") -> tuple:
@@ -873,6 +929,8 @@ async def check_frame_batch(
             f"Batch inference complete: {successful_frames}/{total_frames} model-scored, "
             f"{gated_frames} gated (defaulted to {QUALITY_GATE_DEFAULT_PROB}), {failed_frames} decode-failed"
         )
+
+        pretty_print_batch(files, per_frame_status, confidence, threshold, pred_label)
 
         return BatchInferResponse(pred_label=pred_label, confidence=confidence, probs=probs_list)
 
