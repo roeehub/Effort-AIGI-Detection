@@ -1,0 +1,146 @@
+# ============================================================================
+# R13_P17_LAYER4_HEAD.yaml
+# Phase 2, Round 13 — Layer-4 readout head from frozen P8A backbone (Arm 2).
+#
+# Authored 2026-05-01 morning, alongside R13_P17_LAYER3_HEAD (Arm 1).
+#
+# Purpose:
+#   Companion to Arm 1 (layer-3 readout). Tests the *layer-sensitivity* axis
+#   of the layer-3 hypothesis. The CPU probe measured transfer AUC at:
+#     - layer 3: 0.886 (good — substrate-invariant label direction)
+#     - layer 6: 0.536 (broken — substrate sign-flipped)
+#   Layer 4 is the unmeasured boundary. Three useful outcomes:
+#     - Layer 4 also wins  → robust readout zone, deployment safety margin
+#     - Layer 4 misses     → boundary is between layers 3 and 4 (very tight)
+#     - Either way         → directly informs Arm 1 fragility
+#
+# Single-lever discipline:
+#   ONE change vs Arm 1 (R13_P17_LAYER3_HEAD): backbone.intermediate_layer
+#   = 4 instead of 3. Everything else (frozen backbone, no augmentation
+#   bundle, no GRL, no data-axis change, ArcFace recipe, schedule, base
+#   checkpoint) is byte-identical to Arm 1.
+#
+# Requires same patches as Arm 1 (already applied):
+#   - detectors/effort_detector.py: OpenCLIPVisionModelWrapper.intermediate_layer
+#   - trainer/trainer.py: head.* drop in load_ckpt
+# ============================================================================
+
+name: "R13_P17_LAYER4_HEAD"
+description: "Layer-4 [CLS] readout from frozen P8A backbone — companion arm to LAYER3, tests layer-sensitivity"
+seed: 5504
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "p17-layer4-head"
+    - "anti-shortcut"
+    - "intermediate-layer"
+    - "frozen-backbone"
+    - "layer-4"
+    - "fork-p8a"
+    - "seed-5504"
+    - "companion-arm"
+
+data_source: combined_paired
+
+# ============================================================================
+# Backbone — load P8A weights, hook layer 4, freeze EVERYTHING
+# ============================================================================
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 768                    # layer-4 [CLS] is 768-d (same as layer-3)
+  resolution: 224
+
+  intermediate_layer: 4               # ← THE LEVER (Arm 1 = 3, Arm 2 = 4).
+
+  apply_svd_to_in_proj: true
+  apply_svd_to_mlp: true
+  freeze_svd_residuals: true          # CRITICAL: keep this a true head-only arm
+  unfreeze_final_proj: false
+  unfreeze_final_ln: false
+
+# Initialize from P8A_step5000 — same as Arm 1
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+# ArcFace recipe matches Arm 1 / P8A
+use_arcface_head: true
+arcface_s: 6.0
+arcface_m: 0.15
+s_start: 6.0
+s_end: 12.0
+anneal_steps: 5000
+normalize_features_before_head: true
+
+# ============================================================================
+# Optimizer — only the head updates
+# ============================================================================
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+gradient_clip_val: 1.0
+
+lambda_reg: 0.0
+rank: 736
+
+# ============================================================================
+# Schedule — identical to Arm 1
+# ============================================================================
+batch_size: 64
+total_training_steps: 10000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+eval_every: 500
+save_every: 1000
+periodic_saves:
+  enabled: true
+  step_list: [500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000]
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 1000
+  keep_last_n: 3
+
+# ============================================================================
+# Loss — standard
+# ============================================================================
+use_quality_domain_head: false
+quality_domain_loss_weight: 0.0
+
+# ============================================================================
+# Data — identical to Arm 1 (NO data-axis change, single-lever discipline)
+# ============================================================================
+data:
+  df40:
+    enabled: true
+    family_weight: 0.2
+  deeplive:
+    enabled: true
+    family_weight: 1.0
+  visomaster:
+    enabled: true
+    family_weight: 1.0
+    fake_weight: 4.0
+  visomaster_enhanced:
+    enabled: false
+  visomaster_hints:
+    enabled: false                    # Bad data — never on
+  visomaster_hints_teams:
+    enabled: false                    # Bad data — never on
+  teams:
+    enabled: true
+    family_weight: 1.0
+  external:
+    enabled: true                     # webcam_codec / VCD reals
+
+# Anti-shortcut bundle — DISABLED (single-lever discipline)
+face_scale_jitter:
+  enabled: false
+anchor_aware:
+  enabled: false
+pipeline_randomization:
+  enabled: false

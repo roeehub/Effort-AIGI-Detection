@@ -1,0 +1,332 @@
+# ============================================================================
+# R13_E1_EVAL_TARGETED_AUG.yaml
+# Phase 2, Round 13 — P22-sister with HEAVIER eval-targeted aug curriculum.
+#
+# Forks: R13_P22_AUG_CURRICULUM (run dot1buye) + R13_S2_P22_EARLIER_BASE.
+# Single lever vs P22: pipeline_randomization parameters pushed harder toward
+# the eval-viso joint distribution (laplacian ~50–150, luma ~135–185).
+#
+# Why (cite: analysis/skin_frac_viso_gap_2026-05-03/FINDINGS.md, Stream C):
+#   Stream C (2026-05-03) measured per-frame {skin_frac, laplacian_var, luma_mean}
+#   on 2,284 frames across {eval_viso_fake, train_viso_fake, eval_real, train_viso_real}.
+#   Headline gaps:
+#     - laplacian_var: train viso fake mean 482 vs eval viso fake mean 91
+#       (5.3× softer eval, KS=0.89, p≈10⁻²⁷⁴). Eval p10 (46) sits BELOW training p10 (188).
+#     - luma_mean: eval viso fake mean 160 vs train viso fake mean 108
+#       (eval +51 brighter, KS=0.74, p≈10⁻¹⁷⁴).
+#   P22's blur_sigma_range [0.5, 4.0] + brightness_range [-40, +40] is NOT strong enough
+#   to cover the eval distribution. Per Stream C: "P22's blur-jitter has the right shape
+#   but apparently not strong enough — eval p10 (46) sits below training p10 (188).
+#   A heavier blur curriculum, skewed toward eval-suite sharpness, is the
+#   single-lever try with the most direct evidence behind it."
+#
+# Single-lever discipline:
+#   - anchor_aware                 DISABLED (P14 lever, ruled out)
+#   - face_scale_jitter            DISABLED (P14 lever, ruled out)
+#   - GRL                          DISABLED (P15/P18 lever, ruled out)
+#   - data-axis source weights     UNCHANGED from S2 baseline
+#   - base ckpt                    P8A_step5000 (same as P22, NOT step2500)
+#   - training-step cap            2000 (longer than S2's 1000 to give heavier aug
+#                                  more time to take effect; saved every 100 steps)
+#   - pipeline_randomization       ENABLED with eval-targeted parameters (THIS IS THE LEVER)
+#
+# Pipeline-random delta vs P22:
+#   blur_sigma_range:  [0.5, 4.0]      → [2.0, 8.0]    (+2× upper, +4× lower)
+#   blur_p:            0.7             → 0.85
+#   brightness_range:  [-40, +40] sym  → [-30, +70] asym  (bias toward eval brighter)
+#   brightness_p:      0.5             → 0.7
+#   jpeg_p:            0.6             → 0.7
+#   jpeg_quality:      [40, 95]        → [30, 90]      (more aggressive low end)
+#
+# Pre-registered falsifiers (CPU post-training; run on best-by-class_sep ckpt):
+#   F-E1-A: Pearson r(score, laplacian_var) on dev viso DROPS by ≥ 0.20 magnitude
+#           vs P8A baseline. (Direct evidence the model stopped using sharpness.)
+#   F-E1-B: Viso recall at joint dev+lockbox FPR=10% > 35% (P8A holds 27%, P22 24.9%).
+#   F-E1-C: Lockbox dor_dev FPR ≤ 5/50 = 10% at calibrated τ
+#           (preserve P8A's signature dor invariance).
+#   3/3 → E1 succeeded; promote. 2/3 → mixed. 0-1/3 → eval-targeted aug NOT the lever.
+#
+# Cost: ~$15-25 Vertex (1 day us-west4 A100; FT 2000 steps from P8A_step5000).
+# Region preference per CLAUDE.md: us-west4 → us-east1 → us-central1.
+#
+# Seed: 3001 (distinct from P22=2226, S1=2227, S2=2228, S3=2229).
+# ============================================================================
+
+name: "R13_E1_EVAL_TARGETED_AUG"
+description: "P22-sister with HEAVIER eval-targeted aug curriculum (blur σ∈[2,8], brightness asym [-30,+70], jpeg q∈[30,90]). Stream C provides direct mechanistic evidence: 5.3× sharpness gap and +51 brightness gap between train and eval viso. Single lever vs P22."
+seed: 3001
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "e1"
+    - "eval-targeted-aug"
+    - "stream-c-evidence"
+    - "heavier-blur"
+    - "asymmetric-brightness"
+    - "fork-p22"
+    - "fork-p8a-step5000"
+    - "single-lever"
+    - "no-grl"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "seed-3001"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 3.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 4
+total_training_steps: 2000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 200
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# FT from P8A best ckpt (run 9lmvb5b4, step 5000, AUC 0.9926, EER 0.0270).
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# --- Anchor-aware: DISABLED (single-lever discipline). ---
+anchor_aware:
+  enabled: false
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+# --- Face scale-jitter: DISABLED (single-lever discipline). ---
+face_scale_jitter:
+  enabled: false
+  scale_limit: 0.50
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  # --- Pipeline-randomization: ENABLED — THIS IS E1's LEVER (heavier than P22). ---
+  # Symmetric across labels (p_real == p_fake). Sub-augs tuned to push the
+  # post-aug training distribution INTO the eval-viso joint per Stream C.
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85               # was 0.7 in P22
+    blur_sigma_range: [2.0, 8.0]   # was [0.5, 4.0] — eval p10=46 (vs train p10=188)
+    brightness_p: 0.7          # was 0.5
+    brightness_range: [-30.0, 70.0]  # was [-40, +40] — eval is +51 brighter
+    jpeg_p: 0.7                # was 0.6
+    jpeg_quality: [30, 90]     # was [40, 95]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 3001
+  seed: 3001
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 3001
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: true
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 8.0
+anneal_steps: 1000
+
+evaluate_every_steps: 100
+ood_monitoring_start_step: 100
+ood_monitoring_every_steps: 200
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 5
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 600
+    - 700
+    - 800
+    - 900
+    - 1000
+    - 1200
+    - 1400
+    - 1600
+    - 1800
+    - 2000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

@@ -75,7 +75,6 @@ augmentation:
   routing:
     mode: "symmetric"
     enhanced_strategy_names:
-      - "quality_enhancement"
       - "edge_cases_enhanced"
       - "minimal_processing_enhanced"
   webcam_codec_p: 0.35

@@ -1,0 +1,109 @@
+# ============================================================================
+# R13_P17_LAYER4_HEAD_LINEAR.yaml
+# Phase 2, Round 13 — Layer-4 readout head WITHOUT ArcFace (plain Linear).
+#
+# Companion arm to R13_P17_LAYER3_HEAD_LINEAR. Tests layer-sensitivity axis
+# of the substrate-invariant hypothesis using the cleaner head choice.
+#
+# Single-lever delta vs R13_P17_LAYER3_HEAD_LINEAR.yaml:
+#   intermediate_layer: 3 → 4
+# ============================================================================
+
+name: "R13_P17_LAYER4_HEAD_LINEAR"
+description: "Layer-4 [CLS] readout — plain Linear head (no ArcFace), companion arm to LAYER3_LINEAR"
+seed: 5506
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "p17-layer4-head"
+    - "anti-shortcut"
+    - "intermediate-layer"
+    - "frozen-backbone"
+    - "layer-4"
+    - "fork-p8a"
+    - "seed-5506"
+    - "linear-head"
+    - "no-arcface"
+    - "companion-arm"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 768
+  resolution: 224
+
+  intermediate_layer: 4
+
+  apply_svd_to_in_proj: true
+  apply_svd_to_mlp: true
+  freeze_svd_residuals: true
+  unfreeze_final_proj: false
+  unfreeze_final_ln: false
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+use_arcface_head: false
+normalize_features_before_head: false
+
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+gradient_clip_val: 1.0
+
+lambda_reg: 0.0
+rank: 736
+
+batch_size: 64
+total_training_steps: 10000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+eval_every: 500
+save_every: 1000
+periodic_saves:
+  enabled: true
+  step_list: [500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000]
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 1000
+  keep_last_n: 3
+
+use_quality_domain_head: false
+quality_domain_loss_weight: 0.0
+
+data:
+  df40:
+    enabled: true
+    family_weight: 0.2
+  deeplive:
+    enabled: true
+    family_weight: 1.0
+  visomaster:
+    enabled: true
+    family_weight: 1.0
+    fake_weight: 4.0
+  visomaster_enhanced:
+    enabled: false
+  visomaster_hints:
+    enabled: false
+  visomaster_hints_teams:
+    enabled: false
+  teams:
+    enabled: true
+    family_weight: 1.0
+  external:
+    enabled: true
+
+face_scale_jitter:
+  enabled: false
+anchor_aware:
+  enabled: false
+pipeline_randomization:
+  enabled: false

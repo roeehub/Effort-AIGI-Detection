@@ -1,0 +1,195 @@
+# ============================================================================
+# R13_P17_LAYER3_HEAD.yaml
+# Phase 2, Round 13 — Layer-3 readout head from frozen P8A backbone.
+#
+# DRAFT — authored 2026-05-01 ~02:00 by overnight CPU diagnostic session.
+# DO NOT LAUNCH without:
+#   1. Reading docs/relaunch_handoffs/OVERNIGHT_LAYER3_FINDING_2026-05-01.md
+#   2. Confirming the detector patch (effort_detector.py: intermediate_layer
+#      support in OpenCLIPVisionModelWrapper) is applied and tested.
+#   3. Running tests/test_p17_layer3_head_wiring.py (TBD).
+#
+# Rationale (one paragraph):
+#   The intermediate-layer probe found that P8A's layer-3 [CLS] features
+#   carry SUBSTRATE-INVARIANT label information (dev→lockbox transfer AUC
+#   = 0.95) that the deeper layers DESTROY (transfer AUC at layer 6 =
+#   0.39, worse than chance — the same direction means "fake" in dev and
+#   "real" in lockbox). The head at layer 11 partially recovers (transfer
+#   AUC 0.66) but only by overfitting to dev-style substrate. This packet
+#   tests whether reading out from layer 3 — the layer where label
+#   features still agree across substrates — produces a deployment-grade
+#   detector.
+#
+# Single-lever discipline:
+#   ONE change vs P8A reference (which was FT-from-RLP6_04 with the canonical
+#   SVD recipe): the head reads layer-3 [CLS] features instead of the final
+#   pooler_output. Backbone is FROZEN through layer 3 (so layer-3 features
+#   stay at the substrate-invariant point measured offline). Layers 4-11 and
+#   the visual.proj/ln_post are also frozen — they are not in the gradient
+#   path because the new head reads from before them. NO augmentation
+#   bundle. NO GRL. NO data-axis change.
+#
+# Quick verification (mid-training kill switch):
+#   Every 500 steps, log the dev→lockbox transfer probe AUC (small
+#   subset). If transfer AUC drops below 0.85 by step 1500, kill (with
+#   user OK).
+#
+# Final pass criteria (any one is a clear win):
+#   - lockbox real FPR ≤ 2.0% AND lockbox fake recall ≥ 32.9% (P8A baseline)
+#   - lockbox real FPR ≤ 4.6% AND lockbox fake recall ≥ 50%
+#   - v3 promotion contract selects τ that beats P8A_step5000 on
+#     value_composite
+#   - on the 180-frame production-honest substrate at the calibrated τ:
+#     `roee-mac-laptop-false-flag-virtual-bg` fake-rate < 30%
+#
+# Cost estimate: ~$10–30, ~1–4 hours. Cheap because backbone is FROZEN
+# (only the 1538-param Linear head + ArcFace logits update).
+#
+# Risks:
+#   - If layer-3 features lack enough capacity for a useful head (within-dev
+#     LR AUC at layer 3 is 0.94, which is lower than 0.99 at layer 6/11),
+#     this experiment will land at a non-promoting AUC. That itself is
+#     informative — pivot to layer-4 or layer-5.
+#   - The 768-dim intermediate features differ from the 512-dim final
+#     features. The head dimension config has been adjusted (hidden_size:
+#     768 below) but other modules that rely on hidden_size may need audit.
+#   - The detector patch (intermediate-layer hook in
+#     OpenCLIPVisionModelWrapper) is required and untested. See
+#     experiments/phase2_round13/p17_DETECTOR_PATCH.diff for the proposed
+#     patch.
+# ============================================================================
+
+name: "R13_P17_LAYER3_HEAD"
+description: "Layer-3 [CLS] readout from frozen P8A backbone — test substrate-invariant features hypothesis"
+seed: 5503
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "p17-layer3-head"
+    - "anti-shortcut"
+    - "intermediate-layer"
+    - "frozen-backbone"
+    - "layer-3"
+    - "fork-p8a"
+    - "seed-5503"
+
+data_source: combined_paired
+
+# ============================================================================
+# Backbone — load P8A weights, hook layer 3, freeze EVERYTHING
+# ============================================================================
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 768                    # ← CHANGED: layer-3 [CLS] is 768-d (final is 512-d post-proj)
+  resolution: 224
+
+  # Intermediate-layer readout (NEW — requires detector patch)
+  intermediate_layer: 3               # ← THE LEVER. P8A's resblocks are 0..11.
+
+  # Backbone is FROZEN (no SVD residuals trainable, no unfreeze of any kind)
+  apply_svd_to_in_proj: true          # SVD applied to load P8A's in_proj weights, but we freeze them
+  apply_svd_to_mlp: true              # Same — applied at load, frozen for training
+  freeze_svd_residuals: true          # ← CRITICAL: true head-only training; no layer-3 drift
+  unfreeze_final_proj: false          # ← FROZEN (irrelevant anyway since we read from layer 3)
+  unfreeze_final_ln: false            # ← FROZEN
+
+# Initialize from P8A_step5000 — using the standard FT-from-P8A flag pattern
+# (matches R13_P14_FACE_SCALE_JITTER_ISOLATED.yaml). The trainer.load_ckpt
+# patch (in trainer/trainer.py) automatically drops head.* keys from the
+# checkpoint when backbone.intermediate_layer is set, because the head
+# dim differs (768 vs P8A's 512). NO separate flag needed.
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+# ArcFace recipe matches P8A
+use_arcface_head: true
+arcface_s: 6.0
+arcface_m: 0.15
+s_start: 6.0
+s_end: 12.0
+anneal_steps: 5000
+normalize_features_before_head: true  # L2 norm — important since we skip visual.proj
+
+# ============================================================================
+# Optimizer — only the head updates
+# ============================================================================
+learning_rate: 1.0e-4                 # Larger LR since only head is training
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+gradient_clip_val: 1.0
+
+# Lambda regularization disabled — backbone is frozen, no SVD constraint loss to apply
+lambda_reg: 0.0
+rank: 736                             # Used at SVD application time (load), not runtime
+
+# ============================================================================
+# Schedule
+# ============================================================================
+batch_size: 64
+total_training_steps: 10000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+eval_every: 500
+save_every: 1000
+periodic_saves:
+  enabled: true
+  step_list: [500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000]
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 1000
+  keep_last_n: 3
+
+# ============================================================================
+# Loss — standard binary CE / ArcFace, NO auxiliary heads
+# ============================================================================
+use_quality_domain_head: false
+quality_domain_loss_weight: 0.0
+
+# ============================================================================
+# Data — standard (NO data-axis change, NO bad-data lanes, NO bundle)
+# ============================================================================
+data:
+  df40:
+    enabled: true
+    family_weight: 0.2
+  deeplive:
+    enabled: true
+    family_weight: 1.0
+  visomaster:
+    enabled: true
+    family_weight: 1.0
+    fake_weight: 4.0                  # P8A baseline
+  visomaster_enhanced:
+    enabled: false                    # P14_DATA_FIX bumped this; staying off for clean attribution
+  visomaster_hints:
+    enabled: false                    # Bad data — never on
+  visomaster_hints_teams:
+    enabled: false                    # Bad data — never on
+  teams:
+    enabled: true
+    family_weight: 1.0
+  external:
+    enabled: true                     # webcam_codec / VCD reals
+
+# Anti-shortcut bundle — DISABLED (single-lever discipline)
+face_scale_jitter:
+  enabled: false                      # ← Lever NOT applied (the bundle was net-negative)
+anchor_aware:
+  enabled: false
+pipeline_randomization:
+  enabled: false
+
+# ============================================================================
+# Mid-training transfer probe — DEFERRED for first run (not implemented)
+# ============================================================================
+# A natural follow-up: every 500 steps, run a small dev→lockbox transfer
+# probe on layer-3 [CLS] features and log AUC to W&B. Trainer-side hook
+# (~30 lines in trainer.py). DEFERRED for the first P17 launch — rely on
+# post-training scorecard alone. If P17 wins, this hook is a useful guard
+# rail for follow-ups.

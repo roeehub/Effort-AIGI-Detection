@@ -1,0 +1,326 @@
+# ============================================================================
+# R13_S1_P22_REDUX_SHORT.yaml
+# Phase 2, Round 13 — P22 redux with short training cap + capped ArcFace s.
+#
+# Parent packet: R13_P22_AUG_CURRICULUM (W&B run dot1buye, 2026-05-02).
+# Findings that motivated S1:
+#   - P22 train AUC peaked at step 1000 but class_separation peaked at step 650
+#     (W&B `train/collapse/class_separation`). After step 800, class_sep
+#     halved; by step 7000, logit_std collapsed 3.0 → 0.10 (30× collapse).
+#   - The CPU follow-up packet established that step 1000 is the actually-best
+#     ckpt operationally (joint dev+lockbox τ-cal at FPR=2%): viso 6×, deeplive
+#     44×, dor invariance preserved at 6/1170. Step 8000 regressed dor 0/1170 → 36/1170.
+#   - ArcFace s annealing 6 → 12 collided with aug pressure; collapse begins ~s=10.5.
+# Cite: analysis/p22_eval_2026-05-02/cpu_followups/CPU_FOLLOWUPS_FINDINGS.md
+#
+# S1 hypothesis: cap training at 1000 steps and ArcFace s at 8.0 to preserve
+# class separation. This isolates "trained too long" as the cause of P22's
+# step-8000 collapse.
+#
+# Single-lever discipline:
+#   - SAME aug curriculum as P22 (blur σ ∈ [0.5, 4.0] @ p=0.7, JPEG q ∈ [40, 95]
+#     @ p=0.6, brightness β ∈ [-40, 40] @ p=0.5)
+#   - SAME base checkpoint as P22 (P8A_step5000, run 9lmvb5b4)
+#   - DIFFERENT total_training_steps (1000 vs 8000)
+#   - DIFFERENT s_end (8.0 vs 12.0)
+#   - DIFFERENT anneal_steps (1000 vs 8000)
+#   - DIFFERENT periodic_saves (every 100 vs every 1000)
+#
+# Pre-registered falsifiers (CPU post-training):
+#   F-S1-A: Best ckpt class_separation ≥ 4.0 (P22 peak 5.5; P22 step1k 2.7)
+#   F-S1-B: Best ckpt viso recall at FPR=10% (joint dev+lockbox) > 24.2%
+#           (must beat P22 step1k under same metric)
+#   F-S1-C: Best ckpt lockbox dor FPR ≤ 5/1170 = 0.43% at calibrated τ
+#           (P8A: 0/1170 = 0%; P22 step8k: 36/1170 = 3.1%)
+#   3/3 → S1 succeeded; 0/3 → cap-on-training is not the dominant factor.
+#
+# Cost: ~$5-8 (8× cheaper than P22). Region preference per CLAUDE.md.
+# Seed: 2227 (distinct from P22=2226).
+# ============================================================================
+
+name: "R13_S1_P22_REDUX_SHORT"
+description: "P22 aug curriculum with 1000-step cap + ArcFace s capped at 8.0. Tests whether short training preserves class_separation while delivering shortcut weakening."
+seed: 2227
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "s1"
+    - "p22-redux"
+    - "short-training-cap"
+    - "arcface-s-capped"
+    - "fork-p8a"
+    - "single-lever"
+    - "no-grl"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "seed-2227"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 3.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+# Total training cap is 1000 steps. nEpochs=1 lets the data loader run a full
+# epoch without re-shuffling beyond it; total_training_steps will short-circuit
+# the loop earlier (epoch length ≈ 2516 in P22's run, so 1000 steps = ~40% of
+# one epoch).
+nEpochs: 1
+total_training_steps: 1000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 100  # 10% of total — preserve P22's 5% ratio
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# FT from P8A best ckpt — SAME base as P22 (isolates the cap).
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# Single-lever discipline.
+anchor_aware:
+  enabled: false
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+face_scale_jitter:
+  enabled: false
+  scale_limit: 0.50
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  # IDENTICAL to P22 — this is the curriculum we're isolating.
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.7
+    blur_sigma_range: [0.5, 4.0]
+    brightness_p: 0.5
+    brightness_range: [-40.0, 40.0]
+    jpeg_p: 0.6
+    jpeg_quality: [40, 95]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+# Combined-paired identical to P22.
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 2227
+  seed: 2227
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 2227
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+# ArcFace head — s annealing 6 → 8 over 1000 steps (CAPPED vs P22's 6 → 12).
+# At s=8 the loss landscape is still sensitive but not as sharp as s=12,
+# leaving the model headroom to maintain class_separation under aug noise.
+use_arcface_head: true
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 8.0
+anneal_steps: 1000
+
+# Eval more frequently — the useful training window is short, so we want
+# fine-grained val metrics to identify the inflection point.
+evaluate_every_steps: 100
+ood_monitoring_start_step: 100
+ood_monitoring_every_steps: 200
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 5  # tighter than P22's 16 — short run, fast detection
+
+# Periodic saves at every 100 steps for fine-grained ckpt selection
+# (replaces P22's [500, 1000, 2000, ...] which was too coarse for the
+# step-650-to-1000 useful window).
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 600
+    - 700
+    - 800
+    - 900
+    - 1000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 100  # match periodic_saves granularity
+  keep_last_n: 12        # keep all 10 periodic + first_best + final

@@ -1,0 +1,324 @@
+# ============================================================================
+# R13_S2_P22_EARLIER_BASE.yaml
+# Phase 2, Round 13 — P22 redux from EARLIER P8A base (step 2500 instead of 5000).
+#
+# Parent packets: P22 (W&B run dot1buye), S1 (this packet's sister, same
+# training cap and curriculum but base = step 5000).
+#
+# Why this exists (cite: analysis/p22_eval_2026-05-02/cpu_followups/CPU_FOLLOWUPS_FINDINGS.md):
+#   P22 step1k (the strongest P22 ckpt operationally) had viso recall at FPR=10%
+#   (joint dev+lockbox) of 24.2% — better than P8A's 4.3% but far below the
+#   contrarian's "90% across the board at 5-10% FPR" target. Of the candidate
+#   structural problems:
+#     (a) P22 trained too long → S1 tests this with 1000-step cap
+#     (b) P8A_step5000 base is too shortcut-saturated (viso Pearson r = +0.51)
+#         → S2 tests this by FT'ing from a less-saturated base
+#
+# P8A run (9lmvb5b4) trajectory of saved ckpts:
+#   step 500   AUC 0.9895 EER 0.0405 (early; high EER suggests undertrained)
+#   step 1000  AUC 0.9928 EER 0.0541 (high EER — distribution issues)
+#   step 1500  AUC 0.9928 EER 0.0270 (good)
+#   step 2500  AUC 0.9936 EER 0.0270 (selected — peak val + good EER, mid-training)
+#   step 3500  AUC 0.9918 EER 0.0236
+#   step 4000  AUC 0.9941 EER 0.0236 (P8A's actual peak val AUC)
+#   step 5000  AUC 0.9926 EER 0.0270 (currently used base; slightly past peak)
+#
+# Selected base: step 2500 — peak val AUC at this step + good EER + mid-training.
+# Rationale: step 1500 has same AUC but is earlier in training so likely less
+# fully-formed. Step 4000 is the actual peak but might be MORE saturated than
+# 5000 (val AUC went down between 4000 and 5000, suggesting a subtle drift).
+# Step 2500 is the principled compromise: good metrics, before peak.
+#
+# S2 hypothesis: a less-saturated P8A base has more representational room for
+# the aug curriculum to find non-shortcut features for viso (which P8A_step5000
+# could not).
+#
+# Pre-registered falsifiers (CPU post-training):
+#   F-S2-A: Best ckpt class_separation ≥ S1's best ckpt class_separation
+#   F-S2-B: Best ckpt viso recall at FPR=10% (joint dev+lockbox) > 30.0%
+#           (must break P8A's dev-only 27.1% ceiling — the structural improvement)
+#   F-S2-C: Best ckpt lockbox dor FPR ≤ 5/1170 = 0.43% at calibrated τ
+#           (preserve P8A's signature defense)
+#   3/3 → S2 succeeded; 0-1/3 → P8A_step5000 was right; revert.
+#
+# Cost: ~$5-8. Region preference per CLAUDE.md.
+# Seed: 2229 (distinct from P22=2226, S1=2227).
+# ============================================================================
+
+name: "R13_S3_VISO_WEIGHT"
+description: "S2 + viso family weight 4.0 → 8.0. Stacks short cap + earlier base + curriculum + high viso weight to test whether the viso ceiling is breakable by combining all learned levers."
+seed: 2229
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "s3"
+    - "viso-weight-bump"
+    - "fw-8.0"
+    - "p22-redux"
+    - "short-training-cap"
+    - "arcface-s-capped"
+    - "earlier-p8a-base"
+    - "fork-p8a-step2500"
+    - "single-lever"
+    - "no-grl"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "seed-2229"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 3.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 1
+total_training_steps: 1000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 100
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# DIFFERENT FROM S1: base ckpt is P8A step 2500, not step 5000.
+# Note: at step 2500, only `top_n_effort_*` and `ood_composite_effort_*`
+# variants exist (no `value_composite_*` at this step). Both have identical
+# AUC/EER metadata; using `top_n_effort` as the canonical pick.
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/top_n_effort_20260424_step2500_auc0.9936_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+anchor_aware:
+  enabled: false
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+face_scale_jitter:
+  enabled: false
+  scale_limit: 0.50
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.7
+    blur_sigma_range: [0.5, 4.0]
+    brightness_p: 0.5
+    brightness_range: [-40.0, 40.0]
+    jpeg_p: 0.6
+    jpeg_quality: [40, 95]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 2229
+  seed: 2229
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 2229
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 8.0  # S3: bumped from S2's 4.0 to test viso lift via more viso in batches
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: true
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 8.0
+anneal_steps: 1000
+
+evaluate_every_steps: 100
+ood_monitoring_start_step: 100
+ood_monitoring_every_steps: 200
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 5
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 600
+    - 700
+    - 800
+    - 900
+    - 1000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 100
+  keep_last_n: 12

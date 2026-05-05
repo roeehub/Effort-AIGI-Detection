@@ -69,7 +69,6 @@ augmentation:
   routing:
     mode: "family_aware"
     enhanced_strategy_names:
-      - "quality_enhancement"
       - "edge_cases_enhanced"
       - "minimal_processing_enhanced"
   # -- TEAMS-PASSTHROUGH SPATIAL AUG (same limits as RLP7_04) ------------

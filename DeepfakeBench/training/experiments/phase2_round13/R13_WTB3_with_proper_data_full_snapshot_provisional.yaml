@@ -1,0 +1,307 @@
+# ============================================================================
+# R13_WTB3_with_proper_data_full_snapshot_provisional
+# Phase 2, Round 13 - first real relaunch packet arm
+#
+# Purpose:
+#   Use the proven WTB3 weak-signal family shape and add the full retained
+#   provisional proper-data snapshot.
+# ============================================================================
+
+name: "R13_WTB3_with_proper_data_full_snapshot_provisional"
+description: "WTB3 plus the full retained provisional proper-data snapshot"
+seed: 737
+
+wandb:
+  tags: ["phase2-round13", "fine-tune", "vit-b-16", "wt-b", "wt-f", "proper-data",
+         "wtb3-plus-proper", "full-proper-snapshot", "provisional", "weak-signal",
+         "hints-plus-teams-hints", "explicit-hint-lanes", "policy-aware-teams",
+         "r12g-fp32-base", "ft-scorecard-base", "seed-737", "compound-aug", "gamma-up"]
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+
+learning_rate: 3.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 15
+total_training_steps: 10000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 400
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 8
+prefetch_factor: 4
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [70, 130]
+  context_variation_brightness: [-0.20, 0.60]
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.04
+  context_variation_scale: 0.12
+  context_variation_rotate: 8
+  context_variation_individual_p: 0.15
+  context_variation_cct_p: 0.15
+  context_variation_cct_range: [2700, 8000]
+  hue_shift: 20
+  gamma_up_p: 0.15
+  gamma_up_range: [0.45, 0.85]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 737
+  identity_split_mode: "hash_stable"
+  seed: 737
+  bad_data_policy_manifest: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv"
+  bad_data_policy_summary: "policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_SUMMARY_2026-04-17.json"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    cache_manifest_uri: "gs://training-job-outputs/cache/deeplive/r13_wtb_full_deeplive_discovery_2026-04-19.json"
+    cache_max_age_hours: 12.0
+    cache_revision: "2026-04-19-r13-wtb-full-v1"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: false
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_hints:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    cache_manifest_uri: "gs://training-job-outputs/cache/visomaster/r13_wtb_hints_discovery_2026-04-19.json"
+    cache_max_age_hours: 12.0
+    cache_validate_listing: true
+    cache_revision: "2026-04-19-r13-wtb-hints-v1"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  visomaster_teams_enhanced:
+    enabled: false
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    include_statuses:
+      - "teams_v2_companion"
+      - "clean_companion_only"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  visomaster_enhanced:
+    enabled: false
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    gcs_project: "train-cvit2"
+    exclude_tiers: ["ARTIFACT"]
+    enhancers: null
+    cache_manifest_uri: "gs://visomaster-enhanced-face-cropped/cache/discovery_manifest.json"
+    cache_max_age_hours: 12.0
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    cache_manifest_uri: "gs://training-job-outputs/cache/teams/r13_wtb_teams_passthrough_discovery_2026-04-19.json"
+    cache_max_age_hours: 12.0
+    cache_validate_listing: true
+    cache_revision: "2026-04-19-r13-wtb-teams-v1"
+    require_pair_complete: true
+    apply_bad_data_policy: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  visomaster_hints_teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  proper_data:
+    enabled: true
+    inventory_path: "arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml"
+    manifest_path: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    include_lanes:
+      - "proper_visomaster_clean"
+      - "proper_visomaster_enhanced_clean"
+      - "proper_visomaster_teams"
+      - "proper_visomaster_enhanced_teams"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      cache_manifest_path: "gs://training-job-outputs/cache/external/r13_wtb_vcd_train_reals_frames_2026-04-19.json"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 737
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.15
+      visomaster_hints_fake: 2.5
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 5.0
+      visomaster_hints_teams_fake: 5.0
+      deeplive_teams_real: 4.0
+      df40_real: 0.4
+      realpool_real: 2.5
+      external_real: 2.5
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 300
+        deterministic: true
+      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+        prefix: "samples"
+        method: "teams_ood_real"
+        grouping: "by_folder"
+        path_contains: "/frames/real/"
+        video_id_depth: -4
+        max_videos: 300
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+      - bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams-v2"
+        prefix: "samples"
+        method: "teams_ood_fake"
+        grouping: "by_folder"
+        path_contains: "/frames/fake/"
+        video_id_depth: -4
+        max_videos: 300
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 300
+      wma_failure_fake: 1202
+    strict_expected_counts: false
+
+use_arcface_head: true
+arcface_m: 0.0
+arcface_s: 6.0
+s_start: 6.0
+s_end: 12.0
+anneal_steps: 15000
+
+evaluate_every_steps: 500
+ood_monitoring_start_step: 5000
+ood_monitoring_every_steps: 1000
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
+
+checkpointing:
+  gcs_prefix: "gs://training-job-outputs/phase2r13_experiments/"
+  save_every_steps: 2000
+  keep_last_n: 3
+  ood_composite_enabled: true
+  ood_composite_top_n_size: 3

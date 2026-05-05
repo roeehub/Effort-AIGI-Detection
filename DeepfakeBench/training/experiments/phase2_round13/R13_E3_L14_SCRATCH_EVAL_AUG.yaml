@@ -1,0 +1,336 @@
+# ============================================================================
+# R13_E3_L14_SCRATCH_EVAL_AUG.yaml
+# Phase 2, Round 13 — L14 SCRATCH from CLIP + E1's eval-targeted aug curriculum.
+#
+# Forks: R13_E2_SCRATCH_B16_EVAL_AUG (this packet's hyperparam reference)
+#        + experiments/phase2_round11/R11_G_vit_L14_fixed.yaml (L14 backbone setup).
+#
+# Single lever vs E2: backbone swapped from B16 LAION DataComp-XL to
+# ViT-L-14 (OpenAI HuggingFace). Everything else IDENTICAL to E2.
+#
+# Why (this is the architecture-capacity test):
+#   - The original Effort paper (arxiv:2411.15633) uses ViT-L-14, not B16.
+#   - The PHASE2_SUMMARY R8-R11 finding: "B-16's rank-32 residual subspace doesn't
+#     have the capacity to hold both DF40 discrimination and Teams domain knowledge"
+#     (experiments/phase2_round12/R12_EXPERIMENT_PLAN.md). That conclusion was at
+#     rank=32; current B16 uses rank=736 with 4× SVD coverage post-2026-04-26 fix.
+#   - Stream A (2026-05-03) audit found B16's in_proj-SVD residuals are noise-
+#     dominated for L0-L4, suggesting the capacity ceiling is partially self-
+#     imposed — but only ~2× and concentrated in early layers, not 4× across all.
+#   - L14: 504M params, 24 layers × 4 SVD projections = 96 SVDResidualLinear
+#     layers, ~199K backbone trainable.
+#   - B16: 100M params, 12 layers × 4 SVD projections = 48 SVDResidualLinear
+#     layers, ~74K backbone trainable (post-fix; was ~18K with bug).
+#
+# What this packet decides:
+#   - If E3 viso recall > E2 viso recall by ≥10pp at FPR=10%, the architecture-
+#     capacity hypothesis bites. L14 becomes the new B16. Future packets use L14.
+#   - If E3 viso recall ≈ E2 viso recall, B16 with eval-aug + post-Apr-26 fixes
+#     was the right scope. L14 budget reserved for future use.
+#   - If E3 viso recall < E2 viso recall, L14 needs different hyperparams (per
+#     JAN_13 doc winner: ArcFace s=18 anneal=1000) — this packet didn't give it
+#     a fair trial. We'd note this and consider re-running L14 with its known recipe.
+#
+# Single-lever discipline:
+#   ALL params identical to E2 except:
+#     - backbone.name, variant, source (B16 LAION → L14 OpenAI)
+#     - backbone.hidden_size (512 → 1024)
+#     - rank (736 → 768; per R11_G "stronger per-component signal" finding)
+#     - gcs_assets (CLIP-B16 → L14 OpenAI HuggingFace)
+#
+# Pre-registered falsifiers (CPU post-training):
+#   F-E3-A: Best ckpt val AUC ≥ 0.97 (verifies L14 trained at all from scratch
+#           on this data; L14_ablation showed 0.988 was reachable with ArcFace s=18)
+#   F-E3-B: Viso recall at joint dev+lockbox FPR=10% > E2's viso recall + 10pp
+#           (architecture-capacity bites — L14 lifts viso meaningfully)
+#   F-E3-C: Lockbox dor_dev FPR ≤ 10% at calibrated τ (basic real-side sanity)
+#   F-E3-D: teams_real_all_dev FPR ≤ 10% at calibrated τ (P13-style scratch FPR
+#           catastrophe is avoided)
+#   3-4/4 → L14 architecture is the win, switch to L14 going forward.
+#   2/4   → Mixed; needs L14-specific hyperparam tuning before commitment.
+#   0-1/4 → L14 doesn't help on this contract; B16 was right scope.
+#
+# Cost: ~$50-65 Vertex (L14 has ~5× the compute of B16; 1 day us-central1 A100;
+#        scratch 8000 steps).
+# Region: us-central1 (E1 takes us-west4, E2 takes us-east1; parallelize across regions).
+#
+# Seed: 3003 (distinct from E1=3001, E2=3002).
+# ============================================================================
+
+name: "R13_E3_L14_SCRATCH_EVAL_AUG"
+description: "L14 SCRATCH from CLIP-OpenAI + E1's eval-targeted aug curriculum. Architecture-capacity test: same data + aug + recipe as E2 (B16), only backbone differs. Stream A evidence: B16 capacity is partially self-imposed but localized to early layers; L14 is the structural alternative."
+seed: 3003
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "e3"
+    - "vit-l-14"
+    - "scratch-from-clip"
+    - "eval-targeted-aug"
+    - "architecture-capacity-test"
+    - "openai-clip-large"
+    - "single-lever"
+    - "no-grl"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "seed-3003"
+
+data_source: combined_paired
+
+# THE LEVER: ViT-L-14 OpenAI (HuggingFace) instead of ViT-B-16 LAION DataComp.
+backbone:
+  name: "vit_l_14_openai"
+  variant: "ViT-L-14"
+  source: "openai"
+  huggingface_id: "openai/clip-vit-large-patch14"
+  hidden_size: 1024
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+# Scratch hyperparameters: SAME as E2 (per single-lever discipline).
+# L14_ablation winner used ArcFace s=18 anneal=1000; we cap at 12 for fair B16-vs-L14
+# comparison. If E3 underperforms here, that's a hyperparameter-mismatch caveat
+# for future re-runs, NOT a refutation of L14.
+learning_rate: 2.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 768
+gradient_clip_val: 1.0
+
+nEpochs: 16
+total_training_steps: 8000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 1000
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# Scratch from raw CLIP-L14 (no deepfake-pretrained L14 base in this stack).
+load_base_checkpoint: false
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# --- Anchor-aware: DISABLED (P14 lever, ruled out as net-negative). ---
+anchor_aware:
+  enabled: false
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+# --- Face scale-jitter: DISABLED (mclioexb FAILED contract solo). ---
+face_scale_jitter:
+  enabled: false
+  scale_limit: 0.50
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  # --- Pipeline-randomization: IDENTICAL to E1/E2 (eval-targeted, heavier than P22). ---
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 3003
+  seed: 3003
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 3003
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+# ArcFace schedule: SAME as E2 for fair comparison (cap at s=12).
+use_arcface_head: true
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 12.0
+anneal_steps: 4000
+
+evaluate_every_steps: 200
+ood_monitoring_start_step: 200
+ood_monitoring_every_steps: 400
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 10
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 200
+    - 500
+    - 1000
+    - 1500
+    - 2000
+    - 2500
+    - 3000
+    - 4000
+    - 5000
+    - 6000
+    - 7000
+    - 8000
+
+# THE LEVER (asset side): L14 OpenAI HuggingFace weights instead of B16 LAION.
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/models--openai--clip-vit-large-patch14/"
+    local_path: "./weights/models--openai--clip-vit-large-patch14/"
+    allowed_files:
+      - "model.safetensors"
+      - "config.json"

@@ -83,7 +83,6 @@ augmentation:
   routing:
     mode: "family_aware"
     enhanced_strategy_names:
-      - "quality_enhancement"
       - "edge_cases_enhanced"
       - "minimal_processing_enhanced"
   # ── CODEC-AGGRESSIVE OVERRIDES (copied from RLP7_02) ─────────────────
