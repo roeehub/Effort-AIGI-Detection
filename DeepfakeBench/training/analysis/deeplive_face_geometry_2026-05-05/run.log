@@ -1,0 +1,37 @@
+[16:25:56] workers=8 limit=None
+[16:25:56] output=/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[16:26:38] total frames to process: 65202
+[16:26:38]   edge_cases label=0: 6935
+[16:26:38]   edge_cases label=1: 6959
+[16:26:38]   edge_cases_enhanced label=0: 6935
+[16:26:38]   edge_cases_enhanced label=1: 6959
+[16:26:38]   minimal_processing label=0: 6790
+[16:26:38]   minimal_processing label=1: 6798
+[16:26:38]   minimal_processing_enhanced label=0: 6790
+[16:26:38]   minimal_processing_enhanced label=1: 6798
+[16:26:38]   quality_enhancement label=0: 5118
+[16:26:38]   quality_enhancement label=1: 5120
+[16:26:38] spinning up process pool (workers=8) ...
+[16:29:46]   progress 5000/65202 (7.7%) rate=26.6 fps elapsed=188s eta=2264s err=0 face_detected=4999
+[16:32:41]   progress 10000/65202 (15.3%) rate=27.5 fps elapsed=363s eta=2005s err=0 face_detected=9980
+[16:32:41]   checkpoint: wrote 10000 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[16:35:36]   progress 15000/65202 (23.0%) rate=27.9 fps elapsed=537s eta=1799s err=0 face_detected=14965
+[16:38:30]   progress 20000/65202 (30.7%) rate=28.1 fps elapsed=712s eta=1608s err=0 face_detected=19956
+[16:38:30]   checkpoint: wrote 20000 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[16:41:20]   progress 25000/65202 (38.3%) rate=28.4 fps elapsed=881s eta=1417s err=0 face_detected=24944
+[16:44:13]   progress 30000/65202 (46.0%) rate=28.4 fps elapsed=1055s eta=1238s err=0 face_detected=29939
+[16:44:13]   checkpoint: wrote 30000 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[16:47:08]   progress 35000/65202 (53.7%) rate=28.5 fps elapsed=1230s eta=1061s err=0 face_detected=34935
+[16:50:00]   progress 40000/65202 (61.3%) rate=28.5 fps elapsed=1402s eta=883s err=0 face_detected=39933
+[16:50:00]   checkpoint: wrote 40000 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[16:52:50]   progress 45000/65202 (69.0%) rate=28.6 fps elapsed=1571s eta=705s err=0 face_detected=44929
+[16:55:39]   progress 50000/65202 (76.7%) rate=28.7 fps elapsed=1740s eta=529s err=0 face_detected=49929
+[16:55:39]   checkpoint: wrote 50000 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[16:58:29]   progress 55000/65202 (84.4%) rate=28.8 fps elapsed=1910s eta=354s err=0 face_detected=54927
+[17:01:28]   progress 60000/65202 (92.0%) rate=28.7 fps elapsed=2089s eta=181s err=0 face_detected=59926
+[17:01:28]   checkpoint: wrote 60000 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[17:04:26]   progress 65000/65202 (99.7%) rate=28.7 fps elapsed=2268s eta=7s err=0 face_detected=64926
+[17:04:34] compute complete: 65202 rows in 2275.3s (28.7 fps)
+[17:04:34] wrote 65202 rows -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+[17:04:34] schema: {'frame_path': dtype('O'), 'face_area_fraction': dtype('float64'), 'strategy': dtype('O'), 'label': dtype('int64')}
+[17:04:34] wrote summary -> /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/deeplive_face_geometry_2026-05-05/summary.json
