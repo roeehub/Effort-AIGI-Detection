@@ -482,6 +482,23 @@ class EffortDetector(nn.Module):
         else:
             logger.info("Correlation penalty disabled (no `correlation_penalty.enabled: true` in config)")
 
+        # Optional: real/fake same-source pair-ranking loss (PE_PAIR_RANK_DRO,
+        # added 2026-05-07). Pulls fake_score above paired real_score in
+        # logit-space by `margin` via softplus. λ=0 disables. Pair grouping is
+        # by `pair_id` emitted from combined_paired_collate_fn (= sample_id).
+        # Pair_ids with only one label class in the batch contribute zero —
+        # safe under non-uniform lane coverage.
+        pair_rank_cfg = config.get('pair_rank_loss', {}) if isinstance(config, dict) else {}
+        self.pair_rank_lambda = float(pair_rank_cfg.get('lambda', 0.0))
+        self.pair_rank_margin = float(pair_rank_cfg.get('margin', 0.5))
+        if self.pair_rank_lambda > 0:
+            logger.info(
+                f"Pair-rank loss ENABLED: lambda={self.pair_rank_lambda}, "
+                f"margin={self.pair_rank_margin} (logit-space)"
+            )
+        else:
+            logger.info("Pair-rank loss disabled (`pair_rank_loss.lambda` not set or 0)")
+
     def _setup_tracking_vars(self) -> None:
         """Initialize tracking variables for metrics."""
         self.prob, self.label = [], []
@@ -881,6 +898,73 @@ class EffortDetector(nn.Module):
         loss2 /= len(weight_sum_dict.keys())
         return loss2
 
+    def _compute_pair_rank_loss(
+        self,
+        scores: torch.Tensor,
+        labels: torch.Tensor,
+        pair_ids: list,
+        margin: float = 0.5,
+    ) -> torch.Tensor:
+        """Real-vs-fake same-source pair-ranking loss in logit space.
+
+        For each pair_id with at least one real (label==0) and one fake
+        (label==1) sample in the batch, enforce
+            mean(fake_logit) - mean(real_logit) >= margin
+        via softplus(margin - delta). Pair_ids that are empty/None or that
+        lack one of the two label classes contribute zero — this is what makes
+        the loss safe to apply uniformly across all 6 paired training lanes
+        per `analysis/pair_coverage_audit_2026-05-06`. Unpaired reals
+        (e.g. external_vcd_real, whose sample_id defaults to "") are skipped
+        naturally.
+
+        Args:
+            scores: (N,) fake-class probabilities in (0, 1) (softmax output).
+            labels: (N,) long tensor, 0 = real, 1 = fake. Must match scores shape.
+            pair_ids: list of length N with per-element string pair ids.
+            margin: minimum desired logit-space gap fake_logit - real_logit.
+
+        Returns:
+            Scalar loss tensor; 0.0 with requires_grad if no eligible pairs.
+        """
+        import torch.nn.functional as F
+        from collections import defaultdict
+
+        if len(pair_ids) != scores.shape[0] or labels.shape[0] != scores.shape[0]:
+            # Caller must align shapes; if they don't match, no-op safely.
+            return torch.tensor(0.0, device=scores.device, requires_grad=True)
+
+        eps = 1e-6
+        clamped = scores.clamp(eps, 1 - eps)
+        logit_score = torch.log(clamped / (1 - clamped))
+
+        pair_groups = defaultdict(lambda: {'real': [], 'fake': []})
+        labels_cpu = labels.detach().cpu().tolist()
+        for i, pid in enumerate(pair_ids):
+            if not pid:  # empty / None / "" — skip (unpaired reals)
+                continue
+            side = 'fake' if labels_cpu[i] == 1 else 'real'
+            pair_groups[pid][side].append(i)
+
+        loss_terms = []
+        for sides in pair_groups.values():
+            if not sides['real'] or not sides['fake']:
+                continue
+            real_idx = torch.as_tensor(
+                sides['real'], device=scores.device, dtype=torch.long
+            )
+            fake_idx = torch.as_tensor(
+                sides['fake'], device=scores.device, dtype=torch.long
+            )
+            pair_real_mean = logit_score.index_select(0, real_idx).mean()
+            pair_fake_mean = logit_score.index_select(0, fake_idx).mean()
+            loss_terms.append(
+                F.softplus(margin - (pair_fake_mean - pair_real_mean))
+            )
+
+        if not loss_terms:
+            return torch.tensor(0.0, device=scores.device, requires_grad=True)
+        return torch.stack(loss_terms).mean()
+
     def get_losses(self, data_dict: dict, pred_dict: dict, reduction: str = 'mean') -> dict:
         """
         Calculates losses. Supports both mean reduction (default) and per-sample
@@ -1130,6 +1214,27 @@ class EffortDetector(nn.Module):
                     corr_penalty_loss, corr_per_axis_r = cp_active(score, axis_values)
                     overall_loss = overall_loss + corr_penalty_loss
 
+            # Pair-rank loss (PE_PAIR_RANK_DRO, added 2026-05-07) — additive
+            # scalar in logit space; harmless on lanes/batches without paired
+            # real-fake same-source pairs.
+            pair_rank_loss_val = torch.tensor(0.0, device=device)
+            if self.training and self.pair_rank_lambda > 0:
+                pair_id_list = data_dict.get('pair_id')
+                if pair_id_list is not None and len(pair_id_list) > 0:
+                    score_pf = pred.softmax(dim=-1)[:, 1]
+                    score_n = score_pf.shape[0]
+                    n_videos = len(pair_id_list)
+                    if n_videos > 0 and score_n % n_videos == 0:
+                        t = score_n // n_videos
+                        pair_id_pf = [pid for pid in pair_id_list for _ in range(t)]
+                        pair_rank_loss_val = self._compute_pair_rank_loss(
+                            scores=score_pf,
+                            labels=label,
+                            pair_ids=pair_id_pf,
+                            margin=self.pair_rank_margin,
+                        )
+                        overall_loss = overall_loss + self.pair_rank_lambda * pair_rank_loss_val
+
             # For logging, calculate separate real/fake losses
             mask_real = label == 0
             mask_fake = label == 1
@@ -1155,6 +1260,7 @@ class EffortDetector(nn.Module):
                 'quality_domain_unique_count': quality_domain_unique_count.detach(),
                 'feat_norm_loss': feat_norm_loss.detach(),
                 'corr_penalty_loss': corr_penalty_loss.detach(),
+                'pair_rank_loss': pair_rank_loss_val.detach(),
                 **{f'corr_r_{ax}': r.detach() for ax, r in corr_per_axis_r.items()},
             }
 
@@ -1209,6 +1315,27 @@ class EffortDetector(nn.Module):
                     corr_penalty_loss, corr_per_axis_r = cp_active(score, axis_values)
                     per_sample_loss = per_sample_loss + corr_penalty_loss
 
+            # Pair-rank loss (PE_PAIR_RANK_DRO, added 2026-05-07) — scalar
+            # broadcast across per-sample losses (mirrors the corr_penalty
+            # add-on pattern above). Harmless on batches without paired pairs.
+            pair_rank_loss_val = torch.tensor(0.0, device=device)
+            if self.training and self.pair_rank_lambda > 0:
+                pair_id_list = data_dict.get('pair_id')
+                if pair_id_list is not None and len(pair_id_list) > 0:
+                    score_pf = pred.softmax(dim=-1)[:, 1]
+                    score_n = score_pf.shape[0]
+                    n_videos = len(pair_id_list)
+                    if n_videos > 0 and score_n % n_videos == 0:
+                        t = score_n // n_videos
+                        pair_id_pf = [pid for pid in pair_id_list for _ in range(t)]
+                        pair_rank_loss_val = self._compute_pair_rank_loss(
+                            scores=score_pf,
+                            labels=label,
+                            pair_ids=pair_id_pf,
+                            margin=self.pair_rank_margin,
+                        )
+                        per_sample_loss = per_sample_loss + self.pair_rank_lambda * pair_rank_loss_val
+
             # For logging, calculate the mean of the per-sample losses for each class
             mask_real = label == 0
             mask_fake = label == 1
@@ -1234,6 +1361,7 @@ class EffortDetector(nn.Module):
                 'quality_domain_unique_count': quality_domain_unique_count.detach(),
                 'feat_norm_loss': feat_norm_loss.detach(),
                 'corr_penalty_loss': corr_penalty_loss.detach(),
+                'pair_rank_loss': pair_rank_loss_val.detach(),
                 **{f'corr_r_{ax}': r.detach() for ax, r in corr_per_axis_r.items()},
             }
         else:

@@ -314,6 +314,19 @@ def main():
             print(f"  ✅ Applied correlation_penalty: enabled={cp.get('enabled')} lambda={cp.get('lambda')} axes={cp.get('axes')}")
             logger.info(f"  Applied correlation_penalty: enabled={cp.get('enabled')} lambda={cp.get('lambda')} axes={cp.get('axes')}")
 
+        # Apply pair_rank_loss config directly (nested dict — W&B flattens; must copy).
+        # Detector reads self.config.get('pair_rank_loss') in
+        # detectors/effort_detector.py __init__ and gates the PE_PAIR_RANK_DRO
+        # logit-space margin loss on pair_rank_loss.lambda > 0. Without this
+        # re-apply the detector reads None → lambda=0 → loss is silently disabled.
+        # Mirrors the correlation_penalty fix pattern (memory:
+        # project_wandb_flattens_nested_dicts.md).
+        if 'pair_rank_loss' in single_cfg:
+            config['pair_rank_loss'] = single_cfg['pair_rank_loss']
+            pr = single_cfg['pair_rank_loss']
+            print(f"  ✅ Applied pair_rank_loss: lambda={pr.get('lambda')} margin={pr.get('margin')}")
+            logger.info(f"  Applied pair_rank_loss: lambda={pr.get('lambda')} margin={pr.get('margin')}")
+
         # Apply periodic_saves config directly (nested dict — W&B flattens; must copy).
         # Trainer reads self.config.get('periodic_saves') at trainer.py:2374 to decide
         # whether to save checkpoints at fixed step_list values. Without this, no
@@ -505,6 +518,25 @@ def main():
                 config['data_params'] = {}
             config['data_params']['method_mapping'] = data_split_stats['method_mapping']
             logger.info("Transferred method_mapping from data pipeline to config for Group-DRO.")
+
+        # PE_PAIR_RANK_DRO group_id_mapping (added 2026-05-07): asymmetric
+        # R-D / F-B key. When present in config or data_split_stats, the
+        # GroupDRO mixin prefers it over method_mapping. Pipelines that don't
+        # build a group_id_mapping (legacy data sources) leave it absent and
+        # the mixin falls back to method_mapping cleanly.
+        if 'data_params' in config and 'group_id_mapping' in config.get('data_params', {}):
+            logger.info(
+                f"Group-DRO group_id_mapping already set in config "
+                f"({len(config['data_params']['group_id_mapping'])} groups)."
+            )
+        elif 'group_id_mapping' in data_split_stats:
+            if 'data_params' not in config:
+                config['data_params'] = {}
+            config['data_params']['group_id_mapping'] = data_split_stats['group_id_mapping']
+            logger.info(
+                f"Transferred group_id_mapping from data pipeline to config for "
+                f"Group-DRO ({len(data_split_stats['group_id_mapping'])} groups)."
+            )
     
     # Get validation videos for statistics (backward compatibility)
     val_in_dist_videos = data_split_stats.get('val_in_dist_videos', [])

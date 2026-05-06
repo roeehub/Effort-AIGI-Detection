@@ -1,0 +1,73 @@
+{
+  "job_id": "3077166152858730496",
+  "job_resource_name": "projects/700371397073/locations/us-east1/customJobs/3077166152858730496",
+  "display_name": "path-a-extract-20260506-184624",
+  "vertex_job_url": "https://console.cloud.google.com/vertex-ai/locations/us-east1/training/3077166152858730496?project=train-cvit2",
+  "region": "us-east1",
+  "project": "train-cvit2",
+  "image_uri": "us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.267",
+  "submission_iso": "2026-05-06T16:46:26.281126Z",
+  "submission_status": "submitted_pending",
+  "expected_runtime_min": 40,
+  "expected_cost_usd": "$8-13 (A100 spot, ~40 min, 5,311 frames x 3 ckpts)",
+  "expected_output_gcs": [
+    "gs://training-job-outputs/analysis_outputs/frozen_pair_features_2026-05-07/p8a_paired_features.npz",
+    "gs://training-job-outputs/analysis_outputs/frozen_pair_features_2026-05-07/e2b_paired_features.npz",
+    "gs://training-job-outputs/analysis_outputs/frozen_pair_features_2026-05-07/clip_b16_raw_paired_features.npz",
+    "gs://training-job-outputs/analysis_outputs/frozen_pair_features_2026-05-07/frame_manifest.csv"
+  ],
+  "monitoring_command": "gcloud ai custom-jobs describe 3077166152858730496 --region=us-east1 --project=train-cvit2",
+  "stream_logs_command": "gcloud ai custom-jobs stream-logs 3077166152858730496 --region=us-east1 --project=train-cvit2",
+  "n_frames_expected": 5311,
+  "n_real_frames": 1812,
+  "n_fake_frames": 3499,
+  "checkpoints": {
+    "p8a": {
+      "wandb_run_id": "9lmvb5b4",
+      "alias": "smooth-haze-250",
+      "ckpt_uri": "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+      "rationale": "P8A reference step5000; FT chain through R12G; per memory project_p8a_breakthrough.md"
+    },
+    "e2b": {
+      "wandb_run_id": "rmat8lwx",
+      "alias": "E2B_TOP_N_STEP3200",
+      "ckpt_uri": "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth",
+      "rationale": "E2B = production deployment model; Pearson r=+1.000 with deployment scores per memory project_deployment_is_e2b_2026-05-06.md"
+    },
+    "clip_b16_raw": {
+      "alias": "openclip_ViT-B-16_datacomp_xl_s13b_b90k",
+      "ckpt_uri": "in-image: ./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/open_clip_pytorch_model.bin",
+      "rationale": "Frozen baseline (no FT) — Probe 4 reference for head-vs-encoder localisation"
+    }
+  },
+  "inputs_in_gcs": {
+    "extract_script": "gs://training-job-outputs/path_a_inputs_2026-05-07/extract_paired_features.py",
+    "pair_gaps_csv": "gs://training-job-outputs/path_a_inputs_2026-05-07/pair_gaps.csv"
+  },
+  "rendered_yaml": "analysis/path_a_launch_2026-05-07/launch_yaml/extraction_job.20260506-184624.rendered.yaml",
+  "previous_attempts": [
+    {
+      "job_id": null,
+      "display_name": "path-a-extract-20260506-184114",
+      "submission_status": "rejected_at_submit",
+      "failure_reason": "Image tag 1.3.268 from VERSION file did not exist (only 1.3.267 built so far). Fixed by pinning --version 1.3.267.",
+      "submission_iso": "2026-05-06T16:41:14Z"
+    },
+    {
+      "job_id": "1258837803307892736",
+      "display_name": "path-a-extract-20260506-184150",
+      "submission_status": "JOB_STATE_FAILED",
+      "failure_reason": "Container bootstrap used `gsutil cp` to download script — Vertex provides ADC for Python SDK only, gsutil falls back to anonymous and gets 401. Fixed by replacing gsutil with `python -c '...storage.Client()...'` in YAML template.",
+      "submission_iso": "2026-05-06T16:41:52Z",
+      "termination_iso": "2026-05-06T16:45:28Z"
+    }
+  ],
+  "notes": [
+    "Combined Phase 0h (FROZEN_PAIR_HEAD_PROBE feature extraction) and Phase 0j (forward-pass tight-pair scores) per NEXT_STEPS_PLAN_2026-05-06.md §8.1.",
+    "Container bypasses /workspace/entrypoint.sh and downloads extract_paired_features.py from GCS at runtime via Python SDK — image 1.3.267 was built before the script existed.",
+    "Two prior submission attempts failed (image-tag mismatch and gsutil ADC issue). Third attempt (the one captured above) is the canonical pending job.",
+    "Feature dimension is 512 (post-projection), NOT 768 — `out['feat']` from the Effort detector goes through visual.proj (768->512). This matches the existing analysis/clip_vs_p8a_viso_2026-05-03 feature schema and is what frozen_pair_head_probe expects.",
+    "If PENDING > 30 min, follow CLAUDE.md region rules and relaunch in us-west4 / us-central1; do NOT cancel without explicit user authorisation.",
+    "scores field for clip_b16_raw is a placeholder (sigmoid of feature[0]); the head probe trains its own head on top of frozen features."
+  ]
+}

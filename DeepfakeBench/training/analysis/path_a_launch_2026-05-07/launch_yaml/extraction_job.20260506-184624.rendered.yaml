@@ -1,0 +1,72 @@
+# PATH_A_LAUNCH_2026-05-07 — Vertex job spec template.
+#
+# This is a TEMPLATE — placeholders  are substituted at submit time
+# by ./launch.sh. Final spec is rendered to /tmp and submitted via
+# `gcloud ai custom-jobs create --config <rendered.yaml>`.
+#
+# Strategy: bypass /workspace/entrypoint.sh because this image (1.3.267) was
+# built before extract_paired_features.py existed. Instead, the container
+# downloads the script + CSV from GCS at runtime via gsutil, then invokes
+# the Python script directly. This keeps the launch reproducible without
+# requiring an image rebuild.
+
+baseOutputDirectory:
+  outputUriPrefix: gs://training-job-outputs/vertex-output/path-a-extract-20260506-184624
+
+scheduling:
+  timeout: 7200s   # 2 hours hard cap (expected ~40 min)
+  restartJobOnWorkerRestart: false
+
+workerPoolSpecs:
+  - machineSpec:
+      machineType: a2-highgpu-1g
+      acceleratorType: "NVIDIA_TESLA_A100"
+      acceleratorCount: 1
+    replicaCount: 1
+    diskSpec:
+      bootDiskType: pd-ssd
+      bootDiskSizeGb: 200
+    containerSpec:
+      imageUri: "us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.267"
+      command:
+        - "/bin/bash"
+        - "-c"
+        - |
+          set -euo pipefail
+          mkdir -p /tmp/path_a
+          echo "[bootstrap] Downloading extract_paired_features.py via Python SDK from gs://training-job-outputs/path_a_inputs_2026-05-07/extract_paired_features.py..."
+          # Vertex AI provides ADC for Python but NOT for gsutil (gsutil uses
+          # boto-style auth and on Vertex it falls back to anonymous). Use the
+          # storage SDK directly instead — same pattern as /workspace/entrypoint.sh.
+          python -c "
+          from google.cloud import storage
+          import sys
+          uri = 'gs://training-job-outputs/path_a_inputs_2026-05-07/extract_paired_features.py'
+          assert uri.startswith('gs://'), uri
+          bucket, _, blob = uri[5:].partition('/')
+          c = storage.Client()
+          c.bucket(bucket).blob(blob).download_to_filename('/tmp/path_a/extract_paired_features.py')
+          print('[bootstrap] script downloaded ok')
+          "
+          echo "[bootstrap] Verifying script:"
+          ls -la /tmp/path_a/extract_paired_features.py
+          echo "[bootstrap] Launching extraction..."
+          cd /workspace
+          export PYTHONPATH=/workspace:/tmp/path_a:$${PYTHONPATH:-}
+          python -u /tmp/path_a/extract_paired_features.py \
+            --pair_gaps_csv gs://training-job-outputs/path_a_inputs_2026-05-07/pair_gaps.csv \
+            --output_prefix gs://training-job-outputs/analysis_outputs/frozen_pair_features_2026-05-07/ \
+            --p8a_ckpt gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth \
+            --e2b_ckpt gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth \
+            --include_clip_raw \
+            --batch_size 64 \
+            --num_workers 8
+      env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+        - name: JOB_MODE
+          value: "path_a_extraction"
+
+serviceAccount: "vertex-job-runner-train-cvit2@train-cvit2.iam.gserviceaccount.com"

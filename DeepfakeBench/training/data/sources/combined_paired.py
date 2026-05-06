@@ -3497,6 +3497,228 @@ class CombinedPairedIterableDataset(IterableDataset):
 
 
 # =============================================================================
+# PE_PAIR_RANK_DRO group_id derivation (added 2026-05-07)
+# =============================================================================
+# Asymmetric R-D / F-B grouping per
+# `analysis/group_id_design_audit_2026-05-06/outputs/group_id_python_snippet.py`.
+# Embedded here (rather than imported) so the loader is self-contained — the
+# snippet file remains the source of truth and tests pin the embedded copy
+# against the snippet's behaviour.
+#
+# The two derive helpers below produce sensible group_id strings from the
+# loader's existing fields. They are deliberately lossy: `quality` is set to
+# 'unknown' (we don't carry hi-q/lo-q labels per-row), and method_family /
+# enhancer_family / transport are derived by substring matching. Any mismatch
+# vs the snippet's audit-time mapping degrades gracefully — the GroupDRO
+# mixin's tolerant unknown-group_id path buckets unmatched groups to 0 with
+# a one-shot warning.
+
+CHRONIC_IDENTITIES = (
+    "bla_bla_chow",
+    "bla_bla_chow__s2",
+    "PC_Generator__s22",
+    "PC_Generator__s45",
+    "roy_d",
+    "Q__s6",
+)
+
+
+def _is_chronic_identity(base_identity: str) -> bool:
+    if not isinstance(base_identity, str) or not base_identity:
+        return False
+    if base_identity in CHRONIC_IDENTITIES:
+        return True
+    s = base_identity.lower()
+    return any(cid.lower() in s for cid in CHRONIC_IDENTITIES)
+
+
+_METHOD_FAMILY_KEYWORDS = (
+    # (substring lowercased, family label)
+    ("inswapper", "inswapper"),
+    ("inswap", "inswapper"),
+    ("simswap", "simswap"),
+    ("ghostface", "ghostface"),
+    ("instyleswapper", "instyleswapper"),
+    ("cscs", "cscs"),
+    ("facedancer", "facedancer"),
+    ("blendface", "blendface"),
+    ("e4s", "e4s"),
+    ("mobileswap", "mobileswap"),
+    ("uniface", "uniface"),
+)
+
+
+def _method_family_from(method: str, label: int, source: str) -> str:
+    """Coarse method-family bucketing for F-B GroupDRO key.
+
+    Real-side rows always map to 'real_or_unknown'. Fake-side rows pattern-
+    match the method/source against the known keyword list.
+    """
+    if int(label) == 0:
+        return "real_or_unknown"
+    m = (method or "").lower()
+    s = (source or "").lower()
+    # Source-anchored buckets first (visomaster + deeplive families).
+    if s.startswith("visomaster"):
+        return "visomaster"
+    if s == "deeplive" or s == "deeplive_teams" or s == "deeplive_clean":
+        return "deeplive"
+    if s == "df40":
+        # df40 carries the per-method label in `method`; fall through to keyword match.
+        pass
+    for keyword, family in _METHOD_FAMILY_KEYWORDS:
+        if keyword in m:
+            return family
+    return m or "unknown_method"
+
+
+_ENHANCER_FAMILY_KEYWORDS = (
+    ("gpen", "gpen"),
+    ("gfpgan", "gfpgan"),
+    ("codeformer", "codeformer"),
+    ("restoreformer", "restoreformer"),
+)
+
+
+def _enhancer_family_from(method: str, source: str) -> str:
+    """Coarse enhancer-family bucketing.
+
+    Substring match on method/source for the known restoration models. Falls
+    back to 'enhanced_unknown' when the source signals enhancement but no
+    specific model is identifiable, else 'none'.
+    """
+    haystack = f"{(method or '').lower()}|{(source or '').lower()}"
+    for keyword, family in _ENHANCER_FAMILY_KEYWORDS:
+        if keyword in haystack:
+            return family
+    if "enhanced" in haystack:
+        return "enhanced_unknown"
+    return "none"
+
+
+def _transport_from_source(source: str, method: str) -> str:
+    """Map per-row source/method to the transport axis used by GroupDRO.
+
+    'teams_capture' for anything that traversed the Teams pipeline; the
+    visomaster_teams_enhanced lane goes here even though its rendering is
+    visomaster — the audit's `transport` semantic is "how the frame was
+    captured / delivered", not "what fakery was applied".
+    """
+    s = (source or "").lower()
+    m = (method or "").lower()
+    if "teams" in s or "teams" in m:
+        return "teams_capture"
+    if s.startswith("visomaster"):
+        return "visomaster"
+    if s == "external":
+        return "external"
+    if s in ("df40", "deeplive", "deeplive_clean"):
+        return "raw_capture"
+    return "raw_capture"
+
+
+def _make_group_id_string(
+    label: int,
+    method_family: str,
+    enhancer_family: str,
+    transport: str,
+    quality: str,
+    source: str,
+    base_identity: str,
+) -> str:
+    """Build the asymmetric group_id string. Mirrors make_group_id in the
+    audit snippet exactly; tested against it in
+    tests/test_pair_rank_and_group_dro.py."""
+    qb = quality.lower() if isinstance(quality, str) and quality.lower() in {"hi-q", "lo-q"} else "unknown"
+    if int(label) == 1:
+        return (
+            f"fake|{method_family}|{enhancer_family}|{transport}|{qb}"
+        )
+    chronic_tag = "chronic" if _is_chronic_identity(base_identity) else "regular"
+    return (
+        f"real|{source or 'unknown'}|{transport}|{qb}|{chronic_tag}"
+    )
+
+
+def _derive_group_id_for_yield_row(row: Dict[str, Any]) -> Optional[str]:
+    """Derive the asymmetric group_id string from a per-frame yield dict.
+
+    Used by the collate when the loader didn't pre-stamp `group_id`.
+    Returns None for rows that lack the minimal fields (label / source /
+    method); the GroupDRO mixin treats None as "missing" and routes to the
+    unknown-id fallback bucket.
+    """
+    if "label" not in row:
+        return None
+    label = int(row.get("label", 0))
+    method = row.get("method") or ""
+    source = row.get("source") or ""
+    identity = row.get("identity") or row.get("base_identity") or ""
+    method_family = _method_family_from(method, label, source)
+    enhancer_family = _enhancer_family_from(method, source)
+    transport = _transport_from_source(source, method)
+    quality = row.get("quality", "unknown") or "unknown"
+    return _make_group_id_string(
+        label=label,
+        method_family=method_family,
+        enhancer_family=enhancer_family,
+        transport=transport,
+        quality=quality,
+        source=source,
+        base_identity=identity,
+    )
+
+
+def _derive_group_id_for_sample(sample: Any, label: int) -> Optional[str]:
+    """Same derivation but operating on a UnifiedPairedSample-like dataclass.
+
+    Used by the build pre-pass below to enumerate the universe of group_ids
+    over `all_samples × {label=0, label=1}` at config-load time. Each paired
+    sample contributes both a real-side and a fake-side group_id; an
+    unpaired-real sample only contributes its real-side group_id (the caller
+    is responsible for skipping label=1 on those).
+    """
+    if sample is None:
+        return None
+    method = getattr(sample, "method", "") or ""
+    source = getattr(sample, "source", "") or ""
+    identity = getattr(sample, "identity", "") or ""
+    method_family = _method_family_from(method, label, source)
+    enhancer_family = _enhancer_family_from(method, source)
+    transport = _transport_from_source(source, method)
+    return _make_group_id_string(
+        label=label,
+        method_family=method_family,
+        enhancer_family=enhancer_family,
+        transport=transport,
+        quality="unknown",
+        source=source,
+        base_identity=identity,
+    )
+
+
+def build_group_id_mapping_for_samples(samples: List[Any]) -> Dict[str, int]:
+    """Walk a list of `UnifiedPairedSample` / `UnifiedUnpairedRealSample`
+    instances and build the group_id → int mapping for the GroupDRO mixin.
+
+    Paired samples contribute both label=0 and label=1 derivations; unpaired
+    real samples (`is_unpaired_real=True`) contribute only label=0.
+    """
+    seen = set()
+    for sample in samples:
+        if getattr(sample, "is_unpaired_real", False):
+            gid = _derive_group_id_for_sample(sample, 0)
+            if gid is not None:
+                seen.add(gid)
+            continue
+        for lbl in (0, 1):
+            gid = _derive_group_id_for_sample(sample, lbl)
+            if gid is not None:
+                seen.add(gid)
+    return {g: i for i, g in enumerate(sorted(seen))}
+
+
+# =============================================================================
 # Collate Function
 # =============================================================================
 
@@ -3532,7 +3754,9 @@ def combined_paired_collate_fn(
     video_ids = []
     video_method_ids = []
     video_quality_domains = []
-    
+    video_pair_ids = []  # per-video pair_id (= sample_id) for PE_PAIR_RANK_DRO loss
+    video_group_ids = []  # per-video group_id string for GroupDRO (R-D / F-B keying)
+
     video_face_area_fraction = []  # per-video face_area_fraction (NaN if absent)
 
     for video_key, frames in groups.items():
@@ -3542,13 +3766,13 @@ def combined_paired_collate_fn(
         frame_tensors = []
         for item in frames:
             img = item['image']
-            
+
             if isinstance(img, torch.Tensor):
                 img = img.numpy()
-            
+
             if img.ndim == 2:
                 img = np.stack([img] * 3, axis=-1)
-            
+
             # Face scale-jitter (anti-shortcut, label-symmetric) — runs BEFORE
             # the canonical 224×224 resize so the final face area is randomized.
             from data.augmentations.face_scale_jitter import apply_face_scale_jitter
@@ -3560,7 +3784,7 @@ def combined_paired_collate_fn(
             img_tensor = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
             img_tensor = (img_tensor - CLIP_MEAN) / CLIP_STD
             frame_tensors.append(img_tensor)
-        
+
         video_tensor = torch.stack(frame_tensors)
         video_images.append(video_tensor)
         video_labels.append(frames[0]['label'])
@@ -3570,7 +3794,21 @@ def combined_paired_collate_fn(
         video_quality_domains.append(frames[0].get('quality_domain', 0))
         # Optional per-video face_area_fraction (deeplive only); NaN if absent
         video_face_area_fraction.append(float(frames[0].get('face_area_fraction', float('nan'))))
-    
+        # PE_PAIR_RANK_DRO: pair_id links real-fake same-source videos.
+        # sample_id is the source-grain id; the existing groupby splits by label
+        # so a paired (real, fake) pair shares pair_id but lands in two videos.
+        # Empty string (unpaired reals like external_vcd_real) → skipped by the loss.
+        video_pair_ids.append(str(frames[0].get('sample_id', '')))
+        # PE_PAIR_RANK_DRO: per-video group_id (asymmetric R-D / F-B key) for
+        # the multi-axis GroupDRO term. If the loader didn't pre-stamp
+        # `group_id` on the per-frame row, derive it from the existing
+        # method/source/identity fields. Returning None is safe — the
+        # GroupDRO mixin's tolerant unknown-group_id path covers the gap.
+        gid = frames[0].get('group_id')
+        if gid is None:
+            gid = _derive_group_id_for_yield_row(frames[0])
+        video_group_ids.append(gid)
+
     if len(video_images) == 0:
         return {
             'image': torch.zeros(0, 1, 3, target_size[0], target_size[1]),
@@ -3578,8 +3816,10 @@ def combined_paired_collate_fn(
             'video_id': [],
             'method_id': torch.zeros(0, dtype=torch.long),
             'quality_domain': torch.zeros(0, dtype=torch.long),
+            'pair_id': [],
+            'group_id': [],
         }
-    
+
     # Pad to same length
     max_frames = max(v.shape[0] for v in video_images)
     padded_videos = []
@@ -3588,12 +3828,12 @@ def combined_paired_collate_fn(
             padding = torch.zeros(max_frames - video.shape[0], *video.shape[1:])
             video = torch.cat([video, padding], dim=0)
         padded_videos.append(video)
-    
+
     images = torch.stack(padded_videos)
     labels = torch.tensor(video_labels, dtype=torch.long)
     method_ids = torch.tensor(video_method_ids, dtype=torch.long)
     quality_domains = torch.tensor(video_quality_domains, dtype=torch.long)
-    
+
     return {
         'image': images,
         'label': labels,
@@ -3601,6 +3841,8 @@ def combined_paired_collate_fn(
         'method_id': method_ids,
         'quality_domain': quality_domains,
         'face_area_fraction': torch.tensor(video_face_area_fraction, dtype=torch.float32),
+        'pair_id': video_pair_ids,
+        'group_id': video_group_ids,
     }
 
 
@@ -4394,7 +4636,19 @@ def create_combined_paired_pipeline(
     sorted_methods = sorted(unique_methods)
     method_mapping = {m: i for i, m in enumerate(sorted_methods)}
     logger.info(f"Method mapping ({len(method_mapping)} methods): {method_mapping}")
-    
+
+    # PE_PAIR_RANK_DRO group_id mapping (added 2026-05-07) — asymmetric
+    # R-D / F-B key per analysis/group_id_design_audit_2026-05-06. Walks
+    # all_samples × {label=0, label=1} (paired) or {label=0} (unpaired_real).
+    # Recommended scheme yields ~27 groups; cardinality varies with the data
+    # plane (df40 methods + visomaster swap_models + deeplive strategies).
+    group_id_mapping = build_group_id_mapping_for_samples(all_samples)
+    logger.info(
+        f"Group ID mapping ({len(group_id_mapping)} groups for PE_PAIR_RANK_DRO; "
+        f"R-D real-side + F-B fake-side keys)"
+    )
+
+
     # ==========================================================================
     # Identity-Stratified Split
     # ==========================================================================
@@ -4770,6 +5024,10 @@ def create_combined_paired_pipeline(
         'train_proper_data_lane_counts': train_proper_data_lane_counts,
         # Group DRO method mapping (method_name → int ID)
         'method_mapping': method_mapping,
+        # PE_PAIR_RANK_DRO multi-axis GroupDRO mapping (asymmetric R-D / F-B
+        # key string → int ID). Consumed by trainer/mixins/group_dro.py via
+        # train_sweep.py wiring (added 2026-05-07).
+        'group_id_mapping': group_id_mapping,
     }
     
     logger.info("=" * 70)
