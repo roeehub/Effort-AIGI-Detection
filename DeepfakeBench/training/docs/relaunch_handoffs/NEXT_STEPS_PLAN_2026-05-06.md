@@ -1127,3 +1127,35 @@ Both can combine into a single ~$8-13, ~1hr forward-pass extraction.
 - **Why this matters:** prior wording could have been read as "the lever WILL unlock and that's the FT-base rationale." The new wording separates the plumbing-check (was the bug fix preserved?) from the value question (does the lever actually move metrics under PE_PAIR_RANK_DRO's loss class?). The P10_SYM C-ablation null is a directional prior on the value question, not a binding prediction.
 - **No change** to P1's close criteria (F1-F5), recipe, single-lever discipline, or confidence range. The trigger conditions in §8.1 0g remain authoritative.
 - **No change** to §6.5 (in-proj SVD bug timing argument). User flagged §8.2 specifically; §6.5 stays as-is unless a follow-up tightening is requested.
+
+### 2026-05-07 — Path A processed + P1 wiring landed + Slots 1 & 2 launched
+- Owner: parent agent (Opus 4.7), under explicit user direction (auto mode)
+- Trigger: user authorised launching Slots 1 & 2 + 30-min Option C job
+
+**Path A subagent verdict** (FINDINGS at `analysis/path_a_launch_2026-05-07/FINDINGS.md`):
+- Vertex extraction job `3077166152858730496` ran 3.03 min (~$0.10–0.23 vs $8–13 estimate). Outputs sit at `gs://training-job-outputs/analysis_outputs/frozen_pair_features_2026-05-07/`.
+- Phase 0j on cached scores: **P8A meets ≥2-GREEN bar** — `deeplive_v1` 0.255 (GREEN) + `viso_enhanced` 0.355 (GREEN) + `deeplive_v2` 0.154 (AMBER). E2B is RED on both measurable lanes (reinforces FT-base = P8A).
+- Phase 0h head-vs-encoder probe: **head-only retrain NOT viable.** P8A B−A lift = −0.13pp; E2B = −0.38pp; CLIP_B16_raw = 0.00pp. Multi-seed sensitivity (5 seeds × 50 epochs): paired B−A AUC mean = −0.028pp ± 0.039pp. HP sensitivity (3 hp × 3 seeds): all ≈ 0pp. Lift is robustly zero or slightly negative.
+- **Structural caveat that downgrades the verdict's reach**: Phase 0h substrate is 100% `teams_passthrough` because 32% of `pair_gaps.csv` rows have `gs://local/...` paths (Dor + extra + dor-fake-local lanes). The runbook's "six paired training lanes" (df40, viso_v1, viso_enhanced, viso_teams_enhanced, deeplive_v1, deeplive_v2) **literally never appear** in `pair_gaps.csv` — it was built from eval-substrate cross-products, not training tight pairs. Phase 0h cannot answer the head-vs-encoder question on the load-bearing training lanes from this extraction.
+
+**Slot 3 (Option C) — SKIPPED.** Subagent recommended re-extracting on a non-`gs://local` filtered manifest. Verified empirically: filter drops 12,000 rows (32.2%), all from non-runbook lanes (extra, dor_evening, dor_morning, visomaster_v2_dor, dor_fake_local, live_fakes_teams_prod). Surviving 25,327 rows are 100% teams_passthrough (`teams_real_all_dev/lockbox` × `teams_fake_all_dev/lockbox`) — the same substrate Phase 0h already tested. Filtering can't unlock viso/deeplive lanes because they were never in the CSV. To actually answer the head-vs-encoder question on training tight pairs requires instrumenting the loader to dump `(sample_id, frame_idx)` tuples at training time — multi-hour task, not 30 min.
+
+**P1 wiring committed in `b50f245`** (12 files, +3,668 LOC):
+- Loss-side: `_compute_pair_rank_loss` in `detectors/effort_detector.py` (softplus margin in logit space; skips empty pair_ids and pair_ids missing one label class). `pair_rank_loss.{lambda, margin}` config block with re-apply allowlist entry in `train_sweep.py` (W&B nested-dict flattening fix per `project_wandb_flattens_nested_dicts.md` memory).
+- Loader-side: `combined_paired_collate_fn` emits per-video `pair_id` (= sample_id) and `group_id` (passthrough or derived in-collate from method/source/identity via embedded `make_group_id` parity with the audit snippet). Build pre-pass in the data pipeline computes `group_id_mapping` from `all_samples × {label=0, label=1}` at config-load.
+- Trainer-side: `trainer/mixins/group_dro.py` rewritten to support `group_id_mapping` (str→int, R-D / F-B keying) alongside legacy `method_mapping`. Adds `warmup_steps` (default 100). Unknown group_ids bucket to 0 with one-shot warning. `train_sweep.py` wires `group_id_mapping` from `data_split_stats` → `data_params`.
+- Tests: 36 new in `tests/test_pair_rank_and_group_dro.py` (margin behaviour, gradient flow, collate emission, mixin path resolution, snippet parity, derive helpers). All 67 tests in the touched suites green.
+- YAMLs: `experiments/phase2_round13/R13_P1_BUNDLE_FT_FROM_P8A.yaml` (Slot 1; pair-rank + GroupDRO bundle) + `R13_P1_PAIRRANK_ONLY_FT_FROM_P8A.yaml` (Slot 2; pair-rank only single-lever ablation).
+
+**Image release**: `1.3.269` (`38beaf6`). Cloud Build `93c90398-62c2-40f9-8ab4-cf23a4e556c9`, 20m7s, SUCCESS. Digest `sha256:ab725ae6681fd030c41016f60f318a7f7b103c818c991cbf15487b24e4af97a1`.
+
+**Vertex jobs launched** (us-east1):
+- Slot 1 (BUNDLE): job `6083600379105247232`, RUNNING at t+4m, expected ~5–7h, ~$50–80.
+- Slot 2 (PAIRRANK_ONLY): job `6401104152834867200`, RUNNING at t+4m, expected ~5–7h, ~$50–80.
+
+**Pending for tomorrow morning**:
+- Day-1 verdict: did Slot 1 vs Slot 2 ablation reveal the load-bearing lever (pair-rank alone vs pair-rank+GroupDRO)? Compare via promotion-contract scorecard against P8A reference.
+- Grad-audit at periodic checkpoints step 100/500/1000: zero gradient → fix regressed silently (abort and investigate); nonzero + flat metrics → lever inert under this loss class (consistent with `packets/P8A.md:108` P10_SYM C-ablation prior; not a bug). Promotion gated on F1-F5 metrics only.
+- F2/F3 audit on PD ckpts (still in `analysis/pd_scorecard_artifacts_2026-05-06/` scope, awaiting user signal per "Conclusions NOT drawn yet" instruction from 2026-05-06 evening).
+- If Slots 1 + 2 close any of F1–F5: deployment swap consideration. If both fail: P2 (PE_SBI) becomes the next move; SBI loader still needs implementation (target-domain pseudo-fake generator + auxiliary mix at 15-25%).
+- Loader instrumentation for training-tight-pair extraction: would let Phase 0h actually answer the head-vs-encoder question on viso/deeplive/df40 lanes. Multi-hour task; gated on Slot-1/2 verdict.
