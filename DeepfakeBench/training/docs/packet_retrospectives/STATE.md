@@ -1,6 +1,6 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-08 00:50 local (P2 Slot D launched on image 1.3.272 — `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`, Vertex `8486657808400384000`, us-east1, JOB_STATE_PENDING; A/B/C still RUNNING; all 4 P2 slots now in flight).
+> **Last refreshed**: 2026-05-08 00:50 local (P2 Slot D launched on image 1.3.272 — `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`, Vertex `8486657808400384000`, us-east1, transitioned to JOB_STATE_RUNNING at 22:49:06 UTC, 5 min after submit; A/B/C also RUNNING; all 4 P2 slots in flight).
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
@@ -21,11 +21,11 @@ The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)**
 - **Slot A** [`R13_P2_SCRATCH_BUNDLE`](../../experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml) — 4-axis corr_penalty (sharpness + luma + face_area + color_b_dev) + pair_rank_loss + face_scale_jitter@0.50. Vertex `8395459915946131456` (us-east1, `JOB_STATE_RUNNING` since 21:38:26 UTC). W&B `u22wz1vf` (`R13_P2_SCRATCH_BUNDLE_0507-2138`).
 - **Slot B** [`R13_P2_SCRATCH_CORR_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml) — 4-axis corr_penalty only (single-lever ablation). Vertex `5580112770428305408` (us-west4, `JOB_STATE_RUNNING` since 21:42:11 UTC). W&B `mlo5vfe8` (`R13_P2_SCRATCH_CORR_ONLY_0507-2142`).
 - **Slot C** [`R13_P2_SCRATCH_PAIRRANK_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml) — pair_rank only (matched against P1 PAIRRANK_ONLY but from-scratch). Vertex `3126673777023254528` (us-central1, `JOB_STATE_RUNNING` since 21:36:36 UTC). W&B `oaur8odo` (`R13_P2_SCRATCH_PAIRRANK_ONLY_0507-2137`).
-- **Slot D** [`R13_P2_SCRATCH_FOURIER`](../../experiments/phase2_round13/R13_P2_SCRATCH_FOURIER.yaml) — band-limited Fourier amplitude aug (bands 8-13 randomize, 5-6 preserve, log_range [-0.3,+0.3]) + face_scale_jitter@0.50; no corr_penalty, no pair_rank. Vertex `8486657808400384000` (us-east1, `JOB_STATE_PENDING` since 22:43:33 UTC). Display name `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`. W&B run id pending first-step log emission.
+- **Slot D** [`R13_P2_SCRATCH_FOURIER`](../../experiments/phase2_round13/R13_P2_SCRATCH_FOURIER.yaml) — band-limited Fourier amplitude aug (bands 8-13 randomize, 5-6 preserve, log_range [-0.3,+0.3]) + face_scale_jitter@0.50; no corr_penalty, no pair_rank. Vertex `8486657808400384000` (us-east1, `JOB_STATE_RUNNING` since 22:49:06 UTC; 5 min PENDING). Display name `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`. W&B run id pending first-step log emission.
 
 W&B project URL: https://wandb.ai/dtect-vision/phase2-round13. Step counts at 22:05 UTC for the original 3 slots: A 501, C 314, B 0 (in dataset discovery — VisoMaster Enhanced loading). Canary first-fire is at step 1000; A closest. No canary readouts yet.
 
-Per CLAUDE.md region-distribution: A/D on us-east1, B on us-west4, C on us-central1. Slot D's 30-min PENDING-threshold expires 2026-05-08 01:13 local; if still pending then, relaunch in us-west4 or us-central1 per CLAUDE.md and cancel original only after replacement reaches RUNNING. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$60-80 each, $240-320 total.
+Per CLAUDE.md region-distribution: A/D on us-east1, B on us-west4, C on us-central1. Slot D's 30-min PENDING-threshold check is closed: D transitioned to RUNNING within 5 min of submit; no region-failover needed for any slot. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$60-80 each, $240-320 total.
 
 **Slot D task spec** at [`SLOT_D_FOURIER_TASK_2026-05-08.md`](SLOT_D_FOURIER_TASK_2026-05-08.md) — was the operational handoff for this slot. Smoke notes at [`analysis/p2_eval_2026-05-08/SLOT_D_SMOKE_FAIL.md`](../../analysis/p2_eval_2026-05-08/SLOT_D_SMOKE_FAIL.md) (3-tier smoke; Tier-3 mean_abs floor relaxed 1.0→0.4 per user authorization 2026-05-08 because faces have low FFT amplitude in bands 8-13 — the aug produces a measurable, bounded effect on every cohort but averages 0.50-0.76 per pixel rather than the spec's 1.0 floor calibrated to uniform-noise synthetic). Image 1.3.272 = image 1.3.271 + commit `27e95b8` (fourier_band_aug primitive + Slot D yaml + collate-fn wiring + train_sweep allowlist).
 
