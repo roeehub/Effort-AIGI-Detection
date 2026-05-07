@@ -1,6 +1,6 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-07 evening (P1 packet eval complete; P2 SCRATCH packet launching tonight; wiki contract upgraded; canary probe infrastructure landed; bug fixes committed).
+> **Last refreshed**: 2026-05-08 00:50 local (P2 Slot D launched on image 1.3.272 — `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`, Vertex `8486657808400384000`, us-east1, JOB_STATE_PENDING; A/B/C still RUNNING; all 4 P2 slots now in flight).
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
@@ -16,17 +16,18 @@ The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)**
 
 ## In flight / running right now
 
-**P2 packet** (PREVENT_NOT_UNLEARN, 3 slots) — **LAUNCHED 2026-05-07 23:33 local on image 1.3.271** (Cloud Build `3d5d3fc9-7e2d-4f23-ac8c-33ee90f0d906`, 16m49s). All 3 slots are FROM-SCRATCH (CLIP-B16 init, no FT base) on the post-quality_enhancement-fix data composition with the canary probe enabled @ frequency_steps=1000:
+**P2 packet** (PREVENT_NOT_UNLEARN, 4 slots) — **Slots A/B/C launched 2026-05-07 23:33 local on image 1.3.271; Slot D launched 2026-05-08 00:43 local on image 1.3.272** (Slot D Cloud Build `f66bedcb-6dc6-4bca-b6ff-9335c8244d3a`, 16m25s, commit `27e95b8`). All 4 slots are FROM-SCRATCH (CLIP-B16 init, no FT base) on the post-quality_enhancement-fix data composition with the canary probe enabled @ frequency_steps=1000:
 
 - **Slot A** [`R13_P2_SCRATCH_BUNDLE`](../../experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml) — 4-axis corr_penalty (sharpness + luma + face_area + color_b_dev) + pair_rank_loss + face_scale_jitter@0.50. Vertex `8395459915946131456` (us-east1, `JOB_STATE_RUNNING` since 21:38:26 UTC). W&B `u22wz1vf` (`R13_P2_SCRATCH_BUNDLE_0507-2138`).
 - **Slot B** [`R13_P2_SCRATCH_CORR_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml) — 4-axis corr_penalty only (single-lever ablation). Vertex `5580112770428305408` (us-west4, `JOB_STATE_RUNNING` since 21:42:11 UTC). W&B `mlo5vfe8` (`R13_P2_SCRATCH_CORR_ONLY_0507-2142`).
 - **Slot C** [`R13_P2_SCRATCH_PAIRRANK_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml) — pair_rank only (matched against P1 PAIRRANK_ONLY but from-scratch). Vertex `3126673777023254528` (us-central1, `JOB_STATE_RUNNING` since 21:36:36 UTC). W&B `oaur8odo` (`R13_P2_SCRATCH_PAIRRANK_ONLY_0507-2137`).
+- **Slot D** [`R13_P2_SCRATCH_FOURIER`](../../experiments/phase2_round13/R13_P2_SCRATCH_FOURIER.yaml) — band-limited Fourier amplitude aug (bands 8-13 randomize, 5-6 preserve, log_range [-0.3,+0.3]) + face_scale_jitter@0.50; no corr_penalty, no pair_rank. Vertex `8486657808400384000` (us-east1, `JOB_STATE_PENDING` since 22:43:33 UTC). Display name `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`. W&B run id pending first-step log emission.
 
-W&B project URL: https://wandb.ai/dtect-vision/phase2-round13. Step counts at 22:05 UTC: A 501, C 314, B 0 (in dataset discovery — VisoMaster Enhanced loading). Canary first-fire is at step 1000; A closest. No canary readouts yet.
+W&B project URL: https://wandb.ai/dtect-vision/phase2-round13. Step counts at 22:05 UTC for the original 3 slots: A 501, C 314, B 0 (in dataset discovery — VisoMaster Enhanced loading). Canary first-fire is at step 1000; A closest. No canary readouts yet.
 
-Per CLAUDE.md region-distribution: spread across 3 US regions to avoid common-queue waits. If any remain `PENDING` past 2026-05-08 00:03 local (30 min), failover candidate is the unused US region. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$180-225 / 10-12h each.
+Per CLAUDE.md region-distribution: A/D on us-east1, B on us-west4, C on us-central1. Slot D's 30-min PENDING-threshold expires 2026-05-08 01:13 local; if still pending then, relaunch in us-west4 or us-central1 per CLAUDE.md and cancel original only after replacement reaches RUNNING. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$60-80 each, $240-320 total.
 
-**Slot D — QUEUED for next-agent task spec** at [`SLOT_D_FOURIER_TASK_2026-05-08.md`](SLOT_D_FOURIER_TASK_2026-05-08.md). Band-limited Fourier amplitude randomization aug (bands 8-13 GREEN-verdict per memory `project_fourier_band_overlap_2026-05-06.md` + thread [`processing_signature_shortcut`](threads/processing_signature_shortcut.md) §"Probe 6"). The aug primitive code is NEW — the next agent's job is to implement → smoke-test → build (image 1.3.272 expected) → launch → monitor all 4 slots. The task spec is operational only — the next agent does NOT propose new packets or draw conclusions. When all 4 slots terminate + eval-folder skeletons are populated, the user starts a fresh session for interpretation.
+**Slot D task spec** at [`SLOT_D_FOURIER_TASK_2026-05-08.md`](SLOT_D_FOURIER_TASK_2026-05-08.md) — was the operational handoff for this slot. Smoke notes at [`analysis/p2_eval_2026-05-08/SLOT_D_SMOKE_FAIL.md`](../../analysis/p2_eval_2026-05-08/SLOT_D_SMOKE_FAIL.md) (3-tier smoke; Tier-3 mean_abs floor relaxed 1.0→0.4 per user authorization 2026-05-08 because faces have low FFT amplitude in bands 8-13 — the aug produces a measurable, bounded effect on every cohort but averages 0.50-0.76 per pixel rather than the spec's 1.0 floor calibrated to uniform-noise synthetic). Image 1.3.272 = image 1.3.271 + commit `27e95b8` (fourier_band_aug primitive + Slot D yaml + collate-fn wiring + train_sweep allowlist).
 
 **Bug fixes committed (2026-05-07, commits `2e3c26b` + `fb6c38f`)**:
 - `trainer/trainer.py:1727` W&B logging gap when `use_group_dro=true` — RESOLVED.
