@@ -1725,6 +1725,13 @@ class Trainer(
                             # PREREQUISITE #2: The data_dict must contain 'method_id'
                             # Uses GroupDROMixin.calculate_group_dro_loss()
                             losses = self.calculate_group_dro_loss(data_dict, per_sample_loss)
+                            # Preserve diagnostic scalars from the per-sample dict
+                            # (pair_rank_loss, cls_loss, corr_penalty_loss, etc.) so they
+                            # reach the W&B log loop below. Without this, every run with
+                            # use_group_dro=True silently drops these scalars from history.
+                            for k, v in per_sample_losses_dict.items():
+                                if k != 'overall':
+                                    losses[k] = v
                         else:
                             # Original behavior
                             losses = loss_fn_owner.get_losses(data_dict, predictions)
