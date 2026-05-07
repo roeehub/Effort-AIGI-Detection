@@ -4,14 +4,14 @@
 
 ## Summary
 
-- **Open**: 35
+- **Open**: 38
 - **In progress**: 5
 - **Resolved**: 11
 - **Superseded**: 1
 
 ## Entries
 
-### Open (35)
+### Open (38)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -197,6 +197,14 @@
 - **close_criterion**: either (a) the encoder fine-tune scorecard's 5-axis audit shows |Pearson r| on `is_webcam` AND `is_screen` did NOT amplify > 50% relative to E2B baseline (predicted shifting did not occur on the encoder; resolves favorably) OR (b) the audit shows amplification > 50% on at least one of those axes (the frozen-head prediction holds) AND a successor packet design includes `is_webcam` or `is_screen` in the penalty axes, with a path to deploy them at inference (currently blocked because Teams does not surface capture mode — would need an upstream classifier or a different inference-time signal that proxies for capture mode). The frozen-head prototype showed `face_area` 0.032→0.157 and `is_webcam` 0.081→0.205 as λ ramped 0→1, so the encoder is the place this gets adjudicated. Resolution flips this loop's status to `resolved` favorably or `superseded` (lever-class cap discovered).
 - **source**: `threads/correlation_penalty_loss.md:115`
 
+### `canary-empirical-validation`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: at least 2 P2 ckpts have BOTH (a) a canary readout at the corresponding training step AND (b) a post-training contract scorecard verdict. Compute Pearson correlation between `canary/lockbox_recall_at_FPR_10pct` and the scorecard's `lockbox_fake_recall` at calibrated τ. Compute the same for `canary/max_per_identity_mean_score` and the F5 close-criterion's binding identity. If r > 0.7 on both, the canary is empirically validated as a deployment proxy. If r < 0.3, the canary's design is wrong and the metric set needs re-deriving from the P2 outcomes. Either result closes the loop.
+- **source**: `threads/in_training_canary_signal.md:82`
+
 ### `open-loops-stale-state-claims`
 - **status**: open
 - **severity**: medium
@@ -292,6 +300,22 @@
 - **last_verified**: 2026-04-30
 - **close_criterion**: at least one of the three candidate mechanisms (decision-boundary / intermediate-layer / test-substrate) is empirically supported on a probe whose design isolates that mechanism, AND the supported mechanism produces a measurable signature on `mclioexb` that does NOT also appear on `9lmvb5b4` step 5000 baseline at comparable magnitude — i.e., the mechanism is specific to the value_composite winner, not a feature shared with the FT base
 - **source**: `threads/jitter_winner_mechanism_unknown.md:113`
+
+### `canary-finer-resolution`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: a "tiny canary" companion of ~60 frames runs every 200 steps for finer resolution at the cost of ~0.1% extra training time. Useful specifically because P1 BUNDLE_step500 was already in the failed regime by step 500 — the current 1000-step cadence might miss the inflection. Implement only if the 1000-step cadence proves to be too coarse on the P2 runs. Tiny canary composition would be: 5 chronic identities × 6 frames + 30 lockbox fakes = 60 frames.
+- **source**: `threads/in_training_canary_signal.md:96`
+
+### `canary-wilcoxon-cohort-split`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: the Wilcoxon-vs-P8A metric is split into two cohort-specific stats: `canary/wilcoxon_stat_vs_p8a_healthy_reals` (where small drift = good) and `canary/wilcoxon_stat_vs_p8a_chronic_reals` (where large negative drift = good). The aggregate stat is preserved but augmented. Implementation is ~30 lines in `trainer/mixins/canary_probe.py:_aggregate_metrics`. Defer until P2 results validate the basic metric set; if the basic Wilcoxon already correlates with deployment quality, the cohort split may not be needed.
+- **source**: `threads/in_training_canary_signal.md:89`
 
 ### In progress (5)
 

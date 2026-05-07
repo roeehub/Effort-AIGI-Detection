@@ -1,6 +1,6 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-07 (P1 packet eval complete; wiki contract upgraded; no Vertex jobs in flight).
+> **Last refreshed**: 2026-05-07 evening (P1 packet eval complete; P2 SCRATCH packet launching tonight; wiki contract upgraded; canary probe infrastructure landed; bug fixes committed).
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
@@ -16,13 +16,23 @@ The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)**
 
 ## In flight / running right now
 
-**Vertex**: nothing currently running. Phase A finished 2026-05-07 14:40 UTC; Phase C failed 2026-05-07 15:34 UTC. No new packets launched.
+**P2 packet** (PREVENT_NOT_UNLEARN, 3 slots) — building image then launching tonight 2026-05-07. All 3 slots are FROM-SCRATCH (CLIP-B16 init, no FT base) on the post-quality_enhancement-fix data composition with the canary probe enabled @ frequency_steps=1000:
 
-**Pre-launch / queued**: nothing committed. Several proposals live in [`analysis/p1_pe_eval_2026-05-07/AGENT_PROPOSAL_2026-05-07.md`](../../analysis/p1_pe_eval_2026-05-07/AGENT_PROPOSAL_2026-05-07.md) §6 but none are user-authorized.
+- **Slot A** [`R13_P2_SCRATCH_BUNDLE`](../../experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml) — 4-axis corr_penalty (sharpness + luma + face_area + color_b_dev) + pair_rank_loss + face_scale_jitter@0.50.
+- **Slot B** [`R13_P2_SCRATCH_CORR_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml) — 4-axis corr_penalty only (single-lever ablation).
+- **Slot C** [`R13_P2_SCRATCH_PAIRRANK_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml) — pair_rank only (matched against P1 PAIRRANK_ONLY but from-scratch).
 
-**Bug fixes applied this session, NOT yet committed**:
-- `trainer/trainer.py:1718-1727` — preserves `pair_rank_loss` + 11 other diagnostic scalars when `use_group_dro=true`. Affects every future GroupDRO packet's W&B logging. AST + bytecode compile verified; needs an actual training run to confirm scalars now flow.
-- `analysis/p1_pe_eval_2026-05-07/phase_d/run_chronic_filter.py` — replaced regex-strip-then-substring chronic-id matching with prefix-on-raw-video_id. Re-running produces correct PC_Generator + Q chronic-frame counts. Forensic: original `_FIXED.csv` artifacts left on disk for provenance.
+Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$180-225 / 10-12h each.
+
+**Bug fixes committed (2026-05-07, commits `2e3c26b` + `fb6c38f`)**:
+- `trainer/trainer.py:1727` W&B logging gap when `use_group_dro=true` — RESOLVED.
+- `analysis/p1_pe_eval_2026-05-07/phase_d/run_chronic_filter.py` regex bug — RESOLVED.
+- Wiki contract upgrade (`608dbe2`) — RESOLVED.
+
+**Canary probe infrastructure (NEW 2026-05-07)**:
+- [`trainer/mixins/canary_probe.py`](../../trainer/mixins/canary_probe.py) — bulletproof in-training deployment-quality monitor; logs ~15 deployment-relevant scalars to W&B every N steps.
+- [`arena/canaries/teams_chronic_diverse_800_2026-05-07.parquet`](../../arena/canaries/teams_chronic_diverse_800_2026-05-07.parquet) — 800-frame canary (600 reals + 200 fakes) covering 6 chronic + 5 healthy + HDTF reals + lockbox + viso + deeplive fakes.
+- See thread [`in_training_canary_signal`](threads/in_training_canary_signal.md) for the design rationale.
 
 ---
 

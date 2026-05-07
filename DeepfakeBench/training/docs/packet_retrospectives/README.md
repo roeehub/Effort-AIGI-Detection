@@ -117,6 +117,7 @@ The **2026-04-29 → 2026-04-30 overnight slate** ran three FT-from-P8A_step5000
 | [PC](packets/PC.md) | 2026-05-04 → 2026-05-05 | ❌ | Codec aug + data lever stack on E2B; codec aug HURTS viso recall 35-50pp on F4 vs PA; codec lever empirically refuted |
 | [PD](packets/PD.md) | 2026-05-05 → 2026-05-06 | 🟡 | First explicit-form anti-shortcut loss (`correlation_penalty` λ=1.0 on 3 pixel-derivable axes); two arms (deeplive ship + viso ship) FT-from-E2B + single-lever discipline; training complete; scorecard pending |
 | [P1](packets/P1.md) | 2026-05-06 → 2026-05-07 | 🟡 | PE_PAIR_RANK_DRO: pair_rank λ=0.2 + multi-axis GroupDRO with chronic_flag (BUNDLE) vs pair_rank-only (PAIRRANK). F4 PASS + F5 PASS for BUNDLE arm (PC_Generator FPR 62.9% → 0%); F1 fails at contract τ but is reachable at non-contract τ (BUNDLE_step500 96.5% lockbox recall @ FPR≤10%). Roy_D regression (29% → 78-93%) shared between both arms; refutes initial GroupDRO-balloon hypothesis. First eval folder under FACTS/OPINIONS contract. |
+| [P2](packets/P2.md) | 2026-05-07 → 2026-05-08 | 🟡 | PREVENT_NOT_UNLEARN — first FROM-SCRATCH packet since E2/E2b/E3. 3 slots (BUNDLE = 4-axis corr_penalty + pair_rank; CORR_ONLY; PAIRRANK_ONLY) all from-scratch. Adds color_b_dev to corr_penalty axes (Roy_D-mechanism-targeting). First packet to ship with the canary probe enabled (in-training deployment-quality monitor; 800-frame canary scored every 1000 steps). Tests prevention-vs-unlearning hypothesis directly. |
 
 ### Cross-cutting threads
 
