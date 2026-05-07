@@ -57,11 +57,17 @@ def batch_pearson(x: torch.Tensor, y: torch.Tensor, eps: float = 1e-8) -> torch.
 def compute_pixel_axes(image: torch.Tensor) -> Dict[str, torch.Tensor]:
     """Compute per-frame nuisance axes derivable from the input image alone.
 
-    Two axes returned:
+    Three axes returned:
       - `sharpness_laplacian`: variance of the Laplacian on the luma channel.
         Standard image-sharpness metric; matches the lockbox-tagging parquet's
         column (modulo full-vs-face-crop caveat from `sharpness_metric_bug`).
       - `luma_mean`: mean Y-channel value via Rec. 601 weights.
+      - `color_b_dev`: per-frame std of the B (blue) channel. Added 2026-05-07
+        as the Roy_D-mechanism-targeting axis: P1 evaluation found roy_d
+        regression aligned with `color_b_dev` (Δr=+0.71 mirror of P8A's −0.71;
+        memory `project_dor_drift_named_axes_2026-05-06.md` attributes 27-38%
+        of named-axis drift to color_b_dev). Penalizing this axis at training
+        time prevents the model from using B-channel cast as a real/fake cue.
 
     Args:
         image: [B, 3, H, W] OR [B, T, 3, H, W] float tensor. The combined-paired
@@ -72,8 +78,8 @@ def compute_pixel_axes(image: torch.Tensor) -> Dict[str, torch.Tensor]:
             is scale-invariant so absolute range does not matter.
 
     Returns:
-        dict with keys 'sharpness_laplacian', 'luma_mean'; each value is a
-        [B] (or [B*T] for 5-D input) tensor.
+        dict with keys 'sharpness_laplacian', 'luma_mean', 'color_b_dev'; each
+        value is a [B] (or [B*T] for 5-D input) tensor.
     """
     if image.dim() == 5:
         # [B, T, 3, H, W] -> [B*T, 3, H, W]
@@ -96,9 +102,15 @@ def compute_pixel_axes(image: torch.Tensor) -> Dict[str, torch.Tensor]:
     lap = F.conv2d(luma_4d, lap_kernel, padding=1)  # [B, 1, H, W]
     sharpness = lap.var(dim=(1, 2, 3))  # [B]
 
+    # B-channel std — proxy for color cast / B-channel chroma dispersion.
+    # Pure pixel-derivable, no parquet lookup needed. Correlation is scale-
+    # invariant so the normalized vs raw distinction does not matter.
+    color_b_dev = image[:, 2].std(dim=(1, 2), unbiased=False)  # [B]
+
     return {
         "sharpness_laplacian": sharpness,
         "luma_mean": luma_mean,
+        "color_b_dev": color_b_dev,
     }
 
 

@@ -11,6 +11,8 @@ to add specific capabilities:
 - ArcFaceMixin: ArcFace head parameter annealing
 - ValidationMixin: Validation state management and utilities
 - ReportingMixin: Report generation and GCS upload
+- StabilityRegMixin: Calibration / stability regularization
+- CanaryProbeMixin: In-training deployment-quality monitoring
 
 Usage:
     class MyTrainer(CheckpointingMixin, EarlyStoppingMixin, BaseTrainer):
@@ -25,6 +27,7 @@ from .arcface import ArcFaceMixin
 from .validation import ValidationMixin
 from .reporting import ReportingMixin
 from .stability import StabilityRegMixin
+from .canary_probe import CanaryProbeMixin
 
 __all__ = [
     'CheckpointingMixin',
@@ -35,4 +38,5 @@ __all__ = [
     'ValidationMixin',
     'ReportingMixin',
     'StabilityRegMixin',
+    'CanaryProbeMixin',
 ]

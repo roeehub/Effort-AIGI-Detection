@@ -338,6 +338,18 @@ def main():
             print(f"  ✅ Applied periodic_saves: enabled={ps.get('enabled')} step_list={ps.get('step_list')}")
             logger.info(f"  Applied periodic_saves: enabled={ps.get('enabled')} step_list={ps.get('step_list')}")
 
+        # Apply canary_probe config directly (nested dict — W&B flattens; must copy).
+        # CanaryProbeMixin.init_canary_probe reads self.config.get('canary_probe') at
+        # trainer.py to wire the in-training deployment-quality monitor. Without this
+        # re-apply the mixin reads None → enabled=false → the canary silently never fires.
+        # Mirrors the correlation_penalty / pair_rank_loss fix pattern (memory:
+        # project_wandb_flattens_nested_dicts.md).
+        if 'canary_probe' in single_cfg:
+            config['canary_probe'] = single_cfg['canary_probe']
+            cp = single_cfg['canary_probe']
+            print(f"  ✅ Applied canary_probe: enabled={cp.get('enabled')} parquet_path={cp.get('parquet_path')} frequency_steps={cp.get('frequency_steps')}")
+            logger.info(f"  Applied canary_probe: enabled={cp.get('enabled')} parquet_path={cp.get('parquet_path')} frequency_steps={cp.get('frequency_steps')}")
+
         print("=" * 70)
     else:
         print("⚠️ single_cfg is None/empty - no direct config application!")

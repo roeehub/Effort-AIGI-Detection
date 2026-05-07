@@ -46,6 +46,7 @@ from trainer.mixins import (
     ValidationMixin,
     ReportingMixin,
     StabilityRegMixin,
+    CanaryProbeMixin,
 )
 
 FFpp_pool = ['FaceForensics++', 'FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT']
@@ -508,6 +509,7 @@ class Trainer(
     ValidationMixin,
     ReportingMixin,
     StabilityRegMixin,
+    CanaryProbeMixin,
 ):
     """
     Main trainer class for DeepfakeBench training.
@@ -659,6 +661,10 @@ class Trainer(
 
         # Stability regularisation: perturbation consistency loss
         self.init_stability_reg()
+
+        # Canary probe: in-training deployment-quality monitoring.
+        # No-op unless config.canary_probe.enabled=true.
+        self.init_canary_probe()
 
         # Anchor-aware penalty: push prob_fake on false-flag pools toward target.
         # _to_plain_dict() handles wandb.Config sub-objects (not dict subclasses).
@@ -2629,6 +2635,10 @@ class Trainer(
                         self.logger.warning(
                             f"periodic save failed at step {step_cnt}: {save_err}"
                         )
+
+        # Canary probe: in-training deployment-quality signal.
+        # No-op unless config.canary_probe.enabled=true. Bulletproof — never raises.
+        self._run_canary_probe(step_cnt)
 
     @torch.no_grad()
     def test_epoch(self, epoch, step_cnt, validation_loader, log_prefix: str, is_primary_metric: bool,

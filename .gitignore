@@ -65,6 +65,10 @@ weights/models--openai--clip-vit-large-patch14/
 # Canonical tracked WT-B policy bundle.
 !DeepfakeBench/training/policy/visomaster_bad_data/VISOMASTER_BAD_DATA_POLICY_MANIFEST_2026-04-17.csv
 
+# Canary probe artifacts MUST be tracked — they're loaded by the trainer
+# at runtime and must be present in the production image. Small (~40 KB).
+!DeepfakeBench/training/arena/canaries/*.parquet
+
 # ----------------------------------
 # IGNORE SPECIFIC FOLDERS
 # ----------------------------------
