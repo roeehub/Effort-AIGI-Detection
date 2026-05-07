@@ -350,6 +350,18 @@ def main():
             print(f"  ✅ Applied canary_probe: enabled={cp.get('enabled')} parquet_path={cp.get('parquet_path')} frequency_steps={cp.get('frequency_steps')}")
             logger.info(f"  Applied canary_probe: enabled={cp.get('enabled')} parquet_path={cp.get('parquet_path')} frequency_steps={cp.get('frequency_steps')}")
 
+        # Apply fourier_aug config directly (nested dict — W&B flattens; must copy).
+        # Trainer reads self.config.get('fourier_aug') and calls
+        # data.augmentations.fourier_band_aug.set_fourier_aug_config. Without this
+        # re-apply the aug silently logs DISABLED and band-limited amplitude
+        # randomization is no-op. Mirrors the face_scale_jitter / canary_probe
+        # fix pattern (memory: project_wandb_flattens_nested_dicts.md).
+        if 'fourier_aug' in single_cfg:
+            config['fourier_aug'] = single_cfg['fourier_aug']
+            fa = single_cfg['fourier_aug']
+            print(f"  ✅ Applied fourier_aug: enabled={fa.get('enabled')} p_apply={fa.get('p_apply')} bands_randomize={fa.get('bands_randomize')} bands_preserve={fa.get('bands_preserve')}")
+            logger.info(f"  Applied fourier_aug: enabled={fa.get('enabled')} p_apply={fa.get('p_apply')} bands_randomize={fa.get('bands_randomize')} bands_preserve={fa.get('bands_preserve')}")
+
         print("=" * 70)
     else:
         print("⚠️ single_cfg is None/empty - no direct config application!")

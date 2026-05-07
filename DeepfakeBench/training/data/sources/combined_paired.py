@@ -3781,6 +3781,12 @@ def combined_paired_collate_fn(
             if img.shape[:2] != target_size:
                 img = cv2.resize(img, (target_size[1], target_size[0]), interpolation=cv2.INTER_LINEAR)
 
+            # Band-limited Fourier amplitude randomization — operates on the
+            # canonical 224×224 frame, post-resize, pre-normalize. Bands 8-13
+            # randomized; bands 5-6 preserved (manipulation-signal-carrying).
+            from data.augmentations.fourier_band_aug import apply_fourier_band_aug
+            img = apply_fourier_band_aug(img)
+
             img_tensor = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
             img_tensor = (img_tensor - CLIP_MEAN) / CLIP_STD
             frame_tensors.append(img_tensor)

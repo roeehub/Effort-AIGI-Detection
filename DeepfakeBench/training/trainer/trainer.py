@@ -684,6 +684,13 @@ class Trainer(
             logger=self.logger,
         )
 
+        # Fourier band-amplitude aug — module-level config consumed by collate_fns.
+        # Operates on the post-resize 224x224 frame; bands 8-13 randomized,
+        # bands 5-6 preserved per Probe 6 GREEN verdict.
+        from data.augmentations.fourier_band_aug import set_fourier_aug_config
+        fourier_cfg = _to_plain_dict(self.config.get('fourier_aug'))
+        set_fourier_aug_config(fourier_cfg, logger=self.logger)
+
         # Method-domain mode — flip combined_paired iterators to emit 12-class
         # method-conditional GRL labels when the yaml config indicates Phase 3
         # operation (quality_domain_count >= 12 with use_quality_domain_head).

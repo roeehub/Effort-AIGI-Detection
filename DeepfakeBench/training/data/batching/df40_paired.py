@@ -365,7 +365,13 @@ def df40_paired_collate_fn(batch: List[Dict[str, Any]], target_size: Tuple[int, 
             # Resize to target size if needed
             if img.shape[:2] != target_size:
                 img = cv2.resize(img, (target_size[1], target_size[0]), interpolation=cv2.INTER_LINEAR)
-            
+
+            # Band-limited Fourier amplitude randomization — operates on the
+            # canonical 224×224 frame, post-resize, pre-normalize. Bands 8-13
+            # randomized; bands 5-6 preserved (manipulation-signal-carrying).
+            from data.augmentations.fourier_band_aug import apply_fourier_band_aug
+            img = apply_fourier_band_aug(img)
+
             # Convert to tensor: HWC -> CHW, normalize to [0, 1]
             img_tensor = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
             
