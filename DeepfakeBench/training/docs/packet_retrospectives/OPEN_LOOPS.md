@@ -1,25 +1,17 @@
 # OPEN_LOOPS — Mechanically Generated Issue Inventory
 
-> ⚙ **GENERATED on 2026-05-05** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
+> ⚙ **GENERATED on 2026-05-07** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
 
 ## Summary
 
-- **Open**: 27
-- **In progress**: 4
-- **Resolved**: 9
+- **Open**: 31
+- **In progress**: 6
+- **Resolved**: 10
 - **Superseded**: 1
 
 ## Entries
 
-### Open (27)
-
-### `contract-policy-bug-fix-not-committed`
-- **status**: open
-- **severity**: high
-- **first_seen**: 2026-04-23
-- **last_verified**: 2026-04-30
-- **close_criterion**: the recall-floor + budget-aware τ-selection patch (working-tree diff: `arena/score_teams_promotion_contract.py +98`, `arena/run_target_domain_validation_sequential.py +19`, `tests/test_score_teams_promotion_contract.py +125`, total +207 net lines as of 2026-04-29) is committed to `teams-relaunch-root-2026-04-17`, the image is rebuilt with the fix in (`./dev.sh build-prod -y` auto-bumps VERSION patch), and a contract scorecard run on a representative recent checkpoint (e.g. P8A reference step 5000) is invoked with `--promotion_target_fake_recall_min 0.30` AND the resulting scorecard is documented as having selected τ via the recall-floor path (not via the legacy no-budget minimize-FPR-only path). All three commit + image + verified-readout components are required. **2026-04-30 evening update**: the `mclioexb` scorecard run did NOT exercise the v3 fix — the launcher (`arena/launch_teams_promotion_contract.sh`) omitted `--promotion_target_fake_recall_min`, so the scorecard ran the DEFAULT policy (τ=0.975, recall=0.13). Component 3 still NOT MET. The verdict was independently meaningful (model fails contract under either policy — see [`promotion_contract_evolution`](promotion_contract_evolution.md) "2026-04-30 evening" subsection) but does not close this loop.
-- **source**: `threads/contract_policy_bug.md:108`
+### Open (31)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -52,6 +44,30 @@
 - **last_verified**: 2026-04-29
 - **close_criterion**: `analysis/lockbox_tagging/layers/quality.py:82` is updated to compute the laplacian on a face-crop region (using the existing face-geometry layer's bbox tags), the parquet `analysis/lockbox_tagging/full_tags_2026-04-27.parquet` (or its successor) is re-tagged with the corrected metric, AND any downstream FPR-by-quartile report that depends on `sharpness_laplacian` is either rerun under the corrected metric OR explicitly annotated as "indexed on full-image laplacian, not face laplacian — read as a confounded U-shape". The 2026-04-27 investigation's *"very sharp (>402): 45% FPR"* table entry is the canonical downstream report; flagging it covers the most-cited claim.
 - **source**: `threads/sharpness_metric_bug.md:69`
+
+### `deployment-vs-p8a-substrate-tradeoff-not-quantified`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-06
+- **last_verified**: 2026-05-06
+- **close_criterion**: a written quantification of (a) the populations on which P8A would have lower real-side FPR than the currently-deployed E2B at matched τ — quantified across the identity_browser-style substrates (xinhe_may6_falseflag, dor_evening, dor_morning, extra_roy_d, the chronic-6 set, etc.) and the production live-fake suites — AND (b) the populations on which E2B would have higher fake recall than P8A at matched τ. The disposition then explicitly chooses the deployment model with the trade-off documented (memory `project_promotion_contract.md` is the contract surface for the promotion decision; this loop is the deployment-side disposition that depends on which failure cost the operator weights higher). Until the disposition is recorded, the user has the standing option of swapping deployment to P8A on substrate-classes where E2B is dispositively false-flagging (xinhe_may6_falseflag is one such confirmed substrate).
+- **source**: `threads/processing_signature_shortcut.md:257`
+
+### `diagnostic-substrates-not-in-contract`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: either (a) the canonical contract suite manifest is extended with the 9 diagnostic substrates listed in this thread (`xinhe_may6_falseflag`, `live_*_teams_prod`, `dor_evening`/`dor_morning`, `team_sanity_may5`, `dor_fake_local`, `extra`, `visomaster_v2_dor`) so the GPU scorecard scores them automatically, OR (b) a `verdict_template.md` is authored that mandates a `Phase A.5 — diagnostic substrates` step in every packet retro and is referenced by `AGENTS.md` as a pre-launch checklist item. Either path closes the loop; (a) is the more durable fix.
+- **source**: `threads/eval_substrate_layering.md:64`
+
+### `eval-manifests-version-pinning`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: every eval manifest under `arena/manifests/` is either (a) committed with a date-pinned filename (`..._wave_<YYYY-MM-DD>.json` or `..._wave_<YYYY-MM-DD>_v2.json`) so cross-version comparisons are explicit, OR (b) the manifest filename embeds a content-hash that the scorer/runner records alongside its results so a stale comparison is auto-flagged. A pre-launch lint at `tools/lint/preflight_launch.sh` fails the launch if `git status arena/manifests/` is non-empty.
+- **source**: `threads/eval_substrate_layering.md:73`
 
 ### `split-mode-delta-unquantified`
 - **status**: open
@@ -123,7 +139,7 @@
 - **first_seen**: 2026-04-29
 - **last_verified**: 2026-04-29
 - **close_criterion**: a written disposition is recorded — either (a) the `shortcut-deployment-block` close criterion's `lockbox_fake_recall ≥ 0.60` half is reaffirmed under the corrected contract scorer policy (`target_fake_recall_min=0.30`) and a downstream packet hits both halves at the same τ, OR (b) the criterion is explicitly revised to a frame-level-AUC-based version (e.g. `dor-real-webcam-false-flag-no-virtual-bg` mean prob ≤ 0.30 AND `visomaster_enhanced_macro_dev` frame-level AUC ≥ 0.85) with a documented rationale referencing memory `project_p8a_frame_level_auc_2026-04-29.md`. Surfaced as a sub-question to the parent `shortcut-deployment-block` (critical) loop, not a replacement for it.
-- **source**: `threads/processing_signature_shortcut.md:164`
+- **source**: `threads/processing_signature_shortcut.md:339`
 
 ### `source-image-resolution-floor-not-applied-to-eval`
 - **status**: open
@@ -148,6 +164,22 @@
 - **last_verified**: 2026-04-30
 - **close_criterion**: the next anti-shortcut packet that stacks more than one intervention is structured with at least one single-lever ablation slot (the strongest lever alone, FT init + data + LR fixed) AND the packet retro records whether the bundle is net-additive vs the single-lever baseline. The discipline either becomes a `BUILD_SCAFFOLD.md`-style operational rule for future packets, OR a counter-example (a stacked bundle that demonstrably beats its single-strongest component on a deployment-relevant axis) is filed and this loop is resolved as superseded.
 - **source**: `threads/anti_shortcut_bundle_decomposition.md:60`
+
+### `corr-penalty-frozen-head-shifting-axes-not-targeted`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-06
+- **last_verified**: 2026-05-06
+- **close_criterion**: either (a) the encoder fine-tune scorecard's 5-axis audit shows |Pearson r| on `is_webcam` AND `is_screen` did NOT amplify > 50% relative to E2B baseline (predicted shifting did not occur on the encoder; resolves favorably) OR (b) the audit shows amplification > 50% on at least one of those axes (the frozen-head prediction holds) AND a successor packet design includes `is_webcam` or `is_screen` in the penalty axes, with a path to deploy them at inference (currently blocked because Teams does not surface capture mode — would need an upstream classifier or a different inference-time signal that proxies for capture mode). The frozen-head prototype showed `face_area` 0.032→0.157 and `is_webcam` 0.081→0.205 as λ ramped 0→1, so the encoder is the place this gets adjudicated. Resolution flips this loop's status to `resolved` favorably or `superseded` (lever-class cap discovered).
+- **source**: `threads/correlation_penalty_loss.md:115`
+
+### `open-loops-stale-state-claims`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: `tools/regenerate_open_loops.py` is extended to (a) flag entries whose `last_verified` is more than 30 days old AND whose `close_criterion` text contains state-claim keywords (`uncommitted`, `in working tree`, `not yet committed`, `pending commit`), AND (b) auto-check those claims against current `git status` / `git log` output where possible. Output is a warning section in `OPEN_LOOPS.md` listing entries that need re-verification.
+- **source**: `threads/eval_substrate_layering.md:82`
 
 ### `corrected-val-test-hint-split-counts-unrecoverable`
 - **status**: open
@@ -229,7 +261,7 @@
 - **close_criterion**: at least one of the three candidate mechanisms (decision-boundary / intermediate-layer / test-substrate) is empirically supported on a probe whose design isolates that mechanism, AND the supported mechanism produces a measurable signature on `mclioexb` that does NOT also appear on `9lmvb5b4` step 5000 baseline at comparable magnitude — i.e., the mechanism is specific to the value_composite winner, not a feature shared with the FT base
 - **source**: `threads/jitter_winner_mechanism_unknown.md:113`
 
-### In progress (4)
+### In progress (6)
 
 ### `shortcut-deployment-block`
 - **status**: in-progress
@@ -237,7 +269,7 @@
 - **first_seen**: 2026-04-24
 - **last_verified**: 2026-04-29
 - **close_criterion**: a Packet-7+ checkpoint achieves `dor-real-webcam-false-flag-no-virtual-bg` mean prob_fake ≤ 0.30 (vs RLP6_04's 0.932 post-fix) AND `lockbox_fake_recall ≥ 0.60` at a τ that holds `teams_ood_real` FPR ≤ 5%, demonstrating the camera/ISP shortcut has been broken without sacrificing fake recall
-- **source**: `threads/processing_signature_shortcut.md:175`
+- **source**: `threads/processing_signature_shortcut.md:350`
 
 ### `fpr-minimization-no-budget-tau-collapse`
 - **status**: in-progress
@@ -246,6 +278,22 @@
 - **last_verified**: 2026-04-30
 - **close_criterion**: the `score_teams_promotion_contract.py` runner enforces a recall floor or τ ceiling that prevents `selected_threshold ≈ 0.995` configurations passing silently
 - **source**: `threads/promotion_contract_evolution.md:160`
+
+### `contract-policy-bug-fix-not-committed`
+- **status**: in-progress
+- **severity**: high
+- **first_seen**: 2026-04-23
+- **last_verified**: 2026-05-07
+- **close_criterion**: the recall-floor + budget-aware τ-selection patch is (1) committed to `teams-relaunch-root-2026-04-17`, (2) the image is rebuilt with the fix in, and (3) a contract scorecard run on a representative recent checkpoint is invoked with `--promotion_target_fake_recall_min 0.30` AND the resulting scorecard is documented as having selected τ via the recall-floor path (not via the legacy no-budget minimize-FPR-only path). All three components are required. **2026-04-30 evening update**: the `mclioexb` scorecard run did NOT exercise the v3 fix — the launcher (`arena/launch_teams_promotion_contract.sh`) omitted `--promotion_target_fake_recall_min`, so the scorecard ran the DEFAULT policy (τ=0.975, recall=0.13). Component 3 still NOT MET. **2026-05-07 update — components 1 and 2 are MET; component 3 is in flight.** Audit of the tree (commit `974e033` 2026-04-29) shows the scorer code with `target_real_fpr=0.07 / target_stress_fpr=0.10 / target_fake_recall_min=0.70` defaults was committed a week ago; the runner with `--promotion_target_*` CLI args was committed at the same time. The actual missing piece was the launcher: `arena/launch_teams_promotion_contract.sh` did not pass these flags through. Today's commits `ad070d3` (passing the flags + setting v3 defaults `0.07 / 0.10 / 0.30`) and `7f81e7a` (canonicalizing the 500GB scorecard template to prevent disk-exhaustion) close the launcher gap. Image `1.3.270` (commit `5dccfa4`, Cloud Build `40cf4d7c-4b8b-4af7-81ca-0991f2083450`) bakes everything in. The Phase A scorecard run for P1 (Vertex job `7995519158412378112`, us-east1, submitted 2026-05-07T08:19:20Z) explicitly invokes `--promotion_target_fake_recall_min 0.30` — verifiable in the gcloud `containerSpec.args` trace. Component 3 closes when the resulting `promotion_winner.json` shows τ selected via the recall-floor path; verdict pending Phase A finish (~12:30 UTC).
+- **source**: `threads/contract_policy_bug.md:108`
+
+### `corr-penalty-deployment-grade-verdict-pending`
+- **status**: in-progress
+- **severity**: high
+- **first_seen**: 2026-05-06
+- **last_verified**: 2026-05-06
+- **close_criterion**: a promotion-contract scorecard run on the 8-entry ckpt map `arena/checkpoint_maps/teams_target_domain.deeplive_viso_corr_2026-05-06.yaml` against `arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml` lands and is read against the 4/4 close criterion (F1 lockbox recall ≥ 90% at FPR ≤ 10%; F2 shortcut weakening ≥ 30% on ≥ 2 of 5 axes vs E2B baseline; F3 no untargeted axis +50%; F4 HDTF cross-substrate FPR ≤ 5%). The Phase-2 5-axis audit (`analysis/deeplive_viso_corr_eval_2026-05-06/run_audit.py` Phase 2 block, currently commented out — uncomment after `gcloud storage cp -r <scorecard_output>/raw_reports analysis/deeplive_viso_corr_eval_2026-05-06/raw_reports/` lands) is the comparison frame. Either (a) verdict is positive on all 4 criteria → corr-penalty is the first R13 anti-shortcut intervention to clear deployment grade and gets a "Confirmed good" entry in the README; or (b) any criterion fails → packet is muddled / failed and the lever class joins anchor_aware, GRL, and face_scale_jitter on the "structurally working but not deployment-grade" list.
+- **source**: `threads/correlation_penalty_loss.md:106`
 
 ### `enhanced-vs-unenhanced-val-pool-confound`
 - **status**: in-progress
@@ -263,7 +311,7 @@
 - **close_criterion**: routing fix is applied — `quality_enhancement` is removed from `DEFAULT_ENHANCED_STRATEGIES` in `utils/grouping.py:13-17` AND from every R13 yaml's `enhanced_strategy_names` override (~15 yamls under `experiments/phase2_round13/`); a unit test asserts `infer_family_key` returns `deeplive_non_enhanced_fake` for a `quality_enhancement` fake input; image is rebuilt via `./dev.sh build-prod -y` (auto-bumps VERSION); and a critical-reading banner is added to the README and to historical packet retros (P8A, E2B, PA, PC) noting they trained on the contaminated routing. Validation re-run on at least one FT-from-base packet measuring the delta in deeplive enhanced-vs-non-enhanced family balance is recommended but not required for closure (could be folded into the in-scoping deeplive ship experiment instead). Verification step (visual inspection) is COMPLETE 2026-05-05 evening — user reported "quality enhancement is non-GFPGAN like we suspected." Bug confirmed; fix pending authorization.
 - **source**: `threads/quality_enhancement_strategy_misrouting.md:175`
 
-### Resolved (9)
+### Resolved (10)
 
 ### `data-axis-clean-single-lever-retest-in-progress`
 - **status**: resolved
@@ -320,6 +368,14 @@
 - **last_verified**: 2026-04-29
 - **close_criterion**: every new nested dict in yaml requires explicit re-application in train_sweep.py allowlist (~lines 176-282) — recurrence indicates pattern not generalized.
 - **source**: `threads/wandb_yaml_propagation_bugs.md:85`
+
+### `fourier-aug-band-overlap-not-resolved`
+- **status**: resolved
+- **severity**: medium
+- **first_seen**: 2026-05-06
+- **last_verified**: 2026-05-06
+- **close_criterion**: a follow-up probe partitions FFT amplitude bands into "shortcut-only" (high contribution to Probe 1's may6/may5 separation, low contribution to Probe 3's fake/real separation) vs "signal-carrying" (the inverse), with a quantitative overlap measure. If the overlap is small (e.g., separable bands give ≥80% of shortcut signal while preserving ≥80% of fake signal), the band-limited Fourier-aug recipe is greenlit as a packet candidate. If overlap is large (any randomization that hurts the shortcut also hurts the fake signal substantially), the lever class moves from "viable" to "abandoned"; the next-packet decision pivots fully to AugMix consistency + SBI.
+- **source**: `threads/processing_signature_shortcut.md:214`
 
 ### `wt-e-promotion-winner-deferred`
 - **status**: resolved
