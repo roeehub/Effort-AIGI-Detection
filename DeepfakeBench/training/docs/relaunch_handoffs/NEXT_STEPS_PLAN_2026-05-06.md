@@ -1159,3 +1159,95 @@ Both can combine into a single ~$8-13, ~1hr forward-pass extraction.
 - F2/F3 audit on PD ckpts (still in `analysis/pd_scorecard_artifacts_2026-05-06/` scope, awaiting user signal per "Conclusions NOT drawn yet" instruction from 2026-05-06 evening).
 - If Slots 1 + 2 close any of F1–F5: deployment swap consideration. If both fail: P2 (PE_SBI) becomes the next move; SBI loader still needs implementation (target-domain pseudo-fake generator + auxiliary mix at 15-25%).
 - Loader instrumentation for training-tight-pair extraction: would let Phase 0h actually answer the head-vs-encoder question on viso/deeplive/df40 lanes. Multi-hour task; gated on Slot-1/2 verdict.
+
+### 2026-05-07 — Slots 1+2 finished overnight; P1 evaluation in flight
+
+- Owner: parent agent (Opus 4.7), under explicit user direction
+- Trigger: morning read-out request
+
+**Training run status — both finished early-stopped overnight**:
+
+| | Slot 1 BUNDLE | Slot 2 PAIRRANK_ONLY |
+|---|---|---|
+| Vertex job | `6083600379105247232` SUCCEEDED | `6401104152834867200` SUCCEEDED |
+| W&B project | `dtect-vision/phase2-experiments` | `dtect-vision/phase2-experiments` |
+| W&B run ID | `tznuar61` | `s2mp5fxm` |
+| W&B display | `R13_P1_BUNDLE_FT_FROM_P8A_0506-2213` | `R13_P1_PAIRRANK_ONLY_FT_FROM_P8A_0506-2213` |
+| best val_holdout AUC | 0.9951 (epoch 2) | 0.9949 (epoch 3) |
+| best EER | 0.0210 | 0.0119 |
+| early-stopped at | epoch 3, train_step 2750 | epoch 4, train_step 2750 |
+| GCS ckpt root | `gs://training-job-outputs/best_checkpoints/tznuar61/` | `gs://training-job-outputs/best_checkpoints/s2mp5fxm/` |
+| pair_rank_loss in summary | `train/loss/group_dro_in_warmup=0` (DRO active post-warmup) | `train/loss/pair_rank_loss=0.02488` |
+
+Trainer-side AUC ≈ 0.995 on `val_holdout` for both runs is the same shape P8A produced before its 2-camera test broke it (memory `project_promotion_contract.md`, thread `value_composite_semantics`). Promotion-grade verdict requires the lockbox-anchored contract scorecard, not the trainer composite.
+
+**Eval plan** (full F1–F5 close criterion per YAML headers + plan §8.2 P1):
+
+| Phase | Gate | Substrate | Cost |
+|---|---|---|---|
+| A | F1 lockbox recall | 29-suite contract, GPU us-east1 | ~$30-50, 2h |
+| A.5 | diagnostic substrates (may6, dor_*, live_prod variants) | `grouped_manifest_v2.csv` non-contract suites, CPU local | ~30-60min, $0 |
+| B1 | F2 pair-rank on missed fakes | Phase A per-frame reports, vs P8A | CPU |
+| B2 | F3 5+ axis correlation audit | Phase A per-frame reports, vs P8A; min_dim + color_b_dev computed per-frame | CPU |
+| C | F4 HDTF cross-substrate | proper_data_future suite, GPU us-east1 | ~$10-15, 40min |
+| D | F5 chronic-FP cluster (3-tier) | Phase A per-frame reports filtered by `chronic_flag_definition.json` | CPU |
+| E | weight-delta diagnostic (instrumented, not gate) | P8A vs P1 ckpts, qkv_residual movement | CPU |
+| F | synthesis + decision | all above + §12 entries + plan §1-11 revision | ~30min |
+
+**Pre-launch eval-infra commits** (closed several stale-state hygiene gaps):
+- `ad070d3` — `arena/checkpoint_maps/teams_target_domain.p1_pe_pair_rank_2026-05-07.yaml` (8-entry map: P8A + E2B + 3 BUNDLE + 3 PAIRRANK ckpts) + launcher recall-floor flags (`--promotion_target_real_fpr 0.07`, `--promotion_target_stress_fpr 0.10`, `--promotion_target_fake_recall_min 0.30`).
+- `7f81e7a` — canonicalized 500GB scorecard template at `infra/cloudbuild/vertex_job_template_scorecard.yaml` (was a `/tmp` orphan since PD's run); `--yaml-template` flag on launcher.
+- `5dccfa4` — VERSION bump 1.3.270; image release with the above.
+- `30007e0` — committed accumulated working-tree eval-infra state: contract suite +20 read-only diagnostic-only sub-suites (9→29), HDTF manifest +47% (4,968→7,304 videos), build script + inventory + reports. PA's prior 7.87% on HDTF was on the smaller manifest — flag for cross-version comparisons.
+- `79a2a7c` — docs: open loop `contract-policy-bug-fix-not-committed` updated to `in-progress` (components 1+2 MET; v3-fix scorer was committed `974e033` 2026-04-29; OPEN_LOOPS text was stale by a week). New thread `eval_substrate_layering` + 3 new open loops (`diagnostic-substrates-not-in-contract`, `eval-manifests-version-pinning`, `open-loops-stale-state-claims`).
+
+**Phase A scorecard launched** — `p1-pe-pair-rank-scorecard-2026-05-07`:
+- Vertex job `7995519158412378112`, us-east1, image `1.3.270`, RUNNING since 2026-05-07T08:25:36Z (PENDING for ~6 min then transitioned).
+- Suite: `arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml` (29 suites, working-tree state baked in 1.3.270).
+- Ckpt map: `arena/checkpoint_maps/teams_target_domain.p1_pe_pair_rank_2026-05-07.yaml` (8 ckpts).
+- Policy: `--promotion_target_real_fpr 0.07 --promotion_target_stress_fpr 0.10 --promotion_target_fake_recall_min 0.30`. Closes component 3 of `contract-policy-bug-fix-not-committed` open loop on completion (assuming `promotion_winner.json` shows τ selected via recall-floor path).
+- Outputs at `gs://training-job-outputs/test_results/teams_promotion_contract/p1-pe-pair-rank-scorecard-2026-05-07/`.
+
+**Phase C scorecard launched** — `p1-pe-hdtf-scorecard-2026-05-07`:
+- Vertex job `524047376604725248`, us-east1, image `1.3.270`, RUNNING since 2026-05-07T08:25:36Z.
+- Suite: `arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml` (16 suites, larger working-tree manifest).
+- Same ckpt map. F4 verdict: HDTF cross-substrate FPR ≤ 5%.
+
+**Phase E weight-delta verdict — COMPLETE** (2026-05-07 ~10:25 CET, ~3 min CPU including downloads):
+- 6 P1 ckpts (BUNDLE step 500/1000/4000 + PAIRRANK step 500/1000/6750) vs P8A_REFERENCE_STEP5000.
+- Aggregated by SVD-residual category across all 12 transformer blocks:
+
+  | ckpt | qkv mean ‖Δ‖ | out_proj mean ‖Δ‖ | mlp mean ‖Δ‖ | qkv/out_proj | qkv/mlp |
+  |---|---:|---:|---:|---:|---:|
+  | BUNDLE step500   | 0.0080 | 0.1010 | 0.2449 | 0.080 | 0.033 |
+  | BUNDLE step1000  | 0.0125 | 0.1741 | 0.3984 | 0.071 | 0.031 |
+  | BUNDLE step4000  | 0.0192 | 0.2528 | 0.5847 | 0.076 | 0.033 |
+  | PAIRRANK step500 | 0.0078 | 0.1021 | 0.2488 | 0.077 | 0.032 |
+  | PAIRRANK step1000| 0.0123 | 0.1711 | 0.4082 | 0.072 | 0.030 |
+  | PAIRRANK step6750| 0.0203 | 0.2681 | 0.6163 | 0.076 | 0.033 |
+
+- Verdict: **`apply_svd_to_in_proj` is materially inert under PE_PAIR_RANK_DRO loss class.** Bug fix `2feea58` is preserved (movement is non-zero) but qkv residuals move only ~7.5% as much as out_proj and ~3.2% as much as MLP residuals across both runs and all training stages. Reproduces the `packets/P8A.md:108` P10_SYM C-ablation null on a different loss class. Implication: lever may be class-restricted to recipes where attention-routing is the optimization target (e.g., attention-distillation, method-conditional GRL on heads).
+- Slot 1 vs Slot 2 SVD trajectories indistinguishable at matched training steps (BUNDLE step1000 mean 0.01245 vs PAIRRANK step1000 0.01225, 1.6% apart) — GroupDRO with β=3.0 + chronic_flag does not perceptibly change which layers move.
+- Script: `analysis/p1_pe_eval_2026-05-07/weight_delta/compute_weight_delta.py` (committed `683b7d3`).
+
+**Phase A.5 diagnostic-substrate inference — PARTIAL** (2026-05-07 ~10:44 CET, ~14 min CPU):
+- Script: `analysis/p1_pe_eval_2026-05-07/diagnostic_substrates/run_inference.py` (committed `6eba42b`).
+- Scored 6,818 frames × 2 ckpts (BUNDLE step4000 + PAIRRANK step6750) on the 9 non-contract substrates in `grouped_manifest_v2.csv`.
+- **Stale GCS path issue surfaced**: 5,536 of 13,636 inferences (40%) returned zero-tensor responses due to dead frame paths.
+  - **5 broken suites** (zero-tensor → constant garbage scores): `live_reals_teams_prod` (677), `dor_evening` (324), `dor_morning` (244), `dor_fake_local` (605), `extra` (918) — total 2,768 frames.
+  - **4 suites stale** for two distinct reasons: (a) `gs://local/...` placeholder paths point at files that live on a different machine (`dor_evening`, `dor_morning`, `dor_fake_local`, `extra` — 100% local-path); (b) `live_reals_teams_prod` has paths under `gs://live-fakes-teams-prod/real/roee_tester_real_2026-03-24/` that have been REMOVED from the bucket (current layout is `session_<timestamp>/...` folders). The scoring populated `score_P8A` / `score_E2B` / `score_PA_3800` columns at some prior point — those scores are also against stale paths and should be re-verified.
+- **4 suites scored cleanly** (4,050 frames):
+
+  | suite | n | label | score_P8A | score_E2B (deployed) | score_PA_3800 | **score_P1_BUNDLE** | **score_P1_PAIRRANK** |
+  |---|---:|---|---:|---:|---:|---:|---:|
+  | `xinhe_may6_falseflag` | 92 | real | 0% FPR | **57.6% FPR** | 16.3% | **9.78% FPR** | **13.04% FPR** |
+  | `live_fakes_teams_prod` | 1,675 | fake | 75.3% recall | 81.1% | 50.4% | **74.1% recall** | **78.9% recall** |
+  | `visomaster_v2_dor` | 2,073 | fake | 73.8% recall | 56.0% | 25.2% | **65.2% recall** | **77.7% recall** |
+  | `team_sanity_may5` | 210 | real | 0.95% FPR | 0.95% | 0.48% | 0.95% FPR | 1.43% FPR |
+
+- Headline finding (preliminary, contract scorecard pending): **P1 dramatically reduces may6 false-flag rate (E2B's 57.6% → 9.78%/13.04%)** while not quite matching P8A's 0% baseline. PAIRRANK breaks the visomaster ceiling (77.7% vs P8A's 73.8%), beats E2B at fake recall on production data (78.9% vs 81.1%, near-parity), and matches P8A on team_sanity_may5 reals.
+- **Open loop filed**: `grouped-manifest-v2-stale-paths` — manifest needs regeneration against current bucket state, OR explicit annotation of which paths are local-disk-only.
+
+**Phase B1 + B2 + D + F**: queued for after Phase A's per-frame reports land. Scripts will be drafted off real shape (not pre-staged on speculation).
+
+**Image release**: `1.3.270` (`5dccfa4`). Cloud Build `40cf4d7c-4b8b-4af7-81ca-0991f2083450`, 16m39s, SUCCESS. Digest `sha256:3c65039dfcbd68d7f0fc9643f070b04937647fa22b9275f5711c62bf34bf51e5`.

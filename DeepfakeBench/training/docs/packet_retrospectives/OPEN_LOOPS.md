@@ -4,14 +4,14 @@
 
 ## Summary
 
-- **Open**: 31
+- **Open**: 32
 - **In progress**: 6
 - **Resolved**: 10
 - **Superseded**: 1
 
 ## Entries
 
-### Open (31)
+### Open (32)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -68,6 +68,14 @@
 - **last_verified**: 2026-05-07
 - **close_criterion**: every eval manifest under `arena/manifests/` is either (a) committed with a date-pinned filename (`..._wave_<YYYY-MM-DD>.json` or `..._wave_<YYYY-MM-DD>_v2.json`) so cross-version comparisons are explicit, OR (b) the manifest filename embeds a content-hash that the scorer/runner records alongside its results so a stale comparison is auto-flagged. A pre-launch lint at `tools/lint/preflight_launch.sh` fails the launch if `git status arena/manifests/` is non-empty.
 - **source**: `threads/eval_substrate_layering.md:73`
+
+### `grouped-manifest-v2-stale-paths`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: `analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv` is regenerated against current GCS state (bucket layout has migrated to `session_<timestamp>/...` for `live-fakes-teams-prod` and the `roee_tester_real_2026-03-24/` folder no longer exists), AND every row whose `frame_path` starts with `gs://local/...` is either (a) marked with an explicit `is_local: True` flag so scoring scripts can branch (download from local mirror or skip), OR (b) re-pointed to a real GCS URI. Phase A.5 verifies by re-running the broken suites (`live_reals_teams_prod`, `dor_evening`, `dor_morning`, `dor_fake_local`, `extra` — 2,768 frames total) without zero-tensor decode failures.
+- **source**: `threads/eval_substrate_layering.md:82`
 
 ### `split-mode-delta-unquantified`
 - **status**: open
@@ -179,7 +187,7 @@
 - **first_seen**: 2026-05-07
 - **last_verified**: 2026-05-07
 - **close_criterion**: `tools/regenerate_open_loops.py` is extended to (a) flag entries whose `last_verified` is more than 30 days old AND whose `close_criterion` text contains state-claim keywords (`uncommitted`, `in working tree`, `not yet committed`, `pending commit`), AND (b) auto-check those claims against current `git status` / `git log` output where possible. Output is a warning section in `OPEN_LOOPS.md` listing entries that need re-verification.
-- **source**: `threads/eval_substrate_layering.md:82`
+- **source**: `threads/eval_substrate_layering.md:95`
 
 ### `corrected-val-test-hint-split-counts-unrecoverable`
 - **status**: open

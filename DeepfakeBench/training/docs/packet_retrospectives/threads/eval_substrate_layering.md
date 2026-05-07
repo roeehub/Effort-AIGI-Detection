@@ -79,6 +79,19 @@ close_criterion: every eval manifest under `arena/manifests/` is either (a) comm
 
 The gap surfaced 2026-05-07 during P1 Phase C design: `arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json` had grown from 4,968 videos (HEAD) to 7,304 videos (working tree) since `b50f245` without a commit. PA's 7.87% HDTF baseline was computed against the smaller manifest; the larger one isn't comparable. Same risk on `arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml` (9→29 suites, also unstaged). Without the lint, every future scorecard launch risks running against a different substrate than the one prior numbers cite.
 
+### Open loop: grouped-manifest-v2-stale-paths
+status: open
+severity: high
+first_seen: 2026-05-07
+last_verified: 2026-05-07
+close_criterion: `analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv` is regenerated against current GCS state (bucket layout has migrated to `session_<timestamp>/...` for `live-fakes-teams-prod` and the `roee_tester_real_2026-03-24/` folder no longer exists), AND every row whose `frame_path` starts with `gs://local/...` is either (a) marked with an explicit `is_local: True` flag so scoring scripts can branch (download from local mirror or skip), OR (b) re-pointed to a real GCS URI. Phase A.5 verifies by re-running the broken suites (`live_reals_teams_prod`, `dor_evening`, `dor_morning`, `dor_fake_local`, `extra` — 2,768 frames total) without zero-tensor decode failures.
+
+The gap surfaced 2026-05-07 P1 Phase A.5: 5,536 of 6,818 inferences silently returned zero-tensor outputs because the manifest references stale paths. Two distinct stale-path classes:
+- **`gs://local/...` placeholders** (4 suites, 2,091 frames): files live on a different machine. `extract_paired_features.py` flagged this for a different artifact (Phase 0h, 32% of `pair_gaps.csv`); the same class infects `grouped_manifest_v2.csv`.
+- **bucket layout migration** (1 suite, 677 frames): `live_reals_teams_prod` references `gs://live-fakes-teams-prod/real/roee_tester_real_2026-03-24/...` which has been replaced by `gs://live-fakes-teams-prod/real/session_20260324_174822/...`. Existing `score_P8A` / `score_E2B` / `score_PA_3800` columns in the manifest were populated against the old paths and may also be against stale data.
+
+Until closed, any CPU-side inference using `grouped_manifest_v2.csv` returns garbage scores on these 5 suites. Phase A.5's verdict on may6 / live_fakes / viso / team_sanity is unaffected (those 4 suites scored cleanly on 4,050 frames); the dor invariance check (`dor_evening` / `dor_morning`) is the load-bearing missing piece.
+
 ### Open loop: open-loops-stale-state-claims
 status: open
 severity: medium
