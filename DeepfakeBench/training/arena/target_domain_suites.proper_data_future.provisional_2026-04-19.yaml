@@ -3,7 +3,7 @@
 # Use with a manifest built by:
 #   python arena/build_future_proper_target_domain_manifest.py \
 #     --inventory arena/future_proper_data_inventory.template.yaml \
-#     --output arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json
+#     --output /workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json
 #
 # Naming contract coordinated with WT-E:
 # - suite names always use `<slice>_<split>`
@@ -19,112 +19,112 @@
 suites:
   - name: proper_real_teams_dev
     df40_mode: none
-    external_real_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_real_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_real_manifest_split: "dev"
     external_real_manifest_slices: "proper_real_teams"
     external_real_deterministic: true
 
   - name: proper_real_teams_lockbox
     df40_mode: none
-    external_real_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_real_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_real_manifest_split: "lockbox"
     external_real_manifest_slices: "proper_real_teams"
     external_real_deterministic: true
 
   - name: proper_real_clean_dev
     df40_mode: none
-    external_real_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_real_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_real_manifest_split: "dev"
     external_real_manifest_slices: "proper_real_clean"
     external_real_deterministic: true
 
   - name: proper_real_clean_lockbox
     df40_mode: none
-    external_real_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_real_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_real_manifest_split: "lockbox"
     external_real_manifest_slices: "proper_real_clean"
     external_real_deterministic: true
 
   - name: proper_fake_teams_all_dev
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "dev"
     external_fake_manifest_slices: "proper_fake_teams_all"
     external_fake_deterministic: true
 
   - name: proper_fake_teams_all_lockbox
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "lockbox"
     external_fake_manifest_slices: "proper_fake_teams_all"
     external_fake_deterministic: true
 
   - name: proper_visomaster_teams_dev
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "dev"
     external_fake_manifest_slices: "proper_visomaster_teams"
     external_fake_deterministic: true
 
   - name: proper_visomaster_teams_lockbox
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "lockbox"
     external_fake_manifest_slices: "proper_visomaster_teams"
     external_fake_deterministic: true
 
   - name: proper_visomaster_enhanced_teams_dev
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "dev"
     external_fake_manifest_slices: "proper_visomaster_enhanced_teams"
     external_fake_deterministic: true
 
   - name: proper_visomaster_enhanced_teams_lockbox
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "lockbox"
     external_fake_manifest_slices: "proper_visomaster_enhanced_teams"
     external_fake_deterministic: true
 
   - name: proper_fake_clean_all_dev
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "dev"
     external_fake_manifest_slices: "proper_fake_clean_all"
     external_fake_deterministic: true
 
   - name: proper_fake_clean_all_lockbox
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "lockbox"
     external_fake_manifest_slices: "proper_fake_clean_all"
     external_fake_deterministic: true
 
   - name: proper_visomaster_clean_dev
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "dev"
     external_fake_manifest_slices: "proper_visomaster_clean"
     external_fake_deterministic: true
 
   - name: proper_visomaster_clean_lockbox
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "lockbox"
     external_fake_manifest_slices: "proper_visomaster_clean"
     external_fake_deterministic: true
 
   - name: proper_visomaster_enhanced_clean_dev
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "dev"
     external_fake_manifest_slices: "proper_visomaster_enhanced_clean"
     external_fake_deterministic: true
 
   - name: proper_visomaster_enhanced_clean_lockbox
     df40_mode: none
-    external_fake_manifest: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    external_fake_manifest: "/workspace/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
     external_fake_manifest_split: "lockbox"
     external_fake_manifest_slices: "proper_visomaster_enhanced_clean"
     external_fake_deterministic: true

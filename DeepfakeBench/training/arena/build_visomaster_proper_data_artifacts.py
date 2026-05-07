@@ -58,7 +58,7 @@ DEFAULT_SOURCE_LOGS: Dict[str, str] = {
 DEFAULT_NOTES: Tuple[str, ...] = (
     "Provisional snapshot from the live 2026-04-19 Teams propagation state; regenerate after the remaining Teams data lands.",
     "Clean-versus-Teams alignment is driven by exact sample_id overlap because base-capture keys are ambiguous across multiple fake variants.",
-    "Only exact 16/16 Teams rows are included in this snapshot. Clean rows stay explicit even when their fake-side frame count is ragged.",
+    "Only exact 16/16 clean and Teams rows are included in this snapshot.",
     "quality_band and face_scale_band are provisional dataset-level defaults until upstream manifests carry explicit per-capture band metadata.",
 )
 
@@ -126,6 +126,23 @@ def _slugify(value: str) -> str:
     return text or "unknown"
 
 
+def _parse_wave_id_tokens(wave_id: str) -> Optional[Dict[str, str]]:
+    match = re.match(
+        r"^(?P<prefix>.+?)_wave_(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})(?:_(?P<suffix>.+))?$",
+        str(wave_id or "").strip(),
+    )
+    if match is None:
+        return None
+    tokens = match.groupdict()
+    return {
+        "prefix": str(tokens.get("prefix") or "").strip(),
+        "date_slug": (
+            f"{tokens.get('year')}-{tokens.get('month')}-{tokens.get('day')}"
+        ),
+        "suffix": str(tokens.get("suffix") or "").strip(),
+    }
+
+
 def _normalize_none_token(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -178,9 +195,22 @@ def _frame_paths_for_record(record: Any, side: str) -> List[str]:
     return [_source_path(frame_root, frame_name) for frame_name in frame_names]
 
 
-def _teams_record_is_fixed(record: Any, target_frame_count: int) -> bool:
+def _assert_explicit_frame_files(record: Any) -> None:
+    if not tuple(record.real_frame_names):
+        raise ValueError(
+            f"Missing explicit frame_files for sample_id={record.sample_id!r} side='real'. "
+            "The provisional proper-data builder refuses to synthesize fallback frame paths."
+        )
+    if not tuple(record.fake_frame_names):
+        raise ValueError(
+            f"Missing explicit frame_files for sample_id={record.sample_id!r} side='fake'. "
+            "The provisional proper-data builder refuses to synthesize fallback frame paths."
+        )
+
+
+def _record_is_fixed(record: Any, target_frame_count: int) -> bool:
     expected = int(record.expected_total_per_stream or 0)
-    if expected != target_frame_count:
+    if expected not in {0, target_frame_count}:
         return False
     if int(record.cropped_real_count or 0) != target_frame_count:
         return False
@@ -191,6 +221,14 @@ def _teams_record_is_fixed(record: Any, target_frame_count: int) -> bool:
     if len(tuple(record.fake_frame_names)) != target_frame_count:
         return False
     return True
+
+
+def _clean_record_is_fixed(record: Any, target_frame_count: int) -> bool:
+    return _record_is_fixed(record, target_frame_count)
+
+
+def _teams_record_is_fixed(record: Any, target_frame_count: int) -> bool:
+    return _record_is_fixed(record, target_frame_count)
 
 
 def _derive_identity_and_session(record: Any) -> Tuple[str, str]:
@@ -355,6 +393,7 @@ def build_inventory_snapshot(
     split_seed: int = 737,
     lockbox_ratio: float = 0.20,
     teams_target_frame_count: int = 16,
+    allow_ragged_clean: bool = False,
     dataset_band_defaults: Optional[Mapping[str, Mapping[str, str]]] = None,
     source_logs: Optional[Mapping[str, str]] = None,
     notes: Optional[Iterable[str]] = None,
@@ -383,6 +422,7 @@ def build_inventory_snapshot(
         kept_enhancers: Counter[str] = Counter()
         kept_dataset_keys: Counter[str] = Counter()
         skipped_alignment: List[Dict[str, Any]] = []
+        skipped_ragged_clean: List[Dict[str, Any]] = []
         skipped_ragged_teams: List[Dict[str, Any]] = []
 
         for sample_id in overlap_sample_ids:
@@ -396,6 +436,23 @@ def build_inventory_snapshot(
                     {
                         "sample_id": sample_id,
                         "reason": str(exc),
+                    }
+                )
+                continue
+
+            _assert_explicit_frame_files(clean_record)
+            _assert_explicit_frame_files(teams_record)
+
+            if not allow_ragged_clean and not _clean_record_is_fixed(
+                clean_record, teams_target_frame_count
+            ):
+                skipped_ragged_clean.append(
+                    {
+                        "sample_id": sample_id,
+                        "dataset_key": clean_record.dataset_key,
+                        "expected_total_per_stream": int(clean_record.expected_total_per_stream or 0),
+                        "selected_real": int(clean_record.cropped_real_count or 0),
+                        "selected_fake": int(clean_record.cropped_fake_count or 0),
                     }
                 )
                 continue
@@ -437,6 +494,8 @@ def build_inventory_snapshot(
                 "teams_only_sample_count": len(teams_only_sample_ids),
                 "skipped_alignment_count": len(skipped_alignment),
                 "skipped_alignment_examples": skipped_alignment[:10],
+                "skipped_ragged_clean_count": len(skipped_ragged_clean),
+                "skipped_ragged_clean_examples": skipped_ragged_clean[:10],
                 "skipped_ragged_teams_count": len(skipped_ragged_teams),
                 "skipped_ragged_teams_examples": skipped_ragged_teams[:10],
                 "kept_dataset_keys": {key: int(kept_dataset_keys[key]) for key in sorted(kept_dataset_keys)},
@@ -461,6 +520,7 @@ def build_inventory_snapshot(
         "generated_at": _now_iso(),
         "wave_id": wave_id,
         "teams_target_frame_count": int(teams_target_frame_count),
+        "allow_ragged_clean": bool(allow_ragged_clean),
         "dataset_band_defaults": {
             key: {
                 "quality_band": str(value.get("quality_band")),
@@ -544,6 +604,7 @@ def build_artifacts(
     split_seed: int = 737,
     lockbox_ratio: float = 0.20,
     teams_target_frame_count: int = 16,
+    allow_ragged_clean: bool = False,
     dataset_band_defaults: Optional[Mapping[str, Mapping[str, str]]] = None,
     source_logs: Optional[Mapping[str, str]] = None,
     notes: Optional[Iterable[str]] = None,
@@ -559,6 +620,7 @@ def build_artifacts(
         split_seed=split_seed,
         lockbox_ratio=lockbox_ratio,
         teams_target_frame_count=teams_target_frame_count,
+        allow_ragged_clean=allow_ragged_clean,
         dataset_band_defaults=dataset_band_defaults,
         source_logs=source_logs,
         notes=notes,
@@ -660,11 +722,25 @@ def _parse_key_value(items: Optional[Sequence[str]]) -> Dict[str, str]:
 
 
 def _default_output_paths(wave_id: str) -> Dict[str, str]:
-    date_slug = re.sub(r"[^0-9]+", "-", wave_id).strip("-") or "snapshot"
+    parsed_wave_id = _parse_wave_id_tokens(wave_id)
+    if parsed_wave_id is None:
+        manifest_name = f"{wave_id}_target_domain_manifest.json"
+        suite_name = f"target_domain_suites.{wave_id}.yaml"
+    else:
+        prefix = parsed_wave_id["prefix"] or "proper_data"
+        date_slug = parsed_wave_id["date_slug"] or "snapshot"
+        suffix = parsed_wave_id["suffix"]
+        manifest_name = f"{prefix}_target_domain_manifest_{date_slug}"
+        suite_tail = date_slug
+        if suffix:
+            manifest_name = f"{manifest_name}_{suffix}"
+            suite_tail = f"{suffix}_{date_slug}"
+        manifest_name = f"{manifest_name}.json"
+        suite_name = f"target_domain_suites.proper_data_future.{suite_tail}.yaml"
     return {
         "inventory": str(ARENA_ROOT / "inventories" / f"{wave_id}.yaml"),
-        "manifest": str(ARENA_ROOT / "manifests" / f"{wave_id}_target_domain_manifest.json"),
-        "suite": str(ARENA_ROOT / f"target_domain_suites.{wave_id}.yaml"),
+        "manifest": str(ARENA_ROOT / "manifests" / manifest_name),
+        "suite": str(ARENA_ROOT / suite_name),
         "report": str(ARENA_ROOT / "reports" / f"{wave_id}_build_report.json"),
     }
 
@@ -701,6 +777,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         type=int,
         default=16,
         help="Exact Teams real/fake frame count required for inclusion. Default: 16",
+    )
+    parser.add_argument(
+        "--allow-ragged-clean",
+        action="store_true",
+        help="Keep clean-side rows even when they are not exact fixed-frame pairs. Default is strict clean-side 16/16 filtering.",
     )
     parser.add_argument(
         "--inventory-output",
@@ -785,6 +866,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         split_seed=args.split_seed,
         lockbox_ratio=args.lockbox_ratio,
         teams_target_frame_count=args.teams_target_frame_count,
+        allow_ragged_clean=bool(args.allow_ragged_clean),
         dataset_band_defaults=dataset_bands,
         source_logs=source_logs,
         notes=args.note,
