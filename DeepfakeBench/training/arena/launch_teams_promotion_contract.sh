@@ -31,6 +31,19 @@ OUTPUT_GCS_ROOT="gs://training-job-outputs/test_results/teams_promotion_contract
 JOB_NAME=""
 DRY_RUN=""
 
+# Promotion-contract policy budgets passed through to the runner.
+# Defaults match the v3-fix design (recall floor + bumped FPR budgets); they
+# close the `contract-policy-bug-fix-not-committed` open loop's "scorecard
+# run with --promotion_target_fake_recall_min ... selected τ via the
+# recall-floor path" component. See:
+#   docs/packet_retrospectives/threads/contract_policy_bug.md
+#   docs/packet_retrospectives/threads/promotion_contract_evolution.md
+# Pass --promotion-target-fake-recall-min 0.0 explicitly for legacy-policy
+# comparison runs.
+PROMOTION_TARGET_REAL_FPR="${PROMOTION_TARGET_REAL_FPR:-0.07}"
+PROMOTION_TARGET_STRESS_FPR="${PROMOTION_TARGET_STRESS_FPR:-0.10}"
+PROMOTION_TARGET_FAKE_RECALL_MIN="${PROMOTION_TARGET_FAKE_RECALL_MIN:-0.30}"
+
 usage() {
     cat <<EOF
 Usage:
@@ -47,6 +60,17 @@ Options:
   --image-uri URI             Container image URI (default: versioned effort-detector image)
   --gpu-type TYPE             Accelerator type passed to the shared launcher.
   --gpu-count N               Accelerator count passed to the shared launcher.
+  --promotion-target-real-fpr FLOAT
+                              FPR budget on primary real dev suite for τ selection
+                              (default: ${PROMOTION_TARGET_REAL_FPR}; v3-fix design).
+  --promotion-target-stress-fpr FLOAT
+                              FPR budget on worst real stress dev suite for τ selection
+                              (default: ${PROMOTION_TARGET_STRESS_FPR}; v3-fix design).
+  --promotion-target-fake-recall-min FLOAT
+                              Recall floor on dev_fake_macro_recall. Candidates below
+                              the floor rank in a worse tier (within-ckpt + cross-ckpt).
+                              (default: ${PROMOTION_TARGET_FAKE_RECALL_MIN}; v3-fix design.
+                              Pass 0.0 explicitly for legacy-policy comparison.)
   --dry-run                   Print the launch plan without submitting a Vertex job.
 
 Artifacts:
@@ -105,6 +129,12 @@ while [[ $# -gt 0 ]]; do
             GPU_TYPE="$2"; shift 2 ;;
         --gpu-count)
             GPU_COUNT="$2"; shift 2 ;;
+        --promotion-target-real-fpr)
+            PROMOTION_TARGET_REAL_FPR="$2"; shift 2 ;;
+        --promotion-target-stress-fpr)
+            PROMOTION_TARGET_STRESS_FPR="$2"; shift 2 ;;
+        --promotion-target-fake-recall-min)
+            PROMOTION_TARGET_FAKE_RECALL_MIN="$2"; shift 2 ;;
         --dry-run)
             DRY_RUN="1"; shift ;;
         -h|--help)
@@ -144,6 +174,9 @@ RUNNER_ARGS=(
     --scorecard_delta_csv "${DIAGNOSTIC_GCS_DIR}/scorecard.int8_delta.csv"
     --scorecard_json "${DIAGNOSTIC_GCS_DIR}/scorecard.json"
     --promotion_contract_dir "${CONTRACT_GCS_DIR}"
+    --promotion_target_real_fpr "${PROMOTION_TARGET_REAL_FPR}"
+    --promotion_target_stress_fpr "${PROMOTION_TARGET_STRESS_FPR}"
+    --promotion_target_fake_recall_min "${PROMOTION_TARGET_FAKE_RECALL_MIN}"
 )
 
 LAUNCH_CMD=(
@@ -171,6 +204,7 @@ echo "Suite Manifest:          ${SUITE_MANIFEST}"
 echo "Checkpoint Map:          ${CHECKPOINT_MAP}"
 echo "Checkpoints:             ${CHECKPOINTS}"
 echo "W&B Project:             ${WANDB_PROJECT}"
+echo "Promotion policy:        target_real_fpr=${PROMOTION_TARGET_REAL_FPR}, target_stress_fpr=${PROMOTION_TARGET_STRESS_FPR}, target_fake_recall_min=${PROMOTION_TARGET_FAKE_RECALL_MIN}"
 echo "Vertex Output:           gs://training-job-outputs/vertex-output/${JOB_NAME}/"
 echo "Detailed Reports:        ${REPORTS_GCS_FOLDER}/"
 echo "Diagnostic Scorecards:   ${DIAGNOSTIC_GCS_DIR}/"

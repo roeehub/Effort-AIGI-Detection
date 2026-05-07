@@ -1,0 +1,55 @@
+# Promotion-contract validation map for the P1 (PE_PAIR_RANK_DRO) packet
+#
+# Authored 2026-05-07 to evaluate Slot 1 (BUNDLE) + Slot 2 (PAIRRANK_ONLY)
+# against the canonical contract suite + their pre-registered F1-F5 close
+# criterion (see experiments/phase2_round13/R13_P1_BUNDLE_FT_FROM_P8A.yaml
+# header and NEXT_STEPS_PLAN_2026-05-06.md §8.2 P1).
+#
+# Run pairing:
+#   - tznuar61 ("R13_P1_BUNDLE_FT_FROM_P8A_0506-2213"): pair-rank +
+#     multi-axis GroupDRO (R-D real-side + F-B fake-side keys); seed 5072.
+#   - s2mp5fxm ("R13_P1_PAIRRANK_ONLY_FT_FROM_P8A_0506-2213"): pair-rank
+#     ONLY; seed 5071. Slot-2 isolates the lever for ablation.
+# Both FT from P8A_REFERENCE_STEP5000 on the post-`2feea58` codepath
+# (apply_svd_to_in_proj q/k/v classification gradient active for the first
+# time on this lineage; see project_in_proj_svd_gradient_bug.md).
+#
+# Close criterion (4/4 must pass on the contract scorecard + follow-up audits):
+#   F1: lockbox fake recall >= 90% at FPR <= 10% (this scorecard)
+#   F2: pair-ranking lift OR shortcut weakening >= 30% on >= 2 of 5 axes
+#       vs E2B baseline (CPU 5-axis audit; analysis/p1_pe_eval_2026-05-07/)
+#   F3: no untargeted axis (is_webcam, face_area_fraction, min_dim,
+#       color_b_dev) amplifies +50% (same audit)
+#   F4: HDTF cross-substrate FPR <= 5% (separate proper_data_future scorecard)
+#   F5: chronic-FP pc_generator cluster failure rate (P8A baseline 0.520)
+#       drops by >= 0.10 absolute via GroupDRO chronic_flag (slot-1 only;
+#       post-hoc on per-frame predictions)
+#
+# Baselines included for direct comparison:
+#   - P8A_REFERENCE_STEP5000: production anchor + FT base for both arms
+#     (must beat to justify the FT step under PE_PAIR_RANK_DRO loss class).
+#   - E2B_TOP_N_STEP3200: deployment ≡ E2B per project_deployment_is_e2b_2026-05-06;
+#     5-axis audit baseline for F2/F3.
+#
+# Checkpoint selection rationale (from W&B summary 2026-05-07 + GCS listings):
+#   BUNDLE (tznuar61, 7 saved + 6 top_n; early-stopped at epoch 3, train_step 2750):
+#     top_n step4000:   highest AUC (0.9951) — final-best, val_holdout peak
+#     top_n step3750:   best EER among top_n (0.0168, AUC 0.9947)
+#     periodic step500: grad-audit anchor (only step100 was specced but
+#                       not saved; eval starts at step 250)
+#   PAIRRANK_ONLY (s2mp5fxm, 7 saved + 7 top_n; early-stopped at epoch 4, train_step 2750):
+#     top_n step6750:   highest AUC + best EER (0.9949 / 0.0119)
+#     top_n step6000:   lowest EER (0.0095) at AUC 0.9939 — early-trajectory
+#                       anchor before the late drift
+#     periodic step500: grad-audit anchor
+
+P8A_REFERENCE_STEP5000:           "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:               "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+P1_BUNDLE_TOP_N_STEP4000:         "gs://training-job-outputs/best_checkpoints/tznuar61/top_n_effort_20260507_step4000_auc0.9951_eer0.0210.pth"
+P1_BUNDLE_TOP_N_STEP3750:         "gs://training-job-outputs/best_checkpoints/tznuar61/top_n_effort_20260506_step3750_auc0.9947_eer0.0168.pth"
+P1_BUNDLE_PERIODIC_STEP500:       "gs://training-job-outputs/best_checkpoints/tznuar61/periodic_effort_20260506_step500_auc0.9784_eer0.0735.pth"
+
+P1_PAIRRANK_TOP_N_STEP6750:       "gs://training-job-outputs/best_checkpoints/s2mp5fxm/top_n_effort_20260507_step6750_auc0.9949_eer0.0119.pth"
+P1_PAIRRANK_TOP_N_STEP6000:       "gs://training-job-outputs/best_checkpoints/s2mp5fxm/top_n_effort_20260507_step6000_auc0.9939_eer0.0095.pth"
+P1_PAIRRANK_PERIODIC_STEP500:     "gs://training-job-outputs/best_checkpoints/s2mp5fxm/periodic_effort_20260506_step500_auc0.9848_eer0.0500.pth"
