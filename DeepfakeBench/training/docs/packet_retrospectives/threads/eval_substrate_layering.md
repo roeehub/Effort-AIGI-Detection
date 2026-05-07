@@ -101,6 +101,15 @@ close_criterion: `tools/regenerate_open_loops.py` is extended to (a) flag entrie
 
 The gap surfaced 2026-05-07 during P1 launch prep: the `contract-policy-bug-fix-not-committed` entry described the v3-fix scorer code as "uncommitted in working tree" with `last_verified: 2026-04-30`. Audit found the patch had been committed as `974e033` on 2026-04-29 — the entry text was stale by a week. The first-draft eval plan inherited this stale framing. Without the auto-check, drift between OPEN_LOOPS text and tree state is invisible until an agent does an explicit audit.
 
+### Open loop: f2-not-testable-from-phase-a
+status: open
+severity: high
+first_seen: 2026-05-07
+last_verified: 2026-05-07
+close_criterion: either (a) the F2(a) close criterion ("≥30% relative pair-rank lift on ≥2 of 6 paired training lanes among previously-missed fakes") is rewritten as a Phase-A-evaluable form (e.g., "lift on per-frame pair gaps where P8A is confident-wrong" — uses P8A's own score as the gating condition, doesn't require the training-loader's `(sample_id, frame_idx)` pair structure), OR (b) the eval substrate is extended with score sets on each of the 6 paired training lanes (`df40`, `deeplive`, `visomaster_v1_base`, `visomaster_enhanced`, `visomaster_teams_enhanced`, `deeplive_teams`) so the criterion as written becomes testable, OR (c) the criterion is dropped from packet retros' close-criterion table with a written disposition referencing this loop.
+
+The gap surfaced 2026-05-07 during P1 F2(a) audit. Of the 6 yaml-named paired training lanes, only 1 (`deeplive_teams`) has any Phase A eval-substrate proxy. The 8 canonical_subjects within that lane that the audit subdivided into sub-lanes had P8A baseline `frac_fake_gt_real` values of 0.971-1.000 on the 3 sub-lanes with non-zero `n_pairs` after the "previously-missed fake" filter — saturated, leaving no headroom for the 30% relative-lift bar (max possible lift on the 0.971-baseline sub-lane = +2.99%). Result: 0 of 6 P1 ckpts pass, but the result is mechanically forced by substrate, not a model-quality statement. Without closure, every future packet that uses pair_rank_loss as a lever inherits the same undetectable F2(a) — and a "not testable" cell in the verdict table is invisible to a quick scan vs an actual fail. Source: `analysis/p1_pe_eval_2026-05-07/f2_pair_rank/F2_PAIR_RANK_FACTS_2026-05-07.md` Caveats §1-§5.
+
 ## Cross-thread refs
 
 - [`promotion_contract_evolution`](promotion_contract_evolution.md) — defines the contract layer's authority. This thread documents that the contract is a *layer*, not the only readout.

@@ -1,10 +1,10 @@
 # BUILD_SCAFFOLD — Chronological Map for Slice Agents
 
-> **🟢 Build complete: 2026-04-29.** All 8 slices (0 through 7) are `done`. The wiki is ready for working-agent use under the `AGENTS.md` read/update protocol. The temporal-edge orienting surface for any future agent is `STATE_2026-04-29.md`.
+> **🟢 Build complete: 2026-04-29.** All 8 slices (0 through 7) are `done`. The wiki is ready for working-agent use under the `AGENTS.md` read/update protocol. The temporal-edge orienting surface for any future agent is the rolling `STATE.md` (the build-time snapshot now lives at `archive/STATE_2026-04-29.md`).
 >
 > **Purpose** (build-time): Build-time chronological enumeration of source material, partitioned into 7 substantive slices + Slice 0 scaffold. Each slice agent picked its slice, read the listed sources, and authored thread/timeline content per `AGENTS.md`.
 >
-> **No synthesis in this file.** Listing only — actual synthesis lives in `threads/*.md`, `packets/*.md`, and `STATE_2026-04-29.md`.
+> **No synthesis in this file.** Listing only — actual synthesis lives in `threads/*.md`, `packets/*.md`, and the rolling `STATE.md` (build-time snapshot at `archive/STATE_2026-04-29.md`).
 >
 > **Slice 0 author**: Claude Opus 4.7 (1M context), 2026-04-29.
 >

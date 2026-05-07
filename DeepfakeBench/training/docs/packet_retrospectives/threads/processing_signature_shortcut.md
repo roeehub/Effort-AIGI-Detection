@@ -97,6 +97,180 @@ A 2026-04-29 morning visual audit of eval-substrate slices (the very-sharp-FP an
 - This is **not a reason to revise the close criterion silently**. The 2-camera controlled test (2026-04-24, `R13_RELAUNCH_PACKET7_CAMERA_SIGNATURE_HANDOFF_2026-04-24.md:5-19`) was not eval-substrate — it was direct production-side captures (Dor laptop, Dor webcam, Roee Mac, Roee Windows), and the score-flip happened on those. So the shortcut is real on production captures, not just on the eval substrate. The eval-substrate amplification (if real) compounds with the production-side mechanism rather than replacing it. **Do not unilaterally revise the close criterion.** This update logs the open question for the disposition decision tracked by the `shortcut-block-criterion-may-be-scorer-artifact-bound` sub-loop above.
 - The audit also refines two adjacent eval-substrate findings (see [`sharpness_metric_bug`](sharpness_metric_bug.md), [`eval_substrate_data_hygiene`](eval_substrate_data_hygiene.md)) that bear on how to read existing per-slice FPR analyses: `sharpness_laplacian` is computed on the full image not the face crop (so the very-sharp-FP slice mixes two populations), and the eval substrate contains 99×110-pixel source crops that pass the existing face-area floor but no production deployment would feed the model.
 
+### 2026-05-06 afternoon update — four CPU diagnostics triangulate same-day same-camera capture-pipeline drift as the operational shortcut
+
+Four parallel CPU probes ran on 2026-05-06 in `analysis/{xinhe_cross_camera_audit_2026-05-06,dor_drift_mechanism_2026-05-06,amp_vs_phase_probe_2026-05-06,paired_feature_consistency_2026-05-06}/`. Independent data sources, coherent finding: **the shortcut is a capture-pipeline IQ signature concentrated in pixel-domain amplitude statistics, sensitive to small day-to-day pipeline changes on the same hardware, with a long encoder-side residual tail.**
+
+#### Probe 1 — Xinhe cross-day mechanism (n=92 false-flag + n=60 correct, both "Generator PC" participant)
+
+User flagged 92 fresh real Xinhe frames captured 2026-05-06 11:06 UTC at `gs://live-fakes-teams-prod/real/session_20260506_125113/xinhe-may6-real-false-flag-1/` being false-flagged by deployment (deployment scores 0.83-0.93, RED verdicts on most). Compared against 60 Xinhe real frames from `team_sanity_may5__Xinhe` previously captured (P8A FPR 0% on existing browser data per `analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv`). **Key correction to "cross-camera" framing**: both populations have file-prefix `Generator PC` — same participant, same nominal hardware, captured one day apart. The discriminating factor is *day-to-day capture-pipeline drift*, not gross camera-make change.
+
+Findings (`analysis/xinhe_cross_camera_audit_2026-05-06/outputs/`):
+- 24-feature logistic regression on IQ axes separates the two populations at **5-fold CV AUC = 1.0000** (`falseflag_classifier.json`). May6 frames are perfectly identifiable by IQ features alone.
+- Top discriminators by Cohen's d (`axis_comparison.csv`): `sat_std` d=−5.95 (single-axis AUC=1.0; max of may6 < min of may5), `sobel_mean_face` d=−4.33, `lap_var_face` d=−2.65 (face HF energy roughly halved), `face_area` d=+4.31. May6 has ~half the high-frequency face energy, 40% lower saturation variance, larger faces, broader compression of all per-channel std.
+- Within-may6 (n=92) Pearson r vs deployment_score (`score_axis_correlations.csv`): `lap_var_face` +0.331 (p=1e-3), `r_mean` -0.378, `r_std` +0.306, `luma_mean` -0.275. **Reversal**: cross-population low sharpness predicts false-flag, but within may6 *higher* sharpness pushes the score *up*. The model uses different IQ features inside vs outside the desaturated cluster — classic shortcut polarity-shift.
+- Mechanism: capture/codec-pipeline signature change between two consecutive sessions on the same Generator PC machine. Consistent with chroma-subsampling and codec-style smoothing applied differently between sessions. Same axis family as the documented `cam_test_s33` valley (memory `project_image_quality_shortcut.md`) but operating in the **false-positive direction** (real frames look enough like the desaturated training-fake distribution to trip RED).
+
+#### Probe 2 — Dor 22× same-identity drift mechanism (n=820 across 7 sessions)
+
+Identified earlier in this thread (Slice-4 RLP5 slot-07 evidence) and quantified directly from the cached identity-browser scores: P8A on the same Dor identity moves from `dor_evening` mean 0.015 → `teams_real_dor_dev` mean 0.331 (**22.4× drift**), E2B 0.021 → 0.300 (14.1×), PA_3800 0.119 → 0.665 (5.6×). Probe quantifies what drives it.
+
+Findings (`analysis/dor_drift_mechanism_2026-05-06/outputs/`, `drift_attribution.csv`, `regression_p8a.json`):
+- Endpoint-union ridge fit `score_P8A ~ IQ_axes` recovers **90% of the cross-session drift from named pixel-domain axes alone** (predicted 0.285 / total 0.316 = 90%, R²_union = 0.42-0.62). Named-axis residual: 10% on P8A, 13% on E2B, 18% on PA_3800.
+- Per-axis attribution to drift: **`min_dim` (image resolution) 53-68%**, **`color_b_dev` (LAB B-channel cast) 27-38%**, **`edge_mag` (Sobel mean) 44% on P8A**. `luma_std`, `contrast_l`, `sharpness_lap` add ~10-15% each. Sharpness *counter-drives* on P8A: high-quality crisp frames push score up.
+- Implication: the drift IS substantially captured by the same axes PD targets (`luma`, `sharpness`) plus two PD does NOT target (`min_dim`/resolution and `color_b_dev`/B-channel cast). PD's prototype already showed shifting onto un-targeted axes; this probe names the un-targeted axes specifically.
+
+#### Probe 3 — Amp-vs-phase fake-signal localization (n=5000 frames, 5-fold StratifiedGroupKFold)
+
+Decision-gating probe for proposed Fourier amplitude augmentation (where amplitude carries style and phase carries content). The risk per Wang 2020 is that face-swap manipulation signal also lives in amplitude; naive amp-randomization would erase the signal we want.
+
+Findings (`analysis/amp_vs_phase_probe_2026-05-06/outputs/amp_phase_aucs.csv`):
+| Representation | 5-fold mean AUC |
+|---|---:|
+| Amplitude (16 radial × 8 angle bins) | **0.946** |
+| Phase (same grid, circular-variance bands) | **0.861** |
+| Pixel-baseline (pooled grayscale stats) | 0.671 |
+| Amp-shuffle (sanity control) | 0.497 |
+
+**Verdict: MIXED-with-amplitude-bias.** Both spectra carry separable manipulation signal. Gap = 0.085, above the GOLD threshold (≥0.85 phase AUC and amp <0.70 needed for safe broad randomization). Naive amplitude randomization will erase ~10% of separating power. Top amplitude bands cluster at radial 8-13 (mid-to-high frequency); top phase bands cluster at radial 9-12 (mid-frequency). Implication for next-packet design: a Fourier-aug packet must be **band-limited** (target the shortcut bands while sparing the manipulation-signal bands), NOT broad amplitude swap.
+
+#### Probe 4 — Paired-transport feature consistency (n=275 paired raw/teams viso pairs)
+
+Decisive question for whether AugMix-on-frozen-encoder + new head can cap (head-side problem) or whether encoder fine-tune is mandatory (encoder-side problem). Used cached P8A frozen features (`analysis/clip_vs_p8a_viso_2026-05-03/outputs/p8a__features.npz`) + CLIP-B16-raw baseline.
+
+Findings (`analysis/paired_feature_consistency_2026-05-06/outputs/`, `pair_distances.csv`, `regression_score_on_feat.json`):
+- P8A pair cosine-distance distribution is **bimodal**: 47% tight-invariant (cos < 0.05), 21% typical (0.05-0.15), 22% shifted (0.15-0.30), **11% catastrophic-shift (>0.30, max 0.92)**. CLIP-B16-raw baseline: 6%/93%/0.7%/**0%** in same buckets — FT compressed the typical pair but *created* a shift-tail that didn't exist in CLIP.
+- **Pearson r(P8A pair-feat-distance, P8A pair-score-delta) = +0.697, R² = 0.485** — half the per-pair score variance is explained by encoder-side feature distance, not head-side.
+- Quartile slice (Q4, n=69, mean P8A pair feat-cos-dist 0.331): mean P8A score(raw)=0.627 vs P8A score(teams)=0.181 (Δ=−0.446); CLIP feat-cos-dist on same pairs only 0.102. **The shift is encoder-side, not perceptual** — P8A learned a feature axis that the teams transform turns off, and the information has been removed by the encoder.
+- Cross-encoder null: r(P8A feat-dist, E2B score-delta) = -0.089 (p=0.14), and E2B reverses sign on viso (mean teams 0.172 > mean raw 0.086, Wilcoxon p=0.0019; cross-references prior `pair_loss_effect_verification_2026-05-05/FINDINGS.md`).
+
+**Verdict: ENCODER_PARTIAL_INVARIANCE — not pure head, not pure encoder.** ~47% of pairs are head-fixable (encoder kept them tight, head misuses); ~33% are encoder-bound (encoder itself drifts catastrophically); the head-axis fixes (AugMix-on-frozen + new head, λ-style decorrelation) recover the 47% cohort but are mathematically capped on the 11% large-shift tail.
+
+#### Joint reading across the four probes
+
+Triangulation from independent probes converges: **the shortcut is a capture/codec-pipeline IQ signature concentrated in mid-to-high-frequency amplitude statistics, sensitive to subtle day-to-day pipeline changes on the same hardware, with a long encoder-side residual that head-only fixes cannot reach.**
+
+Direct implications for technique selection (full ranked list in `docs/relaunch_handoffs/ANTI_SHORTCUT_TECHNIQUES_RANKED_2026-05-06.md`):
+
+1. **PD-class explicit-form penalty (in flight)** is well-targeted at the *named* IQ axes that Probe 2 shows carry 80-90% of Dor-style drift; the prototype's predicted shifting onto un-targeted axes is now NAMED — `min_dim` (resolution) and `color_b_dev` (B-channel cast) are the two un-targeted axes most likely to absorb the shifted gradient. Add a 5-axis 5-axis F3 audit on the PD scorecard reports.
+2. **Customized AugMix consistency** is the most direct fit to the "same person, different camera/day flips score" observation (Probes 1+2+4). Use 60% custom-substrate branches (codec, luma, sharpness, crop scale, face area, color cast, resolution) + 40% generic ops + JSD between original and 2 augmented views.
+3. **Band-limited Fourier amplitude augmentation** is conditionally viable per Probe 3 — *only if* restricted to the shortcut-only bands (the radial 8-13 mid-to-high frequencies dominating Probe 1's discriminating axes) and *not* extended to the bands carrying manipulation signal. Naive broad amplitude swap is poison.
+4. **SBI / pseudo-fake** is needed for the 11% encoder-side catastrophic-shift tail (Probe 4 Q4) and for cross-method generalization that AugMix/PD cannot provide.
+
+Open question and new sub-loop below: the Probe 3 verdict is "MIXED-with-amplitude-bias" not "GOLD" — so the band-limited Fourier-aug recipe needs an additional surgical probe to identify *which* radial bands contain the shortcut and *which* contain the manipulation signal, and how much they overlap. This gates whether the band-limited recipe has structural headroom or is a phantom path.
+
+#### Probe 5 (follow-up) — Local CPU inference confirms deployment ≡ E2B; P8A is ROBUST to may6 drift
+
+After Probes 1-4, ran local CPU inference on all three available ckpts (P8A, E2B, PA_3800) over the 152 may5+may6 frames, using `arena/model_arena.load_model` for preprocessing parity (`analysis/xinhe_cross_camera_audit_2026-05-06/run_local_inference.py`, 152 frames × 3 ckpts in ~2 min on Mac CPU). Results in `analysis/xinhe_cross_camera_audit_2026-05-06/outputs/MODEL_SCORES_FINDINGS.md`.
+
+| ckpt | may5 mean / FPR@0.5 | may6 mean / FPR@0.5 | population AUC | r vs deploy_score |
+|---|---|---|---|---|
+| **P8A** | 0.021 / **0.000** | 0.021 / **0.000** | 0.619 (no shift) | +0.359 |
+| **E2B** | 0.053 / 0.017 | **0.511** / **0.576** | 0.892 | **+1.000** |
+| **PA_3800** | 0.054 / 0.000 | 0.269 / 0.163 | 0.883 | +0.757 |
+
+**Two operationally critical findings**:
+
+1. **Deployment scoring matches local E2B inference at Pearson r = +1.000 on the 92 may6 frames.** Every may6 frame deployment flagged at ≥0.5 was also flagged by the local E2B at ≥0.5. The deployed production model is E2B (or a clone). The user's observed false-flag pattern is E2B's behavior, not P8A's.
+2. **P8A is robust to the may6 capture-pipeline drift.** P8A scores 0% FPR@0.5 on the may6 set with mean 0.021, identical to may5 at 0.021. **P8A and E2B have learned non-overlapping shortcut axes on Generator PC frames.** Probe 4's E2B-reverses-sign-on-viso finding was a different facet of this same divergence.
+
+This refines the Slice-5 framing of P8A as "weakened the shortcut at anchor" — on this specific user-flagged production substrate, P8A doesn't *have* the shortcut at all. The framing "P8A's anchor weakening was incomplete (anchor mean 0.744 not ≤0.30)" measures a different anchor pool; on the may6 substrate-class specifically, P8A's relevant FPR is zero.
+
+Within-may6 IQ-axis correlations (`scores_with_features.csv`):
+- E2B/PA_3800 read `lap_var_face` (+0.331/+0.479), `luma_mean` (-0.275/-0.277), `sat_std` (-0.234/-0.246) — Probe 1's discriminating axes.
+- P8A reads them substantially weaker (max +0.111). P8A's score is not driven by the same IQ axes that drive E2B/deployment.
+
+**Operational implication (not a recommendation, an observed option)**: switching deployment to P8A on this substrate-class would resolve the false-flag pattern. The trade-off is documented elsewhere — P8A has lower production fake recall on `live_fakes_teams_prod` (54.3% vs E2B 74.4% at τ=0.5 per identity-browser data), but the v2-substrate viso ceiling and the HDTF substrate findings (memory `project_pa_does_not_generalize_to_hdtf_2026-05-05.md`) both favor P8A on the cross-substrate axis. The right deployment depends on which failure cost is higher — the false-flag pattern (E2B has, P8A doesn't) or the missed-fake rate (E2B catches more, P8A catches fewer).
+
+#### Identity-browser integration
+
+The 92 may6 frames + their P8A/E2B/PA_3800 scores were appended to `analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv` as `suite='xinhe_may6_falseflag'`, `base_identity='xinhe_may6_falseflag'`, label=0 (real), bringing the dataset to 14,626 rows. A backup of the prior manifest is at `data/grouped_manifest_v2.backup_pre_xinhe_may6.csv`. Browser HTML rebuild (with `--skip-download --skip-thumb` and the new score CSVs as `--score-csv` flags) is a 5-minute follow-up not run yet.
+
+#### Probe 6 (closes loop) — Band-overlap probe partitions FFT bands; bands 12-13 are clean shortcut-only
+
+Followup probe (`analysis/fourier_band_overlap_2026-05-06/run_probe.py`, `summary.json`, `per_band_aucs.csv`) directly addresses the loop opened by Probe 3's MIXED verdict. For each of 16 radial FFT amplitude bands, computed two single-feature logistic AUCs:
+- **Shortcut AUC** (Task A): may6 (1) vs may5 (0) on the 152 Xinhe frames — directly measures Probe 1's day-to-day capture-pipeline drift signal per band.
+- **Signal AUC** (Task B): fake (1) vs real (0) on a fresh 200/200 sample of `teams_fake_all_dev` / `teams_real_all_dev` — measures the manipulation signal per band.
+
+| band | shortcut AUC | signal AUC | Δ | interpretation |
+|---:|---:|---:|---:|---|
+| 0-1 (DC) | 0.66 / 0.69 | 0.63 / 0.47 | +0.03 / +0.22 | mixed |
+| 2-4 (low) | 0.85 / 0.91 / 0.85 | 0.69 / 0.73 / 0.74 | +0.15 / +0.18 / +0.11 | both signals moderate |
+| **5-6 (mid)** | 0.63 / 0.61 | **0.72 / 0.70** | -0.09 / -0.08 | **PRESERVE — manipulation-signal-carrying** |
+| 7 | 0.89 | 0.68 | +0.21 | shortcut-leaning |
+| **8-9 (mid-high)** | **0.98 / 0.98** | 0.66 / 0.64 | +0.32 / +0.34 | **mostly safe** |
+| 10 | 0.90 | 0.62 | +0.29 | safe |
+| 11 | 0.83 | 0.59 | +0.24 | safe |
+| **12-13 (high)** | **0.97 / 0.97** | **0.52 / 0.46** | **+0.44 / +0.52** | **CLEAN — randomize** |
+| 14 | 0.83 | 0.54 | +0.28 | safe |
+| 15 (Nyquist) | 0.63 | 0.55 | +0.09 | weak |
+
+**Verdict: GREEN — band-limited Fourier-aug is structurally viable.** Bands **12-13** are the cleanest cell: shortcut signal at AUC 0.97 with manipulation signal AUC 0.46-0.52 (near-chance). Randomizing amplitude on these bands weakens the day-to-day capture-pipeline signature without touching the fake signal. Bands 8-10 are a secondary safe zone. Bands 5-6 are explicitly **signal-carrying** (signal AUC > shortcut AUC) and must be preserved.
+
+Recipe sketch for the next packet (PE / PF candidate): same-label amplitude-randomization restricted to radial bands 8-13, with bands 5-6 explicitly excluded. Preserve phase universally. Optional consistency loss (JSD) between original and band-limited-amplitude-randomized views to force same-prediction-under-amp-perturbation.
+
+This closes the open loop `fourier-aug-band-overlap-not-resolved` favorably (verdict GREEN). New memory `project_fourier_band_overlap_2026-05-06.md`.
+
+### Open loop: fourier-aug-band-overlap-not-resolved
+status: resolved
+severity: medium
+first_seen: 2026-05-06
+last_verified: 2026-05-06
+close_criterion: a follow-up probe partitions FFT amplitude bands into "shortcut-only" (high contribution to Probe 1's may6/may5 separation, low contribution to Probe 3's fake/real separation) vs "signal-carrying" (the inverse), with a quantitative overlap measure. If the overlap is small (e.g., separable bands give ≥80% of shortcut signal while preserving ≥80% of fake signal), the band-limited Fourier-aug recipe is greenlit as a packet candidate. If overlap is large (any randomization that hurts the shortcut also hurts the fake signal substantially), the lever class moves from "viable" to "abandoned"; the next-packet decision pivots fully to AugMix consistency + SBI.
+
+**Resolved 2026-05-06 (favorable, GREEN)**: per Probe 6 above (`analysis/fourier_band_overlap_2026-05-06/run_probe.py`, `summary.json` `verdict: GREEN_BAND_LIMITED_FOURIER_VIABLE`). 4 of 16 bands meet the "shortcut AUC ≥ 0.85 AND signal AUC < 0.65" threshold (bands 9, 10, 12, 13); the cleanest cell is bands 12-13 with shortcut AUC 0.97 and signal AUC 0.46-0.52. Recipe sketch documented above. The lever class is GREENLIT as a packet candidate (PE/PF) — same-label amplitude randomization on bands 8-13, preserving bands 5-6 (manipulation-signal-carrying) and phase universally.
+
+#### Probe 7 — Per-layer P8A vs E2B vs PA divergence (12 resblocks, 3 ckpts, 2 substrates)
+
+Followup to the 2026-04-30 layer-6 finding (`analysis/intermediate_layer_probe_2026-04-30/`) and to the 2026-05-06 deployment-≡-E2B finding (Probe 5). Measures where in the transformer stack P8A and E2B's [CLS] representations diverge. Hooked all 12 resblocks of OpenCLIP-B16 visual encoder on 552 frames (152 may6+may5 shortcut substrate + 400 teams_*_dev fake-signal substrate); ~3 minutes Mac CPU. Outputs `analysis/per_layer_p8a_e2b_pa_2026-05-06/outputs/{summary.json, per_layer_cosine.csv, per_layer_aucs.csv, FINDINGS.md}`.
+
+**Headline 1 — shortcut signal is readable at every layer at AUC=1.0**: 5-fold CV logistic regression on [CLS] for may6 vs may5 separates the populations perfectly at every one of layers 0-11, across all 3 ckpts. The shortcut is so clean in pixel statistics that the patch-embedding [CLS] alone is a perfect classifier. The shortcut is NOT a deeper-layer learned feature — it propagates from the input.
+
+**Headline 2 — manipulation signal develops gradually**: fake-signal AUC climbs from 0.888 at layer 0 → 0.998 at layer 9, then loses 0.2-0.3pp at layer 11 (0.995-0.996). Best layer is 8-9 across all 3 ckpts. The 2026-04-30 "layer 6 has peak discriminability" framing reproduces but is narrow — layers 4-10 all sit within 0.5pp of each other.
+
+**Headline 3 — P8A↔E2B catastrophic divergence is at layers 10-11**:
+
+| layer | cos(P8A,E2B) p50 | frac<0.95 | frac<0.90 | frac<0.80 |
+|---:|---:|---:|---:|---:|
+| 0-5 | 0.998 → 0.981 | 0% | 0% | 0% |
+| 6 | 0.954 | 24% | 0% | 0% |
+| 7-9 | 0.937 → 0.925 | 70-93% | 0-11% | 0% |
+| **10** | **0.855** | **100%** | **97%** | 8% |
+| **11** | **0.320** | **100%** | **100%** | **100%** |
+
+P8A and E2B share encoder representations through layer 5 (cos > 0.98) and become **nearly orthogonal at the final layer 11** (cos p50=0.32, every frame cos<0.80). PA_3800 (FT-from-E2B) tracks E2B closely at layer 11 (cos=0.77) but is as far from P8A as E2B is (cos=0.35). The catastrophic divergence is concentrated at layers 10-11 — exactly the layers P8A's recipe explicitly retrained (visual.proj + ln_post + MLP-SVD per memory `project_p8a_breakthrough.md`).
+
+**Synthesis with Probes 1, 5, 6** (the deployment-≡-E2B and Fourier-band-overlap findings):
+- The shortcut signal is encoder-pervasive (Probe 7) and pixel-amplitude-localized (Probes 1, 6).
+- P8A and E2B share encoder representations through layer 5; they diverge at the final 2 layers + head (Probe 7).
+- The behavioral difference between P8A (0% FPR on may6) and E2B (57.6% FPR) — same person, different day — is entirely a **layer-10/11 + head** difference, not an encoder-representation difference (Probes 5 + 7).
+- Both models have access to the shortcut signal at every encoder layer; **only E2B's head learned to use it confidently**.
+
+**Operational implications** (load-bearing for next-packet design):
+1. **Head-only retraining on any single layer's features will not work**: the shortcut signal is everywhere; an unconstrained head will find it (consistent with Job 7 refutation memory `project_job7_head_retrain_REFUTED_2026-05-04.md` and P17 `project_p17_trained_head_destroys_substrate_invariance.md`). The lever needs explicit constraint that the head NOT use the named shortcut directions.
+2. **Input-level intervention is structurally clean**: Fourier-band-limited amplitude perturbation (Probe 6 GREENLIT bands 8-13) removes the shortcut signal before any layer encodes it. Probe 7 confirms there's nowhere downstream for the shortcut to "re-form" from non-input sources.
+3. **PD's correlation-penalty approach is well-aimed**: forcing the head to NOT correlate with named axes is exactly the intervention the layered evidence prescribes, since the encoder-side fix is structurally hard (signal is everywhere).
+4. **The (corr-penalty + Fourier-band-aug + AugMix-consistency) stack attacks three independent layers** of the same problem and is the structurally-most-complete recipe given Probes 1-7.
+
+This probe does NOT settle whether a constrained head (head-trained-with-explicit-shortcut-projection-out) on the layer-9 features can recover the small AUC margin (0.998 vs final 0.995-0.996); that's a candidate Probe 8 if it becomes operationally relevant. It also does NOT settle whether PD's correlation-penalty meaningfully reshapes the layer-11 cosine vs E2B (will be measurable once PD ckpts are downloadable post-scorecard).
+
+### Open loop: deployment-vs-p8a-substrate-tradeoff-not-quantified
+status: open
+severity: high
+first_seen: 2026-05-06
+last_verified: 2026-05-06
+close_criterion: a written quantification of (a) the populations on which P8A would have lower real-side FPR than the currently-deployed E2B at matched τ — quantified across the identity_browser-style substrates (xinhe_may6_falseflag, dor_evening, dor_morning, extra_roy_d, the chronic-6 set, etc.) and the production live-fake suites — AND (b) the populations on which E2B would have higher fake recall than P8A at matched τ. The disposition then explicitly chooses the deployment model with the trade-off documented (memory `project_promotion_contract.md` is the contract surface for the promotion decision; this loop is the deployment-side disposition that depends on which failure cost the operator weights higher). Until the disposition is recorded, the user has the standing option of swapping deployment to P8A on substrate-classes where E2B is dispositively false-flagging (xinhe_may6_falseflag is one such confirmed substrate).
+
+### 2026-05-06 morning update — explicit-form correlation-penalty loss arms training-complete; scorecard pending
+
+The PD packet ([`packets/PD.md`](../packets/PD.md), home thread [`correlation_penalty_loss`](correlation_penalty_loss.md)) introduces a new lever class targeting this thread's shortcuts directly: an explicit train-time penalty `lambda * sum_axes |Pearson_batch(score, axis)|` over `{sharpness_laplacian, luma_mean, face_area_fraction}` at λ=1.0, encoder fine-tuned from E2B_TOP_N_STEP3200, with single-lever discipline (anchor_aware + face_scale_jitter + arcface_head all DISABLED).
+
+Both arms (R13_DEEPLIVE_CORR_PENALTY run `8jgyw1am`, R13_VISO_CORR_PENALTY run `7u3zc5zt`) SUCCEEDED on 2026-05-06 overnight on us-east1; ckpts saved at `gs://training-job-outputs/best_checkpoints/{8jgyw1am,7u3zc5zt}/`. **Promotion-contract scorecard not yet run** — image 1.3.267 rebuild in flight at writeup time. The 4/4 close criterion (F1 lockbox recall ≥ 90% at FPR ≤ 10%; F2 shortcut weakening ≥ 30% on ≥ 2 of 5 axes; F3 no untargeted axis +50%; F4 HDTF cross-substrate FPR ≤ 5%) is unresolved on every pillar. The frozen-head Phase 1 prototype (`analysis/corr_penalty_prototype_2026-05-05/`) at λ=1 weakened targeted axes |r_sharp| 0.156→0.053 (-66%) and |r_luma| 0.233→0.071 (-69%) but the untargeted `face_area` and `is_webcam` axes amplified — the canonical "shortcut shifting" symptom on a frozen head. The encoder fine-tune adds `face_area_fraction` as a third penalty axis to close one of the two prototype-shifting paths; `is_webcam` is NOT a penalty axis because Teams does not surface capture mode at inference (memory `feedback_per_mode_tau_not_deployable.md`). Whether the encoder fine-tune amplifies `is_webcam` correlation is one of the questions the scorecard's 5-axis audit will answer.
+
+The 8-baseline 5-axis reference table (`analysis/deeplive_viso_corr_eval_2026-05-06/abs_pearson_summary.csv`) is the F2/F3 comparison frame — covers E2B (FT base for PD), P8A (production anchor), PA fleet (3 ckpts), PC fleet (3 ckpts) and was computed from the existing `pa_pc_eval_2026-05-05/raw_reports/` data. **PA / PC's prior measurements**: PA shows axis-uneven weakening (face_area -30% on real, sharpness -9%, luma +13%); PC demonstrates the shortcut-shifting failure mode without corr-penalty (real-suite sharpness -51% via codec aug, luma AMPLIFIED +187%). Neither hit "≥30% on ≥2 axes AND no axis +50%". Whether PD does will be readable against the same table.
+
+**Risks specific to PD inherited from PA/PC** (per `viso_bucket_gap.md` 2026-05-05 late-night + morning updates and `project_pa_does_not_generalize_to_hdtf_2026-05-05.md`): both PD arms FT from E2B which is a CLIP-scratch-from-scratch base, not the FT chain through R12G that produced P8A. The PA/PC walkback established that "FT-from-CLIP-scratch family fails on HDTF cross-substrate". Cross-substrate validation (the F4 pillar) is therefore load-bearing for PD's verdict; v2-substrate-only positive numbers will not be sufficient.
+
 ### 2026-05-04 evening update — `TeamsCodecSimulation` aug calibration empirically verified vs actual transport
 
 The codec_hedge work in Slice 5/6 (Phase C C.3, P11_HEAVY codec axis) used `data/augmentations/teams_simulation.py:104` `TeamsCodecSimulation` calibrated against a documented 18-video × 132-frame sample of measured Teams transport deltas (sharpness −50.9%, brightness +19.0%, HF energy −77.4%, etc.). The Slice-6 codec_hedge lockbox-readout failure (`april-26-training-master-plan-v2.LOG.md:390-422`) was on the lockbox SCORECARD, not on the aug calibration itself. The aug had not been independently verified against actual paired (clean, teams) transport on a different sample.
@@ -129,6 +303,7 @@ The codec_hedge work in Slice 5/6 (Phase C C.3, P11_HEAVY codec axis) used `data
 - [P13](../packets/P13.md) — from-scratch + anti-shortcut interventions (anchor-aware loss, pipeline-random aug, face-scale jitter). Day-4 verdict γ (2026-04-29): all 9 candidates fail, Axis 3 Δ best 0.520 (vs gate 0.15) — directional progress, not breakthrough. Cross-domain capability collapsed (the from-scratch trade); modern_v2 FPR explodes to 30.2% on best ckpt.
 - [P14](../packets/P14.md) — currently in flight (`R13_P14_FT_FROM_P8A.yaml`, FT-from-P8A + interventions). Designed to preserve P8A's cross-domain capability while applying the only intervention class that moved Axis 3 in the right direction. Companion `R13_P14_DATA_FIX.yaml` is drafted but not launched (the bucket-fix variant; see [`viso_bucket_gap`](viso_bucket_gap.md)).
 - [P15](../packets/P15.md) — GRL readiness note drafted (`docs/relaunch_handoffs/P15_GRL_READINESS_NOTE_2026-04-29.md`). The cleanest-available structurally-different anti-shortcut lever (gradient reversal on a quality-domain classifier head, DANN). Smoke-test required. Decision logic: launch on P14 verdict β/γ; do not launch on P14 verdict α.
+- [PD](../packets/PD.md) — explicit-form correlation-penalty loss; first lever class to attack the score↔nuisance-axis correlation directly via a regularizer (vs implicit augmentation/data-axis levers). Two arms (deeplive ship + viso ship) FT-from-E2B, λ=1.0, single-lever discipline. Training complete 2026-05-06; scorecard pending. Verdict will resolve `corr-penalty-deployment-grade-verdict-pending` open loop in [`correlation_penalty_loss`](correlation_penalty_loss.md).
 
 ## Evidence locations
 
@@ -176,7 +351,7 @@ This loop exists because Slice-7 frame-level AUC evidence (memory `project_p8a_f
 status: in-progress
 severity: critical
 first_seen: 2026-04-24
-last_verified: 2026-04-29
+last_verified: 2026-05-07
 close_criterion: a Packet-7+ checkpoint achieves `dor-real-webcam-false-flag-no-virtual-bg` mean prob_fake ≤ 0.30 (vs RLP6_04's 0.932 post-fix) AND `lockbox_fake_recall ≥ 0.60` at a τ that holds `teams_ood_real` FPR ≤ 5%, demonstrating the camera/ISP shortcut has been broken without sacrificing fake recall
 
 The 2026-04-24 controlled 2-camera test (`docs/relaunch_handoffs/R13_RELAUNCH_PACKET7_CAMERA_SIGNATURE_HANDOFF_2026-04-24.md:5-19`) promoted the camera/ISP-signature shortcut from "lockbox curiosity" to a hard deployment blocker: same person, same lighting, swap the camera and the score flips 0.02 ↔ 0.94 on Dor (laptop vs webcam) and 0.01 ↔ 0.90 on Roee (Windows vs Mac). RLP6_04 with `value_composite=0.9006` is contract-legal under the corrected gate but unshippable: lockbox 90/90 is not threshold-reachable (memory `project_signature_shortcut_finding.md` — "at τ catching 90% fakes, real FPR is 63.6%"). The post-fix re-score (`analysis/rlp6_04_postfix_rescore_2026-04-24.summary.json`) ruled out preprocessing drift as a cause (anchor delta −0.008); the shortcut is structural representation. WS-P1 calibration probe (0.301 average gap closure across {5,10,15,25}% target FPRs) ruled out per-camera calibration alone as a cure. RLP7 (5 yamls, training-aug response) is the first structural attempt; the loop closes only when a downstream packet (RLP7+ or whatever supersedes it) hits the close criterion above. Cross-references: this loop interlocks with `fpr-minimization-no-budget-tau-collapse` ([`promotion_contract_evolution`](promotion_contract_evolution.md)) — the contract bug masks the deployment block in current scorecards; a contract fix without a representation fix would surface the same shortcut at the lockbox readout. The two must close together. Memory `project_shortcut_is_upstream.md` (Slice 5 follow-up) notes RLP7_08's evidence that the shortcut lives upstream of RLP6_04 (R12g + CLIP base), so light FT from any RLP6_04 step is structurally bounded; the close criterion may require unfreeze-CLIP / scratch / data-side intervention rather than further FT axes.
@@ -184,3 +359,5 @@ The 2026-04-24 controlled 2-camera test (`docs/relaunch_handoffs/R13_RELAUNCH_PA
 **Slice 5 verification (2026-04-29) — moves to `in-progress`.** P8A produced the first run that materially weakens the shortcut: anchor mean 0.932 → 0.744 (Δ=−0.188) on `dor-real-webcam-no-VBG`, with all three real-correct pools also moving closer to zero and Roee-mac dropping decisively (0.7515 → 0.3528, Δ=−0.399). At the lockbox layer, `lockbox_real_fpr` halved from 0.441% → 0.147% (per `PACKET_9_MID_FLIGHT_HANDOFF_2026-04-26.md:84-91`). **However, the close criterion is not met.** (1) The anchor mean target is ≤0.30; P8A is at 0.744. The shortcut is weakened but not broken — frac > 0.9 still 0.43 (13/30 anchor frames pin). (2) The `lockbox_fake_recall ≥ 0.60` half is more decisively missed: P8A regressed −13.6 pp aggregate fake recall on `teams_fake_all_dev`, with per-method losses of −26.6 pp (deeplive_enhanced), −33.3 pp (xiang_xiang flat), −21.6 pp (visomaster_enhanced_macro). 329 fake-side videos that RLP6_04 caught are missed by P8A; **zero compensating gains**. ~80% of misses sit below the τ-recoverable band — separability collapse, not threshold drift. The trade is structural. P8B refuted the "shortcut is in the weight chain" hypothesis (scratch is worse than RLP6_04). Combined: the shortcut is data-bound; capacity helps; scratch is wrong. Loop stays `critical` and moves to `in-progress` rather than `resolved` because the close criterion explicitly requires *both* halves (anchor weakening AND fake recall retention) — P8A delivers the first half while breaking the second, so the deployment block is **not** closed. Packet-9 is the soften-attempt (single-variable disentangle of magnitude / topology / data); P10 is the orthogonal anti-shortcut intervention class (symmetric router + GRL slate). The Phase C overnight slate's C.3 codec_hedge looks like the next live lever (best_anchor/composite +30% vs canonical), but the lockbox per-method recall has not been validated for it. The close criterion will require a packet whose pre-launch contract makes both halves first-class gates simultaneously.
 
 **Slice 7 verification (2026-04-29) — stays `in-progress`; close criterion remains valid but its framing is reframed.** P13_FROM_SCRATCH Day-4 verdict γ (`docs/relaunch_handoffs/P13_DAY4_VERDICT_2026-04-29.md`): all 9 P13 candidates fail Axis 1 by ≥15pp; Axis 3 Δ exceeds the γ-trigger 0.30 for every candidate (best step18000 = 0.520, vs gate 0.15). The from-scratch + anti-shortcut interventions did NOT break the camera-signature shortcut, but did move it directionally (P13_step18000 Δ=0.520 vs P8A 0.659, ~14pp improvement). All three Plan-v4 levers (anchor-aware loss, pipeline-random aug, face-scale jitter) actually fired this time post-`c366026` wandb-flattening fix; the verdict reflects the recipe's true behavior. **The reframing**: frame-level AUC evidence (memory `project_p8a_frame_level_auc_2026-04-29.md`: viso 0.75 / deeplive 0.86 / teams_fake 0.91) shows the model is meaningfully less broken than the buggy contract scorer was reporting; the close criterion's "lockbox_fake_recall ≥ 0.60" half is more achievable than it looked under the buggy policy (P13_step18000 hits 88.5% lockbox fake recall at τ=0.5; P8A hits 65%). **But the close criterion still does not close** because (a) the anchor mean target ≤0.30 is missed everywhere (best Δ=0.52), (b) the lockbox fake recall half is met at τ=0.5 only by sacrificing modern_v2 FPR which explodes to 30.2% (worse than P8A's 3.6%), and (c) the close criterion requires both halves on the **same τ that holds `teams_ood_real` FPR ≤ 5%** — that joint constraint is not met by any candidate to date. Critical judgment: the close criterion stays the same; what moved is the path to it. The expected next lever is no longer "a P11/P12-style recipe-tuning packet" — it is the layered combination of **bucket-gap closure** (cheap, mostly-built — see [`viso_bucket_gap`](viso_bucket_gap.md)) + **architectural-class anti-shortcut** (P15 GRL drafted; future representation-loss work). See sub-loop `shortcut-block-criterion-may-be-scorer-artifact-bound` below for the open question on whether the criterion's lockbox-recall half should be revised.
+
+**P1 verification (2026-05-07) — stays `in-progress`; first packet to provide BOTH halves at calibrated τ but with a new collateral cost.** P1 (PE_PAIR_RANK_DRO) ran two arms: BUNDLE (pair_rank + GroupDRO + chronic_flag) and PAIRRANK_ONLY (pair_rank only), both FT-from-P8A_step5000 on the post-`2feea58` codepath. Phase A scorecard SUCCEEDED 2026-05-07. **On the criterion's anchor half**: the canonical 2-camera anchor (`teams_real_dor_dev`, n=50) drops from P8A 8.0% → BUNDLE_step500 4.0% (best of all 8 ckpts, tied with PAIRRANK_step6750). On the 180-frame dor probe (different substrate from `teams_real_dor_dev`), BUNDLE_step4000 combined-FPR=0.250 (vs P8A 0.383, E2B 0.128). **On the criterion's lockbox half**: at the contract-selected τ, BUNDLE_step500 lockbox_fake_recall = 84.5% (well above the 0.60 floor); at non-contract τ=0.989, BUNDLE_step500 hits **96.5% lockbox recall at FPR ≤ 10%** — the first time a P-* ckpt has crossed the F1 90% bar on lockbox. The joint constraint (`teams_ood_real` FPR ≤ 5%) is also met: lockbox_real_fpr = 3.31% at BUNDLE_step500's contract τ. **Why the loop stays `in-progress` rather than `resolved`**: a new collateral cost surfaced — the Roy_D regression (29% → 78-93% FPR), shared between BUNDLE and PAIRRANK arms (Wilcoxon p=0.875, refuting the agent's initial GroupDRO-balloon hypothesis). The mechanism appears to be `pair_rank_loss` itself causing collateral damage on real frames belonging to identities NOT in any paired training lane (memory + new thread [`pair_rank_collateral`](pair_rank_collateral.md)). The close criterion as written does NOT bar Roy_D regression, but a deployable detector cannot inflate a previously-handled chronic identity by 60+pp. The disposition of whether to revise the close criterion to include "no chronic-identity FPR regresses by ≥ X pp" is open. Source: `analysis/p1_pe_eval_2026-05-07/DEEP_DIVE_FACTS_2026-05-07.md` §6 + `FOLLOWUPS_FACTS_2026-05-07.md` §1, §6.

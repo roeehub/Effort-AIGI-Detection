@@ -4,14 +4,14 @@
 
 ## Summary
 
-- **Open**: 32
-- **In progress**: 6
-- **Resolved**: 10
+- **Open**: 35
+- **In progress**: 5
+- **Resolved**: 11
 - **Superseded**: 1
 
 ## Entries
 
-### Open (32)
+### Open (35)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -69,6 +69,14 @@
 - **close_criterion**: every eval manifest under `arena/manifests/` is either (a) committed with a date-pinned filename (`..._wave_<YYYY-MM-DD>.json` or `..._wave_<YYYY-MM-DD>_v2.json`) so cross-version comparisons are explicit, OR (b) the manifest filename embeds a content-hash that the scorer/runner records alongside its results so a stale comparison is auto-flagged. A pre-launch lint at `tools/lint/preflight_launch.sh` fails the launch if `git status arena/manifests/` is non-empty.
 - **source**: `threads/eval_substrate_layering.md:73`
 
+### `f2-not-testable-from-phase-a`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: either (a) the F2(a) close criterion ("≥30% relative pair-rank lift on ≥2 of 6 paired training lanes among previously-missed fakes") is rewritten as a Phase-A-evaluable form (e.g., "lift on per-frame pair gaps where P8A is confident-wrong" — uses P8A's own score as the gating condition, doesn't require the training-loader's `(sample_id, frame_idx)` pair structure), OR (b) the eval substrate is extended with score sets on each of the 6 paired training lanes (`df40`, `deeplive`, `visomaster_v1_base`, `visomaster_enhanced`, `visomaster_teams_enhanced`, `deeplive_teams`) so the criterion as written becomes testable, OR (c) the criterion is dropped from packet retros' close-criterion table with a written disposition referencing this loop.
+- **source**: `threads/eval_substrate_layering.md:104`
+
 ### `grouped-manifest-v2-stale-paths`
 - **status**: open
 - **severity**: high
@@ -76,6 +84,14 @@
 - **last_verified**: 2026-05-07
 - **close_criterion**: `analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv` is regenerated against current GCS state (bucket layout has migrated to `session_<timestamp>/...` for `live-fakes-teams-prod` and the `roee_tester_real_2026-03-24/` folder no longer exists), AND every row whose `frame_path` starts with `gs://local/...` is either (a) marked with an explicit `is_local: True` flag so scoring scripts can branch (download from local mirror or skip), OR (b) re-pointed to a real GCS URI. Phase A.5 verifies by re-running the broken suites (`live_reals_teams_prod`, `dor_evening`, `dor_morning`, `dor_fake_local`, `extra` — 2,768 frames total) without zero-tensor decode failures.
 - **source**: `threads/eval_substrate_layering.md:82`
+
+### `pair-rank-non-paired-lane-collateral`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: a follow-up CPU or training experiment establishes whether pair_rank_loss is the specific lever responsible for non-paired-lane real-side regressions. Either: (a) a from-scratch CLIP+pair_rank run reproduces the Roy_D-class regression on its own substrate (confirms pair_rank), OR (b) a controlled FT-from-P8A run with pair_rank disabled reaches similar fake recall without the regression (refutes pair_rank as the exclusive cause).
+- **source**: `threads/pair_rank_collateral.md:52`
 
 ### `split-mode-delta-unquantified`
 - **status**: open
@@ -171,7 +187,7 @@
 - **first_seen**: 2026-04-30
 - **last_verified**: 2026-04-30
 - **close_criterion**: the next anti-shortcut packet that stacks more than one intervention is structured with at least one single-lever ablation slot (the strongest lever alone, FT init + data + LR fixed) AND the packet retro records whether the bundle is net-additive vs the single-lever baseline. The discipline either becomes a `BUILD_SCAFFOLD.md`-style operational rule for future packets, OR a counter-example (a stacked bundle that demonstrably beats its single-strongest component on a deployment-relevant axis) is filed and this loop is resolved as superseded.
-- **source**: `threads/anti_shortcut_bundle_decomposition.md:60`
+- **source**: `threads/anti_shortcut_bundle_decomposition.md:61`
 
 ### `corr-penalty-frozen-head-shifting-axes-not-targeted`
 - **status**: open
@@ -188,6 +204,14 @@
 - **last_verified**: 2026-05-07
 - **close_criterion**: `tools/regenerate_open_loops.py` is extended to (a) flag entries whose `last_verified` is more than 30 days old AND whose `close_criterion` text contains state-claim keywords (`uncommitted`, `in working tree`, `not yet committed`, `pending commit`), AND (b) auto-check those claims against current `git status` / `git log` output where possible. Output is a warning section in `OPEN_LOOPS.md` listing entries that need re-verification.
 - **source**: `threads/eval_substrate_layering.md:95`
+
+### `roy-d-color-b-dev-mechanism`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-07
+- **last_verified**: 2026-05-07
+- **close_criterion**: determine whether P8A's r(score, color_b_dev) = −0.714 on roy_d is (a) generalization (roy_d is held-out from P8A's train set; P8A learned a useful identity-invariant feature), or (b) memorization (roy_d is in train set; P8A's association is set-specific). The (a) interpretation makes the P1 regression more concerning; (b) makes it less so. A grep of the train manifest for Roy_D would close the loop cheaply.
+- **source**: `threads/pair_rank_collateral.md:61`
 
 ### `corrected-val-test-hint-split-counts-unrecoverable`
 - **status**: open
@@ -251,7 +275,7 @@
 - **first_seen**: 2026-04-30
 - **last_verified**: 2026-04-30
 - **close_criterion**: the P13 retro's γ-verdict attribution ("anti-shortcut interventions on a from-scratch substrate are insufficient") is either reaffirmed by a from-scratch single-lever-jitter-only run, OR explicitly revised in the P13 retro to "anti-shortcut bundle as composed in P13 was insufficient on from-scratch; whether the single-lever jitter@0.50 would have been enough is unknown without re-running."
-- **source**: `threads/anti_shortcut_bundle_decomposition.md:69`
+- **source**: `threads/anti_shortcut_bundle_decomposition.md:70`
 
 ### `jitter-on-training-substrate-not-yet-tested`
 - **status**: open
@@ -269,13 +293,13 @@
 - **close_criterion**: at least one of the three candidate mechanisms (decision-boundary / intermediate-layer / test-substrate) is empirically supported on a probe whose design isolates that mechanism, AND the supported mechanism produces a measurable signature on `mclioexb` that does NOT also appear on `9lmvb5b4` step 5000 baseline at comparable magnitude — i.e., the mechanism is specific to the value_composite winner, not a feature shared with the FT base
 - **source**: `threads/jitter_winner_mechanism_unknown.md:113`
 
-### In progress (6)
+### In progress (5)
 
 ### `shortcut-deployment-block`
 - **status**: in-progress
 - **severity**: critical
 - **first_seen**: 2026-04-24
-- **last_verified**: 2026-04-29
+- **last_verified**: 2026-05-07
 - **close_criterion**: a Packet-7+ checkpoint achieves `dor-real-webcam-false-flag-no-virtual-bg` mean prob_fake ≤ 0.30 (vs RLP6_04's 0.932 post-fix) AND `lockbox_fake_recall ≥ 0.60` at a τ that holds `teams_ood_real` FPR ≤ 5%, demonstrating the camera/ISP shortcut has been broken without sacrificing fake recall
 - **source**: `threads/processing_signature_shortcut.md:350`
 
@@ -286,14 +310,6 @@
 - **last_verified**: 2026-04-30
 - **close_criterion**: the `score_teams_promotion_contract.py` runner enforces a recall floor or τ ceiling that prevents `selected_threshold ≈ 0.995` configurations passing silently
 - **source**: `threads/promotion_contract_evolution.md:160`
-
-### `contract-policy-bug-fix-not-committed`
-- **status**: in-progress
-- **severity**: high
-- **first_seen**: 2026-04-23
-- **last_verified**: 2026-05-07
-- **close_criterion**: the recall-floor + budget-aware τ-selection patch is (1) committed to `teams-relaunch-root-2026-04-17`, (2) the image is rebuilt with the fix in, and (3) a contract scorecard run on a representative recent checkpoint is invoked with `--promotion_target_fake_recall_min 0.30` AND the resulting scorecard is documented as having selected τ via the recall-floor path (not via the legacy no-budget minimize-FPR-only path). All three components are required. **2026-04-30 evening update**: the `mclioexb` scorecard run did NOT exercise the v3 fix — the launcher (`arena/launch_teams_promotion_contract.sh`) omitted `--promotion_target_fake_recall_min`, so the scorecard ran the DEFAULT policy (τ=0.975, recall=0.13). Component 3 still NOT MET. **2026-05-07 update — components 1 and 2 are MET; component 3 is in flight.** Audit of the tree (commit `974e033` 2026-04-29) shows the scorer code with `target_real_fpr=0.07 / target_stress_fpr=0.10 / target_fake_recall_min=0.70` defaults was committed a week ago; the runner with `--promotion_target_*` CLI args was committed at the same time. The actual missing piece was the launcher: `arena/launch_teams_promotion_contract.sh` did not pass these flags through. Today's commits `ad070d3` (passing the flags + setting v3 defaults `0.07 / 0.10 / 0.30`) and `7f81e7a` (canonicalizing the 500GB scorecard template to prevent disk-exhaustion) close the launcher gap. Image `1.3.270` (commit `5dccfa4`, Cloud Build `40cf4d7c-4b8b-4af7-81ca-0991f2083450`) bakes everything in. The Phase A scorecard run for P1 (Vertex job `7995519158412378112`, us-east1, submitted 2026-05-07T08:19:20Z) explicitly invokes `--promotion_target_fake_recall_min 0.30` — verifiable in the gcloud `containerSpec.args` trace. Component 3 closes when the resulting `promotion_winner.json` shows τ selected via the recall-floor path; verdict pending Phase A finish (~12:30 UTC).
-- **source**: `threads/contract_policy_bug.md:108`
 
 ### `corr-penalty-deployment-grade-verdict-pending`
 - **status**: in-progress
@@ -319,7 +335,15 @@
 - **close_criterion**: routing fix is applied — `quality_enhancement` is removed from `DEFAULT_ENHANCED_STRATEGIES` in `utils/grouping.py:13-17` AND from every R13 yaml's `enhanced_strategy_names` override (~15 yamls under `experiments/phase2_round13/`); a unit test asserts `infer_family_key` returns `deeplive_non_enhanced_fake` for a `quality_enhancement` fake input; image is rebuilt via `./dev.sh build-prod -y` (auto-bumps VERSION); and a critical-reading banner is added to the README and to historical packet retros (P8A, E2B, PA, PC) noting they trained on the contaminated routing. Validation re-run on at least one FT-from-base packet measuring the delta in deeplive enhanced-vs-non-enhanced family balance is recommended but not required for closure (could be folded into the in-scoping deeplive ship experiment instead). Verification step (visual inspection) is COMPLETE 2026-05-05 evening — user reported "quality enhancement is non-GFPGAN like we suspected." Bug confirmed; fix pending authorization.
 - **source**: `threads/quality_enhancement_strategy_misrouting.md:175`
 
-### Resolved (10)
+### Resolved (11)
+
+### `contract-policy-bug-fix-not-committed`
+- **status**: resolved
+- **severity**: high
+- **first_seen**: 2026-04-23
+- **last_verified**: 2026-05-07
+- **close_criterion**: the recall-floor + budget-aware τ-selection patch is (1) committed to `teams-relaunch-root-2026-04-17`, (2) the image is rebuilt with the fix in, and (3) a contract scorecard run on a representative recent checkpoint is invoked with `--promotion_target_fake_recall_min 0.30` AND the resulting scorecard is documented as having selected τ via the recall-floor path (not via the legacy no-budget minimize-FPR-only path). All three components are required. **2026-04-30 evening update**: the `mclioexb` scorecard run did NOT exercise the v3 fix — the launcher (`arena/launch_teams_promotion_contract.sh`) omitted `--promotion_target_fake_recall_min`, so the scorecard ran the DEFAULT policy (τ=0.975, recall=0.13). Component 3 still NOT MET. **2026-05-07 update — components 1 and 2 are MET; component 3 is in flight.** Audit of the tree (commit `974e033` 2026-04-29) shows the scorer code with `target_real_fpr=0.07 / target_stress_fpr=0.10 / target_fake_recall_min=0.70` defaults was committed a week ago; the runner with `--promotion_target_*` CLI args was committed at the same time. The actual missing piece was the launcher: `arena/launch_teams_promotion_contract.sh` did not pass these flags through. Today's commits `ad070d3` (passing the flags + setting v3 defaults `0.07 / 0.10 / 0.30`) and `7f81e7a` (canonicalizing the 500GB scorecard template to prevent disk-exhaustion) close the launcher gap. Image `1.3.270` (commit `5dccfa4`, Cloud Build `40cf4d7c-4b8b-4af7-81ca-0991f2083450`) bakes everything in. The Phase A scorecard run for P1 (Vertex job `7995519158412378112`, us-east1, submitted 2026-05-07T08:19:20Z) explicitly invokes `--promotion_target_fake_recall_min 0.30` — verifiable in the gcloud `containerSpec.args` trace. Component 3 closes when the resulting `promotion_winner.json` shows τ selected via the recall-floor path; verdict pending Phase A finish (~12:30 UTC).
+- **source**: `threads/contract_policy_bug.md:108`
 
 ### `data-axis-clean-single-lever-retest-in-progress`
 - **status**: resolved

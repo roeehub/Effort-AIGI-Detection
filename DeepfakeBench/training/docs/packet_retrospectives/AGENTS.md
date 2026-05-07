@@ -18,22 +18,27 @@ This protocol structurally prevents rediscovery: every open issue lives in a `##
 
 ```
 docs/packet_retrospectives/
-├── AGENTS.md                  ← this file (entry point)
+├── AGENTS.md                  ← this file (entry point; read-protocol authority)
+├── STATE.md                   ← rolling current-state snapshot (always-current; pass-1 step 1)
 ├── README.md                  ← executive index of the wiki
-├── TIMELINE.md                ← chronological master index (one line per session/packet)
+├── TIMELINE.md                ← chronological master index (append-only; one line per session/packet)
 ├── OPEN_LOOPS.md              ← ⚙ MECHANICALLY GENERATED — do not hand-edit
-├── BUILD_SCAFFOLD.md          ← chronological map for slice agents (build-time)
+├── BUILD_SCAFFOLD.md          ← chronological map for slice agents (build-time; build complete 2026-04-29)
+├── AGENT_GUIDE.md             ← rolling guide; validate-before-suggest checklist for proposing next packets
 ├── thread_template.md         ← canonical structure for a thread doc
 ├── packet_template.md         ← canonical structure for a per-packet retro
-├── packets/                   ← per-packet retros (RLP1.md, RLP2.md, …)
+├── eval_folder_template.md    ← canonical structure for an analysis/<packet>_eval_<date>/ folder (FACTS/OPINIONS split)
+├── packets/                   ← per-packet retros (RLP1.md, …, P1.md)
 ├── threads/                   ← cross-cutting topic docs (the cleanest pattern)
+├── archive/                   ← superseded dated snapshots (e.g., STATE_2026-04-29.md, STATE_2026-04-30.md)
+├── plans/                     ← frozen multi-page plan documents authored at specific points in time
 └── tools/
     └── regenerate_open_loops.py   ← reads structured open-loop blocks from threads/, writes OPEN_LOOPS.md
 ```
 
 Adjacent surfaces this protocol references but does not own:
 
-- `docs/relaunch_handoffs/` — 35 dated session handoffs. **Read-only** for build/working agents. Treat as primary source material; do not reorganize.
+- `docs/relaunch_handoffs/` — **52 dated session handoffs (frozen archive — do NOT author new HANDOFF_*.md as of 2026-05-07)**. Read-only for build/working agents. Treat as historical primary source material; do not reorganize, do not delete, do not rename. New session findings go into `STATE.md` + threads + packet retros instead. Per-session handoffs are no longer the baton-passing mechanism — the wiki itself is.
 - `april-26-training-master-plan-v2.LOG.md` — chronological session log; reference, not a wiki surface.
 - `~/.claude/projects/-Users-roeedar-Documents-repos-Effort-AIGI-Detection-DtectVision/memory/` — auto-memory, loads every session. Has frontmatter (`status`, `wiki_ref`, `last_verified`) that links to threads here.
 
@@ -59,6 +64,44 @@ Run these steps **before** reading the user's task description. They are ordered
    This step exists because the contract-policy bug was rediscovered and "re-fixed" three times. The first fix was sitting uncommitted in the working tree the whole time.
 
 6. **Then read the user's specific task.** Frame your response in terms of the open loops you just loaded.
+
+---
+
+## Reading order for forming an independent view
+
+> **Added 2026-05-07.** This protocol exists because mid-session agent opinions accumulate and contaminate the next agent's read. The split below lets a new agent form their own view from FACTS first, then engage with prior agents' opinions deliberately.
+
+The user explicitly invokes this protocol with phrasing like *"read the wiki and tell me where we are"* or *"form your own view first, then read the prior agent's proposal."*
+
+### Pass 1 — FACTS only (form your own view)
+
+Read in this order. Do NOT read any `AGENT_PROPOSAL_*.md` or `*_OPINIONS_*.md` doc during this pass.
+
+1. **`STATE.md`** — single-page current snapshot (rolling, always current).
+2. **`TIMELINE.md`** — last ~10 entries.
+3. **`OPEN_LOOPS.md`** — currently-tracked issues (mechanically generated; trust it).
+4. **Most recent packet retro** at `packets/<latest_packet>.md` — read ONLY the `### Factual evidence` subsection of `## Conclusions drawn in-session`. Skip the `### In-session opinion` subsection.
+5. **The eval folder's `*_FACTS_<date>.md` docs** at `analysis/<packet>_eval_<date>/` (typically `RESULTS_FACTS_<date>.md`, `RESULTS_F1_F5_FACTS_<date>.md`, `DEEP_DIVE_FACTS_<date>.md`, `FOLLOWUPS_FACTS_<date>.md`).
+6. **Relevant threads** at `threads/` — for each thread your task touches, read `## Current stance` + `## Open loops` sections.
+
+After pass 1, you should be able to answer *"where are we in the journey"* and propose a candidate next step. Surface that view to the user before pass 2.
+
+### Pass 2 — OPINIONS (only after user authorizes)
+
+When the user asks you to read prior agents' interpretations:
+
+7. **The packet retro's `### In-session opinion` subsection** — names the prior agent's mechanism claim and any retractions.
+8. **`AGENT_PROPOSAL_<date>.md`** in the eval folder — full opinion doc with self-correction log.
+9. **Older `AGENT_PROPOSAL_*.md` / `*_OPINIONS_*.md`** docs as the user directs.
+
+Combine the two passes into your own next-step proposal. Cite divergences explicitly: "the prior agent claims X; the FACTS docs support Y; my view is Z because [evidence]."
+
+### Why this works
+
+- Pass 1 is reproducible. Two different agents reading the same FACTS pages should converge on similar candidate next-steps.
+- Pass 2 is intentional. The user controls when prior opinions enter the agent's reasoning.
+- Mid-session retractions (the F5 / F3 errors of 2026-05-07) are isolated to the OPINION doc and `### In-session opinion` subsection, where they cannot leak into a new agent's FACTS-pass conclusions.
+- Per-session HANDOFF docs are unnecessary: the wiki + eval folder carries the state.
 
 ---
 
@@ -107,6 +150,29 @@ Run these steps **before** declaring a session complete (i.e., before handing ba
    This rewrites `OPEN_LOOPS.md` from the structured blocks in `threads/*.md`. The script will warn (but not fail) if any open-loop block has `last_verified:` older than 60 days — re-verify those entries when you encounter them.
 
 6. **The handoff doc is for cross-agent baton-passing only.** Findings must also be promoted to threads, not left in handoffs alone. A handoff dies when the next agent reads it; a thread persists.
+
+---
+
+## Eval-folder authoring contract
+
+> **Added 2026-05-07.** Codifies the FACTS/OPINIONS file-level split for new eval folders. Older eval folders (pre-2026-05-07 except `analysis/p1_pe_eval_2026-05-07/`) may not match this layout — leave them as-is unless retroactive normalization is explicitly authorized.
+
+When a packet's evaluation produces an `analysis/<packet>_eval_<date>/` folder, the canonical filename convention is:
+
+| Doc | Purpose | Read order |
+|---|---|---|
+| `RESULTS_FACTS_<date>.md` | Raw scorecard data, verdict bundle, per-ckpt × suite tables. No interpretation. | 1st |
+| `RESULTS_F1_F5_FACTS_<date>.md` | Close-criterion mechanics applied to the data. Pass/fail/partial cells. | 2nd |
+| `DEEP_DIVE_FACTS_<date>.md` | Consolidating record. Sub-investigation cross-refs. May contain Self-correction log. | 3rd |
+| `FOLLOWUPS_FACTS_<date>.md` | Additional CPU jobs. Standalone subsections per job. | 4th |
+| `<topic>/RESULTS_<topic>_FACTS_<date>.md` | Sub-investigation factual record. | as needed |
+| `AGENT_PROPOSAL_<date>.md` | THE single opinion doc. | LAST (after user authorization) |
+
+Forbidden in FACTS docs: words like "succeeds", "fails", "wins", "promotes", "deployment-grade". Use mechanical pass/fail against pre-stated bars instead.
+
+Mandatory in `AGENT_PROPOSAL_<date>.md`: §"Self-correction log" naming any retracted framings from mid-session, even if zero retractions occurred (state "no retractions in this session").
+
+Full contract: `eval_folder_template.md`.
 
 ---
 

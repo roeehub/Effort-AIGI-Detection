@@ -106,7 +106,7 @@ The pattern is **"design lands but doesn't ship to deployment artifact"**. Every
 ## Open loops
 
 ### Open loop: contract-policy-bug-fix-not-committed
-status: in-progress
+status: resolved
 severity: high
 first_seen: 2026-04-23
 last_verified: 2026-05-07
@@ -118,6 +118,8 @@ The whack-a-mole pattern: same bug, four "fix" attempts, **first three were not 
 2. **2026-04-27 (attempt #2)** — fix designed, smoke-tested, end-to-end validated locally + on durable storage (`analysis/policy_reruns_2026-04-27/`); transient version lost to /tmp wipe; durable version not committed; same agent re-derives within hours, same session.
 3. **2026-04-29 (attempt #3, Slice 7)** — fix re-derived with `target_fake_recall_min=0.30` recall-floor design + 2 new tests + budget defaults bumped 0.02/0.05 → 0.07/0.10 + cross-ckpt summary sort tiering; the runner gets new CLI args. **Committed as `974e033` ("Promotion contract: default recall floor to 0.70 (Block A)") on 2026-04-29 20:57:12 +02:00**, but the entry above remained worded as "uncommitted in working tree" until today's audit. Source-of-truth drift: the OPEN_LOOPS text was stale by a week.
 4. **2026-05-07 (attempt #4)** — launcher gap closed. The scorer + runner had been committed since attempt #3, but the launcher was passing default flags (legacy `0.02 / 0.05 / 0.70`) instead of the v3 design (`0.07 / 0.10 / 0.30`). Today's commits `ad070d3` + `7f81e7a` thread the flags through the launcher; image `1.3.270` rebakes; Phase A scorecard exercises them.
+
+5. **2026-05-07 evening (closure)** — Phase A scorecard SUCCEEDED 2026-05-07 14:40 UTC. `promotion_winner.json` shows `selected_threshold = 0.76772` for `P1_PAIRRANK_PERIODIC_STEP500` (rank-1) — well below the 0.99x τ-tail collapse band; the recall-floor tier mechanism worked as designed. The forensic on `arena/score_teams_promotion_contract.py:460-510` (`_threshold_sort_key`) confirmed the floor is **TIERED, not GATED**: tier 0 = budget-OK + recall ≥ floor; tier 1 = budget-OK + recall < floor; tier 2 = budget-violated. For ckpts with at least one tier-0 candidate (PAIRRANK_step500 has 117), the contract correctly selects from tier 0. For ckpts with NO tier-0 candidates anywhere in the threshold grid (BUNDLE_step3750/step4000 have 0 of ~5300 grid points achieving recall ≥ 0.30 within FPR ≤ 0.07), the contract correctly demotes them to tier-1 selection at the highest available τ — a property of those ckpts' degenerate ROC, not a contract bug. **All three components of the close criterion are MET**: (1) commit `974e033` (2026-04-29) shipped the recall-floor scorer + CLI args, (2) image `1.3.270` (2026-05-07) bakes the flagged launcher in, (3) the Phase A `promotion_winner.json` documents τ=0.768 selected via the tier-0 recall-floor path. Loop closes. Source: `analysis/p1_pe_eval_2026-05-07/scorecard/promotion_winner.json`, `analysis/p1_pe_eval_2026-05-07/roc_degeneracy/ROC_DEGENERACY_FACTS_2026-05-07.md`.
 
 The structural failure mode this thread should henceforth track is **NOT** "fix is uncommitted" (resolved 2026-04-29) but **OPEN_LOOPS source-of-truth drift**: an entry with a `last_verified` date can describe tree state that no longer matches reality. The `regenerate_open_loops.py` tool propagates the entry text but does not re-verify file-state claims (e.g., "uncommitted", "in working tree"). See follow-up loop `open-loops-stale-state-claims` for the systemic fix.
 
