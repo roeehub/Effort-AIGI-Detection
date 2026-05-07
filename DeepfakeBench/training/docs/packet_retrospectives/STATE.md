@@ -18,9 +18,9 @@ The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)**
 
 **P2 packet** (PREVENT_NOT_UNLEARN, 3 slots) — **LAUNCHED 2026-05-07 23:33 local on image 1.3.271** (Cloud Build `3d5d3fc9-7e2d-4f23-ac8c-33ee90f0d906`, 16m49s). All 3 slots are FROM-SCRATCH (CLIP-B16 init, no FT base) on the post-quality_enhancement-fix data composition with the canary probe enabled @ frequency_steps=1000:
 
-- **Slot A** [`R13_P2_SCRATCH_BUNDLE`](../../experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml) — 4-axis corr_penalty (sharpness + luma + face_area + color_b_dev) + pair_rank_loss + face_scale_jitter@0.50. Vertex `8395459915946131456` (us-east1, `JOB_STATE_PENDING`).
-- **Slot B** [`R13_P2_SCRATCH_CORR_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml) — 4-axis corr_penalty only (single-lever ablation). Vertex `5580112770428305408` (us-west4, `JOB_STATE_PENDING`).
-- **Slot C** [`R13_P2_SCRATCH_PAIRRANK_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml) — pair_rank only (matched against P1 PAIRRANK_ONLY but from-scratch). Vertex `3126673777023254528` (us-central1, `JOB_STATE_PENDING`).
+- **Slot A** [`R13_P2_SCRATCH_BUNDLE`](../../experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml) — 4-axis corr_penalty (sharpness + luma + face_area + color_b_dev) + pair_rank_loss + face_scale_jitter@0.50. Vertex `8395459915946131456` (us-east1, `JOB_STATE_RUNNING` since 21:38:26 UTC).
+- **Slot B** [`R13_P2_SCRATCH_CORR_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml) — 4-axis corr_penalty only (single-lever ablation). Vertex `5580112770428305408` (us-west4, `JOB_STATE_RUNNING` since 21:42:11 UTC).
+- **Slot C** [`R13_P2_SCRATCH_PAIRRANK_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml) — pair_rank only (matched against P1 PAIRRANK_ONLY but from-scratch). Vertex `3126673777023254528` (us-central1, `JOB_STATE_RUNNING` since 21:36:36 UTC).
 
 Per CLAUDE.md region-distribution: spread across 3 US regions to avoid common-queue waits. If any remain `PENDING` past 2026-05-08 00:03 local (30 min), failover candidate is the unused US region. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$180-225 / 10-12h each.
 
