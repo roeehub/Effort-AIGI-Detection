@@ -24,6 +24,8 @@ The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)**
 
 Per CLAUDE.md region-distribution: spread across 3 US regions to avoid common-queue waits. If any remain `PENDING` past 2026-05-08 00:03 local (30 min), failover candidate is the unused US region. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$180-225 / 10-12h each.
 
+**Slot D — QUEUED for next-agent task spec** at [`SLOT_D_FOURIER_TASK_2026-05-08.md`](SLOT_D_FOURIER_TASK_2026-05-08.md). Band-limited Fourier amplitude randomization aug (bands 8-13 GREEN-verdict per memory `project_fourier_band_overlap_2026-05-06.md` + thread [`processing_signature_shortcut`](threads/processing_signature_shortcut.md) §"Probe 6"). The aug primitive code is NEW — the next agent's job is to implement → smoke-test → build (image 1.3.272 expected) → launch → monitor all 4 slots. The task spec is operational only — the next agent does NOT propose new packets or draw conclusions. When all 4 slots terminate + eval-folder skeletons are populated, the user starts a fresh session for interpretation.
+
 **Bug fixes committed (2026-05-07, commits `2e3c26b` + `fb6c38f`)**:
 - `trainer/trainer.py:1727` W&B logging gap when `use_group_dro=true` — RESOLVED.
 - `analysis/p1_pe_eval_2026-05-07/phase_d/run_chronic_filter.py` regex bug — RESOLVED.
