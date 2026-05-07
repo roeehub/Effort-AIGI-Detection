@@ -31,6 +31,11 @@ OUTPUT_GCS_ROOT="gs://training-job-outputs/test_results/teams_promotion_contract
 JOB_NAME=""
 DRY_RUN=""
 
+# Default to the 500GB-disk scorecard template — the 200GB default exhausted
+# during PD's run (per pd_scorecard_artifacts_2026-05-06/README §Caveats and
+# NEXT_STEPS_PLAN_2026-05-06.md §12). Override with --yaml-template if needed.
+YAML_TEMPLATE="${TRAINING_DIR}/infra/cloudbuild/vertex_job_template_scorecard.yaml"
+
 # Promotion-contract policy budgets passed through to the runner.
 # Defaults match the v3-fix design (recall floor + bumped FPR budgets); they
 # close the `contract-policy-bug-fix-not-committed` open loop's "scorecard
@@ -71,6 +76,8 @@ Options:
                               the floor rank in a worse tier (within-ckpt + cross-ckpt).
                               (default: ${PROMOTION_TARGET_FAKE_RECALL_MIN}; v3-fix design.
                               Pass 0.0 explicitly for legacy-policy comparison.)
+  --yaml-template PATH        Vertex job template (default: 500GB-disk scorecard template
+                              at infra/cloudbuild/vertex_job_template_scorecard.yaml).
   --dry-run                   Print the launch plan without submitting a Vertex job.
 
 Artifacts:
@@ -135,6 +142,8 @@ while [[ $# -gt 0 ]]; do
             PROMOTION_TARGET_STRESS_FPR="$2"; shift 2 ;;
         --promotion-target-fake-recall-min)
             PROMOTION_TARGET_FAKE_RECALL_MIN="$2"; shift 2 ;;
+        --yaml-template)
+            YAML_TEMPLATE="$2"; shift 2 ;;
         --dry-run)
             DRY_RUN="1"; shift ;;
         -h|--help)
@@ -188,6 +197,7 @@ LAUNCH_CMD=(
     --image-uri "${IMAGE_URI}"
     --gpu-type "${GPU_TYPE}"
     --gpu-count "${GPU_COUNT}"
+    --yaml-template "${YAML_TEMPLATE}"
     --main-script arena/run_target_domain_validation_sequential.py
     --
     "${RUNNER_ARGS[@]}"
@@ -205,6 +215,7 @@ echo "Checkpoint Map:          ${CHECKPOINT_MAP}"
 echo "Checkpoints:             ${CHECKPOINTS}"
 echo "W&B Project:             ${WANDB_PROJECT}"
 echo "Promotion policy:        target_real_fpr=${PROMOTION_TARGET_REAL_FPR}, target_stress_fpr=${PROMOTION_TARGET_STRESS_FPR}, target_fake_recall_min=${PROMOTION_TARGET_FAKE_RECALL_MIN}"
+echo "Vertex Template:         ${YAML_TEMPLATE}"
 echo "Vertex Output:           gs://training-job-outputs/vertex-output/${JOB_NAME}/"
 echo "Detailed Reports:        ${REPORTS_GCS_FOLDER}/"
 echo "Diagnostic Scorecards:   ${DIAGNOSTIC_GCS_DIR}/"

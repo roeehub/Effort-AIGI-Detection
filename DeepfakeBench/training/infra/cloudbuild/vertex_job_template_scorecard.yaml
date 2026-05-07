@@ -1,0 +1,48 @@
+# vertex_job_template.yaml  (jobSpec root)
+# Override of training/infra/cloudbuild/vertex_job_template.yaml with bootDiskSizeGb bumped 200 -> 500
+# to prevent the disk-exhaustion failure mode hit on pd-corr-penalty-scorecard-2026-05-06
+# (157 cells x 896 MB ckpt-per-cell cache = ~140 GB on default 200 GB disk).
+
+baseOutputDirectory:
+  outputUriPrefix: gs://training-job-outputs/vertex-output/{{JOB_NAME}}
+
+scheduling:
+  timeout: 259200s   # 72h
+  restartJobOnWorkerRestart: true
+
+workerPoolSpecs:
+  - machineSpec:
+      machineType: a2-highgpu-1g
+      acceleratorType: "{{GPU_TYPE}}"
+      acceleratorCount: {{GPU_COUNT}}
+    replicaCount: 1
+    diskSpec:
+      bootDiskType: pd-ssd
+      bootDiskSizeGb: 500
+    containerSpec:
+      imageUri: "{{IMAGE_URI}}"
+      command: ["/bin/bash", "/workspace/entrypoint.sh"]
+      args: []
+      env:
+        - name: WANDB_API_KEY
+          value: "{{WANDB_API_KEY}}"
+        - name: WANDB_ENTITY
+          value: "{{WANDB_ENTITY}}"
+        - name: WANDB_PROJECT
+          value: "{{WANDB_PROJECT}}"
+
+        - name: JOB_MODE
+          value: "{{JOB_MODE}}"
+        - name: SWEEP_ID
+          value: "{{SWEEP_ID}}"
+        - name: SWEEP_COUNT
+          value: "{{SWEEP_COUNT}}"
+        - name: MAIN_SCRIPT
+          value: "{{MAIN_SCRIPT}}"
+
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"
+
+serviceAccount: "{{SERVICE_ACCOUNT}}"
