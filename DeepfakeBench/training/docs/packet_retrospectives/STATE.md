@@ -1,6 +1,6 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-08 09:00 local (all 4 P2 slots `JOB_STATE_SUCCEEDED` overnight; A 21:38→23:49 UTC = 2h 11m, B 21:42→00:39 = 2h 57m, C 21:36→00:53 = 3h 17m, D 22:48→05:31 = 6h 43m; eval folder skeleton populated with FACTS docs; D1-D4 CPU diagnostics in flight).
+> **Last refreshed**: 2026-05-08 10:14 local (P2 Phase A scorecard launched on image 1.3.273 — `p2-scratch-scorecard-2026-05-08`, Vertex `6226906326623059968`, us-east1, JOB_STATE_PENDING at 08:13:43 UTC; 7-ckpt curated set per D1-D5 CPU diagnostics; expected SUCCEEDED ~12:00-13:00 CEST).
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
@@ -39,7 +39,32 @@ Canary trajectory headlines (from [`CANARY_TRAJECTORY_FACTS_2026-05-08.md`](../.
 - All 4 slots terminated before `nEpochs: 16` cap; early_stopping_patience=12 likely fired but stop-condition not verified at this level.
 - Slot A and Slot B both early-stopped at the SAME `_step` band (6500-7500) at epoch 3 with similar final score distributions.
 
-**D1-D4 CPU diagnostics** at [`analysis/p2_eval_2026-05-08/d1_d4_cpu/`](../../analysis/p2_eval_2026-05-08/d1_d4_cpu/) — in flight as of writing. Compares 5 selected ckpts (A/top_n_step500, B/top_n_step500, C/top_n_step7000, D/top_n_step6000, D/top_n_step19000) against P8A reference on the canary 800-frame substrate. D4 weight-delta probe completed: Slot A and Slot B are nearly parameter-identical (cos ≈ 0.997 across all layers — both early-stopped at step500); P2 ckpts at `visual_proj` are nearly orthogonal (cos < 0.01) to A/B and to P8A; Slot D step19000 last-layer residuals are uniquely orthogonal to D step6000 (cos 0.034 at resblock_11). Inference + D1-D3 analyses pending.
+**D1-D5 CPU diagnostics** at [`analysis/p2_eval_2026-05-08/d1_d4_cpu/`](../../analysis/p2_eval_2026-05-08/d1_d4_cpu/) — COMPLETED 2026-05-08 morning. Five FACTS docs:
+- `D1_AB_DEGENERACY` — Slot A `top_n_step500` real-fake gap +0.072 (mean 0.43→0.51); Slot B gap +0.016 (means cluster ~0.56-0.58); both ckpts have weak discrimination → excluded from Phase A scorecard.
+- `D2_SLOTD_PAIR` — Slot D step6000 vs step19000 per-cohort: PC_Generator__s22 0.22 → 0.78 (largest absolute shift); healthy_dor_shkedi 0.62 → 0.29; canary `_step=18000` chronic dip NOT reproduced by `top_n_step19000`.
+- `D3_HISTOGRAM` — 15 cohort × 6 ckpt distribution table; P8A reference is OUTSIDE the P2-ckpt envelope on 7 of 15 cohorts (different failure pattern).
+- `D4_WEIGHT_DELTA` — pairwise per-layer L2/cosine across 5 P2 ckpts + P8A. A/B nearly parameter-identical (cos > 0.998); `visual_proj` A/B vs C/D near-orthogonal (cos < 0.01); D step19000 resblock_11 uniquely orthogonal to A/B/P8A (min_cos = -0.27).
+- `D5_CKPT_MAPPING` — verifies wandb `_step` == optimizer step (canary `_step=6000` chronic-6 EXACT match to local `top_n_step6000`); identifies `D_periodic_step3000` as the highest `lockbox_recall_at_FPR_10pct` ckpt across all 6 saved D ckpts (0.37 vs 0.06-0.20 at later ckpts; trajectory non-monotone in optimizer step) and the closest savable approximation to canary `_step=18000` chronic dip.
+
+**Phase A scorecard for P2** — **LAUNCHED 2026-05-08 10:13 local on image 1.3.273** (Cloud Build `3737151f-c949-4326-8a4d-7ee1753eab79`, 17m29s, commit `eb815dd`). Vertex `6226906326623059968` (us-east1, `JOB_STATE_PENDING` since 08:13:43 UTC). Display name `p2-scratch-scorecard-2026-05-08`.
+
+Curated 7-ckpt set per [`arena/checkpoint_maps/teams_target_domain.p2_scratch_2026-05-08.yaml`](../../arena/checkpoint_maps/teams_target_domain.p2_scratch_2026-05-08.yaml):
+- `P8A_REFERENCE_STEP5000` (production anchor)
+- `E2B_TOP_N_STEP3200` (current deployment)
+- `P2_C_PAIRRANK_TOP_N_STEP7000` (C training-AUC peak)
+- `P2_C_PAIRRANK_PERIODIC_STEP3000` (matched-step counterfactual to D step3000)
+- `P2_D_FOURIER_PERIODIC_STEP3000` ⭐ (D5-identified low-saturation operating point; lockbox@10=0.37 on canary)
+- `P2_D_FOURIER_PERIODIC_STEP8000` (yaml's nominal-cap)
+- `P2_D_FOURIER_TOP_N_STEP19000` (D late-saturation peak; uniquely orthogonal layer-11)
+
+Slots A and B excluded per D1 (weak discrimination at top_n_step500).
+
+Suite manifest: 29-suite `target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml`. Promotion policy: target_real_fpr=0.07, target_stress_fpr=0.10, target_fake_recall_min=0.30 (matches P1 settings).
+
+Output paths under `gs://training-job-outputs/test_results/teams_promotion_contract/p2-scratch-scorecard-2026-05-08/`:
+- `reports/` — per-suite frame-level reports
+- `diagnostic_scorecard/scorecard.{csv,wide.csv,json}` — fixed-threshold 0.5 sidecar
+- `promotion_contract/{threshold_grid.csv, selected_threshold_scorecard.csv, checkpoint_summary.csv, promotion_contract.json, promotion_winner.json}`
 
 **Bug fixes committed (2026-05-07, commits `2e3c26b` + `fb6c38f`)**:
 - `trainer/trainer.py:1727` W&B logging gap when `use_group_dro=true` — RESOLVED.
