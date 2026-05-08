@@ -1,0 +1,40 @@
+# Promotion-contract validation map — P2 SCRATCH packet (2026-05-08)
+#
+# Authored 2026-05-08 to scorecard the curated subset of P2 ckpts identified by
+# CPU diagnostics D1-D5. Companion to
+# analysis/p2_eval_2026-05-08/d1_d4_cpu/D5_CKPT_MAPPING_FACTS_2026-05-08.md.
+#
+# Slots A and B are deliberately excluded (D1 showed weak real-fake discrimination
+# at top_n_step500: A gap +0.072, B gap +0.016; not informative on Phase A).
+#
+# Slot C (PAIRRANK_ONLY, run oaur8odo, 17 ckpts saved):
+#   top_n step7000:      training-AUC peak (0.9862, EER 0.0388); canary lockbox_recall@10=0.26 at the matched _step=12000 fire (closest match).
+#   periodic step3000:   matched-step counterfactual to D step3000 — does the early-stop-style operating point exist for a non-Fourier slot?
+#
+# Slot D (FOURIER, run 89tt9xyz, 17 ckpts saved):
+#   periodic step3000:   ⭐ distinct low-saturation operating point. score_p95_on_reals=0.883
+#                        (vs 0.99+ at later D ckpts); lockbox_recall_at_FPR_10pct=0.37 (highest
+#                        across all 6 saved D ckpts evaluated locally); chronic minima on
+#                        Roy_D, bla_bla_chow, PC_Generator__s22. Closest savable approximation
+#                        to canary _step=18000 chronic-dip state.
+#   periodic step8000:   yaml's nominal-cap reference; mid-trajectory saturated regime.
+#   top_n step19000:     late-training peak — highest training AUC across all 4 P2 slots
+#                        (0.9908). resblock_11 last-layer parameter direction uniquely
+#                        orthogonal to A/B/P8A (cosine -0.27 per D4).
+#
+# Baselines:
+#   P8A_REFERENCE_STEP5000: production anchor (memory project_p8a_breakthrough.md).
+#   E2B_TOP_N_STEP3200:     current deployment (memory project_deployment_is_e2b_2026-05-06.md).
+#
+# Close criterion is per the standing promotion-contract policy (recall floor 0.30,
+# real_fpr 0.07, stress_fpr 0.10) — match P1 settings.
+
+P8A_REFERENCE_STEP5000:           "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:               "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+P2_C_PAIRRANK_TOP_N_STEP7000:     "gs://training-job-outputs/best_checkpoints/oaur8odo/top_n_effort_20260507_step7000_auc0.9862_eer0.0388.pth"
+P2_C_PAIRRANK_PERIODIC_STEP3000:  "gs://training-job-outputs/best_checkpoints/oaur8odo/periodic_effort_20260507_step3000_auc0.9364_eer0.1416.pth"
+
+P2_D_FOURIER_PERIODIC_STEP3000:   "gs://training-job-outputs/best_checkpoints/89tt9xyz/periodic_effort_20260507_step3000_auc0.9738_eer0.0823.pth"
+P2_D_FOURIER_PERIODIC_STEP8000:   "gs://training-job-outputs/best_checkpoints/89tt9xyz/periodic_effort_20260508_step8000_auc0.9859_eer0.0169.pth"
+P2_D_FOURIER_TOP_N_STEP19000:     "gs://training-job-outputs/best_checkpoints/89tt9xyz/top_n_effort_20260508_step19000_auc0.9908_eer0.0295.pth"
