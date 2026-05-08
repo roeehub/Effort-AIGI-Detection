@@ -449,4 +449,67 @@ that hasn't been measurement-confirmed.
   (Vertex `6226906326623059968`) for the P2-D-step3000 verdict; once that
   lands, Stage 1 has its third candidate ckpt to decompose.
 
-(Future entries: per-stage results.)
+- **2026-05-08 (PM)** — P2 Phase A `JOB_STATE_SUCCEEDED`. Verdict
+  documented at [`analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md`](../../../analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md).
+  P8A_REFERENCE_STEP5000 is the rank-1 promotion winner. P2_D_FOURIER_PERIODIC_STEP3000
+  ranks 4 with `dev_fake_macro_recall=0.530` (vs E2B 0.508) and
+  `lockbox_fake_recall=0.889` (vs E2B 0.628), at a cost of
+  `lockbox_real_fpr=0.164` (8× E2B) and `teams_real_dor_dev real_fpr=0.460`
+  (5.75× E2B).
+
+- **2026-05-08 (PM)** — Stage 1 (R² probe) executed CPU-only.
+  Driver: [`analysis/iq_shortcut_decomp_2026-05-08/decompose.py`](../../../analysis/iq_shortcut_decomp_2026-05-08/decompose.py).
+  FACTS: [`IQ_DECOMP_FACTS_2026-05-08.md`](../../../analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_FACTS_2026-05-08.md).
+  OPINIONS: [`IQ_DECOMP_OPINIONS_2026-05-08.md`](../../../analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_OPINIONS_2026-05-08.md).
+
+  Headline: 23 cells across 3 ckpts × ≤9 pool-groups. R² is
+  **substrate-conditional**, not uniform:
+
+  | substrate class | R² range | residual AUC range | Δ AUC (raw − resid) median |
+  |---|---|---|---|
+  | HDTF (8 cells, P8A+E2B) | 0.016–0.090 | 0.71–0.99 | 0.022 |
+  | DEV (excl. STRESS, 12 cells) | 0.020–**0.594** | 0.51–0.88 | 0.180 |
+  | LOCKBOX_TEAMS (3 cells) | **0.397–0.542** | 0.63–0.76 | **0.246** |
+
+  Hypothesis A (encoder is mostly an IQ classifier) is **provisionally
+  rejected**: even the most IQ-dominant cell (LOCKBOX, P2-D, residual AUC
+  0.633) keeps fake-vs-real discriminability after IQ removal. Picture is
+  Hypothesis B with the IQ-vs-content balance shifting strongly by substrate.
+
+  The proposal §4.1 uniform-threshold decision criterion does not match the
+  substrate-conditional R² pattern. OPINIONS doc §3 reframes Stage 2 around
+  "where the IQ shortcut binds vs where production lives" rather than the
+  global R² threshold; recommends Stage 2a (IQ GRL) gated on a CPU
+  per-layer IQ-probe diagnostic before launching GPU.
+
+  **Stage 2 GPU spend NOT authorized.** Awaiting user decision per
+  proposal §4.2 + OPINIONS §7.
+
+- **2026-05-08 (late PM)** — User authorized **three pre-Stage-2a checks**
+  (a/b/c) per [`analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_OPINIONS_2026-05-08.md`](../../../analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_OPINIONS_2026-05-08.md) §6:
+
+  - **(a) Per-layer IQ probe** — CPU, dispatched to sub-agent. Output FACTS
+    doc planned at `analysis/iq_perlayer_probe_2026-05-08/IQ_PERLAYER_PROBE_FACTS_2026-05-08.md`.
+    Goal: where in the OpenCLIP B16 encoder is the IQ representation
+    concentrated; informs GRL hook layer choice for Stage 2a Slot 2.
+  - **(b) D step3000 HDTF Phase C** — GPU, Vertex job
+    `p2-d-step3000-hdtf-2026-05-08` (us-east1, image 1.3.273, ~$15-25,
+    ETA ~3-4h). Suite manifest:
+    `arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml`.
+    Goal: is D step3000's viso-ceiling break content-real or v2-substrate-
+    bound (PA-style — memory `project_pa_does_not_generalize_to_hdtf_2026-05-05.md`).
+  - **(c) Dor encoder-axis characterization** — CPU, dispatched to same
+    sub-agent. Output FACTS at `analysis/dor_encoder_axis_2026-05-08/`.
+    Goal: WHY did D step3000 lose P8A's signature dor invariance (J4: real
+    FPR 8% → 46%, fake recall 86% → 62%)? IQ R² doesn't include Dor in any
+    high-R² cell, so the regression isn't IQ-mediated.
+
+  All three are gating Stage 2a packet design. **Stage 2a slot composition
+  + FT-base selection depends on a/b/c outcomes** per the OPINIONS doc §6.
+
+  After a/b/c land: a fresh agent should read the FACTS docs (without
+  reading prior agents' OPINIONS first) and form their own view of the
+  next-step decision per the user's framing — STATE.md's FRESH-AGENT
+  GUIDANCE block has the reading order.
+
+(Future entries: a/b/c results, then Stage 2a decision.)

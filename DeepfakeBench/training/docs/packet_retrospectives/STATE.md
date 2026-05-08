@@ -1,10 +1,31 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-08 10:14 local (P2 Phase A scorecard launched on image 1.3.273 — `p2-scratch-scorecard-2026-05-08`, Vertex `6226906326623059968`, us-east1, JOB_STATE_PENDING at 08:13:43 UTC; 7-ckpt curated set per D1-D5 CPU diagnostics; expected SUCCEEDED ~12:00-13:00 CEST).
+> **Last refreshed**: 2026-05-08 17:00 local (Stage 1 IQ R² probe COMPLETED + J1-J5 deeper analysis CONVERGED — P2 verdict + 23-cell R² decomposition + 5-job characterization all in. Three checks (a/b/c) gating Stage 2a packet design now in flight: (a) per-layer IQ probe + (c) Dor encoder-axis CPU work dispatched to sub-agent; (b) D step3000 HDTF Phase C launching to Vertex `us-east1` job `p2-d-step3000-hdtf-2026-05-08`. Fresh-agent guidance below.).
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
 > **How to use this page**: a new agent reads this AFTER `AGENTS.md` and BEFORE the user's specific task. It tells you what's running, what just landed, what's open, and what decision the user might want next. If the wall-clock is materially after the "Last refreshed" date, verify against `git status`, the tail of [`TIMELINE.md`](TIMELINE.md), and the latest [`packets/`](packets/) entry — state moves quickly.
+>
+> **FRESH-AGENT GUIDANCE (2026-05-08)**: the IQ-shortcut deconvolution program is mid-flight. The user's explicit instruction was to organize the artifacts so a new agent can form their own view of the next-step decision **without being biased by the prior agents' OPINIONS docs**. Reading order for an unbiased fresh take:
+>
+> 1. Read the **FACTS docs FIRST** (factual-only, forbidden-words enforced):
+>    - [`analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md) — promotion contract scorecard
+>    - [`analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_FACTS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_FACTS_2026-05-08.md) — J1-J5 characterization
+>    - [`analysis/iq_data_atlas_2026-05-08/IQ_ATLAS_FACTS_2026-05-08.md`](../../analysis/iq_data_atlas_2026-05-08/IQ_ATLAS_FACTS_2026-05-08.md) — cross-pool IQ measurement
+>    - [`analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_FACTS_2026-05-08.md`](../../analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_FACTS_2026-05-08.md) — 23-cell R² decomposition (Stage 1 of IQ-deconvolution program)
+>    - [`docs/packet_retrospectives/MODEL_GOALS.md`](MODEL_GOALS.md) — three pillars + promotion bar
+>    - [`docs/packet_retrospectives/SCORECARD_GUIDE.md`](SCORECARD_GUIDE.md) — when to use which scorecard mode
+> 2. Form your own reading of what the data shows.
+> 3. THEN, optionally, read the OPINIONS docs to compare your reading to the prior agents'. **You are explicitly free to disagree.**
+>    - [`analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_OPINIONS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_OPINIONS_2026-05-08.md) — synthesis + proposed pre-Stage-2a sequence
+>    - [`analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_OPINIONS_2026-05-08.md`](../../analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_OPINIONS_2026-05-08.md) — sister-agent's Stage 2 reading
+>    - [`docs/packet_retrospectives/threads/iq_shortcut_deconvolution_program_2026-05-08.md`](threads/iq_shortcut_deconvolution_program_2026-05-08.md) — the program proposal thread
+> 4. Read pending check artifacts when they land:
+>    - `analysis/iq_perlayer_probe_2026-05-08/` — per-layer IQ probe (CPU, in flight)
+>    - `analysis/dor_encoder_axis_2026-05-08/` — Dor encoder-axis (CPU, in flight)
+>    - `gs://training-job-outputs/test_results/teams_promotion_contract/p2-d-step3000-hdtf-2026-05-08/` — D step3000 HDTF (GPU, ETA ~3-4h after launch)
+>
+> The fresh agent's task is to look at the convergent FACTS, optionally challenge the existing OPINIONS, and make their own call on Stage 2 (or whatever direction they propose). The user reserves the GPU spend authorization regardless.
 
 ---
 
