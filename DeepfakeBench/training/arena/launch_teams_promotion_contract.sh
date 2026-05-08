@@ -24,9 +24,33 @@ GPU_TYPE="${GPU_TYPE:-NVIDIA_TESLA_A100}"
 GPU_COUNT="${GPU_COUNT:-1}"
 WANDB_PROJECT="${WANDB_PROJECT:-phase2-experiments}"
 
-SUITE_MANIFEST="arena/target_domain_suites.teams_promotion_contract_2026-04-17.yaml"
+# ============================================================================
+# Mode + constants (see docs/packet_retrospectives/SCORECARD_GUIDE.md)
+# ============================================================================
+#
+# SCORECARD_MODE controls what the launcher assembles:
+#   full       — every ckpt in the map × full suite manifest (current default;
+#                authoritative for promotion verdicts and cross-packet batches).
+#   iterative  — anchors + ONE candidate × iterative suite manifest. Use for
+#                "did this packet move the needle?" runs. Saves ~45-55% wall.
+#   trajectory — anchors + multiple candidates from the SAME training run ×
+#                full suite manifest. Use AFTER an iterative win to find the
+#                operating point.
+#
+# Edit `PRODUCTION_ANCHORS` here when the deployment model or production anchor
+# changes — keep it in sync with `MODEL_GOALS.md` and the corresponding memory
+# entries (`project_deployment_is_e2b_2026-05-06.md`, `project_p8a_breakthrough.md`).
+SCORECARD_MODE="${SCORECARD_MODE:-full}"
+PRODUCTION_ANCHORS=("P8A_REFERENCE_STEP5000" "E2B_TOP_N_STEP3200")
+CANDIDATE=""
+
+SUITE_MANIFEST_FULL="arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml"
+SUITE_MANIFEST_ITERATIVE="arena/target_domain_suites.teams_promotion_contract_iterative_2026-05-08.yaml"
+
+# Default suite manifest follows mode (overridden by --suite-manifest if given).
+SUITE_MANIFEST=""
 CHECKPOINT_MAP="arena/checkpoint_maps/teams_target_domain.promotion_shortlist_2026-04-17.yaml"
-CHECKPOINTS="ALL"
+CHECKPOINTS=""
 OUTPUT_GCS_ROOT="gs://training-job-outputs/test_results/teams_promotion_contract"
 JOB_NAME=""
 DRY_RUN=""
@@ -55,9 +79,18 @@ Usage:
   $(basename "$0") [options]
 
 Options:
-  --suite-manifest PATH       Repo-relative or /workspace path to the baked-in suite manifest.
+  --mode MODE                 full | iterative | trajectory (default: full).
+                              See docs/packet_retrospectives/SCORECARD_GUIDE.md.
+                                full       — all ckpts in the map × full suite manifest
+                                iterative  — anchors + 1 candidate × iterative manifest
+                                trajectory — anchors + multiple candidates × full manifest
+  --candidate ALIAS           Candidate ckpt alias (REQUIRED for --mode iterative).
+                              Anchors are added automatically.
+  --suite-manifest PATH       Override the mode-default suite manifest (rare).
   --checkpoint-map PATH       Repo-relative or /workspace path to the baked-in checkpoint map.
-  --checkpoints CSV           Comma-separated checkpoint aliases (default: ${CHECKPOINTS})
+  --checkpoints CSV           Comma-separated checkpoint aliases.
+                              Default: ALL for --mode full; auto-assembled for iterative.
+                              REQUIRED for --mode trajectory (anchors will be prepended).
   --output-gcs-root URI       GCS root for reports + artifacts (default: ${OUTPUT_GCS_ROOT})
   --wandb-project NAME        W&B project name (default: ${WANDB_PROJECT})
   --job-name NAME             Override Vertex display name / output suffix.
@@ -116,6 +149,10 @@ print_cmd() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --mode)
+            SCORECARD_MODE="$2"; shift 2 ;;
+        --candidate)
+            CANDIDATE="$2"; shift 2 ;;
         --suite-manifest)
             SUITE_MANIFEST="$2"; shift 2 ;;
         --checkpoint-map)
@@ -154,6 +191,43 @@ while [[ $# -gt 0 ]]; do
             exit 2 ;;
     esac
 done
+
+# ============================================================================
+# Resolve mode → suite manifest + checkpoint set
+# ============================================================================
+case "${SCORECARD_MODE}" in
+    full)
+        SUITE_MANIFEST="${SUITE_MANIFEST:-${SUITE_MANIFEST_FULL}}"
+        CHECKPOINTS="${CHECKPOINTS:-ALL}"
+        ;;
+    iterative)
+        if [[ -z "${CANDIDATE}" ]]; then
+            echo "ERROR: --mode iterative requires --candidate ALIAS" >&2
+            exit 2
+        fi
+        SUITE_MANIFEST="${SUITE_MANIFEST:-${SUITE_MANIFEST_ITERATIVE}}"
+        # Auto-assemble: anchors + the one candidate.
+        ANCHOR_CSV="$(IFS=,; echo "${PRODUCTION_ANCHORS[*]}")"
+        if [[ -n "${CHECKPOINTS}" ]]; then
+            echo "ERROR: --mode iterative does not accept --checkpoints (auto-assembled from anchors + --candidate)" >&2
+            exit 2
+        fi
+        CHECKPOINTS="${ANCHOR_CSV},${CANDIDATE}"
+        ;;
+    trajectory)
+        SUITE_MANIFEST="${SUITE_MANIFEST:-${SUITE_MANIFEST_FULL}}"
+        if [[ -z "${CHECKPOINTS}" || "${CHECKPOINTS}" == "ALL" ]]; then
+            echo "ERROR: --mode trajectory requires --checkpoints with explicit candidate aliases (anchors will be prepended)" >&2
+            exit 2
+        fi
+        # Prepend anchors to user-provided checkpoints.
+        ANCHOR_CSV="$(IFS=,; echo "${PRODUCTION_ANCHORS[*]}")"
+        CHECKPOINTS="${ANCHOR_CSV},${CHECKPOINTS}"
+        ;;
+    *)
+        echo "ERROR: --mode must be full | iterative | trajectory (got: ${SCORECARD_MODE})" >&2
+        exit 2 ;;
+esac
 
 SUITE_MANIFEST="$(normalize_container_local_path "${SUITE_MANIFEST}")"
 CHECKPOINT_MAP="$(normalize_container_local_path "${CHECKPOINT_MAP}")"
@@ -206,6 +280,7 @@ LAUNCH_CMD=(
 echo "============================================================"
 echo "Teams Promotion Contract — Vertex AI Launch"
 echo "============================================================"
+echo "Mode:                    ${SCORECARD_MODE}"
 echo "Image:                   ${IMAGE_URI}"
 echo "Project:                 ${PROJECT}"
 echo "Region:                  ${REGION}"

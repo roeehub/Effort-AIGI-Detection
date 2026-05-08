@@ -1,0 +1,241 @@
+# Iterative-mode suite manifest for the Teams promotion contract.
+#
+# Authored 2026-05-08 to support the iterative scorecard mode introduced by
+# `launch_teams_promotion_contract.sh --mode iterative`. See
+# `docs/packet_retrospectives/SCORECARD_GUIDE.md` for the discipline.
+#
+# WHAT THIS DROPS vs the FULL manifest
+# (`target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml`):
+# - `teams_real_poor_quality_lockbox` — covered by `teams_real_poor_quality_dev`
+#   which DOES drive τ
+# - `teams_real_lighting_extreme_lockbox` — covered by
+#   `teams_real_lighting_extreme_dev` which DOES drive τ
+#
+# These 2 lockbox-stress diagnostics are pure readouts whose dev counterparts
+# already shape τ via the lex policy. Their lockbox counterparts add a small
+# cross-substrate sanity check that is valuable at promotion-verdict time but
+# is redundant for iterative "did this packet move the needle?" runs.
+#
+# Saves ~1.5-2 min per ckpt × suite × ~3-5 ckpts = ~5-10 min wall-clock per
+# iterative scorecard. Small absolute savings, but free — these suites add
+# zero information that the dev counterparts don't already carry for the
+# iterative question.
+#
+# WHAT THIS KEEPS that's NOT τ-deciding (= still load-bearing for iterative):
+# - All 17 `teams_capture_<identity>_dev` per-identity diagnostic suites.
+#   These are kept because per-identity FPR is the load-bearing diagnostic
+#   for detecting chronic-FP regressions hidden by macro suites — see memory
+#   `project_p1_pe_eval` (Roy_D regression hidden in macro until per-identity
+#   surfaced it) and `project_chronic_offenders_partition_per_ckpt_2026-05-04`
+#   (different ckpts handle different identities).
+#
+# Use the FULL manifest for trajectory and final-promotion-verdict scorecards;
+# use this iterative manifest for "did this packet move the needle?" runs.
+
+suites:
+  - name: teams_real_all_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_real_poor_quality_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_poor_quality"
+    external_real_deterministic: true
+
+  - name: teams_real_lighting_extreme_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_lighting_extreme"
+    external_real_deterministic: true
+
+  - name: teams_fake_all_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+
+  - name: visomaster_enhanced_macro_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "visomaster_enhanced_macro"
+    external_fake_deterministic: true
+
+  - name: deeplive_enhanced_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "deeplive_enhanced"
+    external_fake_deterministic: true
+
+  - name: teams_real_all_lockbox
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "lockbox"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_fake_all_lockbox
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "lockbox"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+
+  - name: teams_real_dor_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "dor"
+    external_real_deterministic: true
+
+# ==========================================================================
+# Per-identity diagnostic suites (no τ influence; kept for iterative because
+# they are load-bearing for chronic-FP detection — see thread-doc).
+# ==========================================================================
+
+  - name: teams_capture_cam_test_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam"
+    external_fake_deterministic: true
+
+  - name: teams_capture_noyn_sharker_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_noyn_sharker"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator"
+    external_fake_deterministic: true
+
+  - name: teams_capture_dor_shkedi_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_dor_shkedi"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_s35_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test_s35"
+    external_fake_method: "teams_capture_cam_test_s35"
+    external_fake_deterministic: true
+
+  - name: teams_capture_noyn_sharker_s23_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_noyn_sharker_s23"
+    external_fake_method: "teams_capture_noyn_sharker_s23"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_s32_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test_s32"
+    external_fake_method: "teams_capture_cam_test_s32"
+    external_fake_deterministic: true
+
+  - name: teams_flat_xiang_xiang2_feng_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_flat_xiang_xiang2_feng"
+    external_fake_method: "teams_flat_xiang_xiang2_feng"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_s3_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator_s3"
+    external_fake_method: "teams_capture_pc_generator_s3"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_s53_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam_s53"
+    external_fake_method: "teams_capture_test_cam_s53"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_s46_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test_s46"
+    external_fake_method: "teams_capture_cam_test_s46"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_s76_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam_s76"
+    external_fake_method: "teams_capture_test_cam_s76"
+    external_fake_deterministic: true
+
+  - name: teams_capture_dor_shkedi_s16_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_dor_shkedi_s16"
+    external_fake_method: "teams_capture_dor_shkedi_s16"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_s73_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam_s73"
+    external_fake_method: "teams_capture_test_cam_s73"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_s38_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test_s38"
+    external_fake_method: "teams_capture_cam_test_s38"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_s9_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator_s9"
+    external_fake_method: "teams_capture_pc_generator_s9"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_s4_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator_s4"
+    external_fake_method: "teams_capture_pc_generator_s4"
+    external_fake_deterministic: true

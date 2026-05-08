@@ -197,7 +197,13 @@ Below ANY of these bars: it is not a promotion candidate, regardless of headline
 
 - Edits to this file require user review (per the authoring discipline above). The doc directs GPU spend; uncontrolled drift would direct future agents at the wrong target.
 - New IQ-robustness axes get added to the Pillar 3 table and to the threads index; do NOT delete axes as "solved" without a thread that proves the axis no longer matters.
-- The deployed model name (E2B_TOP_N_STEP3200) and the production anchor (P8A_REFERENCE_STEP5000) are **versioned facts** — when they change, update this doc AND the corresponding memory entry in the same commit.
+- The deployed model name (E2B_TOP_N_STEP3200) and the production anchor (P8A_REFERENCE_STEP5000) are **versioned facts** — when they change, update this doc AND the corresponding memory entry AND `arena/launch_teams_promotion_contract.sh` (`PRODUCTION_ANCHORS`) AND `SCORECARD_GUIDE.md` in the same commit.
+
+## Companion docs
+
+- [`SCORECARD_GUIDE.md`](SCORECARD_GUIDE.md) — operating manual for promotion-contract scorecards (when to use iterative / trajectory / full mode). Read this before assembling a scorecard.
+- [`AGENT_GUIDE.md`](AGENT_GUIDE.md) — pre-proposal validation checklist (read before proposing any packet).
+- [`AGENTS.md`](AGENTS.md) — agent onboarding overview.
 
 ---
 
