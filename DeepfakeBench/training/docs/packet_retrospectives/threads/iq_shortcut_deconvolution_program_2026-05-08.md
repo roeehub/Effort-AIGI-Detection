@@ -512,4 +512,51 @@ that hasn't been measurement-confirmed.
   next-step decision per the user's framing — STATE.md's FRESH-AGENT
   GUIDANCE block has the reading order.
 
-(Future entries: a/b/c results, then Stage 2a decision.)
+- **2026-05-08 (evening)** — checks (a) and (c) completed CPU-only.
+
+  **(a) Per-layer IQ probe** —
+  FACTS: [`analysis/iq_perlayer_probe_2026-05-08/IQ_PERLAYER_PROBE_FACTS_2026-05-08.md`](../../../analysis/iq_perlayer_probe_2026-05-08/IQ_PERLAYER_PROBE_FACTS_2026-05-08.md).
+  Per-(ckpt × layer) IQ representation on the 800-frame triptych sample
+  (mostly DEV-substrate, 863 frames after IQ panel join).
+
+  Headline: peak per-IQ-feature binary AUC at **layer 6** for all three
+  ckpts (P8A 0.981 / E2B 0.977 / P2D 0.976 on `min_dim`). Multivariate
+  avg-per-feature R² peaks at L6 for P8A (0.726), then climbs to L11 for
+  E2B (0.785) and P2D (0.782). L11 R² gap E2B/P2D − P8A = +0.115.
+
+  L0 results identical across the 3 ckpts (sanity confirmed: FT freezes
+  patch+positional embeddings).
+
+  L9 dip across all 3 ckpts; recovery at L11 is the E2B/P2D-only feature.
+
+  **(c) Dor encoder-axis characterization** —
+  FACTS: [`analysis/dor_encoder_axis_2026-05-08/DOR_ENCODER_AXIS_FACTS_2026-05-08.md`](../../../analysis/dor_encoder_axis_2026-05-08/DOR_ENCODER_AXIS_FACTS_2026-05-08.md).
+  OPINIONS: [`analysis/dor_encoder_axis_2026-05-08/DOR_ENCODER_AXIS_OPINIONS_2026-05-08.md`](../../../analysis/dor_encoder_axis_2026-05-08/DOR_ENCODER_AXIS_OPINIONS_2026-05-08.md).
+  388-frame cohort: 50 DOR_REAL_DEV + 78 DOR_FAKE_DEV + 100 DOR_REAL_LOCKBOX
+  + 80 NON_DOR_REAL_DEV + 80 NON_DOR_FAKE_DEV.
+
+  Headline numbers (final-CLS cosine centroid distances):
+  - `dor_real_vs_dor_fake`: P8A 0.952 → P2D **0.112** (8.5× compressed).
+  - `dor_real_vs_non_dor_real`: P8A 0.062 → P2D 0.342 (5.5× farther).
+  - `dor_fake_vs_non_dor_fake`: P8A 0.003 → P2D 1.077 (350× farther).
+  - Score gap p50(Dor real) − p50(Dor fake): P8A 0.805 → P2D **0.053**.
+  - Per-frame median d(Dor real, non_dor_fake centroid):
+    P8A 0.65, P2D 0.21.
+
+  Dor IQ correlation Pearson r is WEAK on P2D (lap_var r=+0.19 on
+  DOR_REAL_LOCKBOX vs P8A r=+0.46). The largest score-vs-IQ correlation
+  shifts (P2D−P8A) are in the OPPOSITE direction from the LOCKBOX
+  IQ-shortcut: `min_dim` r flips from −0.33 (P8A) to +0.28 (P2D) on
+  DOR_REAL_DEV. The Dor regression is not IQ-mediated in the LOCKBOX
+  IQ-shortcut direction.
+
+  OPINIONS reading: P2D constructed an "is-Dor" identity-cluster sub-region;
+  within it, real/fake separation collapsed (CONFUSED+SHIFTED, simultaneously).
+  Three Stage 2 paths surfaced (IQ-GRL only / identity-axis-GRL only /
+  sister-variant ablation of both). User decides.
+
+  **Stage 2a GPU spend NOT authorized for sub-agent.** Awaiting user pick
+  among Path A / B / C in the OPINIONS doc §7, plus the (b) HDTF Phase C
+  result for D step3000.
+
+(Future entries: (b) HDTF Phase C result, then Stage 2 decision.)
