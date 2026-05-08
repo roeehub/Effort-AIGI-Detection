@@ -1,6 +1,6 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-08 00:50 local (P2 Slot D launched on image 1.3.272 — `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`, Vertex `8486657808400384000`, us-east1, transitioned to JOB_STATE_RUNNING at 22:49:06 UTC, 5 min after submit; A/B/C also RUNNING; all 4 P2 slots in flight).
+> **Last refreshed**: 2026-05-08 09:00 local (all 4 P2 slots `JOB_STATE_SUCCEEDED` overnight; A 21:38→23:49 UTC = 2h 11m, B 21:42→00:39 = 2h 57m, C 21:36→00:53 = 3h 17m, D 22:48→05:31 = 6h 43m; eval folder skeleton populated with FACTS docs; D1-D4 CPU diagnostics in flight).
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
@@ -16,18 +16,30 @@ The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)**
 
 ## In flight / running right now
 
-**P2 packet** (PREVENT_NOT_UNLEARN, 4 slots) — **Slots A/B/C launched 2026-05-07 23:33 local on image 1.3.271; Slot D launched 2026-05-08 00:43 local on image 1.3.272** (Slot D Cloud Build `f66bedcb-6dc6-4bca-b6ff-9335c8244d3a`, 16m25s, commit `27e95b8`). All 4 slots are FROM-SCRATCH (CLIP-B16 init, no FT base) on the post-quality_enhancement-fix data composition with the canary probe enabled @ frequency_steps=1000:
+**P2 packet** (PREVENT_NOT_UNLEARN, 4 slots) — **all 4 slots `JOB_STATE_SUCCEEDED` 2026-05-07/08**. Eval folder at [`analysis/p2_eval_2026-05-08/`](../../analysis/p2_eval_2026-05-08/) carries the populated FACTS docs (`RESULTS_FACTS_2026-05-08.md`, `CANARY_TRAJECTORY_FACTS_2026-05-08.md`). Per-slot summary:
 
-- **Slot A** [`R13_P2_SCRATCH_BUNDLE`](../../experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml) — 4-axis corr_penalty (sharpness + luma + face_area + color_b_dev) + pair_rank_loss + face_scale_jitter@0.50. Vertex `8395459915946131456` (us-east1, `JOB_STATE_RUNNING` since 21:38:26 UTC). W&B `u22wz1vf` (`R13_P2_SCRATCH_BUNDLE_0507-2138`).
-- **Slot B** [`R13_P2_SCRATCH_CORR_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml) — 4-axis corr_penalty only (single-lever ablation). Vertex `5580112770428305408` (us-west4, `JOB_STATE_RUNNING` since 21:42:11 UTC). W&B `mlo5vfe8` (`R13_P2_SCRATCH_CORR_ONLY_0507-2142`).
-- **Slot C** [`R13_P2_SCRATCH_PAIRRANK_ONLY`](../../experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml) — pair_rank only (matched against P1 PAIRRANK_ONLY but from-scratch). Vertex `3126673777023254528` (us-central1, `JOB_STATE_RUNNING` since 21:36:36 UTC). W&B `oaur8odo` (`R13_P2_SCRATCH_PAIRRANK_ONLY_0507-2137`).
-- **Slot D** [`R13_P2_SCRATCH_FOURIER`](../../experiments/phase2_round13/R13_P2_SCRATCH_FOURIER.yaml) — band-limited Fourier amplitude aug (bands 8-13 randomize, 5-6 preserve, log_range [-0.3,+0.3]) + face_scale_jitter@0.50; no corr_penalty, no pair_rank. Vertex `8486657808400384000` (us-east1, `JOB_STATE_RUNNING` since 22:49:06 UTC; 5 min PENDING). Display name `exp-R13_P2_SCRATCH_FOURIER-20260508-004331`. W&B run id pending first-step log emission.
+| slot | yaml | wandb run | wall clock | terminal | final `_step` | canary fires | training-AUC peak |
+|---|---|---|---|---|---:|---:|---|
+| A — BUNDLE | `R13_P2_SCRATCH_BUNDLE.yaml` | `u22wz1vf` | 2h 11m | 23:49:26 UTC | 7508 | 1 | 0.6802 (step500) → declines to 0.5100 (step7000) |
+| B — CORR_ONLY | `R13_P2_SCRATCH_CORR_ONLY.yaml` | `mlo5vfe8` | 2h 57m | 00:39:28 UTC | 6508 | 1 | 0.6800 (step500) → drops below chance to 0.3815 (step3500) |
+| C — PAIRRANK_ONLY | `R13_P2_SCRATCH_PAIRRANK_ONLY.yaml` | `oaur8odo` | 3h 17m | 00:53:42 UTC | 13013 | 4 | 0.8840 → 0.9862 (step7000) monotone |
+| D — FOURIER | `R13_P2_SCRATCH_FOURIER.yaml` | `89tt9xyz` | 6h 43m | 05:31:20 UTC | 25013 | 8 | 0.8743 → 0.9908 (top_n step19000) monotone |
 
-W&B project URL: https://wandb.ai/dtect-vision/phase2-round13. Step counts at 22:05 UTC for the original 3 slots: A 501, C 314, B 0 (in dataset discovery — VisoMaster Enhanced loading). Canary first-fire is at step 1000; A closest. No canary readouts yet.
+Slot D's wall-clock is ~3× the other slots; consistent with the per-frame FFT overhead from `data/augmentations/fourier_band_aug.py` (~3-channel FFT2 + IFFT2 per fired frame at p_apply=0.5).
 
-Per CLAUDE.md region-distribution: A/D on us-east1, B on us-west4, C on us-central1. Slot D's 30-min PENDING-threshold check is closed: D transitioned to RUNNING within 5 min of submit; no region-failover needed for any slot. Per packet retro [`packets/P2.md`](packets/P2.md). Cost ~$60-80 each, $240-320 total.
+Canary trajectory headlines (from [`CANARY_TRAJECTORY_FACTS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/CANARY_TRAJECTORY_FACTS_2026-05-08.md)):
 
-**Slot D task spec** at [`SLOT_D_FOURIER_TASK_2026-05-08.md`](SLOT_D_FOURIER_TASK_2026-05-08.md) — was the operational handoff for this slot. Smoke notes at [`analysis/p2_eval_2026-05-08/SLOT_D_SMOKE_FAIL.md`](../../analysis/p2_eval_2026-05-08/SLOT_D_SMOKE_FAIL.md) (3-tier smoke; Tier-3 mean_abs floor relaxed 1.0→0.4 per user authorization 2026-05-08 because faces have low FFT amplitude in bands 8-13 — the aug produces a measurable, bounded effect on every cohort but averages 0.50-0.76 per pixel rather than the spec's 1.0 floor calibrated to uniform-noise synthetic). Image 1.3.272 = image 1.3.271 + commit `27e95b8` (fourier_band_aug primitive + Slot D yaml + collate-fn wiring + train_sweep allowlist).
+- Slot A canary single-fire: `score_p95_on_reals=0.4994`, all `recall_at_tau05` = 0 — uniform-output state.
+- Slot B canary single-fire: `score_p95_on_reals=0.5005`, `lockbox_recall@FPR_10pct=0.01` but `recall_at_tau05/{viso,deeplive}_fake = 1.00` — every frame scored ~0.500, fakes barely above τ=0.5.
+- Slot C 4 fires: `score_p95_on_reals` saturates to 0.998+ at first fire; chronic-6 means rise from 0.07-0.55 (step3000) to 0.66-0.97 (step12000); `lockbox_recall@FPR_10pct` peaks at 0.26 (step12000).
+- Slot D 8 fires: `score_p95_on_reals` lower (0.88-0.99 oscillating); **non-monotonic chronic dip at `_step=18000`** — Roy_D 0.94→0.68, bla_bla_chow 0.91→0.41, max_per_id 0.94→0.68 — coinciding with `lockbox_recall@FPR_10pct=0.41` peak (top among all 4 slots).
+
+**Open observations** flagged in the FACTS docs (no interpretation, no resolution at this time):
+- Canary cadence anomaly: yaml configured `frequency_steps: 1000` but observed cadence is every 3000 W&B `_step`s for C/D, only 1 fire each for A/B. Cause unverified.
+- All 4 slots terminated before `nEpochs: 16` cap; early_stopping_patience=12 likely fired but stop-condition not verified at this level.
+- Slot A and Slot B both early-stopped at the SAME `_step` band (6500-7500) at epoch 3 with similar final score distributions.
+
+**D1-D4 CPU diagnostics** at [`analysis/p2_eval_2026-05-08/d1_d4_cpu/`](../../analysis/p2_eval_2026-05-08/d1_d4_cpu/) — in flight as of writing. Compares 5 selected ckpts (A/top_n_step500, B/top_n_step500, C/top_n_step7000, D/top_n_step6000, D/top_n_step19000) against P8A reference on the canary 800-frame substrate. D4 weight-delta probe completed: Slot A and Slot B are nearly parameter-identical (cos ≈ 0.997 across all layers — both early-stopped at step500); P2 ckpts at `visual_proj` are nearly orthogonal (cos < 0.01) to A/B and to P8A; Slot D step19000 last-layer residuals are uniquely orthogonal to D step6000 (cos 0.034 at resblock_11). Inference + D1-D3 analyses pending.
 
 **Bug fixes committed (2026-05-07, commits `2e3c26b` + `fb6c38f`)**:
 - `trainer/trainer.py:1727` W&B logging gap when `use_group_dro=true` — RESOLVED.
@@ -43,7 +55,17 @@ Per CLAUDE.md region-distribution: A/D on us-east1, B on us-west4, C on us-centr
 
 ## Most recent eval folder
 
-[`analysis/p1_pe_eval_2026-05-07/`](../../analysis/p1_pe_eval_2026-05-07/) — first folder following the [`eval_folder_template.md`](eval_folder_template.md) FACTS/OPINIONS contract. New agents read in order:
+[`analysis/p2_eval_2026-05-08/`](../../analysis/p2_eval_2026-05-08/) — P2 packet outcomes (4 slots SUCCEEDED). Read in order:
+
+1. `RESULTS_FACTS_2026-05-08.md` — per-slot training outcome + ckpt inventory
+2. `CANARY_TRAJECTORY_FACTS_2026-05-08.md` — full per-slot canary trajectory tables
+3. `SLOT_D_SMOKE_FAIL.md` — Slot D Fourier-aug 3-tier smoke (Tier-3 floor relaxation rationale)
+4. `d1_d4_cpu/` — CPU diagnostics (D1 A/B degeneracy, D2 Slot D step18000 deep-dive, D3 4-slot histogram, D4 weight-delta) — in flight
+5. `slot_{A,B,C,D}_canary_history.csv` — raw W&B history pulls
+
+Phase A scorecard for the P2 ckpts has NOT been authorized yet; the user reviews the canary trajectories + D1-D4 CPU diagnostics before deciding GPU spend on the P2 ckpt pool.
+
+[`analysis/p1_pe_eval_2026-05-07/`](../../analysis/p1_pe_eval_2026-05-07/) — prior packet (P1) eval. Read in order:
 
 1. `RESULTS_FACTS_2026-05-07.md` — raw scorecard
 2. `RESULTS_F1_F5_FACTS_2026-05-07.md` — close-criterion verdicts

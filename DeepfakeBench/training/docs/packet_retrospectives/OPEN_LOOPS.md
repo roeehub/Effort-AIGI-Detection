@@ -1,6 +1,6 @@
 # OPEN_LOOPS — Mechanically Generated Issue Inventory
 
-> ⚙ **GENERATED on 2026-05-07** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
+> ⚙ **GENERATED on 2026-05-08** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
 
 ## Summary
 

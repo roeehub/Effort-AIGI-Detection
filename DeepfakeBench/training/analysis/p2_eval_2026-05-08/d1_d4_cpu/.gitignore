@@ -1,0 +1,4 @@
+# Reproducible from GCS — see run_inference.py CKPTS list and d4_weight_delta.py
+ckpts/
+# Reproducible from canary parquet — frame_paths in arena/canaries/
+_frame_cache/
