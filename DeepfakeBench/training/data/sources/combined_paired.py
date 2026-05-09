@@ -2532,6 +2532,17 @@ class CombinedBatchingConfig:
 
     # Teams passthrough-specific
     teams_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
+    # Optional per-frame keep-list for Teams REAL frames (T3 SLOT1/2/3 IQ-shortcut packets,
+    # 2026-05-09). When provided as a frozenset of full gs:// URIs, only real frames whose
+    # URI is present in the set are yielded by _iterate_teams_sample. Fake frames are not
+    # affected. When None (the default), Teams ingestion is identical to legacy behavior.
+    teams_real_frame_keep_list: Optional[frozenset] = None
+    # Optional per-method keep-list for Teams REAL frames (T3 SLOT3, 2026-05-09).
+    # Maps `method` (e.g. "deeplive_teams_edge_cases") to a frozenset of allowed
+    # gs:// frame URIs for THAT method's pairing. When set, the real frame must
+    # appear in the corresponding method's set; otherwise it is skipped. None
+    # = legacy behavior.
+    teams_real_frame_keep_list_per_method: Optional[Dict[str, frozenset]] = None
 
 
 class CombinedPairedIterableDataset(IterableDataset):
@@ -3391,8 +3402,29 @@ class CombinedPairedIterableDataset(IterableDataset):
             parallel_download_workers=self.config.teams_parallel_download_workers,
         )
 
+        # Optional T3 IQ-shortcut keep-list (2026-05-09): real frames whose
+        # URI is not in the frozenset are skipped. Fakes are not affected.
+        teams_real_keep = getattr(self.config, "teams_real_frame_keep_list", None)
+        teams_real_keep_per_method = getattr(
+            self.config, "teams_real_frame_keep_list_per_method", None
+        )
+        per_method_set = None
+        if teams_real_keep_per_method is not None:
+            per_method_set = teams_real_keep_per_method.get(
+                unified_sample.method, frozenset()
+            )
+
         for frame_idx in frame_indices:
             if frame_idx not in real_by_idx or frame_idx not in fake_by_idx:
+                continue
+
+            real_uri = (
+                f"gs://{sample.gcs_bucket}/{sample.real_prefix}"
+                f"frame_{frame_idx:04d}.jpg"
+            )
+            if teams_real_keep is not None and real_uri not in teams_real_keep:
+                continue
+            if per_method_set is not None and real_uri not in per_method_set:
                 continue
 
             # Real frame (no landmarks for Teams)
@@ -4740,6 +4772,89 @@ def create_combined_paired_pipeline(
         for k, v in family_weights_cfg.items()
     }
 
+    # T3 SLOT 1/2/3 IQ-shortcut packets (2026-05-09): optional Teams REAL frame keep-list.
+    # When `combined_paired.teams.frame_keep_list_path` is set, we load the CSV and pass
+    # a frozenset of `frame_uri` values to the iterable dataset. Real frames whose URI is
+    # NOT in the set are skipped during _iterate_teams_sample. Default behavior (no
+    # config field) is identical to the legacy code path.
+    teams_real_frame_keep_list_set: Optional[frozenset] = None
+    teams_keep_list_path = teams_config.get('frame_keep_list_path') if teams_enabled else None
+    if teams_keep_list_path:
+        if not os.path.isabs(teams_keep_list_path):
+            training_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            teams_keep_list_path = os.path.join(training_dir, teams_keep_list_path)
+        if not os.path.exists(teams_keep_list_path):
+            raise FileNotFoundError(
+                f"combined_paired.teams.frame_keep_list_path={teams_keep_list_path} "
+                "is set but the file does not exist."
+            )
+        import csv as _keep_csv
+        keep_uris: List[str] = []
+        with open(teams_keep_list_path, "r", newline="") as _kfh:
+            _reader = _keep_csv.DictReader(_kfh)
+            if _reader.fieldnames is None or "frame_uri" not in _reader.fieldnames:
+                raise ValueError(
+                    f"combined_paired.teams.frame_keep_list_path={teams_keep_list_path} "
+                    "is missing a `frame_uri` header column."
+                )
+            for _row in _reader:
+                u = (_row.get("frame_uri") or "").strip()
+                if u:
+                    keep_uris.append(u)
+        teams_real_frame_keep_list_set = frozenset(keep_uris)
+        logger.info(
+            "Teams REAL frame keep-list loaded: %d URIs from %s",
+            len(teams_real_frame_keep_list_set),
+            teams_keep_list_path,
+        )
+
+    # T3 SLOT 3 (2026-05-09): optional per-method keep-list. CSV columns
+    # required: method, frame_uri (lap_var optional/ignored). The map is
+    # method -> frozenset(uri).
+    teams_real_frame_keep_list_per_method_map: Optional[Dict[str, frozenset]] = None
+    teams_keep_list_per_method_path = (
+        teams_config.get('frame_keep_list_per_method') if teams_enabled else None
+    )
+    if teams_keep_list_per_method_path:
+        if not os.path.isabs(teams_keep_list_per_method_path):
+            training_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            teams_keep_list_per_method_path = os.path.join(training_dir, teams_keep_list_per_method_path)
+        if not os.path.exists(teams_keep_list_per_method_path):
+            raise FileNotFoundError(
+                f"combined_paired.teams.frame_keep_list_per_method="
+                f"{teams_keep_list_per_method_path} is set but the file does not exist."
+            )
+        import csv as _keep_csv
+        per_method_uris: Dict[str, List[str]] = {}
+        with open(teams_keep_list_per_method_path, "r", newline="") as _kfh:
+            _reader = _keep_csv.DictReader(_kfh)
+            if (
+                _reader.fieldnames is None
+                or "method" not in _reader.fieldnames
+                or "frame_uri" not in _reader.fieldnames
+            ):
+                raise ValueError(
+                    f"combined_paired.teams.frame_keep_list_per_method="
+                    f"{teams_keep_list_per_method_path} is missing the required "
+                    "`method` and `frame_uri` header columns."
+                )
+            for _row in _reader:
+                m = (_row.get("method") or "").strip()
+                u = (_row.get("frame_uri") or "").strip()
+                if not m or not u:
+                    continue
+                per_method_uris.setdefault(m, []).append(u)
+        teams_real_frame_keep_list_per_method_map = {
+            m: frozenset(uris) for m, uris in per_method_uris.items()
+        }
+        total = sum(len(v) for v in teams_real_frame_keep_list_per_method_map.values())
+        logger.info(
+            "Teams REAL per-method keep-list loaded: %d methods, %d URIs total from %s",
+            len(teams_real_frame_keep_list_per_method_map),
+            total,
+            teams_keep_list_per_method_path,
+        )
+
     batching_config = CombinedBatchingConfig(
         batch_size=config.get('frames_per_batch', combined_config.get('frames_per_batch', 32)),
         num_workers=num_workers,
@@ -4769,8 +4884,10 @@ def create_combined_paired_pipeline(
             DEFAULT_PARALLEL_GCS_DOWNLOAD_WORKERS,
         ),
         teams_sparse_indices=combined_config.get('teams', {}).get('anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]),
+        teams_real_frame_keep_list=teams_real_frame_keep_list_set,
+        teams_real_frame_keep_list_per_method=teams_real_frame_keep_list_per_method_map,
     )
-    
+
     # VisoMaster anchor indices for the iterable dataset
     visomaster_anchor_indices = combined_config.get('visomaster', {}).get(
         'anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]

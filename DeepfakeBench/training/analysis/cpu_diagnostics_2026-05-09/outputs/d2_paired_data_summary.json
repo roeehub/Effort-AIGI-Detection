@@ -1,0 +1,1852 @@
+{
+  "df40_pairs": {
+    "path": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/dataset/df40_pairs/df40-pair-matching.json",
+    "n_entries": 9,
+    "n_unique_methods": 0,
+    "n_unique_identities": 0,
+    "top_methods": {}
+  },
+  "proper_data_inventories": [],
+  "combined_paired_yamls": [
+    {
+      "yaml": "experiments/combined_paired_vit_B16.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/combined_paired_vit_L14.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/combined_paired_vit_B16_laion.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/combined_paired_vit_B32.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B4_curriculum_model_L2.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B2_group_dro.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/A4_df40_viso_no_deeplive.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/D2_rank752_k16.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/C2_arcface_m015_s12.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/_shared_defaults.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B3_curriculum_tier_L1.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/A3_df40_deeplive_viso.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B6_checkpoint_resume_dro.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/D4_batch64_video.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B5_checkpoint_resume.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B3_curriculum_tier_L3.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B3_curriculum_tier_L2.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/D5_batch128_accum.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/C1_ce_lambda001.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/D3_rank744_k24.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/A1_df40_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/C3_cosine_softmax.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/D1_rank760_k8.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/A2_df40_deeplive.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B1_flat_training.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2/B4_curriculum_model_L1.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_D_smart_tiers.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_B_df40_zero.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_F_scratch_smart_tiers.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_C_moderate_rebalance.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_SMOKE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_E_scratch_target_heavy.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_A_target_heavy.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_H_scratch_target_heavy_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round8/R8_G_scratch_df40_zero.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P11_SMOKE_TEST.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_07_stack_top3.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_S2_SLOT2_LOW_LR_FT.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB3_with_proper_data_unenhanced_provisional.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_01_E3_teams2_5.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP2_02_FT_WTB1_plus_proper_unenhanced_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P16_DATA_AXIS.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_05_label_smooth_fake.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P14_FACE_SCALE_JITTER_ISOLATED.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P13_FROM_SCRATCH.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_01_arcface_m0125_control.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_I_trackA_teamsonly_realboost_porig70.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_light.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_DEEPLIVE_CORR_PENALTY.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_E2b_SCRATCH_B16_NO_ARCFACE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT3_enhanced_boosted_teams.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_E2_SCRATCH_B16_EVAL_AUG.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_04_FT_proper_spatial__NEW_GATES_FOR_RETRO.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_01_gate_align_canary.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P17_LAYER3_HEAD.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_03_FT_WTB3_hints_plus_teams_hints_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_on_RLP6_04_step23500.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT4_conservative_res_variant.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P12_HEAVY_LONG.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P14_DATA_FIX.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_02_arcface_m015.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT9_trackA_merged_porig70.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_B_k64_capacity.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P17_LAYER3_HEAD_LINEAR.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_05_label_smoothing_005.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_02_hint_clean_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_02_codec_aggressive.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT7_trackA_merged_base.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_02_E3_teams4_0.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_06_arcface_m015_spatial.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_05_E3_both_heavy.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_A_trackA_teams_enhanced_SPEEDCHECK_WARMUP1.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_baseline.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_A_trackA_teams_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_SMOKE_trackA_teams_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_07_E3_seedB.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_06_FT_proper_main_seedB.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_08_combo_aggressive.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P1_PAIRRANK_ONLY_FT_FROM_P8A.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_03_arcface_high_margin.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_GRL.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB3_with_proper_data_full_snapshot_provisional.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_04_teams_spatial_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_06_teams_cct_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_06_FT_WTB3_plus_proper_full_truthful_gammaup.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_02_arcface_m0175_control.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB2_weak_signal_hints_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_05_seed_variance.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P11_HEAVY_DEEPLIVE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_04_add_enh_clean.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_S2_SLOT1_REAL_AUG_OFF.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_05_FT_WTB3_plus_proper_full_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_05_FT_proper_low_arcface_spatial.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP2_04_FT_WTB1_plus_proper_unenhanced_plus_clean_enhanced_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P11_WEBCAM_HARDEN.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_08_E1_teams2_5.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP2_01_FT_WTB1_no_hints_refresh_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P22_AUG_CURRICULUM.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_04_mixup_strong.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_A_trackA_teams_enhanced_SPEEDCHECK_PARITY600.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT6_combined_boost.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_03_arcface_m015_seedB_control.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_05_real_codec_uplift.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_06_feat_norm_reg.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_TB1_trackB_family_split_sidecar.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_S2_P22_EARLIER_BASE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTC2_gammaup_truthful_sidecar.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_04_arcface_m015_teams_reweight.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_LONG_extended.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_A_trackA_teams_enhanced_SPEEDCHECK_SPEED600.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_04_stability_lambda_003.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_H_trackA_teams_enhanced_realboost_porig70.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P2_SCRATCH_FOURIER.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT14_trackA_scorecard_base_realboost_porig60.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB3_weak_signal_hints_plus_teams_hints.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_06_avspeech_readout_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P18_METHOD_DOMAIN_GRL.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_02_FT_WTB2_hints_only_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_08_codec_from_earlier_base.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P18_NO_GRL_CONTROL.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P17_LAYER4_HEAD.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_FORK_DATA_codec_on_r12g.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P2_SCRATCH_CORR_ONLY.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP8_01_unfreeze_clip_codec.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_freeze_native.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_06_E3_deeplive_up.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_04_FT_WTB3_plus_proper_unenhanced_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_DEEPLIVE_CORR_PENALTY_SMOKE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_FORK_p8a_on_r12g.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_02_FT_proper_main__LEGACY_GATES_FOR_RETRO_SANITY.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_03_arcface_m015_seedB.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_07_FT_WTB3_plus_proper_full_teams_shadow.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP2_06_FT_WTB1_plus_proper_unenhanced_low_arcface_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP8_02_fresh_head_plain_clip.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_01_quality_lambda_2x.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_E_trackA_teams_enhanced_realboost.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_05_FT_proper_low_arcface_spatial__NEW_GATES_FOR_RETRO.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_04_E3_enh4_0.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_PC_CODEC_PLUS_DATA.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT2_heavy_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P11_HEAVY.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_02_quality_lambda_4x.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P1_BUNDLE_FT_FROM_P8A.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_08_FT_proper_main_plus_dose_matched_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_S2_SLOT3_WEAK_PAIRRANK.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_R_p8a_reseed.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT8_trackA_merged_realboost.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTC3_teams_passthrough_special_shadow_sidecar.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_05_arcface_m0125_spatial.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT10_trackA_merged_realboost_porig70.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_on_P8A_codec_hedge.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTC1_gammaup_plumbing_control_sidecar.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_D_boosted_teams.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_on_P8A_ablation_no_in_proj.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P15_GRL_FROM_P8A.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_04_FT_proper_spatial.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP2_03_FT_WTB1_plus_proper_unenhanced_plus_teams_enhanced_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P11_MILD.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_07_arcface_m0175_spatial.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB3_weak_signal_hints_plus_teams_draft_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_on_P8A.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_TB2_trackB_family_split_realboost.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_02_FT_proper_main__NEW_GATES_FOR_RETRO.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_E1_EVAL_TARGETED_AUG.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP2_05_FT_WTB1_plus_proper_unenhanced_spatial_stability_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT17_trackA_scorecard_base_realboost_porig70.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_00_PRELAUNCH_SMOKE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT13_trackA_scorecard_base_porig60.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_AB_stack.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6B_07_combo_lite.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_07_teams_spatial_plus_codec_plus_cct.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB1_weak_signal_no_hints_draft_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_E3_L14_SCRATCH_EVAL_AUG.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_08_E1_gate_align.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_01_FT_WTB1_no_hints_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_06_family_rebalance_proper_up.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_07_heavy_enh.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_SYM_on_RLP6_04_step8000.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_03_combined.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT5_heavy_res_variant.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_S1_P22_REDUX_SHORT.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT12_trackA_scorecard_base_realboost.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT16_trackA_scorecard_base_teamsonly_realboost.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_S3_VISO_WEIGHT.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_F_trackA_teams_enhanced_porig70.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_01_lighting_aggressive.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P17_LAYER4_HEAD_LINEAR.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_C_heavy_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP5_03_E3_both2_5.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT15_trackA_scorecard_base_teamsonly.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_GRL_strong.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P2_SCRATCH_PAIRRANK_ONLY.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP6_03_drop_wma_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP7_05_teams_spatial_plus_codec.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P2_SCRATCH_BUNDLE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_02_FT_proper_main.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB2_weak_signal_hints_only_draft_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_03_no_mlp_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_G_seed_insurance_k32.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP4_08_arcface_m015_spatial_teams_reweight.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_01_softened_p8a.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P14_FT_FROM_P8A.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_01_arcface_m010.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_01_FT_control.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_PA_VISOMASTER_ENHANCED_DATA.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_VISO_CORR_PENALTY.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP35_03_arcface_m020.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_03_FT_proper_low_arcface.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P9_FORK_AB_stack_on_r12g.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP1_08_SCRATCH_WTB3_plus_proper_full_live.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_P10_GRL_baseline.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_RLP3_07_FT_proper_lighting_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": true
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_WTB1_weak_signal_no_hints.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT11_trackA_scorecard_base.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_A_champion_plus_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round13/R13_FT1_conservative_enhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S6_full_stack_high_vcd_weight.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S5_vcd_reals_strong_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S1_vcd_reals_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S2_aug_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S1_vcd_reals_aug_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S3_vcd_reals_aug_grl_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S2_aug_only_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S8_full_stack_more_vcd_ids.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S3_vcd_reals_aug_grl.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S4_grl_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_SMOKE_30MIN.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round6/R6_S7_full_stack_strong_grl.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round7/R7_F3_context_var_strong.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round7/R7_F2_context_var.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round7/R7_S3_context_var_higher_vcd_ft.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round7/R7_S1_context_variation.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round7/R7_F1_no_faceswap_baseline.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round7/R7_S2_context_var_strong_ft.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_D_ft_r8e_grl.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_E_grl_teams_ood.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_C_ft_r8e_aug_fix.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_A_scratch_aug_fix.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_D_scratch_k128.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_G_scratch_seed_control.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_B_scratch_k64.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_H_scratch_grl_strong.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_F_ft_r8e_grl.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12/R12_C_ft_r9d_aug_fix.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_C_teams_scratch.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_E_teams_heavy_reg.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_SMOKE.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_F_teams_sim_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_H_teams_fast_adapt.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_E_teams_ft_v2.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_B_teams_ft_nofixes.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_A_teams_ft_stability.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_D_stability_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9/R9_G_teams_both.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12_5/R125_B_gamma_up_shadow.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12_5/R125_A_gamma_up.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round12_5/R125_C_max_lighting_envelope.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9_5/R95_E_arcface_r8_scale.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9_5/R95_F_facedancer_focus.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9_5/R95_D_scratch_stability.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9_5/R95_B_light_stability.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9_5/R95_A_stability_baseline.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round9_5/R95_C_heavy_stability.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s20_batch256.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s15_safe.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_L14_openai_s18_risky.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_L14_openai_s25_batch128.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_L14_openai_s15_safe.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_L14_openai_s12_batch128.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s12_conservative.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s12_batch256.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s15_batch256.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_L14_openai_s12_conservative.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_L14_openai_s20_batch128.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s18_risky.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s18_batch256.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/vit_B16_laion_s25_batch128.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_low_lambda_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_feat_norm_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_cosface_style_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s6_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_slow_anneal_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s18_lr3e4.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_no_arcface_all_improvements.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s18_all_improvements.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s10_m15_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s18_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_no_arcface_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_m15_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s18_full_svd_lr1e4.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/arcface_scale_ablation/B16_LAION_optimized/vit_B16_laion_s10_full_svd.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_1_lambda001_k8.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_cosine_softmax.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_late3_blocks.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_lambda0.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_3_lambda1_k8.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_6_lambda01_k8.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_lambda001.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_4_lambda001_k1.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_arcface_conservative.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_2_lambda0_k8.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_lambda_anneal.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/B16_lambda_sweep/P1_5_lambda005_k8.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/L14_ablation/vit_L14_openai_s18_lr2e4.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/L14_ablation/vit_L14_openai_no_arcface.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/L14_ablation/vit_L14_openai_s18_fast_lr.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/L14_ablation/vit_L14_openai_s18_backbone_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/L14_ablation/vit_L14_openai_s18_all_improvements.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_S1_scratch_baseline_ft7mix.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_S3_scratch_ft7mix_weighted_targetdomain_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_S3_scratch_ft7mix_weighted_targetdomain_aug_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_SMOKE_30MIN_scratch_ft7mix_weighted.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_S2_scratch_ft7mix_weighted.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_S1_scratch_baseline_ft7mix_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round5/R5_S2_scratch_ft7mix_weighted_seed1337.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_A_scratch_wide_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_B_scratch_wide_aug_mixup.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_D_scratch_vit_L14.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_G_ft_wide_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_F_scratch_narrow_aug.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_E_scratch_wide_aug_low_s.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round10/R10_C_ft_teams_v2_cheapest.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F1_cosine_r736.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F5_cosine_r744_warmup3k.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F3_cosine_r744_lr1e4.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_E5_cosine_r752_dro.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F7_cosine_r744_lreg05.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_A1_df40_only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F4_cosine_r744_wd01.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F6_cosine_r736_lr1e4.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F8_cosine_r744_s24.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_E2_cosine_r752.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_E4_cosine_r752_df40only.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_E6_ce_r752.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_E1_cosine_r760.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_A3_all_sources.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R2_E3_cosine_r744.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round2/R25_F2_cosine_r720.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_S2_curriculum_phase2_moderate.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_FT4_finetune_qr_mod_qe.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_S2_curriculum_phase1_light.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_FT1_finetune_qr_moderate.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_FT2_finetune_qr_light.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_FT3_finetune_qe_data.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round3/R3_S1_scratch_qr_moderate.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_G_vit_L14_fixed.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_A_ft_r9d_narrow.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_E_scratch_30k.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_B_ft_r9d_group_dro.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_C_ft_r9d_wide.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_D_ft_r9f_narrow.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_H_ft_r9d_ultra_low_lr.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round11/R11_F_ft_r9d_high_teams_weight.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT4_base_withenhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT7_family_light_withenhanced_weighted_smoke.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT6_family_moderate_withenhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT2_family_light_noenhanced_smoke.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT1_base_noenhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT5_family_light_withenhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT2_family_light_noenhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT5_family_light_withenhanced_smoke.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT7_family_light_withenhanced_weighted.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT3_family_moderate_noenhanced.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    },
+    {
+      "yaml": "experiments/phase2_round4/R4_FT8_family_moderate_withenhanced_weighted.yaml",
+      "uses_combined_paired": true,
+      "uses_proper_data": false
+    }
+  ]
+}

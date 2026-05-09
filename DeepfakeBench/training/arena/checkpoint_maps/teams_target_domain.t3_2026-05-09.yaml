@@ -1,0 +1,54 @@
+# Promotion-contract validation map — T3 (Stage 3) packet (2026-05-09)
+#
+# Authored 2026-05-09 to scorecard the 4 most informative T3 candidates per
+# the τ=0.92 deployment-threshold read in `outputs/t3_per_cohort_stats.csv`
+# (Dor cohort + Roy_D probe).
+#
+# Slot 1 (DROP_HIGH_IQ_TEAMS_REALS, run bxnuz22g):
+#   periodic step1500:  best Pillar-2 candidate. dor_lockbox FPR @τ=0.92 = 1%
+#                       (matches P8A); non_dor_real_dev FPR = 3.8% (better than
+#                       P8A's 7.5%); non_dor_fake_dev recall = 66.2% (matches
+#                       P8A 66.2%). Cost: dor_fake_dev recall drops to 14.1%
+#                       (vs P8A 85.9%).
+#   periodic step2500:  best Slot-1 non-dor fake recall. non_dor_fake_dev
+#                       recall @τ=0.92 = 73.8% (vs P8A 66.2%); non_dor_real
+#                       FPR 17.5% (worse than P8A); dor_lockbox FPR 6%.
+#
+# Slot 3 (PER_METHOD_IQ_MATCH, run v1u6mcwe):
+#   periodic step1500:  best dor fake recall. dor_fake_dev recall @τ=0.92 =
+#                       88.5% (beats P8A 85.9%); non_dor_fake_dev recall
+#                       77.5% (beats P8A 66.2%). Cost: dor_lockbox FPR = 26%
+#                       (vs P8A 1%); non_dor_real FPR = 20%.
+#   periodic step3500:  best non-dor fake recall. non_dor_fake_dev recall
+#                       @τ=0.92 = 78.8% (beats P8A 66.2%); dor_lockbox FPR
+#                       19% (vs P8A 1%); non_dor_real FPR 17.5%.
+#
+# Slot 2 (IQ_MATCHED_REALS, run jevz8h45) — added 2026-05-09 ~19:30 CEST
+# after probe at MPS confirmed step1000 as the joint-frontier candidate:
+#   periodic step1000:  ⭐ first T3 ckpt to gain on BOTH fake cells without
+#                       losing dor: dor_fake_dev recall @τ=0.92 = 87.2%
+#                       (vs P8A 85.9%, +1.3pp); non_dor_fake_dev recall =
+#                       73.8% (vs P8A 66.2%, +7.6pp); dor_lockbox FPR = 5%
+#                       (vs P8A 1%, +4pp absolute — real but small cost).
+#                       Trajectory: dor_fake recall collapses from 87% at
+#                       step1000 → 49% at step1500 → 2.6% at step2500+.
+#                       step1000 is the sweet spot before the phase
+#                       transition.
+#
+# Baselines:
+#   P8A_REFERENCE_STEP5000: production anchor (memory project_p8a_breakthrough.md).
+#   E2B_TOP_N_STEP3200:     current deployment (memory project_deployment_is_e2b_2026-05-06.md).
+#
+# Close criterion is per the standing promotion-contract policy (recall floor 0.30,
+# real_fpr 0.07, stress_fpr 0.10).
+
+P8A_REFERENCE_STEP5000:           "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:               "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+T3_SLOT1_PERIODIC_STEP1500:       "gs://training-job-outputs/best_checkpoints/bxnuz22g/periodic_effort_20260509_step1500_auc0.9817_eer0.0745.pth"
+T3_SLOT1_PERIODIC_STEP2500:       "gs://training-job-outputs/best_checkpoints/bxnuz22g/periodic_effort_20260509_step2500_auc0.9886_eer0.0311.pth"
+
+T3_SLOT3_PERIODIC_STEP1500:       "gs://training-job-outputs/best_checkpoints/v1u6mcwe/periodic_effort_20260509_step1500_auc0.9884_eer0.0379.pth"
+T3_SLOT3_PERIODIC_STEP3500:       "gs://training-job-outputs/best_checkpoints/v1u6mcwe/periodic_effort_20260509_step3500_auc0.9937_eer0.0201.pth"
+
+T3_SLOT2_PERIODIC_STEP1000:       "gs://training-job-outputs/best_checkpoints/jevz8h45/periodic_effort_20260509_step1000_auc0.9867_eer0.0268.pth"

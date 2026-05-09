@@ -1,0 +1,4 @@
+ckpt,fake_suite,n_fake_frames,tau_F0_calibrated_at_target_fpr,tau_F4_calibrated_at_FPR=10%,tau_F4_calibrated_at_FPR=5%,recall_at_tau_F0_pct,recall_at_tau_F4_FPR10_pct,recall_at_tau_F4_FPR5_pct,lift_abs_pp_F0_to_F4_FPR10
+t3_slot1_step1500,visomaster_enhanced_macro_dev,550,0.4678,0.0206,0.0649,29.27,73.27,62.36,44.0
+t3_slot1_step1500,deeplive_enhanced_dev,545,0.4678,0.0206,0.0649,73.94,100.0,99.82,26.06
+t3_slot1_step1500,teams_fake_all_dev,3039,0.4678,0.0206,0.0649,78.91,95.13,92.99,16.22

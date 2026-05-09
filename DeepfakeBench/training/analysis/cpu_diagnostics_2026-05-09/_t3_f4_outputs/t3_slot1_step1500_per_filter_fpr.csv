@@ -1,0 +1,6 @@
+ckpt,filter,n_frames,tau_used_F0_calibrated,fpr_actual_pct
+t3_slot1_step1500,F0,4564,0.4678,10.01
+t3_slot1_step1500,F1,3571,0.4678,0.5
+t3_slot1_step1500,F2,2561,0.4678,6.83
+t3_slot1_step1500,F3,4390,0.4678,10.18
+t3_slot1_step1500,F4,2091,0.4678,0.62
