@@ -204,6 +204,87 @@ Full writeup: `analysis/pa_pc_eval_2026-05-05/VERDICT_FINAL_F0_F4.md`. Pre-regis
 
 This loop replaces the closed-as-superseded `p14-data-fix-not-launched` loop above with a clean single-lever framing. The 2026-04-30 superseded close was based on a confounded test (P14 anti-shortcut bundle + fw=8.0). The 2026-05-04 retest uses fw=4.0 + no bundle on E2B (new anchor candidate). See "2026-05-04 evening update" subsection of Current stance for the launch context.
 
+### 2026-05-09/10 update — T3_SLOT1 closes the data-axis lever loop with the strongest F4 + HDTF result yet
+
+**Source**: `analysis/cpu_diagnostics_2026-05-09/T3_SCORECARD_FACTS_2026-05-09.md` + `MORNING_BRIEF_2026-05-10.md` + packet doc [T3.md](../packets/T3.md). Vertex training jobs `8339710278371377152` (Slot 1), `7520601259871567872` (Slot 2), `6693065086040276992` (Slot 3); five iterative-mode contract scorecards 2026-05-09 PM; F4 substrate-cleaning re-eval on 5 ckpts 2026-05-10 ~01:00 (CPU only); two HDTF cross-substrate evals 2026-05-09 23:43 → 2026-05-10 03:36 (Vertex `8940870459881160704` + `5789970215450181632`, both `JOB_STATE_FAILED` at the same known contract-tail bug; per-suite reports complete).
+
+**T3 packet design**: 3 slots × single lever each, all FT-from-P8A_step5000, **all yamls inherit PA's data sources** (`visomaster_enhanced.enabled=true` + `visomaster_teams_enhanced.enabled=true` at fw=4.0 — important context for interpreting T3 vs PA isolation):
+- T3_SLOT1: drop top-25% high-Lap Teams REAL frames via `frame_keep_list_path`
+- T3_SLOT2: IQ-matched DF40 pair JSON
+- T3_SLOT3: per-method IQ-matched pairs
+
+**F4 substrate-cleaning headline (n_real F0=4564 → F4=2091)**:
+
+| ckpt | F4@10% viso | F4@10% deeplive | F4@10% teams_fake | F0 dev macro |
+|------|------------:|----------------:|------------------:|-------------:|
+| P8A | 67.09% | 92.48% | 92.23% | 30.0% |
+| E2B | 30.91% | 100.00% | 87.13% | 50.9% |
+| **PA_TOP_N_STEP5600 (2026-05-05 leader)** | 72.36% | — | — | — |
+| **T3_SLOT1_PERIODIC_STEP1500** | 73.27% | 100.00% | 95.13% | 37.6% (PASSES floor) |
+| **T3_SLOT1_PERIODIC_STEP2500** | **79.27%** ⭐ | 100.00% | 96.08% | 23.0% (FAILS floor) |
+| T3_SLOT3_PERIODIC_STEP3500 | 65.27% | 99.82% | 93.32% | 28.2% |
+
+**T3_SLOT1_PERIODIC_STEP2500 is the highest F4 viso recall ever observed** in R13 packets, beating PA by +6.91pp. T3_SLOT1_step1500 also exceeds PA on the same headline cell. The "F0 viso 27% production ceiling" is now 3× broken on F4 (PA 72.4% → T3_SLOT1_step1500 73.3% → T3_SLOT1_step2500 79.3%) — the F0 ceiling persists because of contract-calibration artifact (chronic-6 in F0 reals forces auto-τ tight), not because of model capability.
+
+**HDTF cross-substrate, FPR-calibrated τ at 5% on `proper_real_teams_dev`**:
+
+| HDTF Suite | n | P8A | T3_step1500 | T3_step2500 |
+|------------|--:|----:|------------:|------------:|
+| proper_visomaster_enhanced_teams_dev | 1182 | 94.62% | 77.38% | **84.97%** |
+| proper_visomaster_enhanced_teams_lockbox | 302 | 95.61% | 78.60% | **86.47%** |
+| proper_visomaster_teams_dev | 262 | 96.04% | 91.17% | **93.13%** |
+| proper_fake_teams_all_dev | 1444 | 94.88% | 79.88% | **86.45%** |
+| proper_visomaster_clean_dev | 262 | 98.85% | 100.00% | 100.00% |
+| proper_visomaster_enhanced_clean_dev | 1180 | 98.59% | 99.74% | 99.70% |
+
+**T3_SLOT1 partially generalizes to HDTF — NOT a PA-style v2-bound collapse.** PA on `proper_visomaster_enhanced_teams_dev` collapsed to 7.87% at τ=0.5 (memory `project_pa_does_not_generalize_to_hdtf_2026-05-05.md`); T3_SLOT1_step1500 stays at 30.94% at τ=0.5 / 77.38% at FPR-cal; T3_SLOT1_step2500 reaches 72.63% at τ=0.5 / 84.97% at FPR-cal. **Step2500 dominates step1500 on every HDTF teams cell** — the step trajectory ADDS HDTF generalization rather than losing it.
+
+**This is the strongest data-axis-lever result yet observed.** T3_SLOT1's drop-list lever stacked on top of PA's data sources didn't undo PA's mechanism — it ADDED to it.  T3_SLOT1 is BETTER than P8A on:
+- F4 v2 viso (step1500 73.3% / step2500 79.3% vs P8A 67.1%)
+- F4 v2 deeplive (100% tied)
+- F4 v2 teams_fake (95-96% vs P8A 92.2%)
+- HDTF clean transport (T3 99.7-100.0% vs P8A 98.6-98.9%)
+
+T3_SLOT1 is WORSE than P8A on:
+- HDTF teams transport (T3_step2500 84.97% vs P8A 94.62% on the headline cell at FPR-cal 5%)
+
+**Roy_D regression is the universal obstacle** across all 5 scored T3 ckpts (Slot 1/2/3 ckpts × multiple steps). At calibrated τ on `teams_real_lighting_extreme_dev`, every T3 ckpt has Roy_D FPR 74-97% vs P8A 33.6%. Mechanism: score-IQ correlation analysis on `teams_real_all_dev` shows T3 weakened color_a_dev / saturation as real-discrimination signals (P8A ρ=-0.59 → T3 ρ=-0.45) and added luma_mean (P8A +0.22 → T3 +0.49) — Roy_D's distinctive color_a_dev=18.5 / saturation=122.5 anchor is no longer used by T3, leaving Roy_D mis-classified.
+
+**What this update changes**:
+- Memory `project_data_axis_lever_pulled_twice_no_lift.md` is now refuted four times (PA F4 + T3_SLOT1 step1500 F4 + T3_SLOT1 step2500 F4 + T3_SLOT1 HDTF generalization). The data-axis lever is dispositive on F4 v2 substrate AND partially transfers to HDTF. The previous-amendment "pulled three times; PA succeeded on F4" is upgraded to "pulled four times; T3_SLOT1 succeeded on F4 AND on HDTF clean AND partially on HDTF teams".
+- Memory `project_pa_does_not_generalize_to_hdtf_2026-05-05.md` is upgraded: PA-pure-data-source pattern doesn't generalize, but PA-data-source + T3-keep-list partially does. The non-generalization framing was specific to PA's training recipe (FT-from-E2B, no keep-list), not to the data-source lever in general.
+- Memory `project_viso_ceiling_unbroken_10_packets.md` is now further amended: the F4 v2 ceiling is broken cleanly at 79.3% (T3_SLOT1_step2500); the HDTF teams ceiling is partially broken (T3_step2500 reaches 85% vs P8A 95%). The "structural across architectures" claim is universally refuted.
+- Memory `project_t3_slot1_step1500_lockbox_lift_2026-05-09.md` should be amended: the headline candidate is step**2500**, not step**1500**, when the deployment lens is F4 / HDTF rather than F0 contract.
+
+**Open question that remains**: does the Roy_D regression admit a fix that preserves the F4 + HDTF lift? Two CPU-only diagnostics could help:
+- Cross-correlate Roy_D regression magnitude with each identity's color_a_dev × saturation profile across all 18 T3 ckpts (need to score the un-scored ckpts on Mac first — the 6 step ckpts of Slot 1 are scored; Slot 2's 6 + Slot 3's 6 are not).
+- Probe whether disabling visomaster_teams_enhanced (one of PA's data sources) restores Roy_D handling — this would isolate whether PA's data-source addition or T3's keep-list addition is the Roy_D-shifting culprit.
+
+**Cross-substrate verdict crystallized**: under the user's "abstain below IQ threshold" deployment policy (IQ pre-gate filters out chronic-6-equivalent users before scoring), T3_SLOT1_step2500 is the deployable model — F4@10% viso 79.3%, deeplive 100%, teams_fake 96%, HDTF teams 85% at FPR-cal 5%. Under a stricter "must include all real users at all IQs" deployment policy, P8A remains the safer bet (T3 loses 10pp on HDTF teams in exchange for v2-substrate lift).
+
+### Open loop: t3-step2500-deployment-decision-pending
+status: open
+severity: high
+first_seen: 2026-05-10
+last_verified: 2026-05-10
+close_criterion: a written deployment-direction decision is recorded that picks ONE of (a) ship T3_SLOT1_PERIODIC_STEP2500 with FPR-calibrated τ on a production-realistic real cohort (lockbox / F4-cleaned / IQ-pre-gated reals — depending on production substrate match), then optionally launch a refinement packet (T4 — face_scale_jitter @0.50 stacked with Slot 1 keep-list lever, OR Roy_D hard-negative mining); (b) ship T3_SLOT1_PERIODIC_STEP1500 instead (passes F0 strict floor; F4 viso 73.3% vs step2500 79.3% — slightly weaker capability but stricter contract pass); (c) keep P8A as deployment, treat T3 as a research result and pursue T4 with an additional viso-targeted intervention before next deployment cycle. The decision should be backed by an explicit determination of whether production substrate matches v2 (T3 wins), HDTF teams (P8A wins), or HDTF clean (T3 marginally wins) — see memory `project_v2_substrate_is_dor_diverse_swap` for prior framing of the v2-substrate-specificity question.
+
+This loop replaces and supersedes the earlier `data-axis-clean-single-lever-retest-in-progress` resolution above. That loop closed on the F4 v2 lift; this loop is about translating the F4 v2 + HDTF lift into a deployment direction. Source artifacts: `analysis/cpu_diagnostics_2026-05-09/MORNING_BRIEF_2026-05-10.md` (TL;DR §15 + revised T4 directions §13), `packets/T3.md` (full packet doc with all numbers), `_t3_f4_outputs/` (F4 re-eval JSONs), `_t3_hdtf{,_step2500}/reports/` (HDTF per-suite frames CSVs).
+
+### Open loop: roy-d-mechanism-not-fully-diagnosed
+status: open
+severity: medium
+first_seen: 2026-05-10
+last_verified: 2026-05-10
+close_criterion: a CPU diagnostic determines the actual mechanism behind T3's universal Roy_D regression. Two cheap candidates are: (a) cross-correlate Roy_D regression magnitude with each identity's color_a_dev × saturation profile across all 18 T3 ckpts (need to score the 12 un-scored Slot 2 + Slot 3 step ckpts on Mac first, ~30 min CPU); (b) probe whether disabling visomaster_teams_enhanced (one of PA's data sources) on a T3-style retrain restores Roy_D handling — this isolates whether PA's data-source addition or T3's keep-list addition is the Roy_D-shifting culprit (requires GPU retrain, not cheap). Loop closes when EITHER (a) confirms the color_a_dev mechanism (in which case T4 hard-negative-mining or face_scale_jitter is the right intervention) OR (b) refutes both candidate mechanisms (in which case Roy_D regression mechanism remains unknown and a deeper representation-level probe is needed). Current evidence: Lap-shortcut hypothesis FALSIFIED (Roy_D Lap p50=66 is LOW, would not have been dropped by keep-list). Source: `MORNING_BRIEF_2026-05-10.md` §5 + §11.
+
+### Open loop: hdtf-promotion-contract-failure-recurrence
+status: open
+severity: low
+first_seen: 2026-05-05
+last_verified: 2026-05-10
+close_criterion: `score_teams_promotion_contract.py:748` is patched so the hard-coded `--dev_real_suite teams_real_all_dev` default is replaced by a configurable flag OR a fallback that detects suite-name mismatches gracefully (e.g., "no v2-style real suite in manifest, skipping contract scoring with verdict=PERSUITE_ONLY"). All HDTF runs since 2026-05-05 (P8A-on-HDTF, PA-on-HDTF, P2_D-on-HDTF, T3-on-HDTF, T3-step2500-on-HDTF) hit `JOB_STATE_FAILED` at the contract-scoring tail because the HDTF suite manifest does not include `teams_real_all_dev`. Per-suite reports always complete cleanly so the failure is non-blocking, but the FAILED state interferes with the persistent monitor pattern and adds operational friction. Closes when the patch is committed and a fresh HDTF run reaches `JOB_STATE_SUCCEEDED`.
+
 ### Open loop: frame-level-vs-clip-level-scorer-mismatch
 status: open
 severity: medium

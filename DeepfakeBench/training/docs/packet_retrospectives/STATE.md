@@ -1,6 +1,30 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-08 17:00 local (Stage 1 IQ R² probe COMPLETED + J1-J5 deeper analysis CONVERGED — P2 verdict + 23-cell R² decomposition + 5-job characterization all in. Three checks (a/b/c) gating Stage 2a packet design now in flight: (a) per-layer IQ probe + (c) Dor encoder-axis CPU work dispatched to sub-agent; (b) D step3000 HDTF Phase C launching to Vertex `us-east1` job `p2-d-step3000-hdtf-2026-05-08`. Fresh-agent guidance below.).
+> **Last refreshed**: 2026-05-10 ~07:00 local. Headline: **T3 (Stage 3) ran 2026-05-09 → 2026-05-10. T3_SLOT1_PERIODIC_STEP2500 is the highest-capability candidate seen across all R13 packets — 79.27% F4 v2 viso recall (vs P8A 67.09%, PA 72.36%) AND 84.97% HDTF `proper_visomaster_enhanced_teams_dev` at FPR-cal 5% (NOT a PA-style v2-bound collapse — step2500 partially generalizes to HDTF, beats step1500 on every HDTF cell). Step2500 fails the F0 v2 dev recall floor (22.95% < 30%) but the failure is a contract-calibration artifact: with chronic-6 in F0 reals, step2500 over-confidently scores Roy_D as fake → auto-τ clips at 0.971 → dev fakes collapse at that τ. T3_SLOT1_PERIODIC_STEP1500 is the secondary candidate that PASSES the F0 floor at 37.6%.**
+>
+> **Reading carried forward**: under the user's "abstain below IQ threshold" deployment policy (= F4 substrate), step2500 is the strongest deployable candidate. Under strict F0 contract policy (chronic-6 included), step1500 is the only floor-passing T3 candidate; P8A wins lex-policy rank 1 because all T3 ckpts hit ~9.92-9.99% `dev_worst_real_stress_fpr` (target ≤10%; P8A 6.85%). The 9.92% T3 stress FPR is **entirely Roy_D-on-lighting_extreme** — ex-Roy_D, T3 (3.2%) beats P8A (5.0%) on stress; F4 deployment lens makes the regression invisible.
+>
+> **What this means for the next agent**: deployment can ship step2500 with FPR-calibrated τ on a production-realistic real cohort. The remaining open question is whether to launch a refinement packet (T4 — face_scale_jitter or Roy_D hard-negative mining) before shipping. T4 directions documented in `analysis/cpu_diagnostics_2026-05-09/MORNING_BRIEF_2026-05-10.md` §13. Memory `project_t3_slot1_step1500_lockbox_lift_2026-05-09.md` should be amended (top-line headline now points at step2500, not step1500). Memory `project_data_axis_lever_pulled_twice_no_lift.md` is now refuted twice over (PA + T3_SLOT1).
+>
+> **Reading order for the next agent**: (1) `MORNING_BRIEF_2026-05-10.md` §15 TL;DR (30-second read), then (2) `packets/T3.md` (full packet doc), then (3) `T3_SCORECARD_FACTS_2026-05-09.md` + `_t3_f4_outputs/*.json` for the raw numbers, then (4) `_t3_hdtf/reports/` + `_t3_hdtf_step2500/reports/` for HDTF per-suite reports.
+>
+> ---
+>
+> **Earlier 2026-05-09 13:00 snapshot (preserved for context)**: Stage 2 ALL 3 SUCCEEDED. CPU analytics: 3 probes × 9 ckpts on Dor cohort + Roy_D + L11 features. **Headline: ALL Stage 2 step4500 ckpts regress P8A's chronic-identity Pillar 2 — Roy_D real-FPR at τ=0.5 is S1 99.2% / S2 96.9% / S3 100% vs P8A 45.4%.** L11 cos-distance vs P8A on Roy_D: S2_step500 0.21 → S3_step4500 0.82; Spearman r=0.91 with score regression across n=9 sibling Stage 2 ckpts.
+> 
+> **Reading (provisional, 2026-05-09 audit-corrected):** Across the levers tested (data-aug-toggle / LR / pair-rank-λ / Fourier-aug / pair-rank+GroupDRO bundle), every FT-from-P8A regime drifts the dor cluster within 500-2500 steps. The strongest reading from this convergent pattern is "FT-from-P8A under the tested regimes drifts L10-L11 dor invariance"; this was previously phrased as "FT itself is the binding constraint" — that universal framing is overstated and has been corrected (see `analysis/stage2_cpu_2026-05-09/STAGE2_SCORE_PROBE_OPINIONS_2026-05-09.md` 2026-05-09 caveats and `project_stage2_all_levers_regress_p8a_2026-05-09.md` Why-section). Untested lever classes: LoRA / parameter-efficient adapter FT (preserves base by construction), hard-output-preservation losses on a reference cohort, multi-objective training with Pillar-2 explicit constraint, frozen-encoder regimes other than head-only retrain.
+>
+> **L11 anchor-loss FT (option 3a)** remains a candidate next intervention — its targeting is supported by the L11-distance ↔ regression correlation, but the correlation alone is not dispositive (training-step amount is a confounder; alternative anchor layers like L9/L10 / output-side anchor have not been compared). Under the user's 2026-05-09 reframe (production target genuinely unknown; Pillar 3 robustness must come from forgery signal), preserving L11 also preserves the IQ-shortcut representation co-located there — so the anchor lever is not unambiguously net-positive without first establishing that L11 carries a forgery channel separable from the IQ + identity shortcuts. The forgery-signal atlas CPU diagnostic at `analysis/cpu_diagnostics_2026-05-09/` is the cheap test of that.
+>
+> Promotion contract scorecard NOT recommended for any Stage 2 ckpt — saves $45-60 GPU. FACTS + OPINIONS at `analysis/stage2_cpu_2026-05-09/`.
+>
+> **2026-05-09 audit-pass artifacts at `analysis/cpu_diagnostics_2026-05-09/`** — under user reframe (production target unknown; robustness must come from forgery signal not other-property shortcuts), four CPU diagnostics ran on the 800-frame triptych for all 12 ckpts (3 reference + 9 Stage 2):
+>  - **Forgery-signal atlas** (per-layer × per-signal AUC matrix): all signals (real/fake, is_dor, is_chronic_6, lap_var-high, min_dim-high, face_size-high) extractable at AUC 0.95+ from L11 across all ckpts; L0 already gives 0.72 AUC for real/fake from frozen patch+pos embed alone.
+>  - **F4 substrate filter recompute** on the triptych: dropping chronic-6 + is_no_face + min_dim<200 cuts Stage 2 step4500 real-FPR from 0.149-0.163 (F0_full) to 0.042-0.049 (F4) while preserving fake-recall within ≤0.02.
+>  - **IQ R² + residual AUC decomp**: LOCKBOX R² varies 12× across Stage 2 ckpts (0.07-0.84); DEV_NO_CHRONIC residual AUC is 0.90-0.95 across all Stage 2 ckpts.
+>  - **Per-identity score table**: same-root-identity-different-session sub-identities span 100×-280× score range under same ckpt (`dor_shkedi` 0.298-0.859 vs `dor_shkedi__s16` 0.003-0.080).
+> 
+> FACTS doc: `analysis/cpu_diagnostics_2026-05-09/CPU_DIAGNOSTICS_FACTS_2026-05-09.md`. No OPINIONS doc written this pass — by user request, conclusions are user-gated.)
 >
 > **Purpose**: single-page current-state snapshot. Always-current; rolling. Older dated snapshots archived in [`archive/`](archive/) for historical reference.
 >
@@ -13,6 +37,9 @@
 >    - [`analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_FACTS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_FACTS_2026-05-08.md) — J1-J5 characterization
 >    - [`analysis/iq_data_atlas_2026-05-08/IQ_ATLAS_FACTS_2026-05-08.md`](../../analysis/iq_data_atlas_2026-05-08/IQ_ATLAS_FACTS_2026-05-08.md) — cross-pool IQ measurement
 >    - [`analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_FACTS_2026-05-08.md`](../../analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_FACTS_2026-05-08.md) — 23-cell R² decomposition (Stage 1 of IQ-deconvolution program)
+>    - [`analysis/iq_perlayer_probe_2026-05-08/IQ_PERLAYER_PROBE_FACTS_2026-05-08.md`](../../analysis/iq_perlayer_probe_2026-05-08/IQ_PERLAYER_PROBE_FACTS_2026-05-08.md) — check (a) per-layer IQ probe (NEW)
+>    - [`analysis/dor_encoder_axis_2026-05-08/DOR_ENCODER_AXIS_FACTS_2026-05-08.md`](../../analysis/dor_encoder_axis_2026-05-08/DOR_ENCODER_AXIS_FACTS_2026-05-08.md) — check (c) Dor encoder-axis (NEW)
+>    - [`analysis/p2_d_hdtf_2026-05-08/P2_D_HDTF_FACTS_2026-05-08.md`](../../analysis/p2_d_hdtf_2026-05-08/P2_D_HDTF_FACTS_2026-05-08.md) — check (b) D step3000 HDTF Phase C (NEW)
 >    - [`docs/packet_retrospectives/MODEL_GOALS.md`](MODEL_GOALS.md) — three pillars + promotion bar
 >    - [`docs/packet_retrospectives/SCORECARD_GUIDE.md`](SCORECARD_GUIDE.md) — when to use which scorecard mode
 > 2. Form your own reading of what the data shows.
@@ -20,10 +47,7 @@
 >    - [`analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_OPINIONS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_DEEPER_ANALYSIS_OPINIONS_2026-05-08.md) — synthesis + proposed pre-Stage-2a sequence
 >    - [`analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_OPINIONS_2026-05-08.md`](../../analysis/iq_shortcut_decomp_2026-05-08/IQ_DECOMP_OPINIONS_2026-05-08.md) — sister-agent's Stage 2 reading
 >    - [`docs/packet_retrospectives/threads/iq_shortcut_deconvolution_program_2026-05-08.md`](threads/iq_shortcut_deconvolution_program_2026-05-08.md) — the program proposal thread
-> 4. Read pending check artifacts when they land:
->    - `analysis/iq_perlayer_probe_2026-05-08/` — per-layer IQ probe (CPU, in flight)
->    - `analysis/dor_encoder_axis_2026-05-08/` — Dor encoder-axis (CPU, in flight)
->    - `gs://training-job-outputs/test_results/teams_promotion_contract/p2-d-step3000-hdtf-2026-05-08/` — D step3000 HDTF (GPU, ETA ~3-4h after launch)
+> 4. (No pending check artifacts as of 2026-05-08 evening — all three pre-Stage-2a checks landed; Stage 2 decision is now user-gated.)
 >
 > The fresh agent's task is to look at the convergent FACTS, optionally challenge the existing OPINIONS, and make their own call on Stage 2 (or whatever direction they propose). The user reserves the GPU spend authorization regardless.
 
@@ -31,11 +55,41 @@
 
 ## Where we stand right now (one paragraph)
 
-The most recently completed packet is **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)** — pair_rank λ=0.2 + multi-axis GroupDRO with `chronic_flag` (BUNDLE) vs pair_rank-only (PAIRRANK), both FT-from-P8A_step5000 on the post-`2feea58` codepath. Phase A (29-suite contract scorecard) **SUCCEEDED**; Phase C (16-suite HDTF cross-substrate) **FAILED** at the promotion_contract step (per-suite diagnostic completed; verdict bundle never written; root cause not yet investigated). At the contract-selected τ, **no P1 ckpt clears F1 (90% lockbox recall)**; the contract's rank-1 winner is `P1_PAIRRANK_PERIODIC_STEP500` with 70.8% lockbox recall at τ=0.768. **F1 is reachable at non-contract τ** — `BUNDLE_step500` hits 96.5% lockbox recall at FPR ≤ 10% (τ=0.989); `PAIRRANK_step500` hits 91.5% at τ=0.50. **F5 PASSES big** for the BUNDLE arm: PC_Generator chronic FPR drops 62.9% → 0-3%. **F4 PASSES** universally at calibrated τ (max HDTF real FPR 1.4%). **F3 is partial**: 3 of 4 untargeted IQ axes show decoupling (sharpness, min_dim, color_b_dev) but face_area_fraction amplifies (+106-266%). **P1 introduced a Roy_D regression**: 130 frames flip from 29% FPR (P8A) to 78-93% FPR (P1); the regression is `color_b_dev`-aligned (Δr=+0.71 mirror of P8A's r=−0.71) AND **shared between BUNDLE and PAIRRANK arms** (Wilcoxon p=0.875), refuting the initial GroupDRO-balloon hypothesis. **Deployment is still E2B** per memory `project_deployment_is_e2b_2026-05-06.md`; E2B beats every P1 ckpt on `dev_fake_macro_recall` (0.508 vs 0.354). This session also delivered two bug fixes (trainer.py:1727 W&B logging gap + phase_d/run_chronic_filter.py regex) and a wiki contract upgrade (rolling STATE, FACTS/OPINIONS file convention, hard stop on per-session HANDOFF docs).
+The most recently completed packet is **[T3](packets/T3.md) (Stage 3 IQ-shortcut single-lever)** — 3 slots × 6 step ckpts each, FT-from-P8A_step5000, drop / IQ-match / per-method-IQ-match the training real distribution. Trained 2026-05-09; promotion-contract scorecards on 5 candidate ckpts on 2026-05-09 PM; F4 substrate-cleaning re-eval + HDTF cross-substrate eval overnight 2026-05-09 → 2026-05-10. **T3_SLOT1_PERIODIC_STEP2500 is the highest-capability candidate** seen across all R13 packets: F4 v2 viso 79.27% (vs P8A 67.09%, PA 72.36%); HDTF `proper_visomaster_enhanced_teams_dev` 84.97% at FPR-cal 5% (vs step1500 77.38%, vs P8A 94.62%). **Step2500 generalizes BETTER than step1500 on every HDTF teams cell** — NOT a PA-style v2-bound collapse. Step2500 fails the F0 v2 dev recall floor (22.95% < 30%) only because the contract auto-calibration on F0 reals (which include chronic-6) clips τ to 0.971 to control Roy_D over-confidence. **Step1500 (37.63% F0 macro) is the secondary candidate that passes the strict F0 contract floor**; both are valid candidates at different operating points. P8A wins lex-policy rank 1 in the contract scorecards because all T3 ckpts hit 9.92-9.99% stress FPR (P8A 6.85%); the T3 stress FPR is entirely Roy_D-on-lighting_extreme, ex-Roy_D T3 beats P8A on stress. **Deployment recommendation pending user decision**: ship step2500 with FPR-calibrated τ on production-realistic reals + optional T4 refinement packet (face_scale_jitter @0.50 + Slot 1 keep-list). Sub-headline: **PA's mechanism is encoder-level, not memorization-bound** — T3_SLOT1 (which inherited PA's `visomaster_enhanced` + `visomaster_teams_enhanced` data sources and added the keep-list lever) preserves more HDTF capability than PA alone (PA collapsed to 7.87% on HDTF; T3_SLOT1 step2500 at 84.97%).
+
+---
+
+## Older "where we stood" paragraph (P1 era, preserved for context)
+
+The most recently completed packet was **[P1](packets/P1.md) (PE_PAIR_RANK_DRO)** — pair_rank λ=0.2 + multi-axis GroupDRO with `chronic_flag` (BUNDLE) vs pair_rank-only (PAIRRANK), both FT-from-P8A_step5000 on the post-`2feea58` codepath. Phase A (29-suite contract scorecard) **SUCCEEDED**; Phase C (16-suite HDTF cross-substrate) **FAILED** at the promotion_contract step (per-suite diagnostic completed; verdict bundle never written; root cause not yet investigated). At the contract-selected τ, **no P1 ckpt clears F1 (90% lockbox recall)**; the contract's rank-1 winner is `P1_PAIRRANK_PERIODIC_STEP500` with 70.8% lockbox recall at τ=0.768. **F1 is reachable at non-contract τ** — `BUNDLE_step500` hits 96.5% lockbox recall at FPR ≤ 10% (τ=0.989); `PAIRRANK_step500` hits 91.5% at τ=0.50. **F5 PASSES big** for the BUNDLE arm: PC_Generator chronic FPR drops 62.9% → 0-3%. **F4 PASSES** universally at calibrated τ (max HDTF real FPR 1.4%). **F3 is partial**: 3 of 4 untargeted IQ axes show decoupling (sharpness, min_dim, color_b_dev) but face_area_fraction amplifies (+106-266%). **P1 introduced a Roy_D regression**: 130 frames flip from 29% FPR (P8A) to 78-93% FPR (P1); the regression is `color_b_dev`-aligned (Δr=+0.71 mirror of P8A's r=−0.71) AND **shared between BUNDLE and PAIRRANK arms** (Wilcoxon p=0.875), refuting the initial GroupDRO-balloon hypothesis. **Deployment is still E2B** per memory `project_deployment_is_e2b_2026-05-06.md`; E2B beats every P1 ckpt on `dev_fake_macro_recall` (0.508 vs 0.354). This session also delivered two bug fixes (trainer.py:1727 W&B logging gap + phase_d/run_chronic_filter.py regex) and a wiki contract upgrade (rolling STATE, FACTS/OPINIONS file convention, hard stop on per-session HANDOFF docs).
 
 ---
 
 ## In flight / running right now
+
+**Stage 2 status as of 2026-05-09 03:30 local** — image `1.3.274`:
+
+| slot | run_id | terminal state | runtime | best ckpt (holdout AUC) | DOR_REAL_LOCKBOX p50 (probe) |
+|---|---|---|---:|---|---:|
+| S2-1 REAL_AUG_OFF | `4pf24vo7` (us-west4) | SUCCEEDED 03:22:29Z | 5h 35min | step500 auc 0.9914 | 0.536 (step4500) |
+| S2-2 LOW_LR_FT | `rravpdb9` (us-east1) | SUCCEEDED 00:05:48Z | 2h 18min | step2500 auc 0.9929 | **0.285 (step4500)** ← best |
+| S2-3 WEAK_PAIRRANK | `wc6hvodm` (us-central1) | SUCCEEDED 00:17:02Z | 2h 31min | step3500 auc 0.9935 | 0.517 (step4500) |
+
+P8A reference: `DOR_REAL_LOCKBOX p50 = 0.019`.
+
+**CPU score-distribution probe COMPLETE** (FACTS + OPINIONS at [`analysis/stage2_cpu_2026-05-09/`](../../analysis/stage2_cpu_2026-05-09/)). 9 ckpts × 388-frame Dor cohort × 5 reference cohorts on MPS, ~3min total. All three slots regress P8A's signature dor invariance by 15-28× at step4500. Per-slot reading:
+
+- **S1 REAL_AUG_OFF — IQ-prior FLIP hypothesis REFUTED.** Trajectory monotonically degrades: 0.27 → 0.35 → 0.54.
+- **S2 LOW_LR_FT — Preservation PARTIALLY SUPPORTED.** Best preserver among Stage 2 slots; Pearson r 0.62 with P8A on DOR_REAL_LOCKBOX (vs S1 0.53, S3 0.53, P2D 0.46). Step4500 candidate for promotion contract scorecard.
+- **S3 WEAK_PAIRRANK — Dose-response hypothesis REFUTED.** λ=0.05 still produces step500 cluster collapse (DOR_REAL_DEV std 0.077 = 4.5× compressed vs P8A 0.347), AND bidirectionally regresses Dor (real-FPR up + fake-recall DOWN — only Stage 2 ckpt with both-side regression).
+
+Convergent reading: **the binding constraint is FT itself, not any of the three single levers.** All R13 packets that FT from P8A drift the dor cluster within 500-2500 steps. Next packet candidate (per OPINIONS doc §3a): L11 anchor-loss FT — the only structurally distinct intervention left. Promotion contract scorecard for `S2_step4500` (~$15-20 GPU) is the cheap next measurement.
+
+**Pre-Stage-2 context** — P2 Phase A scorecard SUCCEEDED (verdict at [`P2_PHASE_A_VERDICT_FACTS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md): P8A rank 1, P2D rank 4 with major Pillar-2 regressions). All three pre-Stage-2a checks (a/b/c) landed CPU+GPU; (b) HDTF Phase C verdict is at [`P2_D_HDTF_FACTS_2026-05-08.md`](../../analysis/p2_d_hdtf_2026-05-08/P2_D_HDTF_FACTS_2026-05-08.md) (recovered locally; cloud aggregator hit known suite-name-map bug — see open loop `phase-c-hdtf-promotion-contract-failure` below, root cause now identified).
+
+---
+
+## P2 training reference (historical)
 
 **P2 packet** (PREVENT_NOT_UNLEARN, 4 slots) — **all 4 slots `JOB_STATE_SUCCEEDED` 2026-05-07/08**. Eval folder at [`analysis/p2_eval_2026-05-08/`](../../analysis/p2_eval_2026-05-08/) carries the populated FACTS docs (`RESULTS_FACTS_2026-05-08.md`, `CANARY_TRAJECTORY_FACTS_2026-05-08.md`). Per-slot summary:
 

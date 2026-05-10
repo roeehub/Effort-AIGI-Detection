@@ -1,17 +1,17 @@
 # OPEN_LOOPS — Mechanically Generated Issue Inventory
 
-> ⚙ **GENERATED on 2026-05-08** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
+> ⚙ **GENERATED on 2026-05-10** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
 
 ## Summary
 
-- **Open**: 38
+- **Open**: 41
 - **In progress**: 5
 - **Resolved**: 11
 - **Superseded**: 1
 
 ## Entries
 
-### Open (38)
+### Open (41)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -93,6 +93,14 @@
 - **close_criterion**: a follow-up CPU or training experiment establishes whether pair_rank_loss is the specific lever responsible for non-paired-lane real-side regressions. Either: (a) a from-scratch CLIP+pair_rank run reproduces the Roy_D-class regression on its own substrate (confirms pair_rank), OR (b) a controlled FT-from-P8A run with pair_rank disabled reaches similar fake recall without the regression (refutes pair_rank as the exclusive cause).
 - **source**: `threads/pair_rank_collateral.md:52`
 
+### `t3-step2500-deployment-decision-pending`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-10
+- **last_verified**: 2026-05-10
+- **close_criterion**: a written deployment-direction decision is recorded that picks ONE of (a) ship T3_SLOT1_PERIODIC_STEP2500 with FPR-calibrated τ on a production-realistic real cohort (lockbox / F4-cleaned / IQ-pre-gated reals — depending on production substrate match), then optionally launch a refinement packet (T4 — face_scale_jitter @0.50 stacked with Slot 1 keep-list lever, OR Roy_D hard-negative mining); (b) ship T3_SLOT1_PERIODIC_STEP1500 instead (passes F0 strict floor; F4 viso 73.3% vs step2500 79.3% — slightly weaker capability but stricter contract pass); (c) keep P8A as deployment, treat T3 as a research result and pursue T4 with an additional viso-targeted intervention before next deployment cycle. The decision should be backed by an explicit determination of whether production substrate matches v2 (T3 wins), HDTF teams (P8A wins), or HDTF clean (T3 marginally wins) — see memory `project_v2_substrate_is_dor_diverse_swap` for prior framing of the v2-substrate-specificity question.
+- **source**: `threads/viso_bucket_gap.md:265`
+
 ### `split-mode-delta-unquantified`
 - **status**: open
 - **severity**: medium
@@ -155,7 +163,7 @@
 - **first_seen**: 2026-04-29
 - **last_verified**: 2026-04-29
 - **close_criterion**: the contract scorer's clip-level recall numbers are reconciled with the frame-level AUCs from cached predictions — either (a) the corrected contract policy with `target_fake_recall_min=0.30` produces clip-level recalls within ~5pp of `(1 - threshold-implied-FNR)` from the frame-level distribution, OR (b) the contract scorer is documented as measuring something genuinely different from the frame-level signal (e.g. clip-aggregation thresholds, video-level voting policy) and the headline reporting is normalized so future agents do not compare clip-level recall to AUC-implied recall.
-- **source**: `threads/viso_bucket_gap.md:207`
+- **source**: `threads/viso_bucket_gap.md:288`
 
 ### `shortcut-block-criterion-may-be-scorer-artifact-bound`
 - **status**: open
@@ -220,6 +228,14 @@
 - **last_verified**: 2026-05-07
 - **close_criterion**: determine whether P8A's r(score, color_b_dev) = −0.714 on roy_d is (a) generalization (roy_d is held-out from P8A's train set; P8A learned a useful identity-invariant feature), or (b) memorization (roy_d is in train set; P8A's association is set-specific). The (a) interpretation makes the P1 regression more concerning; (b) makes it less so. A grep of the train manifest for Roy_D would close the loop cheaply.
 - **source**: `threads/pair_rank_collateral.md:61`
+
+### `roy-d-mechanism-not-fully-diagnosed`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-10
+- **last_verified**: 2026-05-10
+- **close_criterion**: a CPU diagnostic determines the actual mechanism behind T3's universal Roy_D regression. Two cheap candidates are: (a) cross-correlate Roy_D regression magnitude with each identity's color_a_dev × saturation profile across all 18 T3 ckpts (need to score the 12 un-scored Slot 2 + Slot 3 step ckpts on Mac first, ~30 min CPU); (b) probe whether disabling visomaster_teams_enhanced (one of PA's data sources) on a T3-style retrain restores Roy_D handling — this isolates whether PA's data-source addition or T3's keep-list addition is the Roy_D-shifting culprit (requires GPU retrain, not cheap). Loop closes when EITHER (a) confirms the color_a_dev mechanism (in which case T4 hard-negative-mining or face_scale_jitter is the right intervention) OR (b) refutes both candidate mechanisms (in which case Roy_D regression mechanism remains unknown and a deeper representation-level probe is needed). Current evidence: Lap-shortcut hypothesis FALSIFIED (Roy_D Lap p50=66 is LOW, would not have been dropped by keep-list). Source: `MORNING_BRIEF_2026-05-10.md` §5 + §11.
+- **source**: `threads/viso_bucket_gap.md:274`
 
 ### `corrected-val-test-hint-split-counts-unrecoverable`
 - **status**: open
@@ -300,6 +316,14 @@
 - **last_verified**: 2026-04-30
 - **close_criterion**: at least one of the three candidate mechanisms (decision-boundary / intermediate-layer / test-substrate) is empirically supported on a probe whose design isolates that mechanism, AND the supported mechanism produces a measurable signature on `mclioexb` that does NOT also appear on `9lmvb5b4` step 5000 baseline at comparable magnitude — i.e., the mechanism is specific to the value_composite winner, not a feature shared with the FT base
 - **source**: `threads/jitter_winner_mechanism_unknown.md:113`
+
+### `hdtf-promotion-contract-failure-recurrence`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-05
+- **last_verified**: 2026-05-10
+- **close_criterion**: `score_teams_promotion_contract.py:748` is patched so the hard-coded `--dev_real_suite teams_real_all_dev` default is replaced by a configurable flag OR a fallback that detects suite-name mismatches gracefully (e.g., "no v2-style real suite in manifest, skipping contract scoring with verdict=PERSUITE_ONLY"). All HDTF runs since 2026-05-05 (P8A-on-HDTF, PA-on-HDTF, P2_D-on-HDTF, T3-on-HDTF, T3-step2500-on-HDTF) hit `JOB_STATE_FAILED` at the contract-scoring tail because the HDTF suite manifest does not include `teams_real_all_dev`. Per-suite reports always complete cleanly so the failure is non-blocking, but the FAILED state interferes with the persistent monitor pattern and adds operational friction. Closes when the patch is committed and a fresh HDTF run reaches `JOB_STATE_SUCCEEDED`.
+- **source**: `threads/viso_bucket_gap.md:281`
 
 ### `canary-finer-resolution`
 - **status**: open
