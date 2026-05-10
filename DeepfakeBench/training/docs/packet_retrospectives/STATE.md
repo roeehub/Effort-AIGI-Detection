@@ -30,7 +30,11 @@
 >
 > **How to use this page**: a new agent reads this AFTER `AGENTS.md` and BEFORE the user's specific task. It tells you what's running, what just landed, what's open, and what decision the user might want next. If the wall-clock is materially after the "Last refreshed" date, verify against `git status`, the tail of [`TIMELINE.md`](TIMELINE.md), and the latest [`packets/`](packets/) entry — state moves quickly.
 >
-> **FRESH-AGENT GUIDANCE (2026-05-08)**: the IQ-shortcut deconvolution program is mid-flight. The user's explicit instruction was to organize the artifacts so a new agent can form their own view of the next-step decision **without being biased by the prior agents' OPINIONS docs**. Reading order for an unbiased fresh take:
+> **FRESH-AGENT GUIDANCE (2026-05-10 — START HERE)**: the user has explicitly asked for an independent fresh-agent take on the T3 packet results. Read [`HANDOFF_2026-05-10.md`](HANDOFF_2026-05-10.md) FIRST — it contains the user's framing constraint (production robustness across cameras/lighting/rooms/people), a load-bearing reading order (FACTS docs first, OPINIONS / `packets/T3.md` interpretation only AFTER you form your own view), and the specific deliverable (state your own reading + propose a next step before opening any interpretive doc). Do not skip the production-robustness constraint section — it changes how F4 substrate-cleaning numbers should be interpreted.
+>
+> ---
+>
+> **PRIOR FRESH-AGENT GUIDANCE (2026-05-08, preserved for context)**: the IQ-shortcut deconvolution program is mid-flight. The user's explicit instruction was to organize the artifacts so a new agent can form their own view of the next-step decision **without being biased by the prior agents' OPINIONS docs**. Reading order for an unbiased fresh take:
 >
 > 1. Read the **FACTS docs FIRST** (factual-only, forbidden-words enforced):
 >    - [`analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md`](../../analysis/p2_eval_2026-05-08/P2_PHASE_A_VERDICT_FACTS_2026-05-08.md) — promotion contract scorecard
