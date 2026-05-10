@@ -54,6 +54,31 @@ The OSCILLATION evidence (step 10500 spike, step 11250 reversion) is the most ac
 
 T5-A tests (a) via cyclic λ (periodic re-pressuring) + (c) via dense saves (catches attractor moments regardless of AUC).
 
+### NEW: The GRL is biting the CLASSIFIER, not the features
+
+T4-λ1.0 final W&B logs show online GRL classifier CE loss per axis:
+- `is_dor`: 0.033 (classifier WINS, predicts is_dor at >95% accuracy)
+- `sharpness_laplacian_high`: 0.637 (near 0.69 random — classifier loses)
+- `color_a_approx_dev_high`: 0.676 (near-random)
+
+But atlas (fresh LR probe on cached L11 features) shows these axes ARE
+still encoded (e.g. `sharpness_laplacian_high` AUC = 0.9321 at step
+10500). The features contain the shortcut; the online classifier is
+the one being pushed to random by GRL gradient reversal.
+
+This explains why the inv_mean lift is small (~0.0148 absolute above
+P8A) despite the GRL "biting" hard on classifier metrics: **the
+encoder doesn't actually need to change much — it only needs the
+online classifier to lose its training**. A larger classifier (more
+parameters / wider hidden_dim) would force the encoder to ACTUALLY
+remove the shortcut, because a stronger classifier can't be defeated
+by gradient noise alone.
+
+This suggests T5-C (future packet) should increase `hidden_dim` from
+256 → 512 or 1024, making the online classifier strong enough that
+the encoder can only beat it by genuinely removing the shortcut from
+features.
+
 ### Honest probabilities (revised from earlier in conversation)
 
 - Probability T4 has a deployment-grade winner in scorecard: **~15-25%** (revised down from 35-45% based on oscillation evidence — the briefly-captured step 10500 ckpt is the one to watch)
