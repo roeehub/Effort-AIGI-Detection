@@ -23,6 +23,14 @@ REGION="${REGION:-asia-southeast1}"
 GPU_TYPE="${GPU_TYPE:-NVIDIA_TESLA_A100}"
 GPU_COUNT="${GPU_COUNT:-1}"
 WANDB_PROJECT="${WANDB_PROJECT:-phase2-experiments}"
+# Closes feedback_promotion_contract_launch.md (2026-05-11): the delegate
+# launch_experiment_jobs.sh sed-substitutes WANDB_API_KEY/ENTITY into the
+# scorecard template, and if the env vars are empty the Vertex spec
+# rejects the job with "Required field is not set" on container_spec.env.
+# Mirrors the same fallback that scripts/launch/launch_experiment.sh has.
+WANDB_API_KEY="${WANDB_API_KEY:-bb5a8ea4a27ebe45917587df8c46674d26e43966}"
+WANDB_ENTITY="${WANDB_ENTITY:-dtect-vision}"
+export WANDB_API_KEY WANDB_ENTITY WANDB_PROJECT
 
 # ============================================================================
 # Mode + constants (see docs/packet_retrospectives/SCORECARD_GUIDE.md)
