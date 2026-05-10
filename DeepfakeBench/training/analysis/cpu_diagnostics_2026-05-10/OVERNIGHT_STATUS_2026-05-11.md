@@ -23,13 +23,21 @@
 
 **If you wake up and both are RUNNING**: please cancel one (preference: cancel the LATER-started us-central1 if both are running, since us-west4 had submission priority).
 
-**UPDATE 02:05 CEST**: us-central1 T5-A (job `8739700428029034496`) reached RUNNING first. us-west4 T5-A (job `8996374562765537280`) is still PENDING. Per CLAUDE.md region rotation, us-west4 should now be cancelled — but cancellation needs your authorization. Command when you wake up:
+**UPDATE 02:05 CEST**: us-central1 T5-A (job `8739700428029034496`) reached RUNNING first. us-west4 T5-A (job `8996374562765537280`) is still PENDING.
+
+**UPDATE 02:25 CEST**: us-west4 T5-A ALSO reached RUNNING. Now BOTH T5-A jobs are training. Both use seed 9301 (same yaml) so this is effectively a replicability test, NOT wasted spend — but the extra cost is ~$60-70.
+
+**Action when you wake up**: cancel one of them. They're functionally redundant (same seed, same code, same data). Pick the later-started us-central1 to cancel OR pick the earlier us-west4 to keep — your call:
 
 ```
+# Cancel us-central1 (the later starter; preferred since us-west4 had submission priority):
+gcloud ai custom-jobs cancel projects/train-cvit2/locations/us-central1/customJobs/8739700428029034496 --region=us-central1 --project=train-cvit2
+
+# OR cancel us-west4 (the original pending that finally went RUNNING):
 gcloud ai custom-jobs cancel projects/train-cvit2/locations/us-west4/customJobs/8996374562765537280 --region=us-west4 --project=train-cvit2
 ```
 
-If us-west4 stays PENDING (most likely), no extra cost — Vertex doesn't charge for PENDING. If it ALSO reaches RUNNING, both will train and cost ~2× until you cancel.
+If you'd rather keep both as a replicability check, they each cost ~$60-70 over the ~5h training; total extra cost vs cancellation now ~$50-60.
 
 ## Key findings so far
 
