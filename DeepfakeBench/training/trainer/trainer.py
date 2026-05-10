@@ -789,13 +789,20 @@ class Trainer(
             })
 
     def _update_multi_axis_grl_lambda(self, step_cnt):
-        """Linear warmup of gradient-reversal lambda for the multi-axis GRL block.
+        """Update gradient-reversal lambda for the multi-axis GRL block.
 
-        ramp 0 → λ_max linearly over `multi_axis_grl.lambda_warmup_steps`,
-        flat at λ_max thereafter. Mirrors the schedule pre-test 1 used at
-        evaluation (constant λ_max with brief warmup proxy via batch
-        ordering); avoids the DANN sigmoid's first-50% lull since pre-test 1
-        evidence indicates GRL bite is sensitive to early λ pressure.
+        Supports two schedules via `multi_axis_grl.lambda_schedule`:
+
+        - "linear_warmup_flat" (DEFAULT, used by T4): ramp 0 → λ_max
+          linearly over `lambda_warmup_steps`, flat at λ_max thereafter.
+
+        - "triangular_cyclic" (T5-A, 2026-05-11): same linear warmup
+          0 → λ_max over `lambda_warmup_steps`, then triangular cycles
+          between 0 and λ_max with period `lambda_cycle_steps`. Addresses
+          the T4 oscillation finding (analysis/cpu_diagnostics_2026-05-10
+          /outputs/L11_inv_mean_with_t4.csv): inv_mean is movable but
+          encoder oscillates back to high-shortcut state under flat λ.
+          Cycling re-applies pressure each time the encoder drifts.
         """
         model_instance = self.model.module if isinstance(self.model, DDP) else self.model
         if not getattr(model_instance, 'use_multi_axis_grl', False):
@@ -804,12 +811,37 @@ class Trainer(
         cfg = self.config.get('multi_axis_grl', {}) or {}
         lambda_max = float(cfg.get('lambda_max', 1.0))
         warmup_steps = int(cfg.get('lambda_warmup_steps', 500))
+        schedule = str(cfg.get('lambda_schedule', 'linear_warmup_flat'))
+
         if warmup_steps <= 0:
-            lambda_val = lambda_max
+            warmup_done = True
+            lambda_warmup = lambda_max
         elif step_cnt <= warmup_steps:
-            lambda_val = lambda_max * (step_cnt / warmup_steps)
+            warmup_done = False
+            lambda_warmup = lambda_max * (step_cnt / warmup_steps)
         else:
-            lambda_val = lambda_max
+            warmup_done = True
+            lambda_warmup = lambda_max
+
+        if schedule == 'triangular_cyclic' and warmup_done:
+            cycle_steps = int(cfg.get('lambda_cycle_steps', 1500))
+            if cycle_steps <= 0:
+                lambda_val = lambda_max  # fallback
+            else:
+                # Triangular wave starting at λ_max immediately post-warmup,
+                # descending to 0 by half-period, then back to λ_max by full
+                # period. Continues indefinitely.
+                phase = (step_cnt - warmup_steps) % cycle_steps
+                half = cycle_steps / 2.0
+                if phase <= half:
+                    # λ_max → 0 over first half
+                    lambda_val = lambda_max * (1.0 - phase / half)
+                else:
+                    # 0 → λ_max over second half
+                    lambda_val = lambda_max * ((phase - half) / half)
+        else:
+            lambda_val = lambda_warmup
+
         model_instance.multi_axis_grl_block.set_lambda(lambda_val)
 
         log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
