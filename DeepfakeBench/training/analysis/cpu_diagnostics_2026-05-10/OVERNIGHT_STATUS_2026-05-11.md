@@ -16,7 +16,12 @@
 | T4-λ1.0 | `6720560659215417344` | us-east1 | **SUCCEEDED** (296 min) | Last top_n at step 11250 (AUC 0.9939, EER 0.0195) |
 | T4-λ2.0 | `7226459909208932352` | us-west4 | **SUCCEEDED** (170 min) | Early-stopped step 2500; λ=2.0 suppressed train-eval AUC |
 | T4 promotion scorecard | `7607488310830694400` | us-east1 | **RUNNING** | Started 00:27 CEST; expected ~04:00-04:30 |
-| T5-A (cyclic-λ) | TBD | us-west4 (planned) | **BUILDING** | Image 1.3.280 in progress |
+| T5-A us-west4 | `8996374562765537280` | us-west4 | **PENDING** (35+ min) | Hit CLAUDE.md region-rotation cutoff |
+| T5-A us-central1 | `8739700428029034496` | us-central1 | **PENDING** (just submitted) | Parallel submission per region-rotation policy |
+
+**⚠ Region rotation in progress.** T5-A us-west4 was PENDING for 35+ min, hitting the CLAUDE.md 30-min cutoff. I launched a parallel T5-A in us-central1 per CLAUDE.md policy. Whichever reaches RUNNING first wins; cancellation of the other requires your authorization (per `feedback_no_cancelling_vertex_jobs.md`).
+
+**If you wake up and both are RUNNING**: please cancel one (preference: cancel the LATER-started us-central1 if both are running, since us-west4 had submission priority).
 
 ## Key findings so far
 
