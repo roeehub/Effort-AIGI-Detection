@@ -1,0 +1,68 @@
+# Promotion-contract validation map — T4 multi-axis-L11-GRL packet (2026-05-10)
+#
+# Authored 2026-05-10 to scorecard the strongest T4 candidates against
+# production anchors (P8A_REFERENCE_STEP5000 + E2B_TOP_N_STEP3200) using
+# the v3-fix bug-fixed contract policy (recall_floor=0.30 + real_fpr<=0.07
+# + stress_fpr<=0.10).
+#
+# T4 packet recap (analysis/cpu_diagnostics_2026-05-10/PLAN_2026-05-10.md):
+#   - FT from P8A_REFERENCE_STEP5000.
+#   - T3 SLOT1 data lever (drop top-25% lap_var Teams REALS keep-list +
+#     visomaster_enhanced + visomaster_teams_enhanced).
+#   - NEW: 4-axis adversarial GRL on encoder pooled features (post-ln_post /
+#     post-proj L11 CLS): chronic_flag, is_dor, sharpness_laplacian_high,
+#     color_a_approx_dev_high. k=128 bottleneck, λ ramped 0→λ_max over
+#     first 500 steps.
+#   - Two λ_max sister runs: λ=1.0 (mainline) and λ=2.0 (sensitivity hedge).
+#
+# Selection rationale per ckpt (sorted by training step):
+#
+# T4-λ2.0 (run vl9y01oq) — early-stopped at step 2500 because train-eval
+# AUC didn't improve past step 250's pre-warmup baseline (the GRL pressure
+# at λ=2.0 suppresses train-eval AUC; deployment AUC TBD).
+#
+#   T4_LAMBDA2_PERIODIC_STEP1500:  best train-eval recovery on λ=2.0 path
+#                                  (AUC 0.9910, EER 0.0369). First strong
+#                                  post-GRL-bite ckpt on the λ=2.0 trajectory.
+#   T4_LAMBDA2_PERIODIC_STEP2500:  final ckpt on λ=2.0 path. AUC 0.9831,
+#                                  EER 0.1037 — more GRL exposure than 1500.
+#                                  Tests whether prolonged λ=2.0 pressure helps
+#                                  or hurts deployment metrics.
+#
+# T4-λ1.0 (run ockexlhi) — still training at write time; ckpts continuing
+# to improve (latest top_n step 10500: AUC 0.9937, EER 0.0195).
+#
+#   T4_LAMBDA1_PERIODIC_STEP5000:  hit the periodic-save list endpoint.
+#                                  AUC 0.9910, EER 0.0152 (lowest EER of the
+#                                  full ckpt set — strong shortcut-removal
+#                                  signal).
+#   T4_LAMBDA1_TOP_N_STEP9000:     mid-training top_n at AUC 0.9932,
+#                                  EER 0.0216. Post-recovery, post-warmup,
+#                                  pre-final regime.
+#   T4_LAMBDA1_TOP_N_STEP10500:    best-AUC ckpt across the entire batch
+#                                  at write time (AUC 0.9937, EER 0.0195).
+#                                  If T4 mechanism works, this is the
+#                                  expected best deployment candidate.
+#
+# Baselines:
+#   P8A_REFERENCE_STEP5000: production anchor (memory project_p8a_breakthrough.md).
+#                            Substrate-invariance Pillar holder.
+#   E2B_TOP_N_STEP3200:     current deployment (memory project_deployment_is_e2b_2026-05-06.md).
+#                            HDTF strong but chronic-real false-flag prone (may6 53/92).
+#
+# Close criterion (deployment-grade):
+#   - dor_lockbox_dev real FPR <= 5% at deployment τ
+#   - F4_viso_dev fake recall >= 70% (vs P8A 27%)
+#   - may6 false-flag count <= 6/92 (vs E2B 53/92, P8A 0/92)
+#   - atlas inv_mean at L11 >= 0.05 (vs ceiling 0.031 across all 7 prior ckpts)
+#   - real_fpr <= 0.07 AND stress_fpr <= 0.10 (v3-fix policy)
+
+P8A_REFERENCE_STEP5000:           "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:               "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+T4_LAMBDA2_PERIODIC_STEP1500:     "gs://training-job-outputs/best_checkpoints/vl9y01oq/periodic_effort_20260510_step1500_auc0.9910_eer0.0369.pth"
+T4_LAMBDA2_PERIODIC_STEP2500:     "gs://training-job-outputs/best_checkpoints/vl9y01oq/periodic_effort_20260510_step2500_auc0.9831_eer0.1037.pth"
+
+T4_LAMBDA1_PERIODIC_STEP5000:     "gs://training-job-outputs/best_checkpoints/ockexlhi/periodic_effort_20260510_step5000_auc0.9910_eer0.0152.pth"
+T4_LAMBDA1_TOP_N_STEP9000:        "gs://training-job-outputs/best_checkpoints/ockexlhi/top_n_effort_20260510_step9000_auc0.9932_eer0.0216.pth"
+T4_LAMBDA1_TOP_N_STEP10500:       "gs://training-job-outputs/best_checkpoints/ockexlhi/top_n_effort_20260510_step10500_auc0.9937_eer0.0195.pth"
