@@ -1,0 +1,347 @@
+# ============================================================================
+# R13_T4_MULTI_AXIS_GRL_LAMBDA2_2026-05-10.yaml
+# Stage A sister-run — λ-sensitivity hedge for the T4 multi-axis-L11-GRL packet.
+#
+# IDENTICAL to R13_T4_MULTI_AXIS_GRL_2026-05-10.yaml EXCEPT:
+#   - multi_axis_grl.lambda_max: 2.0  (vs 1.0 in the mainline T4)
+#   - seed: 9202 (vs 9201) — keep distinct for split reproducibility
+#
+# WHY THIS SISTER RUN:
+#   Pre-test 1 (analysis/cpu_diagnostics_2026-05-10/scripts/pretest1_multiaxis_grl.py)
+#   measured P8A frozen-feature inv_mean lift across λ ∈ {0, 0.5, 1.0, 2.0, 5.0}
+#   at k ∈ {128, 256, 768}. The peak lift on P8A was λ=2.0 at k=128 (0.012 →
+#   0.048, 4× lift); λ=1.0 was 3.4× lift; λ=5.0 collapsed forgery signal.
+#   λ_max=1.0 is the conservative mainline; λ_max=2.0 tests whether GPU-scale
+#   training extracts more invariance under stronger pressure WITHOUT the
+#   forgery-signal collapse seen at λ=5.0 on frozen features.
+#
+# RISK SCENARIO:
+#   At λ_max=2.0 the encoder may abandon the forgery objective entirely
+#   (forgery AUC < 0.95 by step 2500). This is what we want to LEARN — if so,
+#   T4-λ1.0 is the safe choice. If λ=2.0 trains stably AND its atlas inv_mean
+#   exceeds T4-λ1.0's, the next iteration uses λ_max ≈ 2.0.
+#
+# DECISION JOINT WITH MAINLINE:
+#   - Both succeed (forgery_AUC ≥ 0.95 + atlas inv_mean ≥ 0.05): pick the one
+#     with higher F4 viso recall + lower may6 false-flag.
+#   - Mainline succeeds, λ2 collapses: ship mainline; record λ_max=1.0 as the
+#     stable-training upper bound.
+#   - Mainline misses but λ2 succeeds: stronger λ is the lever; downstream
+#     packets adopt λ_max=2.0.
+#   - Both miss: encoder-level GRL at L11 with this axis set isn't enough;
+#     pivot to L6/L9 attachment OR add localization aux (Stage C).
+#
+# All other levers, data sources, training schedule, FT base, and periodic
+# saves are IDENTICAL to R13_T4_MULTI_AXIS_GRL_2026-05-10.yaml. See that
+# file for the full rationale tree, falsification paths, and close criteria.
+# ============================================================================
+
+name: "R13_T4_MULTI_AXIS_GRL_LAMBDA2_2026-05-10"
+description: "Stage A T4 sister — λ_max=2.0 sensitivity hedge for multi-axis-L11-GRL on encoder features. Same recipe as T4 mainline; λ doubled per pre-test-1 frozen-feature peak."
+seed: 9202
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "stage-a"
+    - "t4-multi-axis-grl"
+    - "lambda-max-2"
+    - "encoder-invariance"
+    - "ft-from-p8a"
+    - "inherits-t3-slot1-data"
+    - "no-pair-rank"
+    - "no-group-dro"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "no-arcface"
+    - "no-quality-domain-head"
+    - "lambda-sensitivity-hedge"
+    - "seed-9202"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 14
+total_training_steps: 5000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# ===== Multi-axis encoder-level GRL (NEW for T4) — λ_max=2.0 =====
+multi_axis_grl:
+  enabled: true
+  axes:
+    - chronic_flag
+    - is_dor
+    - sharpness_laplacian_high
+    - color_a_approx_dev_high
+  lambda_max: 2.0
+  lambda_warmup_steps: 500
+  loss_weight: 1.0
+  hidden_dim: 256
+  bottleneck_dim: 128
+
+# ===== All other levers identical to T3 SLOT1 =====
+
+pair_rank_loss:
+  lambda: 0.0
+
+use_group_dro: false
+
+correlation_penalty:
+  enabled: false
+
+anchor_aware:
+  enabled: false
+
+face_scale_jitter:
+  enabled: false
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 9202
+  seed: 9202
+
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_enhanced:
+    enabled: true
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    exclude_tiers: ["ARTIFACT"]
+
+  visomaster_hints_teams:
+    enabled: false
+
+  visomaster_teams_enhanced:
+    enabled: true
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    companion_domains:
+      - "teams_v2"
+    include_statuses:
+      - "teams_v2_companion"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    frame_keep_list_path: "analysis/cpu_diagnostics_2026-05-09/slot1_teams_real_keep_list_2026-05-09.csv"
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 9202
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      visomaster_enhanced_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: false
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 6.0
+anneal_steps: 1
+
+evaluate_every_steps: 250
+ood_monitoring_start_step: 250
+ood_monitoring_every_steps: 500
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 12
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 500
+    - 1000
+    - 1500
+    - 2500
+    - 3500
+    - 5000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

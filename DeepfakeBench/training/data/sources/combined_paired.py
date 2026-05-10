@@ -3564,6 +3564,25 @@ def _is_chronic_identity(base_identity: str) -> bool:
     return any(cid.lower() in s for cid in CHRONIC_IDENTITIES)
 
 
+# Identities used by the multi-axis-GRL `is_dor` shortcut classifier.
+# Per project_dor_drift_named_axes_2026-05-06, dor identities are the binding
+# real-side cluster that all FT-from-P8A variants regress on. This list
+# matches the dor cohort used by the per-frame Wilcoxon analysis in
+# HANDOFF_2026-05-02_P18_DIAGNOSTICS_COMPLETE.
+DOR_IDENTITIES = (
+    "dor_shkedi",
+    "healthy_dor",
+    "dor",
+)
+
+
+def _is_dor_identity(base_identity: str) -> bool:
+    if not isinstance(base_identity, str) or not base_identity:
+        return False
+    s = base_identity.lower()
+    return any(d in s for d in ("dor_shkedi", "healthy_dor")) or s == "dor"
+
+
 _METHOD_FAMILY_KEYWORDS = (
     # (substring lowercased, family label)
     ("inswapper", "inswapper"),
@@ -3790,6 +3809,12 @@ def combined_paired_collate_fn(
     video_group_ids = []  # per-video group_id string for GroupDRO (R-D / F-B keying)
 
     video_face_area_fraction = []  # per-video face_area_fraction (NaN if absent)
+    # Multi-axis GRL labels (added 2026-05-10 — used by detectors.effort_detector
+    # MultiAxisGRLBlock when `multi_axis_grl.enabled: true` in yaml). Identity-
+    # derived per-video binary flags; safe to emit unconditionally — the model
+    # only reads these when the feature is enabled.
+    video_chronic_flag = []
+    video_is_dor = []
 
     for video_key, frames in groups.items():
         if len(frames) == 0:
@@ -3846,6 +3871,14 @@ def combined_paired_collate_fn(
         if gid is None:
             gid = _derive_group_id_for_yield_row(frames[0])
         video_group_ids.append(gid)
+        # Multi-axis GRL identity-derived flags (added 2026-05-10).
+        identity_str = (
+            frames[0].get('identity')
+            or frames[0].get('base_identity')
+            or ""
+        )
+        video_chronic_flag.append(int(_is_chronic_identity(identity_str)))
+        video_is_dor.append(int(_is_dor_identity(identity_str)))
 
     if len(video_images) == 0:
         return {
@@ -3856,6 +3889,8 @@ def combined_paired_collate_fn(
             'quality_domain': torch.zeros(0, dtype=torch.long),
             'pair_id': [],
             'group_id': [],
+            'chronic_flag': torch.zeros(0, dtype=torch.long),
+            'is_dor': torch.zeros(0, dtype=torch.long),
         }
 
     # Pad to same length
@@ -3881,6 +3916,8 @@ def combined_paired_collate_fn(
         'face_area_fraction': torch.tensor(video_face_area_fraction, dtype=torch.float32),
         'pair_id': video_pair_ids,
         'group_id': video_group_ids,
+        'chronic_flag': torch.tensor(video_chronic_flag, dtype=torch.long),
+        'is_dor': torch.tensor(video_is_dor, dtype=torch.long),
     }
 
 

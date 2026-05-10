@@ -327,6 +327,22 @@ def main():
             print(f"  ✅ Applied pair_rank_loss: lambda={pr.get('lambda')} margin={pr.get('margin')}")
             logger.info(f"  Applied pair_rank_loss: lambda={pr.get('lambda')} margin={pr.get('margin')}")
 
+        # Apply multi_axis_grl config directly (nested dict — W&B flattens; must copy).
+        # Detector reads self.config.get('multi_axis_grl') in
+        # detectors/effort_detector.py __init__ and gates the
+        # MultiAxisGRLBlock on multi_axis_grl.enabled. Trainer reads the
+        # same block in _update_multi_axis_grl_lambda for the linear warmup
+        # schedule (lambda_max, lambda_warmup_steps). Without this re-apply
+        # the detector reads None → use_multi_axis_grl=False → the block is
+        # silently disabled and λ schedule no-ops. Mirrors the fix pattern
+        # for correlation_penalty / pair_rank_loss (memory:
+        # project_wandb_flattens_nested_dicts.md).
+        if 'multi_axis_grl' in single_cfg:
+            config['multi_axis_grl'] = single_cfg['multi_axis_grl']
+            ma = single_cfg['multi_axis_grl']
+            print(f"  ✅ Applied multi_axis_grl: enabled={ma.get('enabled')} axes={ma.get('axes')} lambda_max={ma.get('lambda_max')} warmup_steps={ma.get('lambda_warmup_steps')}")
+            logger.info(f"  Applied multi_axis_grl: enabled={ma.get('enabled')} axes={ma.get('axes')} lambda_max={ma.get('lambda_max')} warmup_steps={ma.get('lambda_warmup_steps')}")
+
         # Apply periodic_saves config directly (nested dict — W&B flattens; must copy).
         # Trainer reads self.config.get('periodic_saves') at trainer.py:2374 to decide
         # whether to save checkpoints at fixed step_list values. Without this, no

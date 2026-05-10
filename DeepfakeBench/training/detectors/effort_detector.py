@@ -325,6 +325,128 @@ class QualityDomainHead(nn.Module):
         return self.classifier(reversed_features)
 
 
+# =============================================================================
+# Multi-Axis GRL Block (2026-05-10)
+# =============================================================================
+#
+# Attached at the encoder's pooled features (same tensor the head reads). For
+# B16 OpenCLIP this is the post-ln_post / post-proj L11 CLS — the layer where
+# the forgery_signal_atlas (analysis/cpu_diagnostics_2026-05-10) measures
+# inv_mean ≈ 0.02-0.03 across all 7 trained ckpts (P8A, E2B, T3 family,
+# MCLIOEXB, P18 variants), within probe noise. The encoder co-mingles forgery
+# and shortcut signal regardless of training recipe.
+#
+# Pre-test 1 (analysis/cpu_diagnostics_2026-05-10/scripts/pretest1_multiaxis_grl.py)
+# trained a small projection head on FROZEN P8A L11 features with multi-axis
+# GRL across 4 axes (chronic_flag, is_dor, sharpness_laplacian quartile,
+# color_a_dev quartile). It lifted inv_mean 4× (0.012 → 0.048) at k=128, λ=2.0
+# — directional evidence that the mechanism works on P8A's representation
+# space. T3's frozen features did NOT respond (best at λ=0).
+#
+# This block is the GPU-scale realization of the same mechanism: per-axis
+# small classifier heads read the encoder's pooled features through a
+# GradientReversalFunction, so the encoder's gradient is pushed AWAY from
+# encoding shortcut axes while the main forgery head is pushed TO encode
+# forgery. Differs from QualityDomainHead (single multi-class GRL on one
+# domain assignment) and P18's method-conditional GRL (single axis at output)
+# in three ways:
+#   1. Multi-axis: shortcut signal is decomposed into independent axes,
+#      each with its own classifier head. Per-axis GRL pressure stacks.
+#   2. Per-batch quantization for continuous IQ axes (sharpness, color_a):
+#      the pixel-derived value's batch median splits the batch into hi/lo,
+#      labels are binary, classifier is 2-class CE. This matches what
+#      pre-test 1 validated.
+#   3. Loss is scaled by `multi_axis_grl_loss_weight`, with λ inside GRL
+#      ramped on a separate warmup schedule via `set_lambda(val)` (mirrors
+#      QualityDomainHead's quality_grl_lambda DANN sigmoid pattern).
+#
+# Axes default: ('chronic_flag', 'is_dor', 'sharpness_laplacian_high',
+# 'color_a_approx_dev_high'). Drop `min_dim_high` (requires pre-resize
+# metadata not on the per-frame yield row); add via manifest column if
+# the first packet doesn't bite.
+# =============================================================================
+
+
+class MultiAxisGRLBlock(nn.Module):
+    """Multi-axis adversarial GRL on encoder pooled features.
+
+    Args:
+        in_features: encoder hidden_size (768 for B16, 1024 for L14).
+        axes: ordered list of axis names this block predicts. Each axis
+            gets its own 2-class classifier head reading from the same
+            GRL'd features. Pre-test-1-validated default is
+            ('chronic_flag', 'is_dor', 'sharpness_laplacian_high',
+            'color_a_approx_dev_high').
+        hidden_dim: width of the per-axis classifier MLP.
+        bottleneck_dim: optional shared compression layer between GRL and
+            per-axis heads. Pre-test 1 found compression to k=128 amplified
+            GRL bite by 4× on P8A frozen features (vs k=768 lift = 0).
+            None → no shared bottleneck, each head reads in_features.
+    """
+
+    SUPPORTED_AXES = (
+        "chronic_flag",
+        "is_dor",
+        "sharpness_laplacian_high",
+        "color_a_approx_dev_high",
+        "color_b_dev_high",
+        "luma_mean_high",
+    )
+
+    def __init__(
+        self,
+        in_features: int,
+        axes: list = None,
+        hidden_dim: int = 256,
+        bottleneck_dim: int = 128,
+    ):
+        super().__init__()
+        if axes is None:
+            axes = [
+                "chronic_flag",
+                "is_dor",
+                "sharpness_laplacian_high",
+                "color_a_approx_dev_high",
+            ]
+        for ax in axes:
+            if ax not in self.SUPPORTED_AXES:
+                raise ValueError(
+                    f"MultiAxisGRLBlock unsupported axis {ax!r}. "
+                    f"Supported: {self.SUPPORTED_AXES}"
+                )
+        self.axes = list(axes)
+        self.grl = GradientReversalLayer()
+
+        if bottleneck_dim is not None and bottleneck_dim > 0 and bottleneck_dim < in_features:
+            self.bottleneck = nn.Sequential(
+                nn.Linear(in_features, bottleneck_dim),
+                nn.ReLU(),
+            )
+            head_in = bottleneck_dim
+        else:
+            self.bottleneck = nn.Identity()
+            head_in = in_features
+
+        self.heads = nn.ModuleDict({
+            ax: nn.Sequential(
+                nn.Linear(head_in, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(hidden_dim, 2),
+            )
+            for ax in self.axes
+        })
+
+    def set_lambda(self, val: float):
+        self.grl.set_lambda(val)
+
+    def forward(self, features):
+        """Returns dict of {axis_name: per-axis logits [B, 2]}."""
+        reversed_features = self.grl(features)
+        compressed = self.bottleneck(reversed_features)
+        return {ax: self.heads[ax](compressed) for ax in self.axes}
+
+
 @DETECTOR.register_module(module_name='effort')
 class EffortDetector(nn.Module):
     def __init__(self, config=None):
@@ -428,6 +550,39 @@ class EffortDetector(nn.Module):
                 f"loss_weight={self.quality_domain_loss_weight}, "
                 f"require_labels={self.quality_domain_require_labels}"
             )
+
+        # Multi-axis GRL block (added 2026-05-10; see MultiAxisGRLBlock docs).
+        # Independent of the legacy QualityDomainHead — they can co-exist
+        # but the pre-test-1-validated default is to enable multi_axis_grl
+        # only. λ schedule lives in trainer._update_multi_axis_grl_lambda.
+        multi_axis_cfg = config.get('multi_axis_grl', {}) or {}
+        self.use_multi_axis_grl = bool(multi_axis_cfg.get('enabled', False))
+        self.multi_axis_grl_loss_weight = float(multi_axis_cfg.get('loss_weight', 1.0))
+        self._multi_axis_grl_warning_emitted = False
+        if self.use_multi_axis_grl:
+            axes = multi_axis_cfg.get('axes') or [
+                'chronic_flag',
+                'is_dor',
+                'sharpness_laplacian_high',
+                'color_a_approx_dev_high',
+            ]
+            hidden_dim = int(multi_axis_cfg.get('hidden_dim', 256))
+            bottleneck_dim = multi_axis_cfg.get('bottleneck_dim', 128)
+            if bottleneck_dim is not None:
+                bottleneck_dim = int(bottleneck_dim)
+            self.multi_axis_grl_block = MultiAxisGRLBlock(
+                in_features=self.hidden_size,
+                axes=list(axes),
+                hidden_dim=hidden_dim,
+                bottleneck_dim=bottleneck_dim,
+            )
+            logger.info(
+                f"Multi-axis GRL ENABLED: axes={list(axes)}, "
+                f"hidden_dim={hidden_dim}, bottleneck_dim={bottleneck_dim}, "
+                f"loss_weight={self.multi_axis_grl_loss_weight}"
+            )
+        else:
+            logger.info("Multi-axis GRL disabled (no `multi_axis_grl.enabled: true` in config)")
 
         # Initialize tracking variables and log parameter analysis
         self._setup_tracking_vars()
@@ -898,6 +1053,143 @@ class EffortDetector(nn.Module):
         loss2 /= len(weight_sum_dict.keys())
         return loss2
 
+    def _multi_axis_grl_labels(
+        self,
+        data_dict: dict,
+        image: torch.Tensor,
+        target_n: int,
+    ) -> dict:
+        """Assemble per-frame labels for the multi-axis-GRL classifier heads.
+
+        Per-video binary flags (chronic_flag, is_dor) are repeated to per-frame.
+        Continuous IQ axes (sharpness_laplacian, color_a_approx_dev) are
+        computed from the [B*T, 3, H, W] image batch and split at the batch
+        median into binary high/low labels — matches the per-batch
+        quantization scheme that pre-test 1 validated on frozen P8A features.
+
+        Args:
+            data_dict: trainer-supplied dict containing the per-video fields
+                emitted by combined_paired_collate_fn.
+            image: per-frame image tensor [B*T, 3, H, W] (already reshaped).
+            target_n: B*T — the per-frame batch size to align labels to.
+
+        Returns:
+            dict {axis_name: LongTensor[B*T]}; axes whose labels can't be
+            assembled (e.g., missing data_dict field) are omitted, and the
+            caller skips their contribution to the GRL loss.
+        """
+        from loss.correlation_penalty import compute_pixel_axes
+
+        labels: dict = {}
+
+        # Per-video binary flags → per-frame
+        for axis_name in ('chronic_flag', 'is_dor'):
+            if axis_name not in self.multi_axis_grl_block.axes:
+                continue
+            v = data_dict.get(axis_name)
+            if v is None:
+                continue
+            if not isinstance(v, torch.Tensor):
+                v = torch.as_tensor(v, dtype=torch.long)
+            v = v.to(device=image.device, dtype=torch.long)
+            if v.shape[0] != target_n and target_n % v.shape[0] == 0:
+                v = v.repeat_interleave(target_n // v.shape[0])
+            if v.shape[0] != target_n:
+                continue  # shape mismatch — skip rather than crash
+            labels[axis_name] = v
+
+        # Continuous IQ axes via per-batch median split
+        pixel_axes = compute_pixel_axes(image)
+        for axis_name in self.multi_axis_grl_block.axes:
+            if not axis_name.endswith('_high'):
+                continue
+            base = axis_name[:-len('_high')]
+            if base not in pixel_axes:
+                continue
+            vals = pixel_axes[base]
+            if vals.shape[0] != target_n:
+                continue  # shouldn't happen since vals come from image directly
+            med = vals.median()
+            labels[axis_name] = (vals > med).long()
+
+        return labels
+
+    def _compute_multi_axis_grl_loss(
+        self,
+        data_dict: dict,
+        pred_dict: dict,
+    ) -> tuple:
+        """Multi-axis adversarial GRL loss + per-axis logging metrics.
+
+        Returns:
+            (total_loss, raw_total_loss, metrics_dict)
+            - total_loss: weighted sum (loss_weight * raw_total_loss), added
+              to overall_loss by the caller.
+            - raw_total_loss: sum of per-axis CE losses (un-weighted).
+            - metrics_dict: per-axis loss/acc tensors for diagnostic logging.
+        """
+        device = pred_dict['cls'].device
+        zero = torch.tensor(0.0, device=device)
+        metrics = {'multi_axis_grl_n_axes_active': zero.detach().clone()}
+        if 'multi_axis_grl_logits' not in pred_dict:
+            if not self._multi_axis_grl_warning_emitted:
+                logger.warning(
+                    "multi_axis_grl enabled but `multi_axis_grl_logits` is "
+                    "missing from pred_dict. Ensure model.forward attaches them."
+                )
+                self._multi_axis_grl_warning_emitted = True
+            return zero, zero, metrics
+
+        logits_dict = pred_dict['multi_axis_grl_logits']
+        # Determine per-frame N from the first available axis logits.
+        first_logits = next(iter(logits_dict.values()))
+        target_n = first_logits.shape[0]
+
+        image = data_dict.get('image')
+        if image is None:
+            return zero, zero, metrics
+        if image.dim() == 5:
+            B, T, C, H, W = image.shape
+            image_flat = image.reshape(B * T, C, H, W)
+        else:
+            image_flat = image
+        # Sanity: align flattened image with logits.
+        if image_flat.shape[0] != target_n:
+            if not self._multi_axis_grl_warning_emitted:
+                logger.warning(
+                    f"multi_axis_grl shape mismatch: image_flat={image_flat.shape[0]} "
+                    f"vs logits={target_n}; skipping loss this batch."
+                )
+                self._multi_axis_grl_warning_emitted = True
+            return zero, zero, metrics
+
+        labels = self._multi_axis_grl_labels(data_dict, image_flat, target_n)
+        if not labels:
+            return zero, zero, metrics
+
+        per_axis_loss = []
+        n_active = 0
+        for axis_name, axis_logits in logits_dict.items():
+            if axis_name not in labels:
+                continue
+            y = labels[axis_name]
+            if y.shape[0] != axis_logits.shape[0]:
+                continue
+            ce = F.cross_entropy(axis_logits, y)
+            per_axis_loss.append(ce)
+            n_active += 1
+            with torch.no_grad():
+                acc = (axis_logits.argmax(dim=-1) == y).float().mean()
+            metrics[f'multi_axis_grl_loss_{axis_name}'] = ce.detach()
+            metrics[f'multi_axis_grl_acc_{axis_name}'] = acc.detach()
+
+        metrics['multi_axis_grl_n_axes_active'] = torch.tensor(float(n_active), device=device)
+        if n_active == 0:
+            return zero, zero, metrics
+        raw_total = torch.stack(per_axis_loss).sum()
+        weighted = self.multi_axis_grl_loss_weight * raw_total
+        return weighted, raw_total, metrics
+
     def _compute_pair_rank_loss(
         self,
         scores: torch.Tensor,
@@ -1121,6 +1413,21 @@ class EffortDetector(nn.Module):
                 )
                 quality_loss = quality_loss_raw * self.quality_domain_loss_weight
 
+        # --- Multi-axis GRL loss (added 2026-05-10) ---
+        # Encoder-level invariance objective: per-axis CE on shortcut labels
+        # through a shared GRL on encoder pooled features. Adds a single
+        # scalar to overall_loss (weighted by multi_axis_grl_loss_weight);
+        # per-axis components are logged via the metrics dict.
+        multi_axis_grl_loss = torch.tensor(0.0, device=device)
+        multi_axis_grl_loss_raw = torch.tensor(0.0, device=device)
+        multi_axis_grl_metrics: dict = {}
+        if self.use_multi_axis_grl and self.training:
+            (
+                multi_axis_grl_loss,
+                multi_axis_grl_loss_raw,
+                multi_axis_grl_metrics,
+            ) = self._compute_multi_axis_grl_loss(data_dict, pred_dict)
+
         # --- Feature-norm regularization (aux loss) ---
         # Penalize divergence between real-side and fake-side feature norms so the
         # model can't use ‖feat‖ as a shortcut cue. Diagnosis (2026-04-23 dor): the
@@ -1160,6 +1467,8 @@ class EffortDetector(nn.Module):
             overall_loss = cls_loss + reg_term if self.training else cls_loss
             if self.training:
                 overall_loss = overall_loss + quality_loss
+                if self.use_multi_axis_grl:
+                    overall_loss = overall_loss + multi_axis_grl_loss
                 if self.feat_norm_reg_lambda > 0:
                     overall_loss = overall_loss + self.feat_norm_reg_lambda * feat_norm_loss
 
@@ -1261,7 +1570,10 @@ class EffortDetector(nn.Module):
                 'feat_norm_loss': feat_norm_loss.detach(),
                 'corr_penalty_loss': corr_penalty_loss.detach(),
                 'pair_rank_loss': pair_rank_loss_val.detach(),
+                'multi_axis_grl_loss': multi_axis_grl_loss.detach(),
+                'multi_axis_grl_loss_raw': multi_axis_grl_loss_raw.detach(),
                 **{f'corr_r_{ax}': r.detach() for ax, r in corr_per_axis_r.items()},
+                **multi_axis_grl_metrics,
             }
 
         elif reduction == 'none':
@@ -1281,6 +1593,8 @@ class EffortDetector(nn.Module):
             per_sample_loss = per_sample_cls_loss + reg_term if self.training else per_sample_cls_loss
             if self.training:
                 per_sample_loss = per_sample_loss + quality_loss
+                if self.use_multi_axis_grl:
+                    per_sample_loss = per_sample_loss + multi_axis_grl_loss
                 if self.feat_norm_reg_lambda > 0:
                     per_sample_loss = per_sample_loss + self.feat_norm_reg_lambda * feat_norm_loss
 
@@ -1362,7 +1676,10 @@ class EffortDetector(nn.Module):
                 'feat_norm_loss': feat_norm_loss.detach(),
                 'corr_penalty_loss': corr_penalty_loss.detach(),
                 'pair_rank_loss': pair_rank_loss_val.detach(),
+                'multi_axis_grl_loss': multi_axis_grl_loss.detach(),
+                'multi_axis_grl_loss_raw': multi_axis_grl_loss_raw.detach(),
                 **{f'corr_r_{ax}': r.detach() for ax, r in corr_per_axis_r.items()},
+                **multi_axis_grl_metrics,
             }
         else:
             raise ValueError(f"Unsupported reduction type: '{reduction}'. Must be 'mean' or 'none'.")
@@ -1518,6 +1835,13 @@ class EffortDetector(nn.Module):
         # 5. Quality domain prediction (gradient reversal head)
         if self.use_quality_head and not inference:
             pred_dict['quality_domain_logits'] = self.quality_head(features)
+
+        # 6. Multi-axis GRL (added 2026-05-10) — encoder-level invariance
+        # objective targeting chronic-identity / dor / IQ shortcuts. Logits
+        # consumed by get_losses; per-axis labels assembled there from
+        # data_dict + image (pixel-axis batch-median-split).
+        if self.use_multi_axis_grl and not inference:
+            pred_dict['multi_axis_grl_logits'] = self.multi_axis_grl_block(features)
 
         return pred_dict
 

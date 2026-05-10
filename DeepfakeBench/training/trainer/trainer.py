@@ -788,6 +788,37 @@ class Trainer(
                 'train/step': step_cnt,
             })
 
+    def _update_multi_axis_grl_lambda(self, step_cnt):
+        """Linear warmup of gradient-reversal lambda for the multi-axis GRL block.
+
+        ramp 0 → λ_max linearly over `multi_axis_grl.lambda_warmup_steps`,
+        flat at λ_max thereafter. Mirrors the schedule pre-test 1 used at
+        evaluation (constant λ_max with brief warmup proxy via batch
+        ordering); avoids the DANN sigmoid's first-50% lull since pre-test 1
+        evidence indicates GRL bite is sensitive to early λ pressure.
+        """
+        model_instance = self.model.module if isinstance(self.model, DDP) else self.model
+        if not getattr(model_instance, 'use_multi_axis_grl', False):
+            return
+
+        cfg = self.config.get('multi_axis_grl', {}) or {}
+        lambda_max = float(cfg.get('lambda_max', 1.0))
+        warmup_steps = int(cfg.get('lambda_warmup_steps', 500))
+        if warmup_steps <= 0:
+            lambda_val = lambda_max
+        elif step_cnt <= warmup_steps:
+            lambda_val = lambda_max * (step_cnt / warmup_steps)
+        else:
+            lambda_val = lambda_max
+        model_instance.multi_axis_grl_block.set_lambda(lambda_val)
+
+        log_progress_steps = self.config.get('wandb', {}).get('log_progress_steps', 50)
+        if self.wandb_run and step_cnt % log_progress_steps == 0:
+            self.wandb_run.log({
+                'train/multi_axis_grl_lambda': lambda_val,
+                'train/step': step_cnt,
+            })
+
     def _check_collapse_warning(self, predictions, data_dict, step_cnt):
         """
         Early warning system for model collapse.
@@ -1711,6 +1742,7 @@ class Trainer(
                 self._update_arcface_s(step_cnt)
                 self._update_lambda_reg(step_cnt)
                 self._update_quality_domain_lambda(step_cnt)
+                self._update_multi_axis_grl_lambda(step_cnt)
 
                 is_final_accumulation_step = (i + 1) % accumulation_steps == 0
                 is_ddp = type(self.model) is DDP
@@ -2047,6 +2079,7 @@ class Trainer(
         self._update_arcface_s(step_cnt)
         self._update_lambda_reg(step_cnt)
         self._update_quality_domain_lambda(step_cnt)
+        self._update_multi_axis_grl_lambda(step_cnt)
         self.setTrain()
         for key in data_dict.keys():
             if isinstance(data_dict[key], torch.Tensor): data_dict[key] = data_dict[key].to(self.model.device)

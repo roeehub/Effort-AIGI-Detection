@@ -107,10 +107,19 @@ def compute_pixel_axes(image: torch.Tensor) -> Dict[str, torch.Tensor]:
     # invariant so the normalized vs raw distinction does not matter.
     color_b_dev = image[:, 2].std(dim=(1, 2), unbiased=False)  # [B]
 
+    # LAB-a-channel approximation: in RGB space LAB-a is dominated by the
+    # R-G axis (positive a → red-shift; negative a → green-shift). We use
+    # std-dev of (R - G) per frame as a pure-pixel proxy for color_a_dev,
+    # the IQ atlas axis used by pre-test 1 (multi-axis-GRL frozen-feature
+    # probe, 2026-05-10). Correlation/quantile structure is scale-invariant,
+    # so we don't need calibration against the IQ atlas's true LAB metric.
+    color_a_approx_dev = (image[:, 0] - image[:, 1]).std(dim=(1, 2), unbiased=False)  # [B]
+
     return {
         "sharpness_laplacian": sharpness,
         "luma_mean": luma_mean,
         "color_b_dev": color_b_dev,
+        "color_a_approx_dev": color_a_approx_dev,
     }
 
 
