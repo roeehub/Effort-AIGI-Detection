@@ -114,6 +114,33 @@ features.
 4. **`gs://training-job-outputs/best_checkpoints/<T5-A-run-id>/`** — T5-A ckpts (35 saves planned across 12000 steps if it runs to completion)
 5. **W&B**: https://wandb.ai/dtect-vision/phase2-round13 — live training curves
 
+## Morning decision tree (scenarios)
+
+### Scenario A: Scorecard found a T4 winner (ANY ckpt promotes per v3-fix policy)
+**Action**: Ship that ckpt. Document T4 as a successful packet.
+**Then**: Optionally wait for T5-A — confirms reproducibility but not strictly needed.
+**Don't**: Spend on T5-B unless you want robustness over a single packet's evidence.
+
+### Scenario B: Scorecard found no winner BUT T5-A captured a strong inv_mean ckpt
+**Action**: Build T5-A scorecard ckpt map (top 3-5 ckpts from T5-A by atlas inv_mean), launch second scorecard run. ~3-4h.
+**Then**: Same decision tree applies.
+
+### Scenario C: Both T4 scorecard AND T5-A miss every gate
+**Action**: This is when T5-B becomes the next move. Two structural changes the data supports:
+1. **T5-B-L6L11**: Dual GRL attachment at L6 + L11. Forces shortcut removal at TWO sequential layers, harder to evade. ~2h engineering + 5h training.
+2. **T5-C-bigger-classifier**: Same recipe as T4, but hidden_dim=512 or 1024 instead of 256. Stronger online classifier forces encoder to actually remove shortcut from features (not just defeat the classifier). ~30min engineering + 5h training.
+
+I'd run BOTH in parallel since they test different hypotheses. Combined cost: ~$130-160.
+
+### Scenario D: T5-A produces a clearly stable inv_mean ckpt (≥0.05 sustained for several saves)
+**Action**: That's the breakthrough. Build T5-A scorecard ckpt map of THAT ckpt + adjacent step ckpts, launch scorecard.
+
+### Scenario E: T4 has a partial winner (passes some gates but not all)
+**Action**: Note WHICH gates miss. Map to T5-B / T5-C / T5-data choice:
+- Forgery AUC misses → not a GRL problem; check pipeline_randomization or batch composition
+- Dor lockbox FPR misses → encoder didn't remove dor invariance enough → T5-B or T5-C
+- F4 viso recall misses → shortcut removal didn't translate to F4 substrate behavior → T5 should add localization aux or different axes
+
 ## Decision points awaiting you
 
 ### IF T4 scorecard has a clear winner (any T4 ckpt promotes per v3-fix policy)
