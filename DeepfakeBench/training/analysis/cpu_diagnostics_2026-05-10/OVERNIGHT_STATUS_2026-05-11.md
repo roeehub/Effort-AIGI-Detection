@@ -23,6 +23,14 @@
 
 **If you wake up and both are RUNNING**: please cancel one (preference: cancel the LATER-started us-central1 if both are running, since us-west4 had submission priority).
 
+**UPDATE 02:05 CEST**: us-central1 T5-A (job `8739700428029034496`) reached RUNNING first. us-west4 T5-A (job `8996374562765537280`) is still PENDING. Per CLAUDE.md region rotation, us-west4 should now be cancelled — but cancellation needs your authorization. Command when you wake up:
+
+```
+gcloud ai custom-jobs cancel projects/train-cvit2/locations/us-west4/customJobs/8996374562765537280 --region=us-west4 --project=train-cvit2
+```
+
+If us-west4 stays PENDING (most likely), no extra cost — Vertex doesn't charge for PENDING. If it ALSO reaches RUNNING, both will train and cost ~2× until you cancel.
+
 ## Key findings so far
 
 ### Atlas L11 inv_mean (the load-bearing metric)
