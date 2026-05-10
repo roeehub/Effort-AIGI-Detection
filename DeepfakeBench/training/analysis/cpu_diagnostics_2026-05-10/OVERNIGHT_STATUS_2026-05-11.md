@@ -54,6 +54,26 @@ The OSCILLATION evidence (step 10500 spike, step 11250 reversion) is the most ac
 
 T5-A tests (a) via cyclic λ (periodic re-pressuring) + (c) via dense saves (catches attractor moments regardless of AUC).
 
+### NEW: GRL effect is ENTIRELY LOCALIZED at L11 (attachment point)
+
+Per-layer Δinv_mean vs P8A baseline (analysis/cpu_diagnostics_2026-05-10
+/outputs/per_layer_inv_mean.csv):
+
+| Ckpt | L0 | L3 | L6 | L9 | **L11** |
+|---|---|---|---|---|---|
+| T4_L1_step10500 (best) | -0.0002 | +0.0021 | -0.0012 | +0.0047 | **+0.0147** |
+| T4_L2_step1500 | -0.0002 | +0.0037 | +0.0017 | +0.0011 | **+0.0079** |
+
+L11 lift is 3-7× larger than any earlier layer's movement. The encoder's
+mid-layers (L0-L9) are essentially unchanged — the shortcut representation
+is still THERE in all the earlier layers, and L11 only does a LIGHT
+rearrangement to defeat the online classifier.
+
+This is a strong negative finding for single-attachment GRL. The encoder
+can always do a light L11 rearrangement to satisfy the GRL classifier
+without genuinely removing shortcut from features upstream. Bigger
+inv_mean lift requires upstream pressure (T5-B: multi-layer attachment).
+
 ### NEW: The GRL is biting the CLASSIFIER, not the features
 
 T4-λ1.0 final W&B logs show online GRL classifier CE loss per axis:
