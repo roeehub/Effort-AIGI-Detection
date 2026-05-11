@@ -151,6 +151,23 @@ The cyclic-λ schedule produces BETTER classifiers (higher AUC, lower EER) but L
 
 If even the trough ckpts don't beat T4 0.0414, then cyclic-λ may be a NET NEGATIVE intervention vs flat λ. The encoder may be rebuilding shortcut during λ=0 phases faster than it removes it during λ=peak phases.
 
+**RESOLVED 04:50 CEST — all 6 T5-A ckpts measured. NONE break the ceiling:**
+
+| T5-A ckpt | inv_mean | forgery_AUC | EER |
+|---|---|---|---|
+| step 3000 (AUC crash outlier) | **0.0260** | 0.9883 | best T5-A inv_mean — barely above P8A baseline 0.0266 |
+| step 8000 (trough) | 0.0237 | 0.9874 | |
+| step 3500 (top_n peak) | 0.0234 | 0.9866 | |
+| step 6500 (top_n peak) | 0.0230 | 0.9837 | |
+| step 4250 (trough) | 0.0214 | 0.9862 | |
+| step 8500 | 0.0189 | 0.9847 | |
+
+**Cyclic-λ is REFUTED as an inv_mean-improving intervention.** All T5-A ckpts have inv_mean below P8A baseline (0.0266) AND below the 0.0349 prior ceiling. T4-λ1.0 with flat λ=1.0 remains the only ckpt to break the ceiling (0.0414 at step 10500).
+
+T5-A's headline metrics (AUC 0.9956, EER 0.0163) are good as classifier outputs but the encoder representation got LESS invariant, not more. The hypothesis that cycling re-creates step-10500-like attractor moments was wrong — cycling pulls the encoder AWAY from the attractor each time λ drops to 0.
+
+**Implication for the morning**: T4-λ1.0 step 10500 is the only encoder-invariant candidate. Whether it deploys depends entirely on the T4 scorecard. T5-A produces no shippable inv_mean ckpts. T5 design for next iteration should pivot to T5-B (multi-layer attachment) or T5-C (stronger classifier) — NOT another cyclic variant.
+
 ## Morning decision tree (scenarios)
 
 ### Scenario A: Scorecard found a T4 winner (ANY ckpt promotes per v3-fix policy)
