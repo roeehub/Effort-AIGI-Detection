@@ -34,6 +34,8 @@ EXISTING_ATLAS = OUT / "forgery_signal_atlas_extended.csv"
 T4_CKPTS = [
     "T4_L1_step5000", "T4_L1_step9000", "T4_L1_step10500", "T4_L1_step11250",
     "T4_L2_step1500", "T4_L2_step2500",
+    "T5A_C1_step3000", "T5A_C1_step3500", "T5A_C1_step4250",
+    "T5A_C1_step6500", "T5A_C1_step8000", "T5A_C1_step8500",
 ]
 
 

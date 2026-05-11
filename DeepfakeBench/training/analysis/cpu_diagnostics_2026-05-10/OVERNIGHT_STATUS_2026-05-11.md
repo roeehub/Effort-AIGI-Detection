@@ -135,6 +135,22 @@ features.
 4. **`gs://training-job-outputs/best_checkpoints/<T5-A-run-id>/`** — T5-A ckpts (35 saves planned across 12000 steps if it runs to completion)
 5. **W&B**: https://wandb.ai/dtect-vision/phase2-round13 — live training curves
 
+## T5-A interim result (2 ckpts measured, more pending)
+
+T5-A us-central1 is at step 9000+/12000 and producing the expected cyclic AUC trajectory. Train-eval AUC peaks (0.9956 at step 6500 — beats T4's 0.9939 best) and troughs (0.9645 at step 3000 — major dip during cycle).
+
+**However**, the two AUC-peak top_n ckpts have inv_mean BELOW T4's best:
+
+| Ckpt | inv_mean | forgery_AUC | EER | vs T4 best (0.0414) |
+|---|---|---|---|---|
+| T4_L1_step10500 | **0.0414** | 0.9882 | 0.0195 | (baseline) |
+| **T5A_C1_step3500** | **0.0234** | 0.9866 | 0.0163 | -0.018 |
+| **T5A_C1_step6500** | **0.0230** | 0.9837 | 0.0204 | -0.018 |
+
+The cyclic-λ schedule produces BETTER classifiers (higher AUC, lower EER) but LESS invariance lift at the AUC-peak moments. **Interpretation pending**: the AUC-peak ckpts coincide with cycle PEAKS (λ=1.2 max). The trough moments (λ=0) might be where invariance actually lives. Extracting 4 more ckpts from cycle troughs/outliers (step 3000 AUC crash, 4250 trough, 8000 trough, 8500) — results in ~15 min.
+
+If even the trough ckpts don't beat T4 0.0414, then cyclic-λ may be a NET NEGATIVE intervention vs flat λ. The encoder may be rebuilding shortcut during λ=0 phases faster than it removes it during λ=peak phases.
+
 ## Morning decision tree (scenarios)
 
 ### Scenario A: Scorecard found a T4 winner (ANY ckpt promotes per v3-fix policy)
