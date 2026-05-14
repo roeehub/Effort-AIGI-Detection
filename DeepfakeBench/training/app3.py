@@ -58,18 +58,68 @@ device = _resolve_device()
 DEBUG_FRAME_DIR = "./debug_frames"
 
 # ──────────────────────────────────────────
-# Quality gate (deployment packet 2026-05-04)
+# Quality gate profiles
 # ──────────────────────────────────────────
-# Lightweight per-frame gate. Frames that fail any criterion are rejected as
-# "out of operational envelope" and get the default-real probability instead
-# of going through the model. The gate criteria match the deployment packet at
-# `analysis/deeplive_deployment_24h_2026-05-05/DEPLOYMENT_PACKET_DEEPLIVE.md`:
-#   - min(width, height) >= QUALITY_GATE_MIN_DIM (rejects thumbnails)
-#   - laplacian_var >= QUALITY_GATE_MIN_LAP_VAR (rejects extreme blur)
-#   - is_no_face is enforced upstream by YOLO returning None on recrop=True paths
-QUALITY_GATE_DEFAULT_PROB = 0.25
-QUALITY_GATE_MIN_DIM = 80
-QUALITY_GATE_MIN_LAP_VAR = 8.0
+# Per-frame gate that can run in one of two profiles:
+#
+#   legacy  — deployment packet 2026-05-04. min(W,H)>=80 AND laplacian_var>=8.
+#             Frames that fail still VOTE with prob=0.25 (treated as REAL by
+#             threshold=0.5), and the gate hit is logged for audit.
+#
+#   t5c     — ship spec 2026-05-14 (analysis/risky_remediation_2026-05-14/
+#             A_SHIP_SPEC_T5C_2026-05-14.md). G1: face-detector must return a
+#             face. G2: min(W,H)>=200. No laplacian check. Frames that fail
+#             G1 or G2 are NOT scored — they do not vote in the per-identity
+#             decision. is_fake_identity abstains when no frames pass.
+#
+# Default profile is set by env var GATE_PROFILE (defaults to "legacy" to
+# preserve current behavior). Individual requests can override via the
+# ?gate_profile= query parameter on supported endpoints.
+GATE_PROFILES: Dict[str, Dict[str, Any]] = {
+    "legacy": {
+        "min_dim": 80,
+        "min_lap_var": 8.0,
+        "default_prob": 0.25,           # gated frames vote with this prob
+        "exclude_gated_from_vote": False,
+    },
+    "t5c": {
+        "min_dim": 200,
+        "min_lap_var": None,            # laplacian check disabled
+        "default_prob": None,           # gated frames do NOT vote
+        "exclude_gated_from_vote": True,
+    },
+}
+
+_env_profile = os.getenv("GATE_PROFILE", "legacy").lower().strip()
+if _env_profile not in GATE_PROFILES:
+    logger.warning(
+        "Unknown GATE_PROFILE=%r — falling back to 'legacy'. Valid: %s",
+        _env_profile, sorted(GATE_PROFILES.keys()),
+    )
+    _env_profile = "legacy"
+GATE_PROFILE_DEFAULT = _env_profile
+logger.info("Default gate profile: %s", GATE_PROFILE_DEFAULT)
+
+# Kept for backwards compatibility with any callers / tests that import these
+# directly. New code should call quality_gate(img, profile) and read from the
+# profile dict.
+QUALITY_GATE_DEFAULT_PROB = GATE_PROFILES["legacy"]["default_prob"]
+QUALITY_GATE_MIN_DIM = GATE_PROFILES["legacy"]["min_dim"]
+QUALITY_GATE_MIN_LAP_VAR = GATE_PROFILES["legacy"]["min_lap_var"]
+
+
+def resolve_gate_profile(query_value: Optional[str]) -> str:
+    """Pick the gate profile for one request. Query param overrides env default."""
+    if query_value is None or query_value == "":
+        return GATE_PROFILE_DEFAULT
+    profile = query_value.lower().strip()
+    if profile not in GATE_PROFILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid gate_profile={query_value!r}. "
+                   f"Must be one of {sorted(GATE_PROFILES.keys())}.",
+        )
+    return profile
 
 
 def pretty_print_batch(
@@ -111,6 +161,12 @@ def pretty_print_batch(
             lines.append(f"  {DIM}{name}  [decode failed]{RESET}")
             continue
         prob = s.get("prob")
+        if kind == "gated" and prob is None:
+            # t5c profile: gated frames are excluded from voting, no prob.
+            reason = s.get("reason", "gated")
+            blank_bar = "·" * bar_w
+            lines.append(f"  {DIM}{name}  {blank_bar}  -----  GATED  ({reason}) [excluded]{RESET}")
+            continue
         if prob is None:
             lines.append(f"  {DIM}{name}  [no prob]{RESET}")
             continue
@@ -128,28 +184,39 @@ def pretty_print_batch(
     logger.info("\n" + "\n".join(lines))
 
 
-def quality_gate(img_bgr: Optional[np.ndarray], frame_id: str = "frame") -> tuple:
-    """Per-frame deployment quality gate.
+def quality_gate(
+    img_bgr: Optional[np.ndarray],
+    profile: str = "legacy",
+    frame_id: str = "frame",
+) -> tuple:
+    """Per-frame quality gate, dispatched by profile.
 
-    Returns (passes, reason). When passes=False, the caller should NOT run the
-    model on this frame; instead emit prob=QUALITY_GATE_DEFAULT_PROB (0.25,
-    treated as REAL by the standard threshold=0.5) and log the gate hit so the
-    rejection is auditable in production logs.
-
-    Cheap to compute: one cvtColor + one Laplacian pass on the input image.
+    Returns (passes, reason). When passes=False, the caller decides how to
+    handle the frame — legacy profile votes with prob=0.25, t5c profile drops
+    the frame from the vote. See GATE_PROFILES for the per-profile thresholds.
     """
+    spec = GATE_PROFILES.get(profile)
+    if spec is None:
+        return False, f"unknown_gate_profile:{profile!r}"
+
     if img_bgr is None or img_bgr.size == 0:
         return False, "empty_or_none_image"
+
     h, w = img_bgr.shape[:2]
-    if min(h, w) < QUALITY_GATE_MIN_DIM:
-        return False, f"min_dim={min(h, w)}<{QUALITY_GATE_MIN_DIM}"
-    try:
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    except Exception as e:
-        return False, f"gate_compute_failed:{e!r}"
-    if lap_var < QUALITY_GATE_MIN_LAP_VAR:
-        return False, f"laplacian_var={lap_var:.2f}<{QUALITY_GATE_MIN_LAP_VAR}"
+    min_dim = spec["min_dim"]
+    if min_dim is not None and min(h, w) < min_dim:
+        return False, f"min_dim={min(h, w)}<{min_dim}"
+
+    min_lap_var = spec["min_lap_var"]
+    if min_lap_var is not None:
+        try:
+            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+            lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        except Exception as e:
+            return False, f"gate_compute_failed:{e!r}"
+        if lap_var < min_lap_var:
+            return False, f"laplacian_var={lap_var:.2f}<{min_lap_var}"
+
     return True, None
 
 
@@ -722,6 +789,7 @@ async def check_frame(
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
         recrop: bool = Query(False, description="Whether to perform face detection and cropping. If False, assumes image is already cropped"),
+        gate_profile: Optional[str] = Query(None, description="Gate profile: 'legacy' or 't5c'. Defaults to GATE_PROFILE env var (legacy)."),
         debug: bool = False
 ) -> InferResponse:
     if file.content_type not in {"image/jpeg", "image/png"}:
@@ -730,6 +798,13 @@ async def check_frame(
     if recrop:
         require_yolo(request)
 
+    profile = resolve_gate_profile(gate_profile)
+    spec = GATE_PROFILES[profile]
+    # For single-frame endpoints, the t5c "don't score" rule has to collapse to
+    # *some* response — there's no list to drop from. We return prob=0.0 with
+    # pred_label="REAL" and log the gate hit so the abstention is auditable.
+    gated_prob = spec["default_prob"] if spec["default_prob"] is not None else 0.0
+
     try:
         model = get_model_for_request(request, model_type)
         raw = await file.read()
@@ -737,26 +812,23 @@ async def check_frame(
         if img_bgr is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot decode image")
 
-        # Quality gate (deployment packet 2026-05-04): reject thumbnails / extreme-blur
-        # frames before model inference. Gated frames return prob=0.25 (REAL by default
-        # threshold=0.5), and the gate hit is logged for debugging / audit.
-        gate_passes, gate_reason = quality_gate(img_bgr, frame_id=file.filename or "frame")
+        gate_passes, gate_reason = quality_gate(img_bgr, profile=profile, frame_id=file.filename or "frame")
         if not gate_passes:
             logger.info(
-                "[QUALITY-GATE] /check_frame REJECTED %s (%s) → returning prob=%.2f",
-                file.filename or "[unnamed]", gate_reason, QUALITY_GATE_DEFAULT_PROB,
+                "[QUALITY-GATE:%s] /check_frame REJECTED %s (%s) → returning prob=%.2f",
+                profile, file.filename or "[unnamed]", gate_reason, gated_prob,
             )
-            return InferResponse(pred_label="REAL", fake_prob=QUALITY_GATE_DEFAULT_PROB)
+            return InferResponse(pred_label="REAL", fake_prob=gated_prob)
 
         if recrop:
             processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
             if processed_face_bgr is None:
-                # is_no_face branch of the quality gate (YOLO found nothing).
+                # G1 failure: face detector returned no face.
                 logger.info(
-                    "[QUALITY-GATE] /check_frame REJECTED %s (no_face_detected) → returning prob=%.2f",
-                    file.filename or "[unnamed]", QUALITY_GATE_DEFAULT_PROB,
+                    "[QUALITY-GATE:%s] /check_frame REJECTED %s (no_face_detected) → returning prob=%.2f",
+                    profile, file.filename or "[unnamed]", gated_prob,
                 )
-                return InferResponse(pred_label="REAL", fake_prob=QUALITY_GATE_DEFAULT_PROB)
+                return InferResponse(pred_label="REAL", fake_prob=gated_prob)
         else:
             # INTER_LINEAR matches training preprocessing (combined_paired.py:3518).
             processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_LINEAR)
@@ -796,6 +868,7 @@ async def check_frame_batch(
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
         yolo_conf_threshold: float = Query(0.20, ge=0.0, le=1.0, description="YOLO confidence threshold for face detection"),
         recrop: bool = Query(False, description="Whether to perform face detection and cropping. If False, assumes frames are already cropped"),
+        gate_profile: Optional[str] = Query(None, description="Gate profile: 'legacy' or 't5c'. Defaults to GATE_PROFILE env var (legacy)."),
         debug: bool = False
 ) -> BatchInferResponse:
     """
@@ -819,6 +892,11 @@ async def check_frame_batch(
         if f.content_type not in {"image/jpeg", "image/png"}:
             raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only JPEG or PNG images are accepted")
 
+    profile = resolve_gate_profile(gate_profile)
+    spec = GATE_PROFILES[profile]
+    exclude_gated = spec["exclude_gated_from_vote"]
+    gated_vote_prob = spec["default_prob"]  # None when profile excludes gated frames
+
     try:
         model = get_model_for_request(request, model_type)
 
@@ -826,9 +904,8 @@ async def check_frame_batch(
         transform = video_preprocessor._get_transform()
 
         # Per-frame status tracking. The model is run only on frames that pass
-        # the quality gate; gated frames get prob=QUALITY_GATE_DEFAULT_PROB.
-        # Final probs list is in input order, with one entry per successfully
-        # decoded file (gated + model-scored).
+        # the quality gate; in legacy profile gated frames vote with prob=0.25,
+        # in t5c profile gated frames are excluded from the vote entirely.
         per_frame_status = []   # list of dicts: {kind: 'gated'|'tensor'|'failed', tensor?, prob?, reason?}
         failed_frames = 0
         gated_frames = 0
@@ -844,14 +921,17 @@ async def check_frame_batch(
                     failed_frames += 1
                     continue
 
-                # Quality gate: reject thumbnails / extreme blur before model
-                gate_passes, gate_reason = quality_gate(img_bgr, frame_id=f.filename or f"frame_{i+1}")
+                gate_passes, gate_reason = quality_gate(img_bgr, profile=profile, frame_id=f.filename or f"frame_{i+1}")
                 if not gate_passes:
                     logger.info(
-                        "[QUALITY-GATE] /check_frame_batch frame %d/%d REJECTED %s (%s) → prob=%.2f",
-                        i + 1, total_frames, f.filename or "[unnamed]", gate_reason, QUALITY_GATE_DEFAULT_PROB,
+                        "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (%s)%s",
+                        profile, i + 1, total_frames, f.filename or "[unnamed]", gate_reason,
+                        " → excluded from vote" if exclude_gated else f" → prob={gated_vote_prob:.2f}",
                     )
-                    per_frame_status.append({"kind": "gated", "prob": QUALITY_GATE_DEFAULT_PROB, "reason": gate_reason})
+                    entry = {"kind": "gated", "reason": gate_reason}
+                    if not exclude_gated:
+                        entry["prob"] = gated_vote_prob
+                    per_frame_status.append(entry)
                     gated_frames += 1
                     continue
 
@@ -859,12 +939,16 @@ async def check_frame_batch(
                     # Same face extraction path as /check_frame (YOLO)
                     processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
                     if processed_face_bgr is None:
-                        # is_no_face branch — gate-equivalent: emit default-real instead of failing
+                        # G1 failure: face detector returned no face.
                         logger.info(
-                            "[QUALITY-GATE] /check_frame_batch frame %d/%d REJECTED %s (no_face_detected) → prob=%.2f",
-                            i + 1, total_frames, f.filename or "[unnamed]", QUALITY_GATE_DEFAULT_PROB,
+                            "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (no_face_detected)%s",
+                            profile, i + 1, total_frames, f.filename or "[unnamed]",
+                            " → excluded from vote" if exclude_gated else f" → prob={gated_vote_prob:.2f}",
                         )
-                        per_frame_status.append({"kind": "gated", "prob": QUALITY_GATE_DEFAULT_PROB, "reason": "no_face_detected"})
+                        entry = {"kind": "gated", "reason": "no_face_detected"}
+                        if not exclude_gated:
+                            entry["prob"] = gated_vote_prob
+                        per_frame_status.append(entry)
                         gated_frames += 1
                         continue
                 else:
@@ -908,26 +992,31 @@ async def check_frame_batch(
             for idx, prob in zip(tensor_indices, model_probs):
                 per_frame_status[idx]["prob"] = prob
 
-        # Final probs list — gated frames get QUALITY_GATE_DEFAULT_PROB; failed-decode frames are dropped.
-        probs_list = [s["prob"] for s in per_frame_status if s["kind"] in ("gated", "tensor")]
+        # Final probs list — legacy profile includes gated frames with prob=0.25;
+        # t5c profile excludes them entirely. Failed-decode frames are always dropped.
+        probs_list = [s["prob"] for s in per_frame_status if "prob" in s]
         successful_frames = sum(1 for s in per_frame_status if s["kind"] == "tensor")
 
-        # Handle case where no frames were processed (all decode-failed)
+        # Handle case where no frames were processed (all decode-failed AND/OR
+        # all gated under t5c profile — the spec's "abstain when no frames
+        # passed G1+G2" path).
         if not probs_list:
             logger.info(
-                f"No frames could be processed. Failed: {failed_frames}/{total_frames}, gated: {gated_frames}"
+                "No frames available for scoring. Profile=%s. Failed: %d/%d, gated: %d (excluded=%s)",
+                profile, failed_frames, total_frames, gated_frames, exclude_gated,
             )
             return BatchInferResponse(pred_label="REAL", confidence=0.0, probs=[])
 
-        # 'mean' strategy across the union of model-scored and gated frames.
-        # Gated frames at 0.25 will pull confidence DOWN, which is the desired
-        # behavior (uncertain inputs default to real).
         confidence = float(np.mean(probs_list))
         pred_label = "FAKE" if confidence >= threshold else "REAL"
 
+        gated_note = (
+            f"{gated_frames} gated (excluded)" if exclude_gated
+            else f"{gated_frames} gated (defaulted to {gated_vote_prob})"
+        )
         logger.info(
-            f"Batch inference complete: {successful_frames}/{total_frames} model-scored, "
-            f"{gated_frames} gated (defaulted to {QUALITY_GATE_DEFAULT_PROB}), {failed_frames} decode-failed"
+            "Batch inference complete (profile=%s): %d/%d model-scored, %s, %d decode-failed",
+            profile, successful_frames, total_frames, gated_note, failed_frames,
         )
 
         pretty_print_batch(files, per_frame_status, confidence, threshold, pred_label)
@@ -1070,11 +1159,17 @@ async def check_gcs_frame_batch(
         request: Request,
         model_type: Optional[str] = Query(None, description="REQUIRED: 'base' or 'custom'. No default."),
         threshold: float = Query(0.5, ge=0.0, le=1.0, description="Threshold for FAKE/REAL classification"),
+        gate_profile: Optional[str] = Query(None, description="Gate profile: 'legacy' or 't5c'. Defaults to GATE_PROFILE env var (legacy)."),
 ) -> VideoAnalysisResponse:
     gcs_dir_path = request_body.gcs_path
     if not gcs_dir_path.endswith('/'):
         gcs_dir_path += '/'
     logger.info(f"Received request to process frame batch from GCS: {gcs_dir_path}")
+
+    profile = resolve_gate_profile(gate_profile)
+    spec = GATE_PROFILES[profile]
+    exclude_gated = spec["exclude_gated_from_vote"]
+    gated_vote_prob = spec["default_prob"]
 
     try:
         bucket_name, dir_name = gcs_dir_path.split('/', 1)
@@ -1108,14 +1203,15 @@ async def check_gcs_frame_batch(
                     logger.warning(f"Could not read image file: {img_path}, skipping.")
                     continue
 
-                # Quality gate: reject thumbnails / extreme blur before model.
-                gate_passes, gate_reason = quality_gate(img_bgr, frame_id=img_path.name)
+                gate_passes, gate_reason = quality_gate(img_bgr, profile=profile, frame_id=img_path.name)
                 if not gate_passes:
                     logger.info(
-                        "[QUALITY-GATE] /check_gcs_frame_batch REJECTED %s (%s) → prob=%.2f",
-                        img_path.name, gate_reason, QUALITY_GATE_DEFAULT_PROB,
+                        "[QUALITY-GATE:%s] /check_gcs_frame_batch REJECTED %s (%s)%s",
+                        profile, img_path.name, gate_reason,
+                        " → excluded from vote" if exclude_gated else f" → prob={gated_vote_prob:.2f}",
                     )
-                    frame_probs.append(QUALITY_GATE_DEFAULT_PROB)
+                    if not exclude_gated:
+                        frame_probs.append(gated_vote_prob)
                     gated_count += 1
                     continue
 
@@ -1133,9 +1229,13 @@ async def check_gcs_frame_batch(
                 frame_probs.append(prob)
 
         if gated_count:
+            gated_note = (
+                "excluded from vote" if exclude_gated
+                else f"defaulted to {gated_vote_prob:.2f}"
+            )
             logger.info(
-                "GCS frame batch: %d/%d frames gated (defaulted to %.2f)",
-                gated_count, len(image_files), QUALITY_GATE_DEFAULT_PROB,
+                "GCS frame batch (profile=%s): %d/%d frames gated (%s)",
+                profile, gated_count, len(image_files), gated_note,
             )
 
     except HTTPException:
@@ -1150,7 +1250,10 @@ async def check_gcs_frame_batch(
         logger.info(f"Cleaning up temporary directory: {tmp_dir}")
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    logger.info("GCS frame batch inference complete: frames_processed=%d, threshold=%.2f", len(frame_probs), threshold)
+    logger.info(
+        "GCS frame batch inference complete (profile=%s): frames_processed=%d, threshold=%.2f",
+        profile, len(frame_probs), threshold,
+    )
     return calculate_analysis(frame_probs, threshold)
 
 
