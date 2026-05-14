@@ -75,12 +75,22 @@ DEBUG_FRAME_DIR = "./debug_frames"
 # Default profile is set by env var GATE_PROFILE (defaults to "legacy" to
 # preserve current behavior). Individual requests can override via the
 # ?gate_profile= query parameter on supported endpoints.
+# Sentinel probability returned for rejected/gated frames in t5c profile.
+# Chosen as -1.0 because it is outside the valid model-output range [0, 1],
+# so downstream consumers can filter it trivially with `p >= 0.0`. Callers
+# can also count sentinels to know how many frames were rejected without any
+# separate response field. NOTE: index alignment with the input file list
+# is preserved in t5c profile precisely because gated frames now leave a
+# sentinel in their slot — see /check_frame_batch for the contract.
+GATE_SENTINEL_PROB = -1.0
+
 GATE_PROFILES: Dict[str, Dict[str, Any]] = {
     "legacy": {
         "min_dim": 80,
         "min_lap_var": 8.0,
         "default_prob": 0.25,           # gated frames vote with this prob
         "exclude_gated_from_vote": False,
+        "align_probs_to_input": False,  # decode-failure frames are dropped
     },
     "t5c": {
         # NOTE: ship spec said min_dim=200; relaxed in production after the
@@ -89,8 +99,13 @@ GATE_PROFILES: Dict[str, Dict[str, Any]] = {
         # Set to 120, at the upper edge of the sweep-optimum band.
         "min_dim": 120,
         "min_lap_var": None,            # laplacian check disabled
-        "default_prob": None,           # gated frames do NOT vote
+        "default_prob": GATE_SENTINEL_PROB,  # sentinel in probs (excluded from mean)
         "exclude_gated_from_vote": True,
+        # Every input frame gets a slot in `probs` (real model prob, or sentinel
+        # for gated/decode-failed). Downstream consumers can rely on
+        # `len(probs) == len(input_files)` and use index-based participant
+        # attribution safely.
+        "align_probs_to_input": True,
     },
 }
 
@@ -161,15 +176,18 @@ def pretty_print_batch(
     for i, (f, s) in enumerate(zip(files, per_frame_status)):
         name = (f.filename or f"frame_{i}")[:28].ljust(28)
         kind = s.get("kind")
-        if kind == "failed":
+        prob = s.get("prob")
+        # Sentinel slots (t5c profile): gated frames and decode failures keep
+        # their place in `probs` for index alignment but carry GATE_SENTINEL_PROB.
+        is_sentinel = prob is not None and prob < 0.0
+        if kind == "failed" and not is_sentinel:
             lines.append(f"  {DIM}{name}  [decode failed]{RESET}")
             continue
-        prob = s.get("prob")
-        if kind == "gated" and prob is None:
-            # t5c profile: gated frames are excluded from voting, no prob.
-            reason = s.get("reason", "gated")
+        if is_sentinel:
+            reason = s.get("reason", kind or "gated")
             blank_bar = "·" * bar_w
-            lines.append(f"  {DIM}{name}  {blank_bar}  -----  GATED  ({reason}) [excluded]{RESET}")
+            label = "GATED" if kind == "gated" else "FAILED"
+            lines.append(f"  {DIM}{name}  {blank_bar}  sentl  {label}  ({reason}){RESET}")
             continue
         if prob is None:
             lines.append(f"  {DIM}{name}  [no prob]{RESET}")
@@ -804,10 +822,11 @@ async def check_frame(
 
     profile = resolve_gate_profile(gate_profile)
     spec = GATE_PROFILES[profile]
-    # For single-frame endpoints, the t5c "don't score" rule has to collapse to
-    # *some* response — there's no list to drop from. We return prob=0.0 with
-    # pred_label="REAL" and log the gate hit so the abstention is auditable.
-    gated_prob = spec["default_prob"] if spec["default_prob"] is not None else 0.0
+    # legacy: gated → fake_prob=0.25, pred_label="REAL".
+    # t5c:    gated → fake_prob=GATE_SENTINEL_PROB (-1.0), pred_label="REAL".
+    #         Callers can distinguish "gated/abstained" from a real model score
+    #         via `fake_prob < 0`.
+    gated_prob = spec["default_prob"]
 
     try:
         model = get_model_for_request(request, model_type)
@@ -899,7 +918,9 @@ async def check_frame_batch(
     profile = resolve_gate_profile(gate_profile)
     spec = GATE_PROFILES[profile]
     exclude_gated = spec["exclude_gated_from_vote"]
-    gated_vote_prob = spec["default_prob"]  # None when profile excludes gated frames
+    align_to_input = spec["align_probs_to_input"]
+    # In t5c profile this is the sentinel (-1.0). In legacy it's the 0.25 vote.
+    gated_slot_prob = spec["default_prob"]
 
     try:
         model = get_model_for_request(request, model_type)
@@ -909,7 +930,8 @@ async def check_frame_batch(
 
         # Per-frame status tracking. The model is run only on frames that pass
         # the quality gate; in legacy profile gated frames vote with prob=0.25,
-        # in t5c profile gated frames are excluded from the vote entirely.
+        # in t5c profile gated frames carry the sentinel (-1.0) so the response
+        # `probs` list is 1:1 with the input file list.
         per_frame_status = []   # list of dicts: {kind: 'gated'|'tensor'|'failed', tensor?, prob?, reason?}
         failed_frames = 0
         gated_frames = 0
@@ -921,7 +943,14 @@ async def check_frame_batch(
                 img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
                 if img_bgr is None:
                     logger.warning(f"Frame {i+1}/{total_frames}: Cannot decode image: {f.filename or '[unnamed]'}")
-                    per_frame_status.append({"kind": "failed"})
+                    entry = {"kind": "failed"}
+                    # In aligned profile (t5c), decode failures still get a slot
+                    # with the sentinel so downstream index-based attribution
+                    # is preserved.
+                    if align_to_input:
+                        entry["prob"] = GATE_SENTINEL_PROB
+                        entry["reason"] = "decode_failed"
+                    per_frame_status.append(entry)
                     failed_frames += 1
                     continue
 
@@ -930,12 +959,13 @@ async def check_frame_batch(
                     logger.info(
                         "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (%s)%s",
                         profile, i + 1, total_frames, f.filename or "[unnamed]", gate_reason,
-                        " → excluded from vote" if exclude_gated else f" → prob={gated_vote_prob:.2f}",
+                        f" → sentinel={GATE_SENTINEL_PROB}" if exclude_gated else f" → prob={gated_slot_prob:.2f}",
                     )
-                    entry = {"kind": "gated", "reason": gate_reason}
-                    if not exclude_gated:
-                        entry["prob"] = gated_vote_prob
-                    per_frame_status.append(entry)
+                    per_frame_status.append({
+                        "kind": "gated",
+                        "reason": gate_reason,
+                        "prob": gated_slot_prob,
+                    })
                     gated_frames += 1
                     continue
 
@@ -947,12 +977,13 @@ async def check_frame_batch(
                         logger.info(
                             "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (no_face_detected)%s",
                             profile, i + 1, total_frames, f.filename or "[unnamed]",
-                            " → excluded from vote" if exclude_gated else f" → prob={gated_vote_prob:.2f}",
+                            f" → sentinel={GATE_SENTINEL_PROB}" if exclude_gated else f" → prob={gated_slot_prob:.2f}",
                         )
-                        entry = {"kind": "gated", "reason": "no_face_detected"}
-                        if not exclude_gated:
-                            entry["prob"] = gated_vote_prob
-                        per_frame_status.append(entry)
+                        per_frame_status.append({
+                            "kind": "gated",
+                            "reason": "no_face_detected",
+                            "prob": gated_slot_prob,
+                        })
                         gated_frames += 1
                         continue
                 else:
@@ -996,31 +1027,40 @@ async def check_frame_batch(
             for idx, prob in zip(tensor_indices, model_probs):
                 per_frame_status[idx]["prob"] = prob
 
-        # Final probs list — legacy profile includes gated frames with prob=0.25;
-        # t5c profile excludes them entirely. Failed-decode frames are always dropped.
+        # Build the response probs list.
+        # - t5c (align_to_input=True): every input file gets a slot. Real model
+        #   probs for scored frames, GATE_SENTINEL_PROB (-1.0) for gated and
+        #   decode-failed frames. len(probs) == len(files), so downstream
+        #   index-based per-participant attribution works.
+        # - legacy (align_to_input=False): gated frames carry the 0.25 vote,
+        #   decode-failed frames are dropped. Pre-existing contract.
         probs_list = [s["prob"] for s in per_frame_status if "prob" in s]
         successful_frames = sum(1 for s in per_frame_status if s["kind"] == "tensor")
 
-        # Handle case where no frames were processed (all decode-failed AND/OR
-        # all gated under t5c profile — the spec's "abstain when no frames
-        # passed G1+G2" path).
-        if not probs_list:
+        # For the confidence mean, drop sentinel slots (they represent rejected
+        # input, not a real verdict). In legacy profile no slot is a sentinel,
+        # so the filter is a no-op.
+        voting_probs = [p for p in probs_list if p >= 0.0]
+
+        # Handle case where nothing voted (all gated/decode-failed in t5c, or
+        # everything decode-failed in legacy).
+        if not voting_probs:
             logger.info(
                 "No frames available for scoring. Profile=%s. Failed: %d/%d, gated: %d (excluded=%s)",
                 profile, failed_frames, total_frames, gated_frames, exclude_gated,
             )
-            return BatchInferResponse(pred_label="REAL", confidence=0.0, probs=[])
+            return BatchInferResponse(pred_label="REAL", confidence=0.0, probs=probs_list)
 
-        confidence = float(np.mean(probs_list))
+        confidence = float(np.mean(voting_probs))
         pred_label = "FAKE" if confidence >= threshold else "REAL"
 
         gated_note = (
-            f"{gated_frames} gated (excluded)" if exclude_gated
-            else f"{gated_frames} gated (defaulted to {gated_vote_prob})"
+            f"{gated_frames} gated (sentinel)" if exclude_gated
+            else f"{gated_frames} gated (defaulted to {gated_slot_prob})"
         )
         logger.info(
-            "Batch inference complete (profile=%s): %d/%d model-scored, %s, %d decode-failed",
-            profile, successful_frames, total_frames, gated_note, failed_frames,
+            "Batch inference complete (profile=%s): %d/%d model-scored, %s, %d decode-failed, aligned=%s",
+            profile, successful_frames, total_frames, gated_note, failed_frames, align_to_input,
         )
 
         pretty_print_batch(files, per_frame_status, confidence, threshold, pred_label)
