@@ -1,0 +1,420 @@
+# ============================================================================
+# R13_LORA_T5C_L10_L11_PROPER_DATA_2026-05-14.yaml
+# Slot β — SUBSTRATE-DIVERSE DATA INGESTION on Slot 2 recipe.
+#
+# WHAT THIS PACKET TESTS
+# ----------------------
+# Slot 2 (LoRA r=16 on T5C step3500 base, scorecard r13-overnight-2026-05-13)
+# produced +74pp visomaster_enhanced_macro_dev recall (0.882 vs T5C 0.138)
+# with a 9× lockbox_real_fpr regression (0.249 vs 0.028). D9/D10 FACTS
+# established the structural cause: train.teams-v2 is 100% youtube-origin
+# while dev+lockbox are 100% direct-teams-capture (W=5.57 in CLIP-frozen
+# feature space). The T-series lineage that produced T5C does NOT enable
+# proper_data (HDTF + QuickClips visomaster lanes — both clean and teams).
+#
+# This packet is the single-lever DATA ingestion: enable proper_data on
+# the Slot 2 recipe with everything else identical (r=16, alpha=32,
+# target_layers, target_modules, learning rates, frozen base).
+#
+# Hypothesis: adding HDTF + QuickClips visomaster training samples — both
+# the clean variant AND the teams-routed variant — exposes the encoder to
+# additional substrate diversity on the input side. Per D1-D5 critic
+# review §4 Slot A, this addresses the DEV→LOCKBOX substrate gap on the
+# data axis (vs Slot 2's loss-axis attack via LoRA capacity).
+#
+# Falsifier: lockbox_real_fpr stays ≥ 0.20 with similar viso lift to Slot 2 —
+# data-axis substrate ingestion didn't move the chronic-FP drift; the
+# regression is intrinsic to the LoRA-L10-L11 lever regardless of data
+# mixture. If so, output-preservation aux loss becomes the next probe.
+#
+# Success criteria (deployment-grade):
+#   - lockbox_real_fpr ≤ 0.05 (substrate ingestion shrinks the drift)
+#   - visomaster_enhanced_macro_dev recall ≥ 0.50 (preserves viso lift)
+#   - dev_fake_macro_recall ≥ 0.40
+#   - HDTF Phase C: no >5pp regression vs E2B (cross-substrate validator)
+#   - no per-identity FPR > 30% on the chronic-6 set
+#
+# RESOLVED ARCHITECTURAL DECISIONS (carried from Slot 2; only data differs)
+# ------------------------------------------------------------------------
+# D1-D5: same as Slot 2 (LoRA stacks on frozen SVD, lora_lr_mult=10.0,
+#   GRL disabled, anchor_aware disabled, T3 keep-list KEPT).
+# D6: proper_data ENABLED with both clean and teams lanes; family weights
+#   for proper_visomaster_* lanes match the P10/RLP6 pattern (1.0-2.5),
+#   significantly lower than visomaster_fake (4.0) so proper_data is a
+#   NEW ADDITION to the data mixture, not a dominant source.
+#
+# COST: ~$30-40 Vertex (us-west4 or us-east1, A100×1, ~5000 steps).
+# CONFIDENCE: 25-40% single ckpt promotes; addresses the structural data
+# gap measured in D9/D10. Refutation pivots us to loss-axis (output
+# preservation) or different layer.
+# Seed: 9902 (NOT taken by T5C/T6/T7/U_SLOTS/Slot α).
+# ============================================================================
+
+name: "R13_LORA_T5C_L10_L11_PROPER_DATA_2026-05-14"
+description: "Slot β — Slot 2 recipe (LoRA r=16 alpha=32, L10-L11, frozen T5C step3500 base) + proper_data ENABLED. Single-lever substrate-diverse data ingestion. Tests whether adding HDTF + QuickClips visomaster training lanes shrinks the chronic-FP drift observed on Slot 2."
+seed: 9902
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "lora"
+    - "lora-l10-l11"
+    - "frozen-base"
+    - "rank-16-alpha-32"
+    - "proper-data-enabled"
+    - "substrate-ingestion"
+    - "ft-from-t5c-step3500"
+    - "no-multi-axis-grl"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "no-arcface"
+    - "seed-9902"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  # SVD stays ON (matches P8A_step5000's training config) — freeze_base_clip_encoder
+  # below will freeze all SVD residuals so LoRA is the only trainable encoder
+  # delta. See LORA_LAYERS_10_11_TASK_2026-05-12.md §9b D1.
+  apply_svd_to_in_proj: true
+  apply_svd_to_mlp: true
+  # These would be no-ops anyway under freeze_base=true (the LoRA freeze
+  # sweeps everything except lora_A / lora_B), but set to false for
+  # explicit config clarity.
+  unfreeze_final_proj: false
+  unfreeze_final_ln: false
+
+# Top-level optimizer params (read by apply_wandb_optimizer_params).
+# Head LR = 1.0e-5. LoRA LR is set by lora_lr_mult in the nested block.
+learning_rate: 1.0e-5
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+
+# Nested optimizer block — surfaces lora_lr_mult to choose_optimizer.
+# LoRA LR = learning_rate × lora_lr_mult = 1e-5 × 10 = 1e-4. See
+# utils/setup.py choose_optimizer (the `lora` param group, added 2026-05-12).
+optimizer:
+  type: "adam"
+  adam:
+    lr: 1.0e-5
+    eps: 1.0e-8
+    weight_decay: 0.05
+    lora_lr_mult: 10.0
+
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 14
+total_training_steps: 5000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# ===== LoRA: low-rank adapter at resblocks 10 and 11 (NEW for this packet) =====
+# Read by train_sweep.py after checkpoint load; wraps the named linears
+# inside resblocks[10] and resblocks[11], freezes everything else under
+# the visual encoder, rebuilds the optimizer with a `lora` param group.
+# See detectors/lora_adapter.py for the wrapper implementation and
+# tests/test_lora_adapter.py for the unit tests.
+lora:
+  enabled: true
+  target_layers: [10, 11]
+  rank: 16
+  alpha: 32
+  target_modules: ["attn.in_proj", "attn.out_proj", "mlp.c_fc", "mlp.c_proj"]
+  freeze_base: true
+
+# ===== Disabled levers (isolation of the LoRA mechanism) =====
+
+multi_axis_grl:
+  enabled: false
+
+pair_rank_loss:
+  lambda: 0.0
+
+use_group_dro: false
+
+correlation_penalty:
+  enabled: false
+
+anchor_aware:
+  enabled: false
+
+face_scale_jitter:
+  enabled: false
+
+# ===== Augmentation (inherited from T5C / T3 SLOT1) =====
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+# Canary probe — in-training deployment-quality monitor (per spec §3.4).
+canary_probe:
+  enabled: true
+  parquet_path: "arena/canaries/teams_chronic_diverse_800_2026-05-07.parquet"
+  frequency_steps: 1000
+  max_frames: 1000
+  batch_size: 64
+
+# ===== Data (T3 SLOT1 keep-list lever, inherited unchanged from T5C) =====
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 9902
+  seed: 9902
+
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_enhanced:
+    enabled: true
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    exclude_tiers: ["ARTIFACT"]
+
+  visomaster_hints_teams:
+    enabled: false
+
+  visomaster_teams_enhanced:
+    enabled: true
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    companion_domains:
+      - "teams_v2"
+    include_statuses:
+      - "teams_v2_companion"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    # T3 SLOT1 keep-list (drop top-25% lap_var Teams reals). Held fixed —
+    # this is the data lever that produced the first lockbox lift over P8A.
+    frame_keep_list_path: "analysis/cpu_diagnostics_2026-05-09/slot1_teams_real_keep_list_2026-05-09.csv"
+
+  # ===== Slot β single-lever: enable proper_data (HDTF + QuickClips visomaster) =====
+  # Inventory + manifest are the same ones used by older proper_data packets
+  # (R13_P10_SYM_*, R13_WTB3_*). Both clean and teams-routed lanes enabled
+  # to expose the encoder to substrate diversity ABSENT in the T-series
+  # training distribution (D9 FACTS: T5C reals are 100% youtube-origin
+  # vs dev+lockbox 100% direct-teams-capture).
+  proper_data:
+    enabled: true
+    inventory_path: "arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml"
+    manifest_path: "arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json"
+    include_lanes:
+      - "proper_visomaster_clean"
+      - "proper_visomaster_teams"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 9902
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      visomaster_enhanced_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+      # ===== Slot β: weights for proper_data lanes (matches P10/RLP6 pattern) =====
+      # Low-to-moderate weights — proper_data is a new ADDITION to the mixture,
+      # not a dominant source. Total proper_visomaster contribution is roughly
+      # half the existing visomaster_fake (4.0) so the visomaster signal is
+      # preserved while substrate diversity is added.
+      proper_visomaster_clean_fake: 1.0
+      proper_visomaster_teams_fake: 2.5
+      proper_visomaster_enhanced_clean_fake: 1.0
+      proper_visomaster_enhanced_teams_fake: 2.5
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: false
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 6.0
+anneal_steps: 1
+
+evaluate_every_steps: 250
+ood_monitoring_start_step: 250
+ood_monitoring_every_steps: 500
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 12
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 500
+    - 1000
+    - 1500
+    - 2500
+    - 3500
+    - 5000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
