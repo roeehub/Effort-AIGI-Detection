@@ -83,7 +83,10 @@ GATE_PROFILES: Dict[str, Dict[str, Any]] = {
         "exclude_gated_from_vote": False,
     },
     "t5c": {
-        "min_dim": 200,
+        # NOTE: ship spec said min_dim=200; relaxed to 150 in production after
+        # seeing too many real frames fall in the 150-200 band (sub-200 reals
+        # were being abstained on, inflating the no-decision rate).
+        "min_dim": 150,
         "min_lap_var": None,            # laplacian check disabled
         "default_prob": None,           # gated frames do NOT vote
         "exclude_gated_from_vote": True,
