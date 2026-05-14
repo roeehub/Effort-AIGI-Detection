@@ -86,8 +86,8 @@ GATE_PROFILES: Dict[str, Dict[str, Any]] = {
         # NOTE: ship spec said min_dim=200; relaxed in production after the
         # 2026-05-14 fine G2 sweep (combined-pool identity-correctness peaked
         # at 110-120, sub-200 reals were inflating the no-decision rate).
-        # Set to 130 as a conservative pick above the sweep optimum.
-        "min_dim": 130,
+        # Set to 120, at the upper edge of the sweep-optimum band.
+        "min_dim": 120,
         "min_lap_var": None,            # laplacian check disabled
         "default_prob": None,           # gated frames do NOT vote
         "exclude_gated_from_vote": True,
