@@ -362,6 +362,11 @@ def df40_paired_collate_fn(batch: List[Dict[str, Any]], target_size: Tuple[int, 
             from data.augmentations.face_scale_jitter import apply_face_scale_jitter
             img = apply_face_scale_jitter(img)
 
+            # Resolution-chain aug — random downsample->upsample chain BEFORE
+            # the canonical resize. See 2026-05-15 CPU probe FACTS.
+            from data.augmentations.resolution_chain_aug import apply_resolution_chain_aug
+            img = apply_resolution_chain_aug(img)
+
             # Resize to target size if needed
             if img.shape[:2] != target_size:
                 img = cv2.resize(img, (target_size[1], target_size[0]), interpolation=cv2.INTER_LINEAR)

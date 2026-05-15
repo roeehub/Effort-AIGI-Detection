@@ -46,18 +46,19 @@ tmp_wandb/
 vertex-output/
 runs/
 
-# Local analysis caches (huge, never needed in image)
-analysis/_features_cache_*/
-analysis/_fingerprint_cache*/
-analysis/lockbox_tagging/
-analysis/scorecard_*/
-analysis/embedding_triptych_*/outputs/
-analysis/face_size_invariance_*/outputs/
-analysis/domain_confusion_probe_*/outputs/
-analysis/intermediate_layer_probe_*/outputs/
-analysis/head_feature_decomposition_*/outputs/
-analysis/_logs_*/
-analysis/policy_reruns_*/
+# Local analysis artifacts — blanket exclude (analysis/ is 50+ GB locally; eval
+# folders accumulate too fast to enumerate per-pattern). Re-include only the
+# specific sidecars that training yamls reference at runtime.
+analysis/*
+!analysis/deeplive_face_geometry_2026-05-05/
+analysis/deeplive_face_geometry_2026-05-05/*
+!analysis/deeplive_face_geometry_2026-05-05/face_area.parquet
+!analysis/cpu_diagnostics_2026-05-09/
+analysis/cpu_diagnostics_2026-05-09/*
+!analysis/cpu_diagnostics_2026-05-09/slot1_teams_real_keep_list_2026-05-09.csv
+!analysis/cpu_diagnostics_2026-05-09/slot2_teams_real_keep_list_2026-05-09.csv
+!analysis/cpu_diagnostics_2026-05-09/slot3_teams_real_per_method_keep_list_2026-05-09.csv
+
 *.npz
 *.gstmp
 
@@ -71,6 +72,8 @@ weights/
 # Datasets (loaded from GCS)
 dataset/HDTF/
 dataset/TalkVid/
+dataset/demo_videos_2026-05-14/
+dataset/demo_videos_2026-05-14_policy_b.zip
 debug/
 data_analysis_plots/
 
@@ -80,3 +83,16 @@ data_analysis_plots/
 
 # Scratch
 scratch/
+
+# Offline-packaging artifacts (huge zips, not loaded at runtime)
+intel/
+
+# Arena eval outputs (load arena/manifests/, checkpoint_maps/, canaries/ — exclude bulk results)
+arena/arena_results/
+arena/strategy_results/
+arena/visual_audits/
+
+# Inference caches
+inference_results/
+audit_data/
+split_exports/

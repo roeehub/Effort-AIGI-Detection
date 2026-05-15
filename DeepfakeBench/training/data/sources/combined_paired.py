@@ -3835,6 +3835,13 @@ def combined_paired_collate_fn(
             from data.augmentations.face_scale_jitter import apply_face_scale_jitter
             img = apply_face_scale_jitter(img)
 
+            # Resolution-chain aug — random downsample->upsample chain BEFORE
+            # the canonical resize. Targets the 2026-05-15 CPU-probe finding
+            # that source-resolution dominates the per-frame score swing on
+            # reals (size axis 38-42% of variance vs kernel 21-23%).
+            from data.augmentations.resolution_chain_aug import apply_resolution_chain_aug
+            img = apply_resolution_chain_aug(img)
+
             if img.shape[:2] != target_size:
                 img = cv2.resize(img, (target_size[1], target_size[0]), interpolation=cv2.INTER_LINEAR)
 
