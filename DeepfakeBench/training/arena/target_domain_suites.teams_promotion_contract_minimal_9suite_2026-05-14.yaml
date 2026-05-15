@@ -1,0 +1,91 @@
+# ============================================================================
+# Minimal 9-suite promotion-contract manifest (2026-05-14)
+#
+# Purpose: cheap scorecard mode for single-packet trajectory verdicts.
+# Drops the 18 `teams_capture_*` / `teams_flat_*` diagnostic sub-suites and
+# the 2 lockbox quality variants from the full 29-suite manifest. Keeps the
+# 9 contract-load-bearing suites required by the v3-fix lex policy:
+#
+#   τ-calibration:   teams_real_all_dev
+#   Stress reals:    teams_real_poor_quality_dev, teams_real_lighting_extreme_dev
+#   Dev fakes:       teams_fake_all_dev, visomaster_enhanced_macro_dev,
+#                    deeplive_enhanced_dev
+#   Lockbox:         teams_real_all_lockbox, teams_fake_all_lockbox
+#   Chronic cohort:  teams_real_dor_dev  (n=50, informational)
+#
+# Cost vs full 29-suite (used 2026-05-13): ~3.2× cheaper wall-time per ckpt
+# (9/29 of the score-cell count, plus the 18 diagnostic sub-suites had the
+# longest individual run-times because of small batches × large frame pools).
+#
+# When NOT to use: any candidate that needs per-identity diagnostic breakdown
+# (e.g., regression on a specific chronic identity) — use the full 29-suite
+# manifest instead, OR run this minimal followed by a per-identity CPU probe.
+#
+# Suite definitions are line-for-line identical to the corresponding rows in
+# arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml
+# so the contract scorer produces identical numbers on the 9 cells it covers.
+# ============================================================================
+
+suites:
+  - name: teams_real_all_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_real_poor_quality_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_poor_quality"
+    external_real_deterministic: true
+
+  - name: teams_real_lighting_extreme_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "teams_real_lighting_extreme"
+    external_real_deterministic: true
+
+  - name: teams_fake_all_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+
+  - name: visomaster_enhanced_macro_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "visomaster_enhanced_macro"
+    external_fake_deterministic: true
+
+  - name: deeplive_enhanced_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "deeplive_enhanced"
+    external_fake_deterministic: true
+
+  - name: teams_real_all_lockbox
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "lockbox"
+    external_real_manifest_slices: "teams_real_all"
+    external_real_deterministic: true
+
+  - name: teams_fake_all_lockbox
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "lockbox"
+    external_fake_manifest_slices: "teams_fake_all"
+    external_fake_deterministic: true
+
+  - name: teams_real_dor_dev
+    df40_mode: none
+    external_real_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_real_manifest_split: "dev"
+    external_real_manifest_slices: "dor"
+    external_real_deterministic: true

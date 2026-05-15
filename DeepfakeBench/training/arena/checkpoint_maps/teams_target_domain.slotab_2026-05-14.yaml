@@ -1,0 +1,66 @@
+# =============================================================================
+# Promotion-contract validation map — Slot α + Slot β (2026-05-14)
+#
+# Two GPU runs launched 2026-05-14 21:18 UTC; both SUCCEEDED:
+#
+#   Slot α (a7egic45) — R13_LORA_T5C_L10_L11_R8_2026-05-14
+#                       LoRA r=8 alpha=16 on resblocks 10-11, frozen T5C
+#                       step3500 base. Rank ablation of Slot 2 (r=16).
+#                       Tests whether LoRA capacity is the dial controlling
+#                       the (viso_recall, chronic_FP_regression) trade-off
+#                       observed on Slot 2.
+#                       Early-stopped at step 2750.
+#                       Region us-west4. Runtime 3h 04m.
+#
+#   Slot β (ljuuz4u5) — R13_LORA_T5C_L10_L11_PROPER_DATA_2026-05-14
+#                       Slot 2 recipe (r=16 alpha=32) + proper_data ENABLED
+#                       (HDTF + QuickClips visomaster clean+teams lanes).
+#                       Single-lever substrate-diverse data ingestion.
+#                       Tests whether data-axis substrate ingestion shrinks
+#                       the chronic-FP drift observed on Slot 2.
+#                       Region us-east1. Runtime 1h 48m.
+#
+# CKPT SELECTION (3 per run + 4 anchors = 10 ckpts):
+# Periodic ckpts only (not top_n / value_composite, per the AUC-trajectory
+# discipline that periodic operating points are most representative). Early
+# / mid / peak per memory project_train_auc_not_valid_promotion_signal.
+#
+# Slot α (a7egic45, early-stopped step 2750):
+#   periodic_step500   AUC 0.9946 — early operating point
+#   periodic_step1500  AUC 0.9948 — mid
+#   periodic_step2500  AUC 0.9950 — peak (last periodic before early stop)
+#
+# Slot β (ljuuz4u5, 3500 steps):
+#   periodic_step500   AUC 0.9936 — early
+#   periodic_step1500  AUC 0.9929 — mid
+#   periodic_step3500  AUC 0.9934 — final operating
+#
+# Anchors:
+#   P8A_REFERENCE_STEP5000     — production anchor (rank-1 on v3-fix).
+#   E2B_TOP_N_STEP3200         — currently deployed.
+#   T5C_PERIODIC_STEP3500      — FT base for both slots; rank-3 (1.7× P8A
+#                                 lockbox fake recall).
+#   SLOT2_LORA_T5C_STEP1500    — the +74pp visomaster_enhanced_macro_dev
+#                                 recall lift point (Slot 2 rank-5 on
+#                                 r13-overnight-scorecard-2026-05-13);
+#                                 included as A/B reference for whether
+#                                 Slot α / Slot β shrink the chronic-FP
+#                                 regression Slot 2 paid for that lift.
+#
+# Policy: standing v3-fix (recall floor 0.30, real_fpr 0.07, stress_fpr 0.10).
+# Suite manifest: target_domain_suites.teams_promotion_contract_minimal_9suite_2026-05-14.yaml
+# Cell count: 10 ckpts × 9 suites = 90 cells (vs 435 in r13-overnight-2026-05-13).
+# =============================================================================
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:            "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+SLOT2_LORA_T5C_STEP1500:       "gs://training-job-outputs/best_checkpoints/912kd88q/periodic_effort_20260513_step1500_auc0.9941_eer0.0198.pth"
+
+SLOT_A_R8_PERIODIC_STEP500:    "gs://training-job-outputs/best_checkpoints/a7egic45/periodic_effort_20260514_step500_auc0.9946_eer0.0223.pth"
+SLOT_A_R8_PERIODIC_STEP1500:   "gs://training-job-outputs/best_checkpoints/a7egic45/periodic_effort_20260514_step1500_auc0.9948_eer0.0178.pth"
+SLOT_A_R8_PERIODIC_STEP2500:   "gs://training-job-outputs/best_checkpoints/a7egic45/periodic_effort_20260515_step2500_auc0.9950_eer0.0156.pth"
+
+SLOT_B_PROPER_DATA_PERIODIC_STEP500:  "gs://training-job-outputs/best_checkpoints/ljuuz4u5/periodic_effort_20260514_step500_auc0.9936_eer0.0241.pth"
+SLOT_B_PROPER_DATA_PERIODIC_STEP1500: "gs://training-job-outputs/best_checkpoints/ljuuz4u5/periodic_effort_20260514_step1500_auc0.9929_eer0.0262.pth"
+SLOT_B_PROPER_DATA_PERIODIC_STEP3500: "gs://training-job-outputs/best_checkpoints/ljuuz4u5/periodic_effort_20260514_step3500_auc0.9934_eer0.0241.pth"
