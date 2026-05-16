@@ -1,0 +1,44 @@
+# =============================================================================
+# Promotion-contract scorecard map — Slot α + Slot β overnight (2026-05-16)
+#
+# Two FT-from-T5C-step3500 runs from 2026-05-15 overnight, both SUCCEEDED:
+#
+#   Slot α (lsx4n0t7) — R13_T5C_RESCHAIN_2026-05-15
+#                       T5C base + NEW resolution_chain_aug (random
+#                       downsample to {64,96,128,160,192} then upsample with
+#                       random kernel ∈ {LINEAR,CUBIC,AREA,LANCZOS4}, p=0.5).
+#                       us-east1, runtime 1h 47m.
+#                       CPU follow-up probe verdict: median real-cohort
+#                       score_range 0.448 vs T5C 0.605 (25% reduction);
+#                       flip rate τ=0.9: 12.4% vs T5C 57.7% (4.7× more
+#                       stable at production τ).
+#
+#   Slot β (gwntcld0) — R13_T5C_6AXIS_GRL_2026-05-15
+#                       T5C base + multi_axis_grl axes 4→6 (added
+#                       color_b_dev_high + luma_mean_high).
+#                       us-west4, runtime 4h 23m.
+#                       CPU follow-up probe verdict: 3% reduction in
+#                       score_range — null result.
+#
+# CKPT SELECTION (5 ckpts total):
+#   - Slot α step3500: CPU-probe winner, terminal periodic ckpt.
+#   - Slot α step1500: mid-trajectory sanity check (catches potential
+#                      late-step overfit if step3500 regresses contract).
+#   - Slot β step3500: contract-level retest for the null-result aug.
+#   - Anchors: P8A_REFERENCE_STEP5000, T5C_PERIODIC_STEP3500 (FT base
+#              for both slots; rank-3 on v3-fix scorecard 2026-05-12).
+#
+# Suite manifest: minimal 9-suite at
+#   arena/target_domain_suites.teams_promotion_contract_minimal_9suite_2026-05-14.yaml
+# Cell count: 5 × 9 = 45 cells (vs 90 in 2026-05-14 slotab scorecard).
+# Policy: standing v3-fix (target_real_fpr=0.07, target_stress_fpr=0.10,
+#         target_fake_recall_min=0.30).
+# =============================================================================
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+
+SLOT_A_RESCHAIN_STEP1500:      "gs://training-job-outputs/best_checkpoints/lsx4n0t7/periodic_effort_20260515_step1500_auc0.9867_eer0.0424.pth"
+SLOT_A_RESCHAIN_STEP3500:      "gs://training-job-outputs/best_checkpoints/lsx4n0t7/periodic_effort_20260516_step3500_auc0.9913_eer0.0297.pth"
+
+SLOT_B_6AXIS_GRL_STEP3500:     "gs://training-job-outputs/best_checkpoints/gwntcld0/periodic_effort_20260516_step3500_auc0.9910_eer0.0175.pth"
