@@ -1,17 +1,18 @@
 # OPEN_LOOPS — Mechanically Generated Issue Inventory
 
-> ⚙ **GENERATED on 2026-05-10** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
+> ⚙ **GENERATED on 2026-05-16** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
 
 ## Summary
 
-- **Open**: 41
-- **In progress**: 5
-- **Resolved**: 11
+- **Open**: 52
+- **In progress**: 6
+- **Resolved**: 15
 - **Superseded**: 1
+- **Unknown status**: 1
 
 ## Entries
 
-### Open (41)
+### Open (52)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -100,6 +101,22 @@
 - **last_verified**: 2026-05-10
 - **close_criterion**: a written deployment-direction decision is recorded that picks ONE of (a) ship T3_SLOT1_PERIODIC_STEP2500 with FPR-calibrated τ on a production-realistic real cohort (lockbox / F4-cleaned / IQ-pre-gated reals — depending on production substrate match), then optionally launch a refinement packet (T4 — face_scale_jitter @0.50 stacked with Slot 1 keep-list lever, OR Roy_D hard-negative mining); (b) ship T3_SLOT1_PERIODIC_STEP1500 instead (passes F0 strict floor; F4 viso 73.3% vs step2500 79.3% — slightly weaker capability but stricter contract pass); (c) keep P8A as deployment, treat T3 as a research result and pursue T4 with an additional viso-targeted intervention before next deployment cycle. The decision should be backed by an explicit determination of whether production substrate matches v2 (T3 wins), HDTF teams (P8A wins), or HDTF clean (T3 marginally wins) — see memory `project_v2_substrate_is_dor_diverse_swap` for prior framing of the v2-substrate-specificity question.
 - **source**: `threads/viso_bucket_gap.md:265`
+
+### `dev-to-lockbox-substrate-transfer-gap`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-11
+- **last_verified**: 2026-05-12
+- **close_criterion**: EITHER (a) a head-retrain on a substrate-diverse pool (dev + lockbox-style data, properly held-out for eval) lifts T4 lockbox AUC ≥ 0.90 — confirms the gap is closeable by exposing the head to substrate-diverse training, OR (b) the gap is REPRODUCED on multiple ckpts (T4, P8A, T3) and on the full lockbox cohort — closes as "structural data gap; requires new training data ingestion, not architecture/loss changes"
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:756`
+
+### `slot-b-viso-lift-mechanism-and-lockbox-fpr-localization`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: a per-identity decomposition of Slot β step3500's lockbox_real_fpr (~$0 MPS, ~1h) determines whether the +5.5pp absolute penalty is concentrated on 2-3 chronic identities (rule-rescuable per memory `project_blend_unsharp_lever_2026-05-14`) or distributed across new identities. AND a 5-axis sister-variant (axes = current 4 + color_b_dev_high only, no luma_mean_high) tests whether the viso lift comes from color_b alone or requires both new axes. The combination of these two tests resolves whether Slot β is a deployment path.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1143`
 
 ### `split-mode-delta-unquantified`
 - **status**: open
@@ -237,6 +254,46 @@
 - **close_criterion**: a CPU diagnostic determines the actual mechanism behind T3's universal Roy_D regression. Two cheap candidates are: (a) cross-correlate Roy_D regression magnitude with each identity's color_a_dev × saturation profile across all 18 T3 ckpts (need to score the 12 un-scored Slot 2 + Slot 3 step ckpts on Mac first, ~30 min CPU); (b) probe whether disabling visomaster_teams_enhanced (one of PA's data sources) on a T3-style retrain restores Roy_D handling — this isolates whether PA's data-source addition or T3's keep-list addition is the Roy_D-shifting culprit (requires GPU retrain, not cheap). Loop closes when EITHER (a) confirms the color_a_dev mechanism (in which case T4 hard-negative-mining or face_scale_jitter is the right intervention) OR (b) refutes both candidate mechanisms (in which case Roy_D regression mechanism remains unknown and a deeper representation-level probe is needed). Current evidence: Lap-shortcut hypothesis FALSIFIED (Roy_D Lap p50=66 is LOW, would not have been dropped by keep-list). Source: `MORNING_BRIEF_2026-05-10.md` §5 + §11.
 - **source**: `threads/viso_bucket_gap.md:274`
 
+### `chronic-6-encoder-iq-angle-drift-during-ft`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: a counterfactual training experiment establishes whether the chronic-6 IQ-PC1 angle drift from CLIP-frozen's 83.68° to FT'd ckpts' 74.95°-78.54° is causally responsible for chronic-cohort FPR, OR is a correlated side-effect. Candidate experiment: FT with continuous-axis-GRL on 6 IQ axes that explicitly pulls the encoder direction toward IQ-orthogonality. If post-training chronic-6 angle ≥ 82° AND chronic-cohort FPR drops by ≥ 0.05 absolute at FPR-cal τ, the drift is causally implicated. If angle goes ≥ 82° but FPR doesn't change, the drift is incidental.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:868`
+
+### `chronic-6-encoder-iq-angle-drift-during-ft`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: a counterfactual training experiment establishes whether the chronic-6 IQ-PC1 angle drift from CLIP-frozen's 83.68° to FT'd ckpts' 74.95°-78.54° is causally responsible for chronic-cohort FPR, OR is a correlated side-effect. Candidate experiment: FT with continuous-axis-GRL on 6 IQ axes that explicitly pulls the encoder direction toward IQ-orthogonality. If post-training chronic-6 angle ≥ 82° AND chronic-cohort FPR drops by ≥ 0.05 absolute at FPR-cal τ, the drift is causally implicated. If angle goes ≥ 82° but FPR doesn't change, the drift is incidental.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1025`
+
+### `t5c-classifier-capacity-mechanism`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: L11 atlas inv_mean recompute on T5C step1500 + step3500 + step3750 (a la A3 2026-05-11) — if T5C step3500 chronic_6 inv_mean ≥ P8A's (vs T4 step10500's −0.0315 absolute), classifier capacity is the lever responsible for the chronic_6 lift; otherwise the dor-cohort lift comes from somewhere else and §3.1 of the opinion-doc is refuted
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:812`
+
+### `cpu-probe-mechanism-discrimination`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: the 2026-05-15 resolution-chain probe template is amended to report fake-vs-real AUC on the panel for each ckpt scored. The AUC distinguishes encoder-level invariance (AUC preserved) from score-distribution compression (AUC reduced). Once added, any single-lever IQ-axis-attack packet must demonstrate that AUC is preserved as the pre-launch CPU gate.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1127`
+
+### `lockbox-real-fpr-tiebreak-is-load-bearing`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: a $0 CPU re-rank of the most recent scorecard using `dev_fake_macro_recall` as the tiebreak (instead of `lockbox_real_fpr`) AND a per-IQ-quartile cell decomposition of `lockbox_real_fpr` at each ckpt's selected τ. If the per-quartile FPR is uniformly below dev FPR (per D4 2026-05-12 finding), the tiebreak is measuring τ-tail-density not lockbox substrate difficulty. Decision: whether to amend the contract policy.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1160`
+
 ### `corrected-val-test-hint-split-counts-unrecoverable`
 - **status**: open
 - **severity**: low
@@ -341,7 +398,39 @@
 - **close_criterion**: the Wilcoxon-vs-P8A metric is split into two cohort-specific stats: `canary/wilcoxon_stat_vs_p8a_healthy_reals` (where small drift = good) and `canary/wilcoxon_stat_vs_p8a_chronic_reals` (where large negative drift = good). The aggregate stat is preserved but augmented. Implementation is ~30 lines in `trainer/mixins/canary_probe.py:_aggregate_metrics`. Defer until P2 results validate the basic metric set; if the basic Wilcoxon already correlates with deployment quality, the cohort split may not be needed.
 - **source**: `threads/in_training_canary_signal.md:89`
 
-### In progress (5)
+### `clip-frozen-chronic-6-auc-robustness`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: extend the CLIP-frozen chronic-6 probe to a larger sample (e.g., 500-1000 chronic-6 reals from contract suites + 100-200 chronic-6 fakes). If 5-fold CV probe AUC remains ≥ 0.95 at the larger sample, the "forgery signal is in raw CLIP" framing is robust. If the AUC drops below 0.90 at scale, the n=282 triptych result is sample-size-inflated and the framing weakens.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:879`
+
+### `clip-frozen-chronic-6-auc-robustness`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: extend the CLIP-frozen chronic-6 probe to a larger sample (e.g., 500-1000 chronic-6 reals from contract suites + 100-200 chronic-6 fakes). If 5-fold CV probe AUC remains ≥ 0.95 at the larger sample, the "forgery signal is in raw CLIP" framing is robust. If the AUC drops below 0.90 at scale, the n=282 triptych result is sample-size-inflated and the framing weakens.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1036`
+
+### `train-bucket-identity-overlap-gcs-audit`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: a GCS-side enumeration (`gsutil ls gs://live-deepfake-methods-real-and-fake-frames-cropped-teams-v2/samples/ | head -1000`) plus identity-name extraction from per-sample `manifest.json`'s `original_video_name` field determines whether the SAME HUMANS as `real_dor`/`Cam_Test`/`PC_Generator`/etc. appear in the training-side teams-v2 bucket under different sample_ids or sessions. If yes, the "P8A memorization" framing is plausible and the critic's §3.2 C4 reframe should be partially walked back. If no, the "P8A invariance" framing is strengthened and Slot C (L11 anchor on 5-identity cohort) becomes safer. Cost: <10 min CPU + GCS list quota; <$1.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:905`
+
+### `canary-probe-not-default-in-yaml-templates`
+- **status**: open
+- **severity**: low
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: the next packet author adds a default-on canary block to the packet yaml template OR explicitly documents the rationale for keeping it off. The canary infrastructure has been available since 2026-05-07; both Slot α and Slot β yamls inherited the canary-disabled state from `R13_T5C_T4_BIG_CLASSIFIER_2026-05-11.yaml`. The canary would have surfaced fake-side score crash by step 500-1000 in Slot α, allowing early-stop.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1177`
+
+### In progress (6)
 
 ### `shortcut-deployment-block`
 - **status**: in-progress
@@ -383,7 +472,15 @@
 - **close_criterion**: routing fix is applied — `quality_enhancement` is removed from `DEFAULT_ENHANCED_STRATEGIES` in `utils/grouping.py:13-17` AND from every R13 yaml's `enhanced_strategy_names` override (~15 yamls under `experiments/phase2_round13/`); a unit test asserts `infer_family_key` returns `deeplive_non_enhanced_fake` for a `quality_enhancement` fake input; image is rebuilt via `./dev.sh build-prod -y` (auto-bumps VERSION); and a critical-reading banner is added to the README and to historical packet retros (P8A, E2B, PA, PC) noting they trained on the contaminated routing. Validation re-run on at least one FT-from-base packet measuring the delta in deeplive enhanced-vs-non-enhanced family balance is recommended but not required for closure (could be folded into the in-scoping deeplive ship experiment instead). Verification step (visual inspection) is COMPLETE 2026-05-05 evening — user reported "quality enhancement is non-GFPGAN like we suspected." Bug confirmed; fix pending authorization.
 - **source**: `threads/quality_enhancement_strategy_misrouting.md:175`
 
-### Resolved (11)
+### `chronic_6-feature-regression-on-t4`
+- **status**: in-progress
+- **severity**: low
+- **first_seen**: 2026-05-11
+- **last_verified**: 2026-05-12
+- **close_criterion**: a training-time intervention (T5-C stronger online classifier; OR T5-B multi-layer GRL attachment; OR head-only retrain on a substrate-diverse pool including lockbox-style data) measurably restores chronic_6 inv_mean Δ to ≥ 0 vs P8A on the FULL chronic_6 cohort (including PC_Generator/Roy_D/Q identities, not just bla_bla_chow) while preserving lockbox + HDTF performance
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:741`
+
+### Resolved (15)
 
 ### `contract-policy-bug-fix-not-committed`
 - **status**: resolved
@@ -400,6 +497,14 @@
 - **last_verified**: 2026-05-05
 - **close_criterion**: Packet A (`R13_PA_VISOMASTER_ENHANCED_DATA.yaml`, run `3140330896851206144`, JOB_STATE_RUNNING in us-east1) and/or Packet C-codec (`R13_PC_CODEC_PLUS_DATA.yaml`, run `1202657157175050240`, JOB_STATE_RUNNING in us-east1) complete training, the resulting checkpoints are scored under both the F0 (full eval substrate) and F4 (substrate-cleaning, `analysis/substrate_cleaning_eval_2026-05-05/`) lenses, and a documented verdict is recorded for whether enabling `visomaster_enhanced + visomaster_teams_enhanced` data sources at fw=4.0 lifts visomaster_enhanced_macro_dev recall above the E2B_3200 baseline (8.4% F0 / 30.9% F4) at deployment-honest single-τ at 5% FPR ceiling. The verdict closes EITHER as (a) data-axis lever is dispositive (Packet A/C-codec materially beats E2B on viso recall under deployment policy), OR (b) data-axis lever as cleanly tested still does not lift, in which case memory `project_data_axis_lever_pulled_twice_no_lift.md` is amended to "pulled three times" with the bundle-confound caveat lifted from the prior two attempts. Either outcome closes the loop.
 - **source**: `threads/viso_bucket_gap.md:160`
+
+### `dev-to-lockbox-substrate-transfer-gap`
+- **status**: resolved
+- **severity**: high
+- **first_seen**: 2026-05-11
+- **last_verified**: 2026-05-12
+- **close_criterion**: EITHER (a) a head-retrain on a substrate-diverse pool (dev + lockbox-style data, properly held-out for eval) lifts T4 lockbox AUC ≥ 0.90 — confirms the gap is closeable by exposing the head to substrate-diverse training, OR (b) the gap is REPRODUCED on multiple ckpts (T4, P8A, T3) and on the full lockbox cohort — closes as "structural data gap; requires new training data ingestion, not architecture/loss changes"
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1001`
 
 ### `hints-as-supervision-hypothesis`
 - **status**: resolved
@@ -465,6 +570,14 @@
 - **close_criterion**: at least one shortlist run produces a written `promotion_winner.json`/`checkpoint_summary.csv` artifact pair on the WT-E manifest+shortlist
 - **source**: `threads/promotion_contract_evolution.md:151`
 
+### `face-scale-jitter-composability`
+- **status**: resolved
+- **severity**: low
+- **first_seen**: 2026-04-30
+- **last_verified**: 2026-05-12
+- **close_criterion**: empirical test of jitter@0.50 stacked on top of a non-bundle base (T3 SLOT1 or T4 multi-axis-L11-GRL) — if dev_macro_recall holds within 0.05 of base, composability is supported; if regression > 0.05 absolute, lever is bundle-replacement only
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:800`
+
 ### `pair-loss-asymmetric-variant-untested`
 - **status**: resolved
 - **severity**: low
@@ -472,6 +585,22 @@
 - **last_verified**: 2026-05-04
 - **close_criterion**: either (a) a $5 GPU probe extracts E2B features on the same 550 (raw, teams) viso pairs and re-runs Q1/Q2 directly on E2B geometry, with documented verdict on whether the P8A-as-proxy assumption hides a real signal; OR (b) an asymmetric-pair-loss variant (only aligning teams toward raw when raw scores higher than teams — never the reverse) is scoped, the cohort math is recomputed under that asymmetry, and a go/no-go decision is documented; OR (c) the loop is explicitly closed-as-not-pursued with a one-line note that the symmetric pair loss verdict is dispositive enough to deprioritize the asymmetric variant given the 9pp upper-bound ceiling and the existence of cheaper alternatives (substrate cleaning, per-substrate τ-calibration).
 - **source**: `threads/clean_teams_identity_pairing.md:93`
+
+### `encoder-vs-head-locus-on-t4-lockbox`
+- **status**: resolved
+- **severity**: low
+- **first_seen**: 2026-05-11
+- **last_verified**: 2026-05-11
+- **close_criterion**: frozen-encoder linear probe on T4 lockbox features yields AUC ≥ 0.85 across multiple T4 ckpts (= α-outcome, encoder retains separation, head is the failure point) OR AUC ≤ trained-head AUC (= β-outcome, encoder lost separation)
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:728`
+
+### `train-bucket-identity-overlap-gcs-audit`
+- **status**: resolved
+- **severity**: low
+- **first_seen**: 2026-05-12
+- **last_verified**: 2026-05-12
+- **close_criterion**: a GCS-side enumeration (`gsutil ls gs://live-deepfake-methods-real-and-fake-frames-cropped-teams-v2/samples/ | head -1000`) plus identity-name extraction from per-sample `manifest.json`'s `original_video_name` field determines whether the SAME HUMANS as `real_dor`/`Cam_Test`/`PC_Generator`/etc. appear in the training-side teams-v2 bucket under different sample_ids or sessions. If yes, the "P8A memorization" framing is plausible and the critic's §3.2 C4 reframe should be partially walked back. If no, the "P8A invariance" framing is strengthened and Slot C (L11 anchor on 5-identity cohort) becomes safer. Cost: <10 min CPU + GCS list quota; <$1.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1014`
 
 ### Superseded (1)
 
@@ -482,4 +611,14 @@
 - **last_verified**: 2026-04-30
 - **close_criterion**: `R13_P14_DATA_FIX.yaml` is committed, the smoke loads enhanced viso samples cleanly, the retrain completes, and a contract scorecard run on the resulting checkpoint shows `visomaster_enhanced_macro_dev` recall lifted materially above the P8A baseline (≥ 24% target under the corrected contract policy with `target_fake_recall_min=0.30`) — verifying the bucket-gap closure on the actual headline metric.
 - **source**: `threads/viso_bucket_gap.md:64`
+
+### Unknown status (1)
+
+### `dev-to-lockbox-substrate-transfer-gap`
+- **status**: resolvable
+- **severity**: high
+- **first_seen**: 2026-05-11
+- **last_verified**: 2026-05-12
+- **close_criterion**: EITHER (a) a head-retrain on a substrate-diverse pool (dev + lockbox-style data, properly held-out for eval) lifts T4 lockbox AUC ≥ 0.90 — confirms the gap is closeable by exposing the head to substrate-diverse training, OR (b) the gap is REPRODUCED on multiple ckpts (T4, P8A, T3) and on the full lockbox cohort — closes as "structural data gap; requires new training data ingestion, not architecture/loss changes"
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:856`
 
