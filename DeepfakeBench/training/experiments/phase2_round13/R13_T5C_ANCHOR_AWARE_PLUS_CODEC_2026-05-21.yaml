@@ -1,0 +1,395 @@
+# ============================================================================
+# R13_T5C_ANCHOR_AWARE_PLUS_CODEC_2026-05-21.yaml
+#
+# SINGLE-LEVER DELTA vs R13_T5C_ANCHOR_AWARE_2026-05-16 (Slot A v2):
+#   + augmentation.teams_codec_sim_p = 0.40
+#   + augmentation.teams_codec_sim_quality = [20, 65]
+#   (FT-from-Slot-A-v2-step3500; everything else byte-identical to Slot A v2.)
+#
+# MOTIVATION (FACTS — verified by 2026-05-21 audit):
+#   * P22 (2026-05-02) replaced `teams_codec_sim` with `pipeline_randomization`
+#     in the augmentation stack — deliberate change at the time, evaluated on
+#     dev fake_macro_recall (3× lift). T3, T4, T5C, Slot A v2 all inherit P22's
+#     swap. P8A still trains with `teams_codec_sim_p=0.40` + `pipeline_rand=disabled`.
+#   * 2026-05-19 natural experiment (`analysis/teams_account_natural_experiment_2026-05-19`):
+#     same person × same camera × same moment, 2 Teams accounts produce
+#     Δ prob_fake = 0.168 on T5C (0.795 → 0.628), enough to flip verdict at
+#     τ=0.70. P8A doesn't flip (0.376 → 0.211). The per-Teams-account
+#     transport-signature shortcut is alive in T5C and inherited into Slot A v2
+#     (Job A 2026-05-20 measured Δ identical to 4 decimal places).
+#   * may6 production-drift cohort (92 frames): P8A 0/92 false-flags; Slot A v2
+#     4/92; T5C 16/92; E2B 53/92. P8A's superior production-drift survival is
+#     the one property tracking aug-stack difference, not architecture.
+#
+# HYPOTHESIS:
+#   Stacking `teams_codec_sim_p=0.40` ON TOP of `pipeline_randomization`
+#   (NOT replacing it) restores P8A's transport-shortcut robustness while
+#   keeping P22's dev fake-recall lift AND Slot A v2's chronic-FP reduction.
+#   Strictly additive: 3 distinct mechanisms — anchor_aware suppresses
+#   chronic identities, pipeline_randomization randomizes generic IQ axes,
+#   teams_codec_sim specifically simulates Teams's brightness+contrast+JPEG
+#   pipeline (calibrated against "original PNG → Teams passthrough JPG").
+#
+# FALSIFIERS (close criterion):
+#   - dev_fake_macro_recall regresses > −0.05 absolute vs Slot A v2 step3500
+#     at any sampled ckpt → aug compression trap, codec lever shouldn't ship
+#   - lockbox_real_fpr regresses > +0.01 absolute vs Slot A v2 (0.0191) at
+#     every sampled ckpt → aug + anchor interaction breaks invariance
+#   - 2026-05-19 Roy_D crop natural-experiment Δ between original and
+#     codec-aug-augmented version > 0.30 → aug doesn't desensitize the
+#     transport axis the experiment actually identified
+#
+# CONFIRMATION (deployment grade):
+#   - lockbox_fake_recall ≥ 0.688 (Slot A v2 step3500's value) at some ckpt
+#   - lockbox_real_fpr ≤ 0.025 (Slot A v2 step3500: 0.0191)
+#   - chronic-6 mean dor_FPR ≤ 0.50 (Slot A v2: 0.86 on Roy_D — even maintaining
+#     is acceptable since this isn't the targeted axis)
+#   - PLUS: 2026-05-19 natural-experiment Δ on trained ckpt ≤ 0.05 (vs
+#     Slot A v2 step3500's Δ ≈ 0.168) — codec aug should reproduce
+#     deployment-pipeline transport variance during training, desensitizing
+#     the encoder to between-account drift
+#
+# DIFFERS FROM PRIOR ATTEMPTS:
+#   - P8A trained with `teams_codec_sim` but WITHOUT `pipeline_randomization`
+#     and WITHOUT anchor_aware. This packet STACKS all three. No prior
+#     packet has run this exact combination.
+#   - P22 swapped `teams_codec_sim` FOR `pipeline_randomization` — this
+#     packet keeps both. P22-era evaluation was dev fake_macro_recall
+#     (3× lift); deployment-pipeline-shortcut cost was not measured until
+#     2026-05-19. This packet's success criterion includes that cost.
+#
+# COST: ~$30-40 Vertex (us-west4/us-east1/us-central1, A100×1, 3500-step FT).
+# CONFIDENCE: 50-60% any single ckpt promotes; 70-80% the mechanism
+#   measurably reduces 2026-05-19 natural-experiment Δ.
+# Seed: 9921
+# ============================================================================
+
+name: "R13_T5C_ANCHOR_AWARE_PLUS_CODEC_2026-05-21"
+description: "Slot A v2 (anchor_aware on T5C step3500) + teams_codec_sim_p=0.40 + teams_codec_sim_quality=[20, 65] (P8A-matched dose). Tests whether restoring P8A's Teams-codec augmentation on top of P22's pipeline_randomization closes the 2026-05-19 per-Teams-account transport-shortcut gap, without regressing Slot A v2's chronic-FP fixes."
+seed: 9921
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "stage-codec-restoration-2026-05-21"
+    - "anchor-aware-enabled"
+    - "ft-from-slot-a-v2-step3500"
+    - "teams-codec-sim-p-0.40"
+    - "p8a-matched-codec-dose"
+    - "inherits-t4-grl"
+    - "inherits-t3-slot1-data"
+    - "inherits-p22-pipeline-randomization"
+    - "single-lever"
+    - "no-pair-rank"
+    - "no-group-dro"
+    - "no-resolution-chain-aug"
+    - "no-face-scale-jitter"
+    - "no-arcface"
+    - "seed-9921"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 10
+total_training_steps: 3500
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 350
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+# ===== FT from Slot A v2 step3500 (auto-mode 2026-05-16) =====
+# Slot A v2 step3500 (hp35c51p) was rank-2 with +30pp lockbox_fake_recall over
+# P8A at +0.07pp lockbox_real_fpr — current best deployment-grade ckpt.
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step3500_auc0.9952_eer0.0123.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# ===== Multi-axis encoder-level GRL — INHERITED from T5C =====
+multi_axis_grl:
+  enabled: true
+  axes:
+    - chronic_flag
+    - is_dor
+    - sharpness_laplacian_high
+    - color_a_approx_dev_high
+  lambda_max: 1.0
+  lambda_warmup_steps: 250
+  loss_weight: 1.0
+  hidden_dim: 1024
+  bottleneck_dim: 128
+
+resolution_chain_aug:
+  enabled: false
+
+pair_rank_loss:
+  lambda: 0.0
+
+use_group_dro: false
+
+correlation_penalty:
+  enabled: false
+
+# ===== Anchor-aware penalty — INHERITED from Slot A v2 (NOT changed) =====
+anchor_aware:
+  enabled: true
+  weight: 5.0
+  target_mean_prob: 0.10
+  samples_per_step: 16
+  pool_names:
+    - "dor-real-webcam-false-flag-no-virtual-bg"
+
+face_scale_jitter:
+  enabled: false
+
+# ===== AUGMENTATION — only delta from Slot A v2 is the 2 new keys =====
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  # ── NEW (restored from P8A, see motivation block above) ────────────
+  # P8A used these flat keys at the augmentation top level.
+  # Wave 2 calibration: −50.9% sharpness, +19% brightness, +3.5% contrast
+  # (vs the original PNG → Teams-passthrough JPG matched pairs).
+  teams_codec_sim_p: 0.40
+  teams_codec_sim_quality: [20, 65]
+  # ───────────────────────────────────────────────────────────────────
+
+  # ── INHERITED from T5C / Slot A v2 (P22-introduced, NOT changed) ───
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 9913
+  seed: 9913
+
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_enhanced:
+    enabled: true
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    exclude_tiers: ["ARTIFACT"]
+
+  visomaster_hints_teams:
+    enabled: false
+
+  visomaster_teams_enhanced:
+    enabled: true
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    companion_domains:
+      - "teams_v2"
+    include_statuses:
+      - "teams_v2_companion"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    frame_keep_list_path: "analysis/cpu_diagnostics_2026-05-09/slot1_teams_real_keep_list_2026-05-09.csv"
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 9913
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      visomaster_enhanced_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: false
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 6.0
+anneal_steps: 1
+
+evaluate_every_steps: 250
+ood_monitoring_start_step: 250
+ood_monitoring_every_steps: 500
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 12
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 500
+    - 1000
+    - 1500
+    - 2500
+    - 3500
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin
