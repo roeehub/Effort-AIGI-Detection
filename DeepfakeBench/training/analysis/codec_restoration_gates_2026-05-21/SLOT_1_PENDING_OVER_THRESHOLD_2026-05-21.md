@@ -1,6 +1,12 @@
-# Slot 1 PENDING > 30 min in us-west4 — user decision pending
+# Slot 1 PENDING > 30 min in us-west4 — RESOLVED (Slot 1 reached RUNNING at ~40 min)
 
-> Auto-mode flag raised 2026-05-20 23:02 UTC. Slot 1 has been in
+> **STATUS UPDATE 2026-05-20 23:05 UTC**: Slot 1 transitioned to
+> `JOB_STATE_RUNNING` shortly after this note was written, at ~40 min PENDING.
+> The decision tension below is historical and no action is required. Keeping
+> the note for reproducibility — the auto-mode rule-conflict still merits
+> a CLAUDE.md amendment for next time.
+
+> Auto-mode flag raised 2026-05-20 23:02 UTC. Slot 1 had been in
 > JOB_STATE_PENDING for ~39 minutes in us-west4 (submitted 22:23:50 UTC).
 > CLAUDE.md says switch regions; user's "up to 3 GPU jobs" cap + memory
 > `feedback_no_cancelling_vertex_jobs` (no cancel without user OK) put me
