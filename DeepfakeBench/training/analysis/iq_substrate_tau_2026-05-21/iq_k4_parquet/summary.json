@@ -1,0 +1,57 @@
+{
+  "k": 4,
+  "seed": 9921,
+  "n_dev_rows": 6495,
+  "n_lockbox_rows": 839,
+  "features_used": [
+    "sharpness_laplacian",
+    "brightness_v_mean",
+    "brightness_v_std",
+    "contrast_rms",
+    "saturation_s_mean"
+  ],
+  "cluster_centers_original_scale": {
+    "iqA0": {
+      "sharpness_laplacian": 2175.191246965425,
+      "brightness_v_mean": 153.08399877584688,
+      "brightness_v_std": 55.619257833544204,
+      "contrast_rms": 60.99255209079778,
+      "saturation_s_mean": 53.02169658797908
+    },
+    "iqA1": {
+      "sharpness_laplacian": 283.8438366090733,
+      "brightness_v_mean": 133.53672531297957,
+      "brightness_v_std": 49.83866414360365,
+      "contrast_rms": 46.86504872336642,
+      "saturation_s_mean": 90.27601446956548
+    },
+    "iqA2": {
+      "sharpness_laplacian": 216.78440392416718,
+      "brightness_v_mean": 170.18092904654668,
+      "brightness_v_std": 49.88144546152338,
+      "contrast_rms": 47.83631806467239,
+      "saturation_s_mean": 62.53194691988303
+    },
+    "iqA3": {
+      "sharpness_laplacian": 255.16644427603188,
+      "brightness_v_mean": 155.9088162600719,
+      "brightness_v_std": 65.24047534895725,
+      "contrast_rms": 61.99915246897949,
+      "saturation_s_mean": 79.05133187316713
+    }
+  },
+  "dev_cluster_counts": {
+    "iqA0": 123,
+    "iqA1": 2303,
+    "iqA2": 2155,
+    "iqA3": 1914
+  },
+  "lockbox_cluster_counts": {
+    "iqA0": 37,
+    "iqA1": 341,
+    "iqA2": 160,
+    "iqA3": 301
+  },
+  "tags_parquet_source": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/lockbox_tagging/full_tags_2026-04-27.parquet",
+  "synthetic_parquet_path": "analysis/iq_substrate_tau_2026-05-21/iq_k4_parquet/synthetic_tags.parquet"
+}

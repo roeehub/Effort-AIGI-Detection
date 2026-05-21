@@ -1,0 +1,92 @@
+{
+  "k": 8,
+  "seed": 9921,
+  "n_dev_rows": 6495,
+  "n_lockbox_rows": 839,
+  "features_used": [
+    "sharpness_laplacian",
+    "brightness_v_mean",
+    "brightness_v_std",
+    "contrast_rms",
+    "saturation_s_mean"
+  ],
+  "cluster_centers_original_scale": {
+    "iqA0": {
+      "sharpness_laplacian": 145.84830449917683,
+      "brightness_v_mean": 161.58497008890959,
+      "brightness_v_std": 47.52757200970357,
+      "contrast_rms": 45.01858697932535,
+      "saturation_s_mean": 62.4295936801401
+    },
+    "iqA1": {
+      "sharpness_laplacian": 100.84907349043007,
+      "brightness_v_mean": 174.64456495332632,
+      "brightness_v_std": 59.00665125810012,
+      "contrast_rms": 53.465628862735784,
+      "saturation_s_mean": 82.26039212750304
+    },
+    "iqA2": {
+      "sharpness_laplacian": 359.00097610259616,
+      "brightness_v_mean": 157.82054872041164,
+      "brightness_v_std": 51.11868324033219,
+      "contrast_rms": 53.48402386276647,
+      "saturation_s_mean": 137.14208363491667
+    },
+    "iqA3": {
+      "sharpness_laplacian": 703.8469808105366,
+      "brightness_v_mean": 181.7473696978333,
+      "brightness_v_std": 47.66855735173776,
+      "contrast_rms": 52.74918532677226,
+      "saturation_s_mean": 34.84921128986032
+    },
+    "iqA4": {
+      "sharpness_laplacian": 105.83161338521992,
+      "brightness_v_mean": 132.23387332017253,
+      "brightness_v_std": 50.44576914867344,
+      "contrast_rms": 46.0784653055585,
+      "saturation_s_mean": 84.99364154902263
+    },
+    "iqA5": {
+      "sharpness_laplacian": 279.92757721429416,
+      "brightness_v_mean": 148.3562421693802,
+      "brightness_v_std": 67.27615998522843,
+      "contrast_rms": 64.20200135377473,
+      "saturation_s_mean": 74.26285480855745
+    },
+    "iqA6": {
+      "sharpness_laplacian": 710.6591094207132,
+      "brightness_v_mean": 124.73550716283177,
+      "brightness_v_std": 50.4533924436042,
+      "contrast_rms": 47.98691963256398,
+      "saturation_s_mean": 81.43752995319606
+    },
+    "iqA7": {
+      "sharpness_laplacian": 2495.6966137524905,
+      "brightness_v_mean": 138.0690978279297,
+      "brightness_v_std": 60.56881525549652,
+      "contrast_rms": 64.79750414630915,
+      "saturation_s_mean": 59.70908531919122
+    }
+  },
+  "dev_cluster_counts": {
+    "iqA0": 1285,
+    "iqA1": 1076,
+    "iqA2": 399,
+    "iqA3": 462,
+    "iqA4": 1359,
+    "iqA5": 1246,
+    "iqA6": 587,
+    "iqA7": 81
+  },
+  "lockbox_cluster_counts": {
+    "iqA0": 67,
+    "iqA1": 153,
+    "iqA2": 2,
+    "iqA4": 312,
+    "iqA5": 245,
+    "iqA6": 28,
+    "iqA7": 32
+  },
+  "tags_parquet_source": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/lockbox_tagging/full_tags_2026-04-27.parquet",
+  "synthetic_parquet_path": "analysis/iq_substrate_tau_2026-05-21/iq_k8_parquet/synthetic_tags.parquet"
+}
