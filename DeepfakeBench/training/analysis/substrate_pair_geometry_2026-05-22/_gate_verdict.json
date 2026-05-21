@@ -1,0 +1,19 @@
+{
+  "verdict": "AMBIGUOUS",
+  "reason": "delta=-0.0774, |kliep_proj_mean|=0.0135",
+  "slot_a_v2_l11": {
+    "ckpt_key": "SlotAv2_step3500",
+    "layer": 11,
+    "cos_pair": 0.8672829056254729,
+    "cos_pair_std": 0.16610755569719168,
+    "cos_within_same": 0.9446757672035765,
+    "cos_cross_id": 0.7201089816056437,
+    "delta_pair_vs_within": -0.07739286157810354,
+    "score_corr": 0.36847323867911563,
+    "n_pairs": 1825,
+    "kliep_projection_mean": 0.01350302405725786,
+    "kliep_projection_std": 0.026105478388754294,
+    "n_frames_per_side": 3
+  },
+  "kliep_axis_acc": 0.9908864954432477
+}
