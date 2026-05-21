@@ -1,0 +1,42 @@
+{
+  "trained": {
+    "SLOT_1_ANCHOR_CODEC040_STEP3500": {
+      "Roy_D": 0.7945737838745117,
+      "Guest": 0.7120997905731201,
+      "delta": -0.0824739933013916,
+      "anchor": true,
+      "codec_p": 0.4,
+      "ft_base": "Slot A v2 step3500"
+    },
+    "SLOT_2_ANCHOR_CODEC020_STEP3500": {
+      "Roy_D": 0.8061103224754333,
+      "Guest": 0.7391239404678345,
+      "delta": -0.06698638200759888,
+      "anchor": true,
+      "codec_p": 0.2,
+      "ft_base": "Slot A v2 step3500"
+    },
+    "SLOT_3_NOANCHOR_CODEC040_STEP3500": {
+      "Roy_D": 0.8253192901611328,
+      "Guest": 0.7195156216621399,
+      "delta": -0.10580366849899292,
+      "anchor": false,
+      "codec_p": 0.4,
+      "ft_base": "T5C step3500"
+    }
+  },
+  "reference": {
+    "SLOT_A_V2_STEP3500_REF": {
+      "Roy_D": 0.7668,
+      "Guest": 0.5987,
+      "delta": -0.1681,
+      "may6_frac_gt05": 0.043
+    },
+    "T5C_STEP3500_REF": {
+      "Roy_D": 0.7952,
+      "Guest": 0.6275,
+      "delta": -0.1677,
+      "may6_frac_gt05": 0.174
+    }
+  }
+}
