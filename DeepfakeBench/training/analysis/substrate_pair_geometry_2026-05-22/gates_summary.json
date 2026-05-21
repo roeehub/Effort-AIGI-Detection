@@ -1,0 +1,28 @@
+{
+  "frames_clean_by_source": {
+    "hdtf_visomaster_teams": 17504,
+    "quickclips_visomaster_teams": 11712
+  },
+  "frames_teams_by_source": {
+    "hdtf_visomaster_teams": 17504,
+    "quickclips_visomaster_teams": 11712,
+    "visomaster_teams_enhanced": 1050
+  },
+  "inputs": {
+    "enhanced_resolver_json": "analysis/p16_split_audit_2026-04-30/_cache/enhanced_visomaster_resolver_2026-04-06.json",
+    "provisional_yaml": "arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml"
+  },
+  "pairs_by_source": {
+    "hdtf_visomaster_teams": 1094,
+    "quickclips_visomaster_teams": 732,
+    "visomaster_teams_enhanced": 54
+  },
+  "pairs_clean_count_missing": 54,
+  "pairs_with_sufficient_frames": 1880,
+  "phase_0_floor_threshold": 500,
+  "phase_0_gate_status": "FLOOR_MET",
+  "sufficient_frames_threshold_per_side": 5,
+  "total_frames_clean": 29216,
+  "total_frames_teams": 30266,
+  "total_pairs": 1880
+}
