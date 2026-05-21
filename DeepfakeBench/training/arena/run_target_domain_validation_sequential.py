@@ -464,6 +464,8 @@ def _write_promotion_contract_outputs(
         target_stress_fpr=float(args.promotion_target_stress_fpr),
         target_fake_recall_min=float(args.promotion_target_fake_recall_min),
         readout_only_suites=tuple(_csv_list(args.promotion_readout_only_suites)),
+        tiebreak_policy=str(args.promotion_tiebreak_policy).strip().lower(),
+        tiebreak_lambda=float(args.promotion_tiebreak_lambda),
     )
     payload = promotion.score_promotion_contract(
         report_root=str(args.output_gcs_folder).strip(),
@@ -1006,6 +1008,24 @@ def main() -> None:
     parser.add_argument("--promotion_readout_only_suites", type=str,
                         default="teams_real_dor_dev",
                         help="CSV of suite names that appear in scorecard but do NOT influence τ.")
+    parser.add_argument("--promotion_tiebreak_policy", type=str,
+                        default="lex", choices=("lex", "composite"),
+                        help=(
+                            "Cross-checkpoint ranking policy. 'lex' (default) "
+                            "preserves the lockbox_real_fpr → lockbox_fake_recall "
+                            "lexicographic ordering. 'composite' replaces the "
+                            "post-tier ordering with the scalar score = "
+                            "lockbox_real_fpr + λ × (1 − lockbox_fake_recall), "
+                            "where λ is set by --promotion_tiebreak_lambda. "
+                            "Use composite when the lex-leading field is "
+                            "near-tied across candidates."
+                        ))
+    parser.add_argument("--promotion_tiebreak_lambda", type=float, default=1.0,
+                        help=(
+                            "FP-to-FN cost ratio for the composite tiebreak. "
+                            "Only consulted when --promotion_tiebreak_policy="
+                            "composite."
+                        ))
 
     # Defaults for optional suite keys
     parser.add_argument("--df40_mode", type=str, default="none",

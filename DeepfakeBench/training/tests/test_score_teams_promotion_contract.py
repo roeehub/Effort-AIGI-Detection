@@ -364,3 +364,233 @@ def test_wrapper_and_scorer_cli_defaults_match_contract_default():
         f"Wrapper CLI --promotion_target_fake_recall_min default ({wrapper_default}) "
         f"does not match ContractConfig default ({contract_default})."
     )
+
+
+# ---------------------------------------------------------------------------
+# Tiebreak policy (composite vs. lex) — 2026-05-22
+# ---------------------------------------------------------------------------
+
+
+def test_default_tiebreak_policy_is_lex():
+    """Regression guard: existing scorecards must keep their lex ordering.
+    Any default other than 'lex' silently changes how historical reruns rank.
+    """
+    contract = _base_contract()
+    assert contract.tiebreak_policy == "lex"
+    assert contract.tiebreak_lambda == 1.0
+
+
+def test_composite_tiebreak_score_formula():
+    """Direct check on the scalar combine: score = FPR + λ × (1 − recall).
+    Verified by hand for the 2026-05-20 4-ckpt panel's two leading rows.
+    """
+    p8a_row = {"lockbox_real_fpr": 0.0184, "lockbox_fake_recall": 0.387}
+    slot_a_v2_row = {"lockbox_real_fpr": 0.0191, "lockbox_fake_recall": 0.688}
+
+    # At λ=0 the composite reduces to lockbox_real_fpr → P8A's value.
+    assert promotion._composite_tiebreak_score(p8a_row, 0.0) == 0.0184
+    assert promotion._composite_tiebreak_score(slot_a_v2_row, 0.0) == 0.0191
+
+    # At λ=1 P8A has the higher composite (more FN cost → worse score).
+    assert promotion._composite_tiebreak_score(p8a_row, 1.0) > promotion._composite_tiebreak_score(
+        slot_a_v2_row, 1.0
+    )
+
+    # Closed-form crossover: λ* ≈ (0.0191 − 0.0184) / (0.688 − 0.387) ≈ 0.00233.
+    crossover = (0.0191 - 0.0184) / (0.688 - 0.387)
+    assert 0.0020 < crossover < 0.0030
+    # Slightly above the crossover, Slot A v2 (better recall) wins.
+    above = promotion._composite_tiebreak_score(p8a_row, crossover + 1e-4)
+    below_slot = promotion._composite_tiebreak_score(slot_a_v2_row, crossover + 1e-4)
+    assert below_slot < above
+    # Slightly below the crossover, P8A (lower FPR) wins.
+    above_p8a = promotion._composite_tiebreak_score(p8a_row, crossover - 1e-4)
+    below_slot_v2 = promotion._composite_tiebreak_score(slot_a_v2_row, crossover - 1e-4)
+    assert above_p8a < below_slot_v2
+
+
+def test_composite_tiebreak_handles_missing_metrics():
+    """Rows with missing or non-finite lockbox metrics sink to +inf so they
+    never beat a valid row regardless of λ. Otherwise an unranked summary row
+    (e.g., an early-failure ckpt) could spuriously rank first."""
+    bad_row = {"lockbox_real_fpr": None, "lockbox_fake_recall": 0.5}
+    nan_row = {"lockbox_real_fpr": float("nan"), "lockbox_fake_recall": 0.5}
+    good_row = {"lockbox_real_fpr": 0.05, "lockbox_fake_recall": 0.5}
+    assert promotion._composite_tiebreak_score(bad_row, 1.0) == float("inf")
+    assert promotion._composite_tiebreak_score(nan_row, 1.0) == float("inf")
+    assert promotion._composite_tiebreak_score(good_row, 1.0) < float("inf")
+
+
+def test_promotion_summary_sort_key_composite_flips_winner_above_crossover():
+    """Under lex policy P8A wins (lower lockbox_real_fpr). Under composite
+    policy with λ above the crossover, Slot A v2 wins. This is the Track B
+    rerank behavior the operational decision rests on."""
+    p8a = {
+        "lockbox_real_fpr": 0.0184,
+        "lockbox_fake_recall": 0.387,
+        "dev_primary_real_fpr": 0.03,
+        "dev_worst_real_stress_fpr": 0.04,
+        "dev_fake_macro_recall": 0.75,
+        "selected_threshold": 0.92,
+        "teams_fake_all_dev__fake_recall": 0.5,
+        "visomaster_enhanced_macro_dev__fake_recall": 0.3,
+        "deeplive_enhanced_dev__fake_recall": 0.6,
+    }
+    slot_a_v2 = {
+        "lockbox_real_fpr": 0.0191,
+        "lockbox_fake_recall": 0.688,
+        "dev_primary_real_fpr": 0.03,
+        "dev_worst_real_stress_fpr": 0.04,
+        "dev_fake_macro_recall": 0.75,
+        "selected_threshold": 0.535,
+        "teams_fake_all_dev__fake_recall": 0.7,
+        "visomaster_enhanced_macro_dev__fake_recall": 0.5,
+        "deeplive_enhanced_dev__fake_recall": 0.8,
+    }
+
+    lex = _base_contract()
+    assert lex.tiebreak_policy == "lex"
+    rows_lex = sorted(
+        [p8a, slot_a_v2],
+        key=lambda r: promotion._promotion_summary_sort_key(r, lex),
+    )
+    assert rows_lex[0] is p8a, "lex policy must rank P8A first on lower lockbox_real_fpr"
+
+    # λ=1 is far above the ~0.0023 crossover.
+    composite_lambda1 = _base_contract(tiebreak_policy="composite", tiebreak_lambda=1.0)
+    rows_comp = sorted(
+        [p8a, slot_a_v2],
+        key=lambda r: promotion._promotion_summary_sort_key(r, composite_lambda1),
+    )
+    assert rows_comp[0] is slot_a_v2, (
+        "composite policy with λ=1 must rank Slot A v2 first — fake-recall "
+        "gain dominates the 0.07pp lockbox_real_fpr gap"
+    )
+
+    # λ=0 reduces to FPR-min; P8A wins again (deterministic via lex tail).
+    composite_lambda0 = _base_contract(tiebreak_policy="composite", tiebreak_lambda=0.0)
+    rows_comp0 = sorted(
+        [p8a, slot_a_v2],
+        key=lambda r: promotion._promotion_summary_sort_key(r, composite_lambda0),
+    )
+    assert rows_comp0[0] is p8a
+
+
+def test_composite_tiebreak_end_to_end_changes_winner_in_score_promotion_contract(tmp_path):
+    """End-to-end: the same fixtures rank P8A-like first under lex and
+    Slot-A-v2-like first under composite λ=1. This is the rerank story we
+    document in the Track B FACTS doc."""
+    checkpoint_map_path = tmp_path / "checkpoint_map.yaml"
+    report_root = tmp_path / "reports"
+    checkpoint_map_path.write_text(
+        'low_fpr_low_recall: "gs://bucket/low_fpr.pth"\n'
+        'mid_fpr_high_recall: "gs://bucket/mid_fpr.pth"\n'
+    )
+
+    # LOW_FPR_LOW_RECALL (P8A-like): teams_real_lockbox 1/50 = 0.02 FPR;
+    # teams_fake_lockbox 4/10 = 0.40 recall at τ ≈ 0.50.
+    # MID_FPR_HIGH_RECALL (Slot A v2-like): 1/49 ≈ 0.0204 FPR;
+    # teams_fake_lockbox 7/10 = 0.70 recall at τ ≈ 0.50.
+    # Both ckpts use identical dev distributions so the dev-side τ selection
+    # picks the same threshold; the difference lives entirely in lockbox.
+    dev_real_low = [(0, 0.10), (0, 0.15), (0, 0.20), (0, 0.25)]
+    dev_real_stress = [(0, 0.18), (0, 0.22)]
+    dev_fake_strong = [(1, 0.55), (1, 0.60), (1, 0.65)]
+    fixtures = {
+        "LOW_FPR_LOW_RECALL": {
+            "teams_real_all_dev": dev_real_low,
+            "teams_real_poor_quality_dev": dev_real_stress,
+            "teams_real_lighting_extreme_dev": dev_real_stress,
+            "teams_fake_all_dev": dev_fake_strong,
+            "visomaster_enhanced_macro_dev": [(1, 0.58)],
+            "deeplive_enhanced_dev": [(1, 0.57)],
+            "teams_real_all_lockbox": [(0, 0.30)] * 49 + [(0, 0.95)],
+            "teams_fake_all_lockbox": [(1, 0.60)] * 4 + [(1, 0.40)] * 6,
+        },
+        "MID_FPR_HIGH_RECALL": {
+            "teams_real_all_dev": dev_real_low,
+            "teams_real_poor_quality_dev": dev_real_stress,
+            "teams_real_lighting_extreme_dev": dev_real_stress,
+            "teams_fake_all_dev": dev_fake_strong,
+            "visomaster_enhanced_macro_dev": [(1, 0.58)],
+            "deeplive_enhanced_dev": [(1, 0.57)],
+            # 1 lockbox real above 0.55 → 1/49 FPR vs LOW's 1/50; tiny gap.
+            "teams_real_all_lockbox": [(0, 0.30)] * 48 + [(0, 0.95)],
+            # 7 fakes above 0.55 vs LOW's 4.
+            "teams_fake_all_lockbox": [(1, 0.60)] * 7 + [(1, 0.40)] * 3,
+        },
+    }
+    for ckpt, suite_map in fixtures.items():
+        for suite_name, rows in suite_map.items():
+            _write_report(report_root, suite_name, ckpt, rows)
+
+    common = dict(
+        report_root=str(report_root),
+        checkpoint_map_path=str(checkpoint_map_path),
+        checkpoints_arg="LOW_FPR_LOW_RECALL,MID_FPR_HIGH_RECALL",
+    )
+
+    payload_lex = promotion.score_promotion_contract(
+        **common,
+        contract=_base_contract(target_fake_recall_min=0.0, tiebreak_policy="lex"),
+    )
+    assert payload_lex["winner"]["checkpoint_key"] == "LOW_FPR_LOW_RECALL"
+    assert payload_lex["contract"]["tiebreak_policy"] == "lex"
+    assert "composite_tiebreak_score" not in payload_lex["winner"], (
+        "lex policy must not stamp the composite score column into the summary"
+    )
+
+    payload_composite = promotion.score_promotion_contract(
+        **common,
+        contract=_base_contract(
+            target_fake_recall_min=0.0,
+            tiebreak_policy="composite",
+            tiebreak_lambda=1.0,
+        ),
+    )
+    assert payload_composite["winner"]["checkpoint_key"] == "MID_FPR_HIGH_RECALL"
+    assert payload_composite["contract"]["tiebreak_policy"] == "composite"
+    assert payload_composite["contract"]["tiebreak_lambda"] == 1.0
+    for row in payload_composite["checkpoint_summary_rows"]:
+        assert "composite_tiebreak_score" in row
+        assert row["composite_tiebreak_lambda"] == 1.0
+
+
+def test_scorer_and_wrapper_tiebreak_cli_defaults_match_contract():
+    """Regression guard mirroring test_wrapper_and_scorer_cli_defaults_match_contract_default,
+    for the new tiebreak args. If these drift between the dataclass and CLI
+    defaults a future agent's scorecard could silently change ranking policy.
+    """
+    import re
+
+    contract = _base_contract()
+    scorer_text = (ROOT / "arena/score_teams_promotion_contract.py").read_text()
+    wrapper_text = (ROOT / "arena/run_target_domain_validation_sequential.py").read_text()
+
+    scorer_policy = re.search(
+        r'add_argument\(\s*"--tiebreak_policy"\s*,\s*choices=\([^)]+\)\s*,\s*default="([^"]+)"',
+        scorer_text,
+    )
+    assert scorer_policy is not None
+    assert scorer_policy.group(1) == contract.tiebreak_policy
+
+    scorer_lambda = re.search(
+        r'add_argument\(\s*"--tiebreak_lambda"\s*,\s*type=float\s*,\s*default=([^,\)]+)',
+        scorer_text,
+    )
+    assert scorer_lambda is not None
+    assert float(scorer_lambda.group(1).strip()) == contract.tiebreak_lambda
+
+    wrapper_policy = re.search(
+        r'add_argument\(\s*"--promotion_tiebreak_policy"\s*,\s*type=str\s*,\s*\n?\s*default="([^"]+)"',
+        wrapper_text,
+    )
+    assert wrapper_policy is not None
+    assert wrapper_policy.group(1) == contract.tiebreak_policy
+
+    wrapper_lambda = re.search(
+        r'add_argument\(\s*"--promotion_tiebreak_lambda"\s*,\s*type=float\s*,\s*default=([^,\s\)]+)',
+        wrapper_text,
+    )
+    assert wrapper_lambda is not None
+    assert float(wrapper_lambda.group(1).strip()) == contract.tiebreak_lambda

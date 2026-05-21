@@ -294,6 +294,17 @@ class ContractConfig:
     # (e.g., teams_real_dor_dev) where we want a per-checkpoint readout without
     # letting the new pool drag the contract's τ around.
     readout_only_suites: Tuple[str, ...] = ()
+    # Cross-checkpoint ranking policy (2026-05-22). "lex" preserves the original
+    # lockbox_real_fpr → lockbox_fake_recall → ... lexicographic ordering; with
+    # near-tied lockbox_real_fpr values, the noise on that field dominates the
+    # decision (the Slot A v2 vs P8A 2026-05-20 panel: 0.07pp gap, paired-bootstrap
+    # 95% CI [-0.008, +0.010] covers zero). "composite" replaces the post-tier
+    # ranking with a single scalar score = lockbox_real_fpr + λ × (1 − lockbox_fake_recall),
+    # which names the operational FP-to-FN cost ratio λ explicitly instead of
+    # encoding it implicitly via tie-tolerance. Default "lex" for backward
+    # compatibility.
+    tiebreak_policy: str = "lex"
+    tiebreak_lambda: float = 1.0
 
     def all_suites(self) -> Tuple[str, ...]:
         ordered: List[str] = []
@@ -510,6 +521,28 @@ def _threshold_sort_key(row: Dict[str, Any], contract: ContractConfig) -> Tuple[
     )
 
 
+def _composite_tiebreak_score(row: Dict[str, Any], lambda_: float) -> float:
+    """Single scalar that combines lockbox FPR and lockbox FN under a named cost ratio.
+
+    score = lockbox_real_fpr + λ × (1 − lockbox_fake_recall)
+
+    Lower is better. λ is the operator's FP-to-FN cost ratio: λ=0 reduces to
+    pure FPR-min (lex-equivalent on the leading field); λ→∞ reduces to pure
+    fake-recall-max. Missing/non-finite values for either input collapse to
+    +inf so the row sinks to the bottom.
+    """
+    fpr_value = row.get("lockbox_real_fpr")
+    recall_value = row.get("lockbox_fake_recall")
+    try:
+        fpr = float(fpr_value) if fpr_value is not None else float("inf")
+        recall = float(recall_value) if recall_value is not None else float("inf")
+    except (TypeError, ValueError):
+        return float("inf")
+    if not math.isfinite(fpr) or not math.isfinite(recall):
+        return float("inf")
+    return fpr + float(lambda_) * (1.0 - recall)
+
+
 def _promotion_summary_sort_key(row: Dict[str, Any], contract: ContractConfig) -> Tuple[float, ...]:
     # Tier rows by whether they meet the recall floor on dev_fake_macro_recall
     # (when the floor is active). Without this tiering, the cross-ckpt ranker
@@ -531,6 +564,27 @@ def _promotion_summary_sort_key(row: Dict[str, Any], contract: ContractConfig) -
         tier = 0 if macro_recall_raw >= contract.target_fake_recall_min - 1e-9 else 1
     else:
         tier = 0
+
+    if str(contract.tiebreak_policy).strip().lower() == "composite":
+        composite = _composite_tiebreak_score(row, contract.tiebreak_lambda)
+        # Preserve the rest of the lex ordering as a deterministic tail so that
+        # ties on the composite score still resolve identically to the legacy
+        # path (matters when lockbox_real_fpr and lockbox_fake_recall are both
+        # exactly equal across rows).
+        return (
+            tier,
+            composite,
+            _sort_number(row.get("lockbox_real_fpr")),
+            _sort_number(row.get("lockbox_fake_recall"), higher_is_better=True),
+            _sort_number(row.get("dev_primary_real_fpr")),
+            _sort_number(row.get("dev_worst_real_stress_fpr")),
+            *[
+                _sort_number(row.get(f"{suite_name}__fake_recall"), higher_is_better=True)
+                for suite_name in contract.dev_fake_suites
+            ],
+            _sort_number(row.get("selected_threshold"), higher_is_better=True),
+        )
+
     return (
         tier,
         _sort_number(row.get("lockbox_real_fpr")),
@@ -669,6 +723,13 @@ def score_promotion_contract(
             summary_row[f"{suite_name}__fake_recall"] = best_threshold_row[f"{suite_name}__fake_recall"]
         checkpoint_summary_rows.append(summary_row)
 
+    if str(contract.tiebreak_policy).strip().lower() == "composite":
+        for row in checkpoint_summary_rows:
+            row["composite_tiebreak_score"] = round(
+                _composite_tiebreak_score(row, contract.tiebreak_lambda), 6
+            )
+            row["composite_tiebreak_lambda"] = float(contract.tiebreak_lambda)
+
     checkpoint_summary_rows.sort(key=lambda row: _promotion_summary_sort_key(row, contract))
     for rank, row in enumerate(checkpoint_summary_rows, 1):
         row["promotion_rank"] = rank
@@ -684,6 +745,8 @@ def score_promotion_contract(
             "target_real_fpr": contract.target_real_fpr,
             "target_stress_fpr": contract.target_stress_fpr,
             "target_fake_recall_min": contract.target_fake_recall_min,
+            "tiebreak_policy": contract.tiebreak_policy,
+            "tiebreak_lambda": contract.tiebreak_lambda,
         },
         "threshold_grid_rows": threshold_grid_rows,
         "selected_threshold_scorecard_rows": selected_threshold_scorecard_rows,
@@ -797,6 +860,32 @@ def main() -> None:
             "Default includes teams_real_dor_dev (OOD-real monitor). Pass '' to disable."
         ),
     )
+    parser.add_argument(
+        "--tiebreak_policy",
+        choices=("lex", "composite"),
+        default="lex",
+        help=(
+            "Cross-checkpoint ranking policy. 'lex' (default) preserves the "
+            "lockbox_real_fpr → lockbox_fake_recall lexicographic ordering. "
+            "'composite' replaces the post-tier ordering with the scalar "
+            "score = lockbox_real_fpr + λ × (1 − lockbox_fake_recall), where "
+            "λ is set by --tiebreak_lambda. Use composite when the lex-leading "
+            "field is near-tied across candidates and the noise on that field "
+            "would otherwise dominate the decision."
+        ),
+    )
+    parser.add_argument(
+        "--tiebreak_lambda",
+        type=float,
+        default=1.0,
+        help=(
+            "FP-to-FN cost ratio used by the composite tiebreak. Only consulted "
+            "when --tiebreak_policy=composite. λ=0 reduces to pure FPR-min; "
+            "λ→∞ reduces to pure fake-recall-max. λ=1 weights one percentage "
+            "point of lockbox_real_fpr equally with one percentage point of "
+            "lockbox_fake_recall loss."
+        ),
+    )
     args = parser.parse_args()
 
     contract = ContractConfig(
@@ -809,6 +898,8 @@ def main() -> None:
         target_stress_fpr=float(args.target_stress_fpr),
         target_fake_recall_min=float(args.target_fake_recall_min),
         readout_only_suites=_csv_list(args.readout_only_suites),
+        tiebreak_policy=str(args.tiebreak_policy).strip().lower(),
+        tiebreak_lambda=float(args.tiebreak_lambda),
     )
 
     payload = score_promotion_contract(
