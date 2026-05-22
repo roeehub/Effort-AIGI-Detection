@@ -222,6 +222,20 @@ combined_paired:
       - deeplive_teams
     pair_fraction: 0.25
 
+  # NEW (2026-05-22 PM, commit ed10630): substrate_paired_inventory data
+  # source. Reads HDTF (1094 pairs) + quickclips (732 pairs) directly from
+  # the A0.1 inventory CSV — these GCS buckets had no existing iterator
+  # before today. Without this block enabled the BACKBONE training only
+  # sees the 54 viso_teams_enhanced pairs that already had an iterator.
+  substrate_paired_inventory:
+    enabled: true
+    inventory_path: "analysis/substrate_pair_geometry_2026-05-22/inventory_manifest.csv"
+    sources:
+      - hdtf_visomaster_teams
+      - quickclips_visomaster_teams
+    sparse_indices: [0, 4, 8, 12]
+    parallel_download_workers: 8
+
   df40:
     enabled: true
     pair_json: "dataset/df40_pairs/df40-pair-matching.json"
