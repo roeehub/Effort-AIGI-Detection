@@ -1,0 +1,59 @@
+{
+  "frozen_clip_kliep": {
+    "acc": 0.9908864954432477,
+    "source": "_kliep_w_hat.npy"
+  },
+  "ckpt_axes": {
+    "P8A_step5000": {
+      "acc": 0.9803742583295298,
+      "acc_train": 0.9808262953663547,
+      "n_train": 8762,
+      "n_test": 2191,
+      "coef_norm": 39.464471609212644,
+      "b": 0.41482945962106244,
+      "cos_with_frozen": 0.10374897811684775,
+      "pair_proj_mean": 0.1186608187278663,
+      "pair_proj_std": 0.0423053119262624,
+      "pair_proj_abs_mean": 0.11870411430316125,
+      "pair_proj_frozen_mean": 0.005180111785388351,
+      "pair_proj_frozen_std": 0.019508899554295422,
+      "n_pairs": 1825
+    },
+    "SlotAv2_step3500": {
+      "acc": 0.9835691465084436,
+      "acc_train": 0.9892718557406984,
+      "n_train": 8762,
+      "n_test": 2191,
+      "coef_norm": 38.27871079155102,
+      "b": 0.40455790893498167,
+      "cos_with_frozen": 0.039986093699267734,
+      "pair_proj_mean": 0.13627536502407758,
+      "pair_proj_std": 0.04332814723390807,
+      "pair_proj_abs_mean": 0.13632863734534242,
+      "pair_proj_frozen_mean": 0.013503024057245126,
+      "pair_proj_frozen_std": 0.02610547838872968,
+      "n_pairs": 1825
+    },
+    "T5C_step3500": {
+      "acc": 0.9835691465084436,
+      "acc_train": 0.9885870805752112,
+      "n_train": 8762,
+      "n_test": 2191,
+      "coef_norm": 38.50475175917623,
+      "b": 0.30377340887703197,
+      "cos_with_frozen": 0.05918414983997837,
+      "pair_proj_mean": 0.13368860957305417,
+      "pair_proj_std": 0.03801832661914588,
+      "pair_proj_abs_mean": 0.1337420246741017,
+      "pair_proj_frozen_mean": 0.014772015964982945,
+      "pair_proj_frozen_std": 0.022989638009027563,
+      "n_pairs": 1825
+    }
+  },
+  "meta": {
+    "seed": 42,
+    "n_pairs": 1825,
+    "wall_seconds": 11.3,
+    "split": "stratified 80/20 random_state=42"
+  }
+}
