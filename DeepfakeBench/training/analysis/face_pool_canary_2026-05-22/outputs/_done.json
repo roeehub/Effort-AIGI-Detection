@@ -1,0 +1,5 @@
+{
+  "status": "done",
+  "output_json": "analysis/face_pool_canary_2026-05-22/outputs/SLOT_A_V2_STEP3500_face_pool.json",
+  "scores_npy": "analysis/face_pool_canary_2026-05-22/outputs/SLOT_A_V2_STEP3500_face_pool.scores.npy"
+}
