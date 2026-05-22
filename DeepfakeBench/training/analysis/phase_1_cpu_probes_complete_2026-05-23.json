@@ -1,0 +1,31 @@
+{
+  "status": "done",
+  "wall_seconds": 814,
+  "wall_seconds_per_probe": {
+    "cpu_1": 501,
+    "cpu_2": 312,
+    "cpu_3": 0
+  },
+  "cpu_1_verdict": "gamma",
+  "cpu_2_verdict": "beta",
+  "cpu_3_verdict": "gamma",
+  "cpu_1_summary": "viso non-face saliency mass 72.6% (alpha cond 2 met) but viso non-face recall = 0.000 < face recall 0.067 + 0.05 (alpha cond 1 not met); face saliency mass 27.4% < 50% (beta cond 2 not met). Top-3 viso saliency patches all at row 2 (top of frame), outside the centered 7x7 face region.",
+  "cpu_2_summary": "Slot A v2 mean(raw)=0.5029 < mean(teams)=0.5419, Delta=+0.0390, Wilcoxon p=0.002, same direction as E2B 2026-05-04. Per literal rule: pair-loss premise does not hold on Slot A v2.",
+  "cpu_3_summary": "|cos(per-ckpt axis, false-flag-normal)| = 0.04-0.08 << 0.3 (alpha cond 1 met); cos(P8A, SlotAv2) = 0.692 < 0.7 (alpha cond 2 not met by 0.008). Pairwise cosines P8A/SlotAv2/T5C between 0.692 and 0.924. No beta trigger.",
+  "phase_2_implications": "HEAD experiment unchanged. BACKBONE-SlotAv2 + BACKBONE-T5C pivot from substrate-pair-orthogonal (projection-MSE on per-ckpt axis) to GroupDRO substrate-balanced (Phase 4 Fallback B). HEAD ALT (dual-readout) deferred to Phase 4. Reasoning: CPU-2 indicates the projection-MSE objective's underlying asymmetry has wrong sign on Slot A v2; CPU-3 indicates SlotAv2 and T5C substrate axes are 0.924 cosine-aligned (single axis problem); CPU-1 indicates the non-face-pool readout cannot recover viso recall at the calibrated CLS tau (recall=0 at tau_CLS).",
+  "facts_docs": [
+    "analysis/viso_fake_signature_localization_2026-05-23/RESULTS_FACTS_2026-05-23.md",
+    "analysis/pair_loss_slot_a_v2_2026-05-23/RESULTS_FACTS_2026-05-23.md",
+    "analysis/per_ckpt_axis_decomposition_2026-05-23/RESULTS_FACTS_2026-05-23.md"
+  ],
+  "sentinels": [
+    "analysis/viso_fake_signature_localization_2026-05-23/_cpu1_complete.json",
+    "analysis/pair_loss_slot_a_v2_2026-05-23/_cpu2_complete.json",
+    "analysis/per_ckpt_axis_decomposition_2026-05-23/_cpu3_complete.json"
+  ],
+  "reproducible_scripts": [
+    "analysis/viso_fake_signature_localization_2026-05-23/run_cpu_1_viso_localization.py",
+    "analysis/pair_loss_slot_a_v2_2026-05-23/run_cpu_2_pair_loss.py",
+    "analysis/per_ckpt_axis_decomposition_2026-05-23/run_cpu_3_axis_decomposition.py"
+  ]
+}

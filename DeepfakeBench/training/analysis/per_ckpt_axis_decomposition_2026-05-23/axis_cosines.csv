@@ -1,0 +1,7 @@
+row_type,name,cos_axis_vs_grad,cos_axis_vs_false_flag,cosine
+per_ckpt,P8A_step5000,0.07039562999310903,0.08083802803760362,
+per_ckpt,SlotAv2_step3500,-0.049706310236702675,0.06277379017972849,
+per_ckpt,T5C_step3500,-0.041007784496282,0.0393179518627541,
+pairwise,cos_P8A_SlotAv2,,,0.6922319578909754
+pairwise,cos_P8A_T5C,,,0.7264428538349705
+pairwise,cos_SlotAv2_T5C,,,0.9235989565682514

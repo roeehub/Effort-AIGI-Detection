@@ -1,0 +1,27 @@
+{
+  "status": "done",
+  "wall_seconds": 0,
+  "verdict": "gamma",
+  "verdict_summary": "in-between: |cos(axis, false-flag-normal)| = P8A=0.081, SlotAv2=0.063, T5C=0.039; cos(P8A,SlotAv2)=0.692; both BACKBONE runs proceed",
+  "cosines": {
+    "P8A_step5000": {
+      "cos_axis_vs_grad": 0.07039562999310903,
+      "cos_axis_vs_false_flag": 0.08083802803760362
+    },
+    "SlotAv2_step3500": {
+      "cos_axis_vs_grad": -0.049706310236702675,
+      "cos_axis_vs_false_flag": 0.06277379017972849
+    },
+    "T5C_step3500": {
+      "cos_axis_vs_grad": -0.041007784496282,
+      "cos_axis_vs_false_flag": 0.0393179518627541
+    },
+    "_pairwise": {
+      "cos_P8A_SlotAv2": 0.6922319578909754,
+      "cos_P8A_T5C": 0.7264428538349705,
+      "cos_SlotAv2_T5C": 0.9235989565682514
+    }
+  },
+  "n_dev_dor": 15,
+  "n_lb_dor": 38
+}

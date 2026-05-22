@@ -1,0 +1,22 @@
+{
+  "status": "done",
+  "wall_seconds": 501,
+  "verdict": "gamma",
+  "verdict_summary": "in-between: cls_recall=0.184 face_recall=0.067 nonface_recall_at_tau_cls=0.000; face_saliency_frac=0.274 nonface_saliency_frac=0.726",
+  "viso_recall": {
+    "recall_at_tau_cls": 0.18363636363636363,
+    "recall_at_tau_face": 0.06727272727272728,
+    "recall_nonface_at_tau_cls": 0.0,
+    "recall_nonface_at_tau_face": 0.012727272727272728,
+    "recall_nonface_at_tau_05": 0.4218181818181818
+  },
+  "deeplive_recall": {
+    "recall_at_tau_cls": 0.781651376146789,
+    "recall_at_tau_face": 0.6844036697247706,
+    "recall_nonface_at_tau_cls": 0.0,
+    "recall_nonface_at_tau_face": 0.05137614678899083,
+    "recall_nonface_at_tau_05": 0.9926605504587156
+  },
+  "n_viso": 550,
+  "n_deeplive": 545
+}

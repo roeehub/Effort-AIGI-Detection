@@ -1,0 +1,58 @@
+{
+  "status": "done",
+  "wall_seconds": 312,
+  "verdict": "beta",
+  "verdict_summary": "sign same direction as E2B on Slot A v2: mean(raw)=0.5029 < mean(teams)=0.5419 (\u0394=+0.0390); pair-loss premise does not hold; pivot to GroupDRO substrate-balanced",
+  "n_pairs": 275,
+  "mean_raw": 0.5028777125477791,
+  "mean_teams": 0.541905745159496,
+  "delta_teams_minus_raw": 0.039028032611716834,
+  "wilcoxon_stat": 14893.0,
+  "wilcoxon_p": 0.0019861052455054876,
+  "cohorts": [
+    {
+      "tau": 0.05,
+      "target_n": 0,
+      "wrong_way_n": 0,
+      "both_caught_n": 275,
+      "both_missed_n": 0,
+      "target_mean_raw": NaN,
+      "target_mean_teams": NaN,
+      "wrong_way_mean_raw": NaN,
+      "wrong_way_mean_teams": NaN
+    },
+    {
+      "tau": 0.1,
+      "target_n": 25,
+      "wrong_way_n": 0,
+      "both_caught_n": 250,
+      "both_missed_n": 0,
+      "target_mean_raw": 0.09119772255420684,
+      "target_mean_teams": 0.267023324072361,
+      "wrong_way_mean_raw": NaN,
+      "wrong_way_mean_teams": NaN
+    },
+    {
+      "tau": 0.2,
+      "target_n": 62,
+      "wrong_way_n": 1,
+      "both_caught_n": 187,
+      "both_missed_n": 25,
+      "target_mean_raw": 0.12344872218466574,
+      "target_mean_teams": 0.35923559939669025,
+      "wrong_way_mean_raw": 0.284505695104599,
+      "wrong_way_mean_teams": 0.10653842240571976
+    },
+    {
+      "tau": 0.5,
+      "target_n": 30,
+      "wrong_way_n": 19,
+      "both_caught_n": 135,
+      "both_missed_n": 91,
+      "target_mean_raw": 0.28469686110814413,
+      "target_mean_teams": 0.6419968684514363,
+      "wrong_way_mean_raw": 0.6727469218404669,
+      "wrong_way_mean_teams": 0.36970335637268265
+    }
+  ]
+}
