@@ -1,0 +1,40 @@
+{
+  "contract": {
+    "dev_fake_suites": [
+      "teams_fake_all_dev",
+      "visomaster_enhanced_macro_dev",
+      "deeplive_enhanced_dev"
+    ],
+    "dev_real_stress_suites": [
+      "teams_real_poor_quality_dev",
+      "teams_real_lighting_extreme_dev"
+    ],
+    "dev_real_suite": "teams_real_all_dev",
+    "lockbox_fake_suite": "teams_fake_all_lockbox",
+    "lockbox_real_suite": "teams_real_all_lockbox",
+    "target_fake_recall_min": 0.7,
+    "target_real_fpr": 0.07,
+    "target_stress_fpr": 0.1,
+    "tiebreak_lambda": 1.0,
+    "tiebreak_policy": "lex"
+  },
+  "winner": {
+    "checkpoint_key": "SLOT_A_ANCHOR_AWARE_STEP3500",
+    "checkpoint_path": "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step3500_auc0.9952_eer0.0123.pth",
+    "deeplive_enhanced_dev__fake_recall": 0.684404,
+    "dev_fake_macro_recall": 0.460328,
+    "dev_primary_real_fpr": 0.063634,
+    "dev_worst_real_stress_fpr": 0.099929,
+    "lockbox_fake_n_videos": 253,
+    "lockbox_fake_recall": 0.766798,
+    "lockbox_fake_suite": "teams_fake_all_lockbox",
+    "lockbox_real_fpr": 0.01543,
+    "lockbox_real_n_videos": 1361,
+    "lockbox_real_suite": "teams_real_all_lockbox",
+    "promotion_rank": 1,
+    "selected_threshold": 0.736775,
+    "teams_fake_all_dev__fake_recall": 0.629307,
+    "threshold_candidate_count": 5596,
+    "visomaster_enhanced_macro_dev__fake_recall": 0.067273
+  }
+}

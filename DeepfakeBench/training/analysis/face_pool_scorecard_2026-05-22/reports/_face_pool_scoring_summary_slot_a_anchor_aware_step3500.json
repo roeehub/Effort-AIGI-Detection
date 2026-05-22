@@ -1,0 +1,70 @@
+{
+  "checkpoint_key": "SLOT_A_ANCHOR_AWARE_STEP3500",
+  "ckpt_path": "analysis/manual_canary_2026-05-20/ckpts/periodic_effort_20260516_step3500_auc0.9952_eer0.0123.pth",
+  "total_wall_seconds": 1422.7,
+  "suites": [
+    {
+      "suite": "teams_real_all_dev",
+      "frames": 4564,
+      "videos": 3253,
+      "wall_seconds": 252.3,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_real_all_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_poor_quality_dev",
+      "frames": 1303,
+      "videos": 923,
+      "wall_seconds": 181.3,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_real_poor_quality_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_lighting_extreme_dev",
+      "frames": 1742,
+      "videos": 1401,
+      "wall_seconds": 188.7,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_real_lighting_extreme_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "frames": 3039,
+      "videos": 2409,
+      "wall_seconds": 231.9,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_fake_all_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "visomaster_enhanced_macro_dev",
+      "frames": 550,
+      "videos": 550,
+      "wall_seconds": 123.0,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/visomaster_enhanced_macro_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "deeplive_enhanced_dev",
+      "frames": 545,
+      "videos": 545,
+      "wall_seconds": 124.6,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/deeplive_enhanced_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_all_lockbox",
+      "frames": 1418,
+      "videos": 1361,
+      "wall_seconds": 186.3,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_real_all_lockbox_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "teams_fake_all_lockbox",
+      "frames": 425,
+      "videos": 253,
+      "wall_seconds": 104.5,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_fake_all_lockbox_slot_a_anchor_aware_step3500_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_dor_dev",
+      "frames": 50,
+      "videos": 50,
+      "wall_seconds": 30.0,
+      "videos_report": "analysis/face_pool_scorecard_2026-05-22/reports/teams_real_dor_dev_slot_a_anchor_aware_step3500_videos_report.csv"
+    }
+  ]
+}

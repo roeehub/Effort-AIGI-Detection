@@ -1,0 +1,8 @@
+{
+  "status": "done",
+  "wall_seconds": 1217,
+  "lex_rc": 0,
+  "composite_rc": 0,
+  "write_rc": 0,
+  "verdict_summary": "face-pool SHIP-as-inference-variant — lockbox Δfpr=-0.0037 Δrecall=+0.0791"
+}
