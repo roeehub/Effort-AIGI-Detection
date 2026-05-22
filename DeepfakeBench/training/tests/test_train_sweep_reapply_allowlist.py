@@ -43,6 +43,8 @@ TRAINER_NESTED_KEYS = [
     "lesson_gate",
     "dataset_methods",
     "correlation_penalty",
+    "lora",
+    "substrate_pair_asymmetric_loss",
 ]
 
 

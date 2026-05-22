@@ -301,6 +301,16 @@ def main():
             print(f"  ✅ Applied face_scale_jitter: enabled={fsj.get('enabled')} scale_limit={fsj.get('scale_limit')}")
             logger.info(f"  Applied face_scale_jitter: enabled={fsj.get('enabled')} scale_limit={fsj.get('scale_limit')}")
 
+        # Apply resolution_chain_aug config directly (nested dict — W&B flattens; must copy).
+        # Trainer reads self.config.get('resolution_chain_aug') and calls
+        # data.augmentations.resolution_chain_aug.set_resolution_chain_aug_config.
+        # See 2026-05-15 resolution-chain CPU probe FACTS for motivation.
+        if 'resolution_chain_aug' in single_cfg:
+            config['resolution_chain_aug'] = single_cfg['resolution_chain_aug']
+            rca = single_cfg['resolution_chain_aug']
+            print(f"  ✅ Applied resolution_chain_aug: enabled={rca.get('enabled')} p_apply={rca.get('p_apply')} sizes={rca.get('down_sizes')} kernels={rca.get('kernels')}")
+            logger.info(f"  Applied resolution_chain_aug: enabled={rca.get('enabled')} p_apply={rca.get('p_apply')} sizes={rca.get('down_sizes')} kernels={rca.get('kernels')}")
+
         # Apply correlation_penalty config directly (nested dict — W&B flattens; must copy).
         # Detector reads self.config.get('correlation_penalty') in
         # detectors/effort_detector.py:_setup_loss_function and constructs
@@ -377,6 +387,74 @@ def main():
             fa = single_cfg['fourier_aug']
             print(f"  ✅ Applied fourier_aug: enabled={fa.get('enabled')} p_apply={fa.get('p_apply')} bands_randomize={fa.get('bands_randomize')} bands_preserve={fa.get('bands_preserve')}")
             logger.info(f"  Applied fourier_aug: enabled={fa.get('enabled')} p_apply={fa.get('p_apply')} bands_randomize={fa.get('bands_randomize')} bands_preserve={fa.get('bands_preserve')}")
+
+        # Apply lora config directly (nested dict — W&B flattens; must copy).
+        # train_sweep.py reads config.get('lora') after checkpoint load to wire
+        # the LoRA adapter via detectors/lora_adapter.py. Without this
+        # re-apply, the trainer reads None → LoRA never activates → the model
+        # silently behaves as the head-only-retrain baseline. The [LoRA] log
+        # line is the smoke-test verifier; see Tier-2 smoke in
+        # docs/packet_retrospectives/LORA_LAYERS_10_11_TASK_2026-05-12.md §3.5.
+        if 'lora' in single_cfg:
+            config['lora'] = single_cfg['lora']
+            lr_cfg = single_cfg['lora']
+            print(f"  ✅ Applied lora: enabled={lr_cfg.get('enabled')} target_layers={lr_cfg.get('target_layers')} rank={lr_cfg.get('rank')} alpha={lr_cfg.get('alpha')} freeze_base={lr_cfg.get('freeze_base')}")
+            logger.info(f"  Applied lora: enabled={lr_cfg.get('enabled')} target_layers={lr_cfg.get('target_layers')} rank={lr_cfg.get('rank')} alpha={lr_cfg.get('alpha')} freeze_base={lr_cfg.get('freeze_base')}")
+
+        # Apply head_only_retrain config directly (nested dict — W&B flattens; must copy).
+        # train_sweep.py reads config.get('head_only_retrain') to (a) apply LoRA BEFORE
+        # checkpoint load (so a Slot-1-class LoRA-trained ckpt's lora_A/lora_B weights
+        # populate correctly) and (b) freeze every non-head param after load and rebuild
+        # the optimizer with only the head's params. Without this re-apply, the trainer
+        # reads None → behaves as the standard FT path (LoRA after load + full optimizer)
+        # which silently mis-loads any LoRA-bearing checkpoint. Added 2026-05-13 for the
+        # R13_SLOT1_HEAD_RETRAIN packet.
+        if 'head_only_retrain' in single_cfg:
+            config['head_only_retrain'] = single_cfg['head_only_retrain']
+            hor = single_cfg['head_only_retrain']
+            print(f"  ✅ Applied head_only_retrain: enabled={hor.get('enabled')} reinit_head={hor.get('reinit_head')}")
+            logger.info(f"  Applied head_only_retrain: enabled={hor.get('enabled')} reinit_head={hor.get('reinit_head')}")
+
+        # Apply face_pool_readout config directly (nested dict — W&B flattens; must copy).
+        # detectors/effort_detector.py reads self.config.get('face_pool_readout') in
+        # _build_openclip_backbone to construct an OpenCLIPVisionModelWrapper that
+        # swaps the standard CLS pool for a centered face-region patch mean at
+        # the specified resblock. Without re-applying, the wrapper sees None and
+        # silently uses CLS pooling — defeating the entire Phase 2 HEAD experiment.
+        # Added 2026-05-22 for the R13_FACE_POOL_HEAD packet.
+        if 'face_pool_readout' in single_cfg:
+            config['face_pool_readout'] = single_cfg['face_pool_readout']
+            fpr_cfg = single_cfg['face_pool_readout']
+            print(f"  ✅ Applied face_pool_readout: enabled={fpr_cfg.get('enabled')} layer={fpr_cfg.get('layer')} subgrid_radius={fpr_cfg.get('subgrid_radius')}")
+            logger.info(f"  Applied face_pool_readout: enabled={fpr_cfg.get('enabled')} layer={fpr_cfg.get('layer')} subgrid_radius={fpr_cfg.get('subgrid_radius')}")
+
+        # Apply substrate_pair_asymmetric_loss config directly (nested dict — W&B flattens; must copy).
+        # trainer/trainer.py reads self.config.get('substrate_pair_asymmetric_loss') in __init__
+        # to construct loss/substrate_pair_asymmetric.SubstratePairAsymmetricLoss. Without this
+        # re-apply, the trainer reads None → loss is silently no-op. Added 2026-05-22 for the
+        # R13_PAIR_LOSS_ASYM_T5C BACKBONE-T5C packet.
+        if 'substrate_pair_asymmetric_loss' in single_cfg:
+            config['substrate_pair_asymmetric_loss'] = single_cfg['substrate_pair_asymmetric_loss']
+            spa = single_cfg['substrate_pair_asymmetric_loss']
+            print(f"  ✅ Applied substrate_pair_asymmetric_loss: enabled={spa.get('enabled')} lambda_pair={spa.get('lambda_pair')} margin={spa.get('margin')}")
+            logger.info(f"  Applied substrate_pair_asymmetric_loss: enabled={spa.get('enabled')} lambda_pair={spa.get('lambda_pair')} margin={spa.get('margin')}")
+
+        # Apply substrate_pair_sampling sub-block of combined_paired (nested dict — W&B flattens).
+        # data.sample.substrate_paired.SubstratePairStamper.from_config reads
+        # config['combined_paired']['substrate_pair_sampling']. Without this re-apply
+        # the stamper falls back to disabled and the substrate_pair_id / substrate_transport
+        # fields are -1 across the batch, defeating both BACKBONE-SlotAv2 (GroupDRO
+        # substrate-balanced) and BACKBONE-T5C (asymmetric pair-loss). Added 2026-05-22.
+        # NOTE: combined_paired itself is already in the allowlist above. This block
+        # re-applies the SUB-block specifically in case wandb flattens the nested dict.
+        if 'combined_paired' in single_cfg:
+            sps = single_cfg['combined_paired'].get('substrate_pair_sampling') if isinstance(single_cfg['combined_paired'], dict) else None
+            if sps:
+                if 'combined_paired' not in data_config or data_config.get('combined_paired') is None:
+                    data_config['combined_paired'] = {}
+                data_config['combined_paired']['substrate_pair_sampling'] = sps
+                print(f"  ✅ Applied combined_paired.substrate_pair_sampling: enabled={sps.get('enabled')} sources={sps.get('sources')} pair_fraction={sps.get('pair_fraction')}")
+                logger.info(f"  Applied combined_paired.substrate_pair_sampling: enabled={sps.get('enabled')} sources={sps.get('sources')} pair_fraction={sps.get('pair_fraction')}")
 
         print("=" * 70)
     else:
@@ -1039,11 +1117,62 @@ def main():
         use_group_dro=config.get('use_group_dro', False)
     )
 
+    # ===========================================================================
+    # --- HEAD-ONLY RETRAIN: pre-checkpoint-load LoRA injection ---
+    # ===========================================================================
+    # When `head_only_retrain.enabled: true` AND `lora.enabled: true`, install the
+    # LoRA modules BEFORE loading the checkpoint. This is required when the source
+    # ckpt was itself trained with LoRA (e.g. Slot 1's gf6l06rf step2000), because
+    # its state_dict contains `lora_A.weight` / `lora_B.weight` keys — and
+    # `Trainer.load_ckpt` uses `strict=False`, so without pre-installed LoRA
+    # modules these keys are silently dropped and the trained LoRA delta is lost.
+    #
+    # In the standard (no head-only retrain) path, LoRA is installed AFTER load
+    # (the block below the load) because the source ckpt does NOT have LoRA keys
+    # (e.g. loading P8A for Slot 1's training). Both orderings are correct for
+    # `strict=False`; the difference is whether the source ckpt has LoRA weights
+    # the load is expected to consume.
+    #
+    # Added 2026-05-13 for the R13_SLOT1_HEAD_RETRAIN packet.
+    head_only_cfg = config.get('head_only_retrain') or {}
+    _head_only_enabled = bool(head_only_cfg.get('enabled', False))
+    _lora_preinstalled = False
+    if _head_only_enabled:
+        lora_cfg_early = config.get('lora') or {}
+        if lora_cfg_early.get('enabled', False):
+            from detectors.lora_adapter import (
+                DEFAULT_TARGET_MODULES as _LORA_DEFAULT_TARGETS_EARLY,
+                apply_lora_to_openclip_visual as _apply_lora_early,
+            )
+            model_instance_early = trainer.model.module if hasattr(trainer.model, 'module') else trainer.model
+            visual_early = model_instance_early.backbone.visual
+            target_layers_early = list(lora_cfg_early.get('target_layers', [10, 11]))
+            lora_rank_early = int(lora_cfg_early.get('rank', 16))
+            lora_alpha_early = float(lora_cfg_early.get('alpha', 2 * lora_rank_early))
+            target_modules_early = tuple(lora_cfg_early.get('target_modules', _LORA_DEFAULT_TARGETS_EARLY))
+            n_wrapped_early = _apply_lora_early(
+                visual_early,
+                target_layers=target_layers_early,
+                rank=lora_rank_early,
+                alpha=lora_alpha_early,
+                target_modules=target_modules_early,
+            )
+            device_early = next(model_instance_early.parameters()).device
+            model_instance_early.to(device_early)
+            logger.info(
+                f"[head_only_retrain] LoRA pre-installed BEFORE checkpoint load: "
+                f"layers={target_layers_early} rank={lora_rank_early} alpha={lora_alpha_early:g} | "
+                f"wrapped {n_wrapped_early} layers — ckpt's lora_A/lora_B will load into these modules"
+            )
+            _lora_preinstalled = True
+        else:
+            logger.info("[head_only_retrain] enabled but lora.enabled=false — skipping pre-checkpoint LoRA install")
+
     if config.get('load_base_checkpoint', False):
         checkpoint_path = config.get('gcs_assets', {}).get('base_checkpoint', {}).get('local_path')
         if checkpoint_path and os.path.exists(checkpoint_path):
             logger.info(f"--- Loading base checkpoint from {checkpoint_path} as requested by config. ---")
-            
+
             # Load the checkpoint (trainer will handle ArcFace parameter validation/override based on train_arcface flag)
             trainer.load_ckpt(checkpoint_path, validate=False)
             
@@ -1085,6 +1214,146 @@ def main():
             "--- Configuration 'load_base_checkpoint' is False. "
             "Skipping checkpoint load. The model will start from the base CLIP weights. ---"
         )
+
+    # ===========================================================================
+    # --- LoRA: parameter-efficient FT adapter on selected resblocks ---
+    # ===========================================================================
+    # Applied AFTER checkpoint load so the LoRA module-name changes
+    # (`out_proj.base_layer.weight_main` etc.) don't break the load. After
+    # wrapping + freezing we rebuild the optimizer and scheduler so the LoRA
+    # A/B parameters end up in the optimizer's param groups (and frozen base
+    # params drop out via `requires_grad=False` filtering in choose_optimizer).
+    # See docs/packet_retrospectives/LORA_LAYERS_10_11_TASK_2026-05-12.md.
+    lora_cfg = config.get('lora') or {}
+    if lora_cfg.get('enabled', False):
+        from detectors.lora_adapter import (
+            DEFAULT_TARGET_MODULES as _LORA_DEFAULT_TARGETS,
+            apply_lora_to_openclip_visual,
+            count_lora_parameters,
+            freeze_base_clip_encoder,
+        )
+
+        model_instance = trainer.model.module if hasattr(trainer.model, 'module') else trainer.model
+        visual = model_instance.backbone.visual
+
+        target_layers = list(lora_cfg.get('target_layers', [10, 11]))
+        lora_rank = int(lora_cfg.get('rank', 16))
+        lora_alpha = float(lora_cfg.get('alpha', 2 * lora_rank))
+        target_modules = tuple(lora_cfg.get('target_modules', _LORA_DEFAULT_TARGETS))
+        freeze_base = bool(lora_cfg.get('freeze_base', True))
+
+        if _lora_preinstalled:
+            # LoRA was already applied BEFORE checkpoint load via the
+            # head_only_retrain pre-install path. Skip the second apply (which
+            # would double-install and raise) and just (a) optionally re-freeze
+            # base and (b) rebuild the optimizer.
+            logger.info(
+                f"[LoRA] already pre-installed via head_only_retrain — skipping post-load apply"
+            )
+            n_wrapped = 0
+        else:
+            n_wrapped = apply_lora_to_openclip_visual(
+                visual,
+                target_layers=target_layers,
+                rank=lora_rank,
+                alpha=lora_alpha,
+                target_modules=target_modules,
+            )
+
+        if freeze_base:
+            trainable, total = freeze_base_clip_encoder(visual)
+        else:
+            trainable, total = count_lora_parameters(visual)
+
+        device = next(model_instance.parameters()).device
+        model_instance.to(device)  # move freshly-allocated LoRA params onto the model's device
+
+        pct = 100.0 * trainable / total if total > 0 else 0.0
+        logger.info(
+            f"[LoRA] enabled at layers {target_layers} | rank={lora_rank} alpha={lora_alpha:g} | "
+            f"target_modules={list(target_modules)} | wrapped {n_wrapped} layers (this call) | "
+            f"trainable encoder params: {trainable:,} of {total:,} ({pct:.2f}%) | "
+            f"freeze_base={freeze_base}"
+        )
+
+        # Rebuild optimizer and scheduler so LoRA params get their own group
+        # and frozen base params drop out (choose_optimizer filters on
+        # requires_grad=True; see utils/setup.py:104).
+        new_optimizer = choose_optimizer(trainer.model, config)
+        new_scheduler = choose_scheduler(config, new_optimizer)
+        trainer.optimizer = new_optimizer
+        trainer.scheduler = new_scheduler
+        logger.info("[LoRA] optimizer + scheduler rebuilt with LoRA param group")
+    else:
+        logger.info("[LoRA] not enabled (no `lora` block or `lora.enabled: false`)")
+
+    # ===========================================================================
+    # --- HEAD-ONLY RETRAIN: post-load freeze + optimizer rebuild ---
+    # ===========================================================================
+    # When `head_only_retrain.enabled: true`:
+    #   1. Set requires_grad=False on EVERY parameter except `head.weight`/`head.bias`
+    #      (so encoder, SVD residuals, LoRA A/B, and any auxiliary heads are all
+    #      frozen). The encoder representation that produced Slot 1's atlas
+    #      inv_mean Δ≈0 vs P8A + may6 lift over E2B is preserved exactly —
+    #      ONLY the classifier head is trainable.
+    #   2. Optionally re-initialise the head (`head_only_retrain.reinit_head: true`)
+    #      so the prior head's substrate-asymmetric decision boundary is discarded
+    #      and the optimisation finds a fresh boundary on the same encoder.
+    #   3. Rebuild the optimizer so only head params end up in the param groups
+    #      (choose_optimizer filters on requires_grad=True; see utils/setup.py).
+    #
+    # Added 2026-05-13 for the R13_SLOT1_HEAD_RETRAIN packet.
+    if _head_only_enabled:
+        model_instance_h = trainer.model.module if hasattr(trainer.model, 'module') else trainer.model
+
+        # Step 1: identify trainable params — by default only `head.weight` and
+        # `head.bias`. Selector substrings can be overridden via yaml.
+        head_param_names = tuple(head_only_cfg.get('trainable_param_substrings', ['head.weight', 'head.bias']))
+        trainable_count_h = 0
+        total_count_h = 0
+        for name, param in model_instance_h.named_parameters():
+            total_count_h += param.numel()
+            keep_trainable = any(sub in name for sub in head_param_names)
+            param.requires_grad_(keep_trainable)
+            if keep_trainable:
+                trainable_count_h += param.numel()
+        pct_h = 100.0 * trainable_count_h / total_count_h if total_count_h else 0.0
+        logger.info(
+            f"[head_only_retrain] froze every non-head param | "
+            f"trainable={trainable_count_h:,} of {total_count_h:,} ({pct_h:.4f}%) | "
+            f"selector substrings={list(head_param_names)}"
+        )
+
+        # Step 2: optionally re-init head so the prior decision boundary is discarded.
+        if bool(head_only_cfg.get('reinit_head', True)):
+            head_module = getattr(model_instance_h, 'head', None)
+            if head_module is None:
+                raise RuntimeError("head_only_retrain.reinit_head: true but model has no `head` attribute")
+            import torch.nn.init as _init
+            # nn.Linear: reset to Kaiming uniform (PyTorch default) so the head
+            # starts from a clean prior matching a fresh nn.Linear init.
+            if isinstance(head_module, torch.nn.Linear):
+                _init.kaiming_uniform_(head_module.weight, a=5 ** 0.5)
+                if head_module.bias is not None:
+                    fan_in = head_module.weight.shape[1]
+                    bound = 1.0 / (fan_in ** 0.5) if fan_in > 0 else 0.0
+                    _init.uniform_(head_module.bias, -bound, bound)
+                logger.info("[head_only_retrain] re-initialised nn.Linear head with PyTorch default Kaiming uniform")
+            else:
+                # ArcMarginProduct etc: warn and skip rather than fail.
+                logger.warning(
+                    f"[head_only_retrain] head is {type(head_module).__name__}, "
+                    f"not nn.Linear — leaving weights as loaded (reinit_head skipped)"
+                )
+        else:
+            logger.info("[head_only_retrain] reinit_head=false — keeping checkpoint's head weights")
+
+        # Step 3: rebuild optimizer + scheduler with only head params.
+        new_optimizer_h = choose_optimizer(trainer.model, config)
+        new_scheduler_h = choose_scheduler(config, new_optimizer_h)
+        trainer.optimizer = new_optimizer_h
+        trainer.scheduler = new_scheduler_h
+        logger.info("[head_only_retrain] optimizer + scheduler rebuilt with only head params")
 
     # ===========================================================================
     # --- TRAINING SUMMARY: Key metrics for visibility ---

@@ -3815,6 +3815,11 @@ def combined_paired_collate_fn(
     # only reads these when the feature is enabled.
     video_chronic_flag = []
     video_is_dor = []
+    # Substrate-pair fields (BACKBONE 2026-05-22): per-video pair_id + transport
+    # stamped from the inventory CSV by data.sample.substrate_paired.SubstratePairStamper.
+    # When the stamper is disabled (default), every entry is -1 (no-op).
+    video_substrate_pair_id = []
+    video_substrate_transport = []
 
     for video_key, frames in groups.items():
         if len(frames) == 0:
@@ -3887,6 +3892,27 @@ def combined_paired_collate_fn(
         video_chronic_flag.append(int(_is_chronic_identity(identity_str)))
         video_is_dor.append(int(_is_dor_identity(identity_str)))
 
+        # Substrate-pair fields (BACKBONE 2026-05-22). When the stamper is
+        # active and the identity matches an inventory row, this stamps
+        # substrate_pair_id (int) and substrate_transport (0=clean, 1=teams).
+        # Default no-op: returns (-1, -1) when stamper is disabled.
+        try:
+            from data.sample.substrate_paired import get_active_stamper
+            stamper = get_active_stamper()
+            if stamper is not None and stamper.enabled:
+                pair_id, transport = stamper.lookup(
+                    identity=identity_str,
+                    source=frames[0].get('source', '') or '',
+                    companion_domain=frames[0].get('companion_domain'),
+                    label=int(frames[0].get('label', 0)),
+                )
+            else:
+                pair_id, transport = -1, -1
+        except Exception:
+            pair_id, transport = -1, -1
+        video_substrate_pair_id.append(int(pair_id))
+        video_substrate_transport.append(int(transport))
+
     if len(video_images) == 0:
         return {
             'image': torch.zeros(0, 1, 3, target_size[0], target_size[1]),
@@ -3898,6 +3924,8 @@ def combined_paired_collate_fn(
             'group_id': [],
             'chronic_flag': torch.zeros(0, dtype=torch.long),
             'is_dor': torch.zeros(0, dtype=torch.long),
+            'substrate_pair_id': torch.zeros(0, dtype=torch.long),
+            'substrate_transport': torch.zeros(0, dtype=torch.long),
         }
 
     # Pad to same length
@@ -3925,6 +3953,8 @@ def combined_paired_collate_fn(
         'group_id': video_group_ids,
         'chronic_flag': torch.tensor(video_chronic_flag, dtype=torch.long),
         'is_dor': torch.tensor(video_is_dor, dtype=torch.long),
+        'substrate_pair_id': torch.tensor(video_substrate_pair_id, dtype=torch.long),
+        'substrate_transport': torch.tensor(video_substrate_transport, dtype=torch.long),
     }
 
 

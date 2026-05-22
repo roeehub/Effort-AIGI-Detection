@@ -675,6 +675,49 @@ class Trainer(
             logger=self.logger,
         )
 
+        # Substrate-pair asymmetric hinge loss (BACKBONE-T5C, 2026-05-22).
+        # Reads `substrate_pair_id` + `substrate_transport` from data_dict;
+        # one-sided hinge pulling prob_fake(clean) UP to match prob_fake(teams).
+        # See loss/substrate_pair_asymmetric.py for the FACTS motivation.
+        spa_cfg = _to_plain_dict(self.config.get('substrate_pair_asymmetric_loss')) or {}
+        spa_enabled = bool(spa_cfg.get('enabled', False))
+        if spa_enabled:
+            from loss.substrate_pair_asymmetric import SubstratePairAsymmetricLoss
+            self.substrate_pair_asymmetric_loss = SubstratePairAsymmetricLoss(
+                lambda_pair=float(spa_cfg.get('lambda_pair', 0.3)),
+                margin=float(spa_cfg.get('margin', 0.0)),
+                enabled=True,
+            )
+            self.logger.info(
+                "SubstratePairAsymmetricLoss ENABLED: lambda_pair=%.3f margin=%.3f",
+                self.substrate_pair_asymmetric_loss.lambda_pair,
+                self.substrate_pair_asymmetric_loss.margin,
+            )
+        else:
+            self.substrate_pair_asymmetric_loss = None
+
+        # Substrate-pair stamper: per-frame inventory-based pair_id + transport
+        # stamping. Used by BOTH BACKBONE-SlotAv2 (GroupDRO substrate-balanced)
+        # and BACKBONE-T5C (asymmetric pair-loss above). The stamper is a
+        # collate-time annotator; data still flows through the existing paired
+        # iterators. See data/sample/substrate_paired.py.
+        try:
+            from data.sample.substrate_paired import (
+                SubstratePairStamper,
+                set_active_stamper,
+            )
+            cp_cfg = _to_plain_dict(self.config.get('combined_paired')) or {}
+            sps_cfg = _to_plain_dict(cp_cfg.get('substrate_pair_sampling')) or {}
+            stamper = SubstratePairStamper.from_config(sps_cfg)
+            set_active_stamper(stamper)
+            self.substrate_pair_stamper = stamper
+        except Exception as exc:
+            self.logger.warning(
+                "SubstratePairStamper init failed (non-fatal, falling back to no-op): %s",
+                exc,
+            )
+            self.substrate_pair_stamper = None
+
         # Face scale-jitter — module-level config consumed by collate_fns.
         from data.augmentations.face_scale_jitter import set_face_scale_jitter_config
         fsj_cfg = _to_plain_dict(self.config.get('face_scale_jitter'))
@@ -1418,6 +1461,15 @@ class Trainer(
                 'focal_loss_alpha': self.config.get('focal_loss_alpha'),
                 'lambda_reg': self.config.get('lambda_reg', 1.0),
                 'rank': self.config.get('rank', 1023),
+                # The 'lora' block must round-trip through ckpt -> load_model so
+                # LoRA-wrapped resblocks can be reconstructed at inference time.
+                # Without this, batch_inference_gcs.load_model constructs the
+                # model without LoRA layers, and load_state_dict silently drops
+                # the 16 lora_A/lora_B tensors. The 2026-05-20 manual canary on
+                # Slot 2 (LoRA L8-L9) hit this — see open loop
+                # `lora-enabled-not-propagated-by-load-model` in
+                # docs/packet_retrospectives/threads/wandb_yaml_propagation_bugs.md.
+                'lora': self.config.get('lora') or {},
             },
             'epoch': epoch,
             'auc': auc,
@@ -1840,6 +1892,15 @@ class Trainer(
                     )
                     losses['overall'] = losses['overall'] + anchor_loss
                     losses['anchor_aware'] = anchor_loss.detach()
+
+                    # --- Substrate-pair asymmetric hinge (BACKBONE-T5C) ---
+                    # No-op when self.substrate_pair_asymmetric_loss is None.
+                    if self.substrate_pair_asymmetric_loss is not None:
+                        spa_loss = self.substrate_pair_asymmetric_loss.compute_from_batch(
+                            predictions['prob'], data_dict,
+                        )
+                        losses['overall'] = losses['overall'] + spa_loss
+                        losses['substrate_pair_asymmetric'] = spa_loss.detach()
 
                     # Store unscaled loss for accurate logging
                     unscaled_loss = losses['overall'].clone().detach()

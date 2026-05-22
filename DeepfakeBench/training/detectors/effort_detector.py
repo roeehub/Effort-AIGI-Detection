@@ -166,7 +166,7 @@ class OpenCLIPVisionModelWrapper(nn.Module):
     This wrapper standardizes the output format.
     """
     
-    def __init__(self, openclip_visual, intermediate_layer=None):
+    def __init__(self, openclip_visual, intermediate_layer=None, face_pool_readout=None):
         super().__init__()
         self.visual = openclip_visual
         # NEW (P17): if intermediate_layer is set, hook that resblock and
@@ -174,12 +174,63 @@ class OpenCLIPVisionModelWrapper(nn.Module):
         # forward still runs but the head reads the captured features.
         self.intermediate_layer = intermediate_layer
         self._captured = None
+
+        # NEW (Phase 2 HEAD 2026-05-22): if face_pool_readout is enabled,
+        # hook a resblock and capture the FULL token sequence (197 tokens for
+        # ViT-B/16 at 224 resolution: 1 CLS + 196 patches in a 14x14 grid).
+        # In forward, drop CLS, mean-pool the centered 7x7 face subgrid (49
+        # patches), apply ln_post + visual.proj (768 -> 512), return as
+        # pooler_output. Productionizes the monkey-patch prototype from
+        # analysis/face_pool_canary_2026-05-22/score_canary_face_pool.py.
+        #
+        # Schema: {enabled: bool, layer: int (0-11), subgrid_radius: int (1-7)}
+        # subgrid_radius=3 -> centered 7x7 (the canary default).
+        self.face_pool_readout = face_pool_readout or {}
+        self._face_pool_enabled = bool(self.face_pool_readout.get("enabled", False))
+        self._captured_tokens = None
+        self._face_idx_cache = None
         if intermediate_layer is not None:
             blocks = openclip_visual.transformer.resblocks
             assert 0 <= intermediate_layer < len(blocks), \
                 f"intermediate_layer={intermediate_layer} out of range [0, {len(blocks)})"
             blocks[intermediate_layer].register_forward_hook(self._capture_hook)
             logger.info(f"OpenCLIPVisionModelWrapper: intermediate-layer readout at block {intermediate_layer}")
+        if self._face_pool_enabled:
+            face_layer = int(self.face_pool_readout.get("layer", 11))
+            blocks = openclip_visual.transformer.resblocks
+            assert 0 <= face_layer < len(blocks), \
+                f"face_pool_readout.layer={face_layer} out of range [0, {len(blocks)})"
+            self._face_layer = face_layer
+            self._face_subgrid_radius = int(self.face_pool_readout.get("subgrid_radius", 3))
+            self._patch_grid = int(self.face_pool_readout.get("patch_grid", 14))
+            self._n_patches_expected = 1 + self._patch_grid * self._patch_grid
+            blocks[face_layer].register_forward_hook(self._capture_tokens_hook)
+            # Pre-compute the flat indices of the centered subgrid patches.
+            face_mask = self._face_region_mask(self._patch_grid, self._face_subgrid_radius)
+            self._face_idx_cache = torch.from_numpy(
+                np.where(face_mask)[0].astype(np.int64)
+            )
+            logger.info(
+                "OpenCLIPVisionModelWrapper: face_pool_readout ACTIVE at block "
+                f"{face_layer} | subgrid_radius={self._face_subgrid_radius} "
+                f"(centered {2*self._face_subgrid_radius+1}x{2*self._face_subgrid_radius+1} of "
+                f"{self._patch_grid}x{self._patch_grid}, {int(face_mask.sum())} face patches)"
+            )
+
+    @staticmethod
+    def _face_region_mask(grid_size: int, radius: int) -> np.ndarray:
+        """Centered subgrid mask. Identical to the canary prototype's
+        face_region_mask_7x7 with parameterized radius. Returns a flat
+        boolean array of length grid_size**2 covering the centered
+        (2*radius+1) x (2*radius+1) patches.
+        """
+        center = grid_size // 2
+        lo = center - radius - 1
+        hi = center + radius
+        assert hi - lo == 2 * radius + 1, f"hi-lo={hi-lo} expected {2*radius+1}"
+        mask = np.zeros((grid_size, grid_size), dtype=bool)
+        mask[lo:hi, lo:hi] = True
+        return mask.reshape(-1)
 
     def _capture_hook(self, module, inputs, output):
         # OpenCLIP resblock output shape: (seq, batch, dim) by default.
@@ -195,6 +246,20 @@ class OpenCLIPVisionModelWrapper(nn.Module):
             raise RuntimeError(f"unexpected resblock output shape: {output.shape}")
         self._captured = cls
 
+    def _capture_tokens_hook(self, module, inputs, output):
+        # Capture FULL token sequence (CLS + patch tokens). Same seq-first vs
+        # batch-first handling as _capture_hook.
+        if output.dim() != 3:
+            raise RuntimeError(
+                f"face_pool: unexpected resblock output dim: {output.shape}"
+            )
+        if output.shape[0] >= output.shape[1]:
+            # seq-first (seq, batch, dim) -> (batch, seq, dim)
+            tokens = output.permute(1, 0, 2)
+        else:
+            tokens = output
+        self._captured_tokens = tokens
+
     def forward(self, pixel_values, **kwargs):
         """
         Forward pass that returns HuggingFace-compatible output dict.
@@ -208,7 +273,46 @@ class OpenCLIPVisionModelWrapper(nn.Module):
         # OpenCLIP visual encoder returns pooled output directly
         # The visual encoder's forward method signature varies by version
         # Most OpenCLIP models: visual(x) returns the pooled CLS token
+        # When face_pool_readout is enabled, we still run the full forward so
+        # the token-sequence hook fires, but we override pooler_output below
+        # using the face-region mean.
         pooled_output = self.visual(pixel_values)
+
+        # Phase 2 HEAD: face_pool_readout overrides the standard CLS pooler.
+        # Drop CLS, index-select the centered subgrid (49 patches for r=3),
+        # mean-pool to (B, 768), apply ln_post + visual.proj (768 -> 512).
+        if self._face_pool_enabled:
+            tokens = self._captured_tokens
+            if tokens is None:
+                raise RuntimeError(
+                    "face_pool_readout enabled but tokens hook did not fire"
+                )
+            if tokens.shape[1] != self._n_patches_expected:
+                raise RuntimeError(
+                    f"face_pool_readout: unexpected token count "
+                    f"{tokens.shape[1]}; expected {self._n_patches_expected}"
+                )
+            patches = tokens[:, 1:, :]  # drop CLS -> (B, n_patches, dim)
+            face_idx_dev = self._face_idx_cache.to(patches.device)
+            face_patches = patches.index_select(1, face_idx_dev)  # (B, k, dim)
+            face_pool = face_patches.mean(dim=1)  # (B, dim)
+            # Apply the same post-block ops as the CLS path:
+            #   OpenCLIP: ln_post then matmul visual.proj (768 -> 512)
+            #   HF CLIP : post_layernorm only (768)
+            ln_post = getattr(self.visual, "ln_post", None) or \
+                      getattr(getattr(self.visual, "visual", object()), "post_layernorm", None)
+            proj = getattr(self.visual, "proj", None)
+            if ln_post is None:
+                raise RuntimeError(
+                    "face_pool_readout: could not locate ln_post / post_layernorm"
+                )
+            face_pool = ln_post(face_pool)
+            if proj is not None:
+                face_pool = face_pool @ proj
+            return {
+                'pooler_output': face_pool,
+                'final_pooler_output': pooled_output,  # kept for diagnostics
+            }
 
         # NEW (P17): if intermediate-layer hook is active, return that as the
         # primary "pooler_output" — head reads from intermediate features.
@@ -1021,8 +1125,21 @@ class EffortDetector(nn.Module):
         
         # Wrap to make output compatible with HuggingFace format
         # NEW (P17): pass intermediate_layer through if set in yaml
+        # NEW (Phase 2 HEAD 2026-05-22): pass face_pool_readout through if
+        # set as a TOP-LEVEL yaml key (not under backbone). When enabled,
+        # the wrapper swaps the CLS pooler for a centered face-region mean
+        # at the specified resblock.
         intermediate_layer = backbone_config.get('intermediate_layer', None)
-        wrapped_encoder = OpenCLIPVisionModelWrapper(visual_encoder, intermediate_layer=intermediate_layer)
+        # face_pool_readout is a TOP-LEVEL yaml key (not under `backbone:`).
+        # The `config` arg to _build_openclip_backbone is the same dict stored
+        # in self.config; use it directly so the path also works for callers
+        # that might pass a separate dict in the future.
+        face_pool_readout = (config or {}).get('face_pool_readout', None)
+        wrapped_encoder = OpenCLIPVisionModelWrapper(
+            visual_encoder,
+            intermediate_layer=intermediate_layer,
+            face_pool_readout=face_pool_readout,
+        )
 
         return wrapped_encoder
 
