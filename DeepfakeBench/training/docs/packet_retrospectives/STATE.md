@@ -1,6 +1,53 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-22 (Phase 1 CPU probes closed). All 3 Phase 1 close criteria resolved at $0 / ~14 min wall total (CPU-3 0.4s, CPU-2 5 min, CPU-1 8.4 min). CPU-1 gamma (viso saliency 72.6% in non-face patches but non-face recall = 0% at CLS τ → HEAD ALT deferred to Phase 4). CPU-2 beta (Slot A v2 mean(raw)=0.503 < mean(teams)=0.542, Δ=+0.039, Wilcoxon p=0.002, same direction as E2B 2026-05-04 → BACKBONE pivots to GroupDRO substrate-balanced). CPU-3 gamma (|cos(axis, false-flag-normal)| = 0.04-0.08 ≪ 0.3 alpha threshold met, but cos(P8A, SlotAv2) = 0.692 < 0.7 alpha threshold by 0.008 → both BACKBONE runs proceed). Net Phase 2 implications: HEAD experiment unchanged; BACKBONE-SlotAv2 + BACKBONE-T5C BOTH pivot from substrate-pair-orthogonal loss to GroupDRO substrate-balanced; HEAD ALT (dual-readout) deferred. Earlier 2026-05-22 face-pool work block retained below.
+> **Last refreshed**: 2026-05-22 PM (Phase 2 HEAD full launched on Vertex; BACKBONE paused per operator direction). HEAD full Vertex `3087778639090024448` is RUNNING in us-east1, image `1.3.298`, W&B `dtect-vision/effort-r13-phase2/runs/kwhju7im`, projected wall ~2.5h, projected cost ~$7–9 (head-only retrain freezes 99.9996% of params; cheaper than the $25–32 plan estimate). HEAD smoke (Vertex `4897381264362831872`) was cancelled at $2.94 sunk cost due to a `max_train_steps` yaml bug discovered post-launch; fix landed in both HEAD yamls before the full launch.
+>
+> ---
+>
+> #### 2026-05-22 PM — operator pivot + Phase 2 launch state (FACTS only)
+>
+> **Phase 1 CPU-2 secondary finding triggered a design pivot.** The literal β verdict (mean(raw) < mean(teams) on Slot A v2 viso fake pairs, same sign as 2026-05-04 E2B refutation) maps to BACKBONE pivots-to-GroupDRO per the master plan's decision rule. But the per-pair cohort partition at τ=0.20 is **62:1 asymmetric** (62 teams_caught_raw_missed vs 1 raw_caught_teams_missed) — far more lopsided than E2B's 47:11 at the same τ. The 62:1 asymmetry indicates a `raise(prob_fake(clean), prob_fake(teams))` one-sided alignment lever (pull clean scores UP toward teams) — a different loss form than either the 2026-05-04 symmetric KL (refuted) or GroupDRO (literal rule pivot).
+>
+> **Operator decision (2026-05-22 PM)**: split BACKBONE across both mechanisms:
+> - BACKBONE-SlotAv2 = GroupDRO substrate-balanced (literal rule, Slot A v2 step3500 base, anchor_aware ON)
+> - BACKBONE-T5C = asymmetric pair-loss (62:1 secondary finding, T5C step3500 base, no anchor_aware)
+> - Plus HEAD = face-pool head-only retrain on Slot A v2 step3500 (per plan; unchanged)
+>
+> Three Phase 2 experiments total. See `analysis/phase_2_backbone_t5c_2026-05-22/AGENT_PROPOSAL_2026-05-22.md` § "Recommendation" for the asymmetric-pair-loss design rationale.
+>
+> **Phase 2 implementation status (commits in this branch)**:
+>
+> 1. Phase 2 infra commit (HEAD detector flag + BACKBONE sampler/loss/trainer/yamls): production code in `data/sample/substrate_paired.py` (SubstratePairStamper), `loss/substrate_pair_asymmetric.py` (one-sided hinge, `prob_teams.detach()` so gradient flows ONLY into clean — design correction relative to the original spec). 138/138 tests pass, 20 new in `tests/test_substrate_paired_and_asymmetric_loss.py`.
+> 2. `ed10630` Phase 2 data wiring: new `data/sources/substrate_paired_inventory.py` discovers all 1826 fully-paired identity-rows directly from the A0.1 inventory CSV. Sanity probe: 704/705 unique substrate_pair_ids reached (99.86% of stamper's identity-keyed ceiling — the stamper collapses multiple rows-per-identity into one pair_id by design); 100% matched-pair batch coverage under paired sampling at pair_fraction=0.25; 29/29 tests in the substrate-paired test file pass. The 4 repo-wide test failures are pre-existing on the branch (verified via git stash). Eval folder `analysis/data_wiring_sanity_probe_2026-05-22/`.
+> 3. `9f68e63` Enable `substrate_paired_inventory` in both BACKBONE yamls (no GPU spend in this commit; explicitly gated on operator authorization of image rebuild + smoke spend).
+> 4. HEAD launch commit: VERSION bumped `1.3.290 → 1.3.298` via `./dev.sh build-prod -y`; image rebuilt with both the BACKBONE infra commit AND the data wiring (ed10630) included — i.e., `1.3.298` already contains the HDTF + quickclips data source code. **No separate image build needed before BACKBONE smokes.** Both HEAD yamls (smoke + full) gained `max_train_steps` field.
+>
+> **Live state (as of last STATE.md refresh)**:
+>
+> - HEAD full Vertex job: `3087778639090024448`, us-east1, image `1.3.298`, RUNNING since `2026-05-22T13:52:21Z`. Periodic saves at steps [500, 1000, 1500, 2500] under `gs://training-job-outputs/best_checkpoints/kwhju7im/` (step 100 skipped because `evaluate_every_steps=250`). Completion script: `analysis/phase_2_head_2026-05-22/complete_phase_2_head.sh kwhju7im` — does end-to-end download + 9-suite face-pool scoring + lex+composite contract + sentinel update.
+> - Shell-only poll loop watching HEAD full: writes `analysis/phase_2_head_2026-05-22/_full_terminal.json` on terminal state. Pure-shell pattern (not a Claude sub-agent) to survive any agent lifecycle. PID may have rotated; check via `ps aux | grep head_full_poll` if needed.
+> - Local MPS scoring in flight: the HEAD agent left a process scoring the step 250 top_n ckpt (NOT a periodic save — the step 250 eval-time save) on macOS MPS. Expected ~96 min total across 9 suites × ~10 min each. No sentinel; results will land in `analysis/phase_2_head_2026-05-22/` as suite-named CSVs.
+> - BACKBONE work is PAUSED per operator direction "pause everything until HEAD smoke result lands" — interpreted as "pause until HEAD full Vertex job terminal-states, since the smoke result alone was the cancelled-with-fix smoke and the verdict on the lever lives in the full." When HEAD full lands and is scored, operator will re-authorize BACKBONE smokes ($6) + image-build-verify (already done) + BACKBONE fulls ($90–130).
+> - GPU spend today: $2.94 (cancelled smoke) + ~$7–9 projected (HEAD full) = ~$10–12 for HEAD. Well under the $30 ceiling. BACKBONE adds ~$96–136 if launched.
+>
+> **Image-build state**: `1.3.298` is the current production image, deployed at ~`2026-05-22T13:50Z` after the max_train_steps fix. It contains: Phase 2 infra (Phase 2 commit), data wiring (`ed10630`), BACKBONE yaml updates (`9f68e63`), HEAD yaml fixes. No new build is required for BACKBONE smokes; the image is current. If new yamls or code land before BACKBONE launch, `./dev.sh build-prod -y` auto-bumps VERSION patch per memory `reference_image_rebuild.md`.
+>
+> **Open loops touched**:
+>
+> - `per-base-substrate-pair-cohort-math-untested` (HIGH) — partially closed by CPU-2; the cohort math IS computed for Slot A v2 (62:1 at τ=0.20). The lever choice (asymmetric pair-loss on T5C) is the operator's response. Will be fully closed when BACKBONE-T5C smoke shows `train/loss/substrate_pair_asymmetric > 0` (proves the loss fires on actual matched pairs).
+> - `viso-fake-signature-non-face-vs-face-localization` (HIGH) — CPU-1 verdict γ documented, awaiting HEAD full scorecard for resolution (does head-fitting on face-pool recover the visomaster regression?).
+>
+> ---
+>
+> #### 2026-05-22 — Phase 1 CPU probes closed (FACTS only)
+>
+> All 3 probes documented in `analysis/{viso_fake_signature_localization,pair_loss_slot_a_v2,per_ckpt_axis_decomposition}_2026-05-23/RESULTS_FACTS_2026-05-23.md` + sentinels `_cpu{1,2,3}_complete.json`. Reproducible scripts: `run_cpu_{1,2,3}_*.py` in each folder. Phase 1 master sentinel: `analysis/phase_1_cpu_probes_complete_2026-05-23.json`.
+>
+> **CPU-1 (Viso-fake signature localization, 8.4 min MPS)** — gamma. On 550 viso fakes + 545 deeplive fakes (control), Slot A v2 step3500 at the calibrated CLS τ=0.788 gives viso recall 0.184 / face-pool recall 0.067 / non-face-pool recall 0.000. 14×14 per-patch saliency map: viso non-face-region mass 72.6% (alpha condition 2 met; >70%), but viso non-face recall = 0.000 < face recall 0.067 + 0.05 (alpha condition 1 not met). Top-3 viso patches all at row 2 (top of frame), OUTSIDE the centered 7×7 face region. Deeplive control: row 6 col 11, row 4 col 2 (also non-face). HEAD ALT (dual-readout face ⊕ non-face → 1024-dim head) deferred to Phase 4 per gamma rule.
+>
+> **CPU-2 (Pair-loss re-verification on Slot A v2, 5.2 min CPU)** — beta. 275/275 paired viso fakes from the 2026-05-04 inventory. Slot A v2 step3500 CLS-pool: mean(raw)=0.5029 < mean(teams)=0.5419, Δ=+0.0390, Wilcoxon stat=14893 p=0.0020. Same direction as E2B step3200 (mean(raw)=0.086 < mean(teams)=0.172, p=0.002). At τ=0.20: target cohort (teams>τ AND raw≤τ) = 62 vs wrong_way cohort = 1 — strong asymmetry pointing toward teams→raw alignment, BUT decision rule keys on mean(raw) > mean(teams) which is not the observed sign. Per literal rule: pair-loss premise does not hold on Slot A v2 either. Operator-driven design pivot (above) splits BACKBONE: SlotAv2 uses GroupDRO substrate-balanced (literal rule), T5C uses asymmetric pair-loss (62:1 secondary finding).
+>
+> **CPU-3 (Per-ckpt axis vs anchor decomposition, 0.4s)** — gamma. Pairwise cosines between the 3 per-ckpt substrate axes: cos(P8A, SlotAv2) = +0.692, cos(P8A, T5C) = +0.726, cos(SlotAv2, T5C) = +0.924. Cross-encoder |cos(per-ckpt axis, false-flag-normal-frozen)| using 15 dor real dev normal_photo + 38 dor real lockbox webcam frames from D8 frozen-CLIP-L11 cache: P8A=0.081, SlotAv2=0.063, T5C=0.039 (alpha condition 1 met; <0.3). cos(P8A, SlotAv2) = 0.692 misses alpha condition 2 (>0.7) by 0.008. No beta trigger (max |cos| = 0.081 << 0.6). Per literal rule: gamma → both BACKBONE runs proceed. CPU-1 gamma (viso saliency 72.6% in non-face patches but non-face recall = 0% at CLS τ → HEAD ALT deferred to Phase 4). CPU-2 beta (Slot A v2 mean(raw)=0.503 < mean(teams)=0.542, Δ=+0.039, Wilcoxon p=0.002, same direction as E2B 2026-05-04 → BACKBONE pivots to GroupDRO substrate-balanced). CPU-3 gamma (|cos(axis, false-flag-normal)| = 0.04-0.08 ≪ 0.3 alpha threshold met, but cos(P8A, SlotAv2) = 0.692 < 0.7 alpha threshold by 0.008 → both BACKBONE runs proceed). Net Phase 2 implications: HEAD experiment unchanged; BACKBONE-SlotAv2 + BACKBONE-T5C BOTH pivot from substrate-pair-orthogonal loss to GroupDRO substrate-balanced; HEAD ALT (dual-readout) deferred. Earlier 2026-05-22 face-pool work block retained below.
 >
 > #### 2026-05-22 — Phase 1 CPU probes closed (FACTS only)
 >
