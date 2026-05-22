@@ -1,0 +1,30 @@
+{
+  "phase": "phase_2_head_full",
+  "status": "submitted",
+  "submitted_at_utc": "2026-05-22T13:52:00Z",
+  "vertex_job_id": "3087778639090024448",
+  "vertex_job_display_name": "exp-R13_FACE_POOL_HEAD_2026-05-25-20260522-155158",
+  "region": "us-east1",
+  "image": "us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.298",
+  "config_yaml": "experiments/phase2_round13/R13_FACE_POOL_HEAD_2026-05-25.yaml",
+  "wandb_project": "effort-r13-phase2",
+  "wandb_entity": "dtect-vision",
+  "wandb_url": "https://wandb.ai/dtect-vision/effort-r13-phase2",
+  "gpu": "NVIDIA_TESLA_A100 x 1",
+  "total_training_steps": 2500,
+  "max_train_steps": 2500,
+  "periodic_save_steps": [100, 500, 1000, 1500, 2500],
+  "lr_scheduler_warmup_steps": 250,
+  "seed": 9914,
+  "base_checkpoint": "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step3500_auc0.9952_eer0.0123.pth",
+  "lever": "face_pool_readout {layer: 11, subgrid_radius: 3, enabled: true}",
+  "freeze": "head_only_retrain {enabled: true, reinit_head: true}",
+  "monitor_cmd": "gcloud ai custom-jobs describe 3087778639090024448 --region=us-east1 --project=train-cvit2 --format='value(state)'",
+  "wandb_run_id": "kwhju7im",
+  "wandb_run_url": "https://wandb.ai/dtect-vision/effort-r13-phase2/runs/kwhju7im",
+  "smoke_cancelled_for_overrun": true,
+  "smoke_ckpts_saved": [
+    "gs://training-job-outputs/best_checkpoints/s1hihyi7/periodic_effort_20260522_step100_auc0.9896_eer0.0490.pth",
+    "gs://training-job-outputs/best_checkpoints/s1hihyi7/periodic_effort_20260522_step200_auc0.9895_eer0.0490.pth"
+  ]
+}

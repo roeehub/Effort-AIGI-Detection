@@ -1,0 +1,86 @@
+{
+  "phase": "phase_2_head",
+  "status": "training_launched_scoring_pending",
+  "last_updated_utc": "2026-05-22T14:08:00Z",
+  "summary": "Implementation + smoke validation + full launch complete. Full Vertex job is RUNNING. Scoring of periodic ckpts (steps 500, 1000, 1500, 2500) is pending the training job's JOB_STATE_SUCCEEDED.",
+  "implementation": {
+    "code_edits": [
+      "detectors/effort_detector.py — face_pool_readout flag on OpenCLIPVisionModelWrapper",
+      "train_sweep.py — face_pool_readout added to wandb-flattening bypass allowlist"
+    ],
+    "yaml_added": [
+      "experiments/phase2_round13/R13_FACE_POOL_HEAD_2026-05-25.yaml",
+      "experiments/phase2_round13/R13_FACE_POOL_HEAD_SMOKE_2026-05-25.yaml"
+    ],
+    "analysis_folder": "analysis/phase_2_head_2026-05-22/",
+    "scoring_scripts": [
+      "complete_phase_2_head.sh (end-to-end: download ckpts -> score -> contract -> sentinel)",
+      "run_periodic_ckpt_scorecard.sh (step-by-step scoring)",
+      "run_contract_scoring.sh (lex + composite)"
+    ],
+    "image_versions_built": ["1.3.297 (initial, then fixed)", "1.3.298 (max_train_steps fix landed)"]
+  },
+  "smoke": {
+    "vertex_job_id": "4897381264362831872",
+    "wandb_run_id": "s1hihyi7",
+    "wandb_url": "https://wandb.ai/dtect-vision/effort-r13-phase2/runs/s1hihyi7",
+    "status": "cancelled_after_pass_criteria_met",
+    "cost_usd_estimated": 2.94,
+    "ckpts_preserved": [
+      "gs://training-job-outputs/best_checkpoints/s1hihyi7/periodic_effort_20260522_step100_auc0.9896_eer0.0490.pth",
+      "gs://training-job-outputs/best_checkpoints/s1hihyi7/periodic_effort_20260522_step200_auc0.9895_eer0.0490.pth"
+    ],
+    "pass_criteria_met": {
+      "loss_decreasing": "step 100 loss=2.7767; step 401 loss=2.4407",
+      "head_only_retrain_active": "trainable=1,026 of 235,488,010 params (0.0004%)",
+      "face_pool_wrapper_active": "log line: face_pool_readout ACTIVE at block 11 | subgrid_radius=3",
+      "first_val_holdout_auc": 0.9896,
+      "no_nan_losses": "all sampled losses finite"
+    }
+  },
+  "full": {
+    "vertex_job_id": "3087778639090024448",
+    "wandb_run_id": "kwhju7im",
+    "wandb_url": "https://wandb.ai/dtect-vision/effort-r13-phase2/runs/kwhju7im",
+    "status": "running",
+    "running_since_utc": "2026-05-22T13:52:21Z",
+    "expected_finish_utc": "~2026-05-22T16:30:00Z",
+    "expected_periodic_ckpts": [
+      "step=500 (eval at 500 -> save fires)",
+      "step=1000 (eval at 1000 -> save fires)",
+      "step=1500 (eval at 1500 -> save fires)",
+      "step=2500 (eval at 2500 -> save fires)"
+    ],
+    "step100_save_will_skip": "Reason: evaluate_every_steps=250 means step 100 has no eval -> trainer's holdout_auc_p is None -> periodic save short-circuits. The smoke run s1hihyi7 step 100 ckpt covers this data point in spirit.",
+    "image": "us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.298",
+    "region": "us-east1",
+    "gpu": "NVIDIA_TESLA_A100 x 1",
+    "cost_usd_projected": "$7.30-9.00 for ~2.5 h"
+  },
+  "scoring_pending": {
+    "scoring_driver": "analysis/phase_2_head_2026-05-22/complete_phase_2_head.sh",
+    "invocation_after_full_completes": "cd /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training && ./analysis/phase_2_head_2026-05-22/complete_phase_2_head.sh kwhju7im",
+    "expected_wall_time_minutes": 100,
+    "outputs": [
+      "analysis/phase_2_head_2026-05-22/reports/<suite>_head_kwhju7im_step<N>_videos_report.csv",
+      "analysis/phase_2_head_2026-05-22/reports/contract_lex/",
+      "analysis/phase_2_head_2026-05-22/reports/contract_composite_lambda_1.0/",
+      "analysis/phase_2_head_2026-05-22/_phase_2_head_complete.json (will be overwritten with scoring_complete)"
+    ]
+  },
+  "next_actions": [
+    "1. Wait for full Vertex job (3087778639090024448) to reach JOB_STATE_SUCCEEDED",
+    "2. Run ./analysis/phase_2_head_2026-05-22/complete_phase_2_head.sh kwhju7im",
+    "3. Fill in RESULTS_FACTS_2026-05-22.md scorecard table",
+    "4. Apply HEAD decision gate to AGENT_PROPOSAL_2026-05-22.md: deploy / iterate / abort",
+    "5. Update /Users/roeedar/.claude/plans/ok-so-we-don-t-valiant-quasar.md Phase 2 HEAD section"
+  ],
+  "cost_ledger": {
+    "smoke": 2.94,
+    "full_projected": 8.0,
+    "scoring_local": 0.0,
+    "total_projected_usd": 10.94,
+    "budget_target": 32.0,
+    "budget_remaining": 21.06
+  }
+}
