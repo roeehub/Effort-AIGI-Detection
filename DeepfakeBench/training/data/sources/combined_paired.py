@@ -85,6 +85,14 @@ QUALITY_DOMAIN_MAP = {
     "proper_visomaster_enhanced_clean": 2,
     "proper_visomaster_teams": 1,
     "proper_visomaster_enhanced_teams": 1,
+    # Substrate-paired inventory lanes (BACKBONE 2026-05-22). Real-only frames
+    # in clean vs teams substrates for the same identity. The clean side is a
+    # studio_capture-like source (no Teams codec) → 2; the teams side carries
+    # Teams pipeline artefacts → 1.
+    "hdtf_visomaster": 2,
+    "quickclips_visomaster": 2,
+    "hdtf_visomaster_teams": 1,
+    "quickclips_visomaster_teams": 1,
     "youtube": 3,        # social_media — heavier compression, variable resolution
 }
 
@@ -851,6 +859,72 @@ def create_unified_samples_from_visomaster_res_variant(
     logger.info(f"  - Avg samples per identity: {avg_per_id:.2f}")
     logger.info(f"  - Per-resolution: {dict(res_counts)}")
     logger.info(f"  - Per-tier: {dict(tier_counts)}")
+
+    return unified
+
+
+def create_unified_samples_from_substrate_paired_inventory(
+    inventory_samples: List[Any],
+    logger: logging.Logger,
+) -> List[UnifiedPairedSample]:
+    """Convert substrate-paired inventory rows into UnifiedPairedSample wrappers.
+
+    Each inventory row produces TWO wrappers:
+      * one ``clean`` variant with no ``_teams`` suffix in the source label so
+        the SubstratePairStamper resolves it to ``transport=0``.
+      * one ``teams`` variant with the inventory's ``_teams`` source label so
+        the stamper resolves it to ``transport=1``.
+
+    Both wrappers share the same ``realpool_<identity_id>`` identity, so the
+    identity-stratified split keeps the clean and teams sides on the same
+    side of the train/val/test boundary and the SubstratePairStamper assigns
+    them matching ``substrate_pair_id`` values.
+
+    The wrappers carry ``original_sample`` = the ``SubstratePairedInventorySample``
+    so the iterator can recover bucket + prefix metadata. We also attach a
+    private attribute ``_substrate_side`` (``'clean'`` or ``'teams'``) to each
+    wrapper via the original_sample's ``method`` field; the iterator inspects
+    the wrapper's source label to decide which bucket to read from.
+    """
+    unified: List[UnifiedPairedSample] = []
+    identity_counts: Dict[str, int] = defaultdict(int)
+    per_source_per_side: Dict[Tuple[str, str], int] = defaultdict(int)
+
+    for sample in inventory_samples:
+        identity = sample.identity_with_prefix
+        identity_counts[identity] += 1
+
+        clean_wrapper = UnifiedPairedSample(
+            identity=identity,
+            source=sample.clean_source_label,
+            original_sample=sample,
+            method=sample.clean_method,
+            has_landmarks=False,
+            sample_id=sample.clean_sample_id,
+        )
+        teams_wrapper = UnifiedPairedSample(
+            identity=identity,
+            source=sample.teams_source_label,
+            original_sample=sample,
+            method=sample.teams_method,
+            has_landmarks=False,
+            sample_id=sample.teams_sample_id,
+        )
+        unified.append(clean_wrapper)
+        unified.append(teams_wrapper)
+        per_source_per_side[(sample.source, "clean")] += 1
+        per_source_per_side[(sample.source, "teams")] += 1
+
+    unique_identities = len(identity_counts)
+    avg_per_id = len(unified) / unique_identities if unique_identities > 0 else 0
+
+    logger.info(
+        f"Created {len(unified)} unified samples from substrate-paired inventory"
+    )
+    logger.info(f"  - Unique identities: {unique_identities}")
+    logger.info(f"  - Avg wrappers per identity (2 = 1 clean + 1 teams): {avg_per_id:.2f}")
+    pretty = {f"{src}/{side}": cnt for (src, side), cnt in sorted(per_source_per_side.items())}
+    logger.info(f"  - Per-source / side: {pretty}")
 
     return unified
 
@@ -2530,6 +2604,11 @@ class CombinedBatchingConfig:
     proper_data_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
     proper_data_parallel_download_workers: int = DEFAULT_PARALLEL_GCS_DOWNLOAD_WORKERS
 
+    # Substrate-paired inventory-specific (HDTF + quickclips real-only paired
+    # clean ↔ teams lanes; BACKBONE 2026-05-22).
+    substrate_paired_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
+    substrate_paired_parallel_download_workers: int = 4
+
     # Teams passthrough-specific
     teams_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
     # Optional per-frame keep-list for Teams REAL frames (T3 SLOT1/2/3 IQ-shortcut packets,
@@ -2700,6 +2779,11 @@ class CombinedPairedIterableDataset(IterableDataset):
                     yield from self._iterate_visomaster_sample(unified_sample, rng)
                 elif unified_sample.source in {'deeplive_teams', 'visomaster_hints_teams'}:
                     yield from self._iterate_teams_sample(unified_sample, rng)
+                elif unified_sample.source in {
+                    'hdtf_visomaster', 'quickclips_visomaster',
+                    'hdtf_visomaster_teams', 'quickclips_visomaster_teams',
+                }:
+                    yield from self._iterate_substrate_paired_inventory_sample(unified_sample, rng)
                 else:  # deeplive
                     yield from self._iterate_deeplive_sample(unified_sample, rng)
             except Exception as e:
@@ -3468,6 +3552,115 @@ class CombinedPairedIterableDataset(IterableDataset):
                 'frame_idx': frame_idx,
                 'quality_domain': _domain_for_sample(unified_sample.method, src, 1),
             }
+
+    def _get_substrate_paired_gcs_client(self):
+        if not hasattr(self, '_substrate_paired_gcs_client'):
+            self._substrate_paired_gcs_client = storage.Client()
+        return self._substrate_paired_gcs_client
+
+    def _get_substrate_paired_download_executor(self):
+        max_workers = max(
+            1,
+            int(getattr(self.config, "substrate_paired_parallel_download_workers", 1) or 1),
+        )
+        if max_workers <= 1:
+            return None
+        executor = getattr(self, "_substrate_paired_download_executor", None)
+        executor_workers = getattr(self, "_substrate_paired_download_executor_workers", None)
+        if executor is None or executor_workers != max_workers:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self._substrate_paired_download_executor = ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="substrate-paired-gcs",
+            )
+            self._substrate_paired_download_executor_workers = max_workers
+        return self._substrate_paired_download_executor
+
+    def _iterate_substrate_paired_inventory_sample(
+        self,
+        unified_sample: UnifiedPairedSample,
+        rng: random.Random,
+    ) -> Iterator[Dict[str, Any]]:
+        """Load and yield real frames from a substrate-paired inventory row.
+
+        Each wrapper represents EITHER the clean side OR the teams side; the
+        iterator yields only the corresponding bucket's frames. Identity is
+        shared with the partner wrapper so SubstratePairStamper can match
+        the pair_id across the two videos at collate time.
+        """
+        from .substrate_paired_inventory import (
+            CLEAN_SOURCE_HDTF,
+            CLEAN_SOURCE_QCLIP,
+            TEAMS_SOURCE_HDTF,
+            TEAMS_SOURCE_QCLIP,
+            load_substrate_paired_real_frames,
+        )
+
+        sample = unified_sample.original_sample
+        src = unified_sample.source
+        method = unified_sample.method
+
+        if src in (CLEAN_SOURCE_HDTF, CLEAN_SOURCE_QCLIP):
+            side = "clean"
+            companion_domain = None
+        elif src in (TEAMS_SOURCE_HDTF, TEAMS_SOURCE_QCLIP):
+            side = "teams"
+            companion_domain = "teams_v2"
+        else:
+            logger.warning(
+                "Unknown substrate-paired source label %r — skipping sample %s",
+                src, unified_sample.sample_id,
+            )
+            return
+
+        frame_indices = self.config.substrate_paired_sparse_indices
+        client = self._get_substrate_paired_gcs_client()
+        executor = self._get_substrate_paired_download_executor()
+
+        frames_by_idx = load_substrate_paired_real_frames(
+            sample,
+            side=side,
+            frame_indices=frame_indices,
+            client=client,
+            executor=executor,
+            parallel_download_workers=self.config.substrate_paired_parallel_download_workers,
+        )
+
+        for frame_idx in frame_indices:
+            if frame_idx not in frames_by_idx:
+                continue
+            img = frames_by_idx[frame_idx]
+            if self.transform:
+                img = self._apply_transform(
+                    img,
+                    None,
+                    {'label': 0, 'source': src, 'method': method},
+                )
+            row = {
+                'image': img,
+                'label': 0,
+                'identity': unified_sample.identity,
+                'source': src,
+                'method': method,
+                'method_id': self.method_mapping.get(method, -1),
+                'sample_id': unified_sample.sample_id,
+                'frame_idx': frame_idx,
+                'quality_domain': _domain_for_sample(method, src, 0),
+                # `companion_bucket` is plumbed for parity with the
+                # visomaster_teams_enhanced lane (per
+                # `data/sources/visomaster.py:748,1105,1176,1539-1554`).
+                # SubstratePairStamper itself does not read it — pair lookup
+                # is identity-keyed — but keeping the field populated lets
+                # downstream tools (e.g. group_id derivation, sanity probes)
+                # reconstruct the (clean, teams) bucket pair if needed.
+                'companion_bucket': (
+                    sample.teams_bucket if side == "clean" else sample.clean_bucket
+                ),
+            }
+            if companion_domain is not None:
+                row['companion_domain'] = companion_domain
+            yield row
 
     def _iterate_unpaired_real_sample(
         self,
@@ -4579,6 +4772,45 @@ def create_combined_paired_pipeline(
         logger.info("VisoMaster Teams-enhanced merged dataset: DISABLED")
 
     # ==========================================================================
+    # Load Substrate-Paired Inventory Dataset (HDTF + quickclips real-only
+    # clean ↔ teams pairs; BACKBONE 2026-05-22). Reads inventory CSV at
+    # `analysis/substrate_pair_geometry_2026-05-22/inventory_manifest.csv` by
+    # default. Each row produces TWO UnifiedPairedSample wrappers (clean side
+    # + teams side) sharing the same realpool_<identity> so the substrate-
+    # pair stamper matches their pair_ids at collate time.
+    # ==========================================================================
+    substrate_paired_config = combined_config.get('substrate_paired_inventory', {})
+    substrate_paired_enabled = bool(substrate_paired_config.get('enabled', False))
+    substrate_paired_samples: List[UnifiedPairedSample] = []
+
+    if substrate_paired_enabled:
+        from .substrate_paired_inventory import discover_substrate_paired_samples as _disc_inv
+
+        sp_inventory_path = substrate_paired_config.get('inventory_path')
+        sp_sources = substrate_paired_config.get('sources')
+
+        logger.info("Loading substrate-paired inventory dataset (HDTF + quickclips):")
+        logger.info(f"  - Inventory path: {sp_inventory_path or 'DEFAULT'}")
+        logger.info(f"  - Sources filter: {sp_sources or 'DEFAULT (hdtf+quickclips)'}")
+
+        raw_substrate_paired_samples = _disc_inv(
+            inventory_path=sp_inventory_path,
+            sources=sp_sources,
+            log=logger,
+        )
+        if len(raw_substrate_paired_samples) == 0:
+            logger.warning(
+                "Substrate-paired inventory is ENABLED but 0 inventory rows were loaded. "
+                "Check the inventory CSV path and the `sources` filter."
+            )
+        substrate_paired_samples = create_unified_samples_from_substrate_paired_inventory(
+            raw_substrate_paired_samples,
+            logger,
+        )
+    else:
+        logger.info("Substrate-paired inventory dataset: DISABLED")
+
+    # ==========================================================================
     # Load VisoMaster Enhanced Dataset (post-hoc face enhancement)
     # ==========================================================================
     viso_enhanced_config = combined_config.get('visomaster_enhanced', {})
@@ -4723,6 +4955,7 @@ def create_combined_paired_pipeline(
         + visomaster_teams_enhanced_samples + visomaster_enhanced_samples
         + visomaster_res_variant_samples
         + teams_samples + visomaster_hint_teams_samples + external_real_samples
+        + substrate_paired_samples
     )
     
     if len(all_samples) == 0:
@@ -4740,6 +4973,7 @@ def create_combined_paired_pipeline(
     logger.info(f"  - Teams passthrough: {len(teams_samples)}")
     logger.info(f"  - VisoMaster Teams hints: {len(visomaster_hint_teams_samples)}")
     logger.info(f"  - External reals: {len(external_real_samples)}")
+    logger.info(f"  - Substrate-paired inventory (HDTF+QCLIP, real-only): {len(substrate_paired_samples)}")
     
     # Build method mapping early (needed by dataset for Group DRO method_id)
     unique_methods = set()
@@ -4960,6 +5194,14 @@ def create_combined_paired_pipeline(
         teams_sparse_indices=combined_config.get('teams', {}).get('anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]),
         teams_real_frame_keep_list=teams_real_frame_keep_list_set,
         teams_real_frame_keep_list_per_method=teams_real_frame_keep_list_per_method_map,
+        substrate_paired_sparse_indices=combined_config.get('substrate_paired_inventory', {}).get(
+            'anchor_indices', [0, 2, 4, 6, 8, 10, 12, 14]
+        ),
+        substrate_paired_parallel_download_workers=int(
+            combined_config.get('substrate_paired_inventory', {}).get(
+                'parallel_download_workers', 4
+            ) or 4
+        ),
     )
 
     # VisoMaster anchor indices for the iterable dataset
@@ -5158,6 +5400,7 @@ def create_combined_paired_pipeline(
         'teams_samples': len(teams_samples),
         'visomaster_hints_teams_samples': len(visomaster_hint_teams_samples),
         'external_real_samples': len(external_real_samples),
+        'substrate_paired_inventory_samples': len(substrate_paired_samples),
         'external_training_identities': len(external_training_identities),
         'train_samples': len(train_samples),
         'val_samples': len(val_samples),

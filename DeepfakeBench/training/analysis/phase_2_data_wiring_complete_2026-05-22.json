@@ -1,0 +1,15 @@
+{
+  "status": "done",
+  "wall_seconds": 8.4,
+  "unique_substrate_pair_ids_reached": 704,
+  "out_of_total_pair_ids": 1826,
+  "out_of_reachable_ceiling": 705,
+  "matched_pair_batch_pct": 100.0,
+  "matched_pair_batch_pct_random": 29.0,
+  "n_batches": 100,
+  "batch_size": 32,
+  "tests_added": 9,
+  "tests_pass": "29/29 in tests/test_substrate_paired_and_asymmetric_loss.py (was 20/20); 611/619 repo-wide (4 pre-existing failures unrelated to this change, 4 skipped).",
+  "pass_unique_pair_ids_gte_95pct_of_ceiling": true,
+  "pass_matched_pair_batch_pct_gte_30": true
+}

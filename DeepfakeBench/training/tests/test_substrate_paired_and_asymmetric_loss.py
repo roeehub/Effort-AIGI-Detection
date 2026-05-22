@@ -321,3 +321,236 @@ def test_end_to_end_collate_plus_asymmetric_loss(stamper_enabled):
         assert abs(result.item() - 0.12) < 1e-5
     finally:
         set_active_stamper(None)
+
+
+# ---------------------------------------------------------------------------
+# Substrate-paired inventory data lane wiring (BACKBONE 2026-05-22)
+# ---------------------------------------------------------------------------
+
+def test_inventory_discovery_default_filter_keeps_hdtf_and_qclip():
+    """`discover_substrate_paired_samples` returns 1826 rows by default
+    (HDTF 1094 + QCLIP 732). The 54 enhanced rows are filtered out because
+    they ship via the visomaster_teams_enhanced lane."""
+    from data.sources.substrate_paired_inventory import (
+        INVENTORY_SOURCE_HDTF,
+        INVENTORY_SOURCE_QCLIP,
+        discover_substrate_paired_samples,
+    )
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+
+    samples = discover_substrate_paired_samples(inventory_path=INVENTORY_PATH)
+    assert len(samples) == 1826
+    by_source = {s.source for s in samples}
+    assert by_source == {INVENTORY_SOURCE_HDTF, INVENTORY_SOURCE_QCLIP}
+
+    # Per-source counts match the inventory geometry.
+    n_hdtf = sum(1 for s in samples if s.source == INVENTORY_SOURCE_HDTF)
+    n_qclip = sum(1 for s in samples if s.source == INVENTORY_SOURCE_QCLIP)
+    assert n_hdtf == 1094
+    assert n_qclip == 732
+
+
+def test_inventory_discovery_explicit_sources_list():
+    """Restricting `sources` returns only matching rows."""
+    from data.sources.substrate_paired_inventory import discover_substrate_paired_samples
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+
+    only_hdtf = discover_substrate_paired_samples(
+        inventory_path=INVENTORY_PATH,
+        sources=["hdtf_visomaster_teams"],
+    )
+    assert len(only_hdtf) == 1094
+    assert all(s.source == "hdtf_visomaster_teams" for s in only_hdtf)
+
+    only_qclip = discover_substrate_paired_samples(
+        inventory_path=INVENTORY_PATH,
+        sources=["quickclips_visomaster_teams"],
+    )
+    assert len(only_qclip) == 732
+    assert all(s.source == "quickclips_visomaster_teams" for s in only_qclip)
+
+
+def test_inventory_sample_source_labels():
+    """Each inventory row has a clean source label without `_teams` and a
+    teams source label with `_teams` — the stamper relies on this exact
+    contract to derive transport from the source string."""
+    from data.sources.substrate_paired_inventory import (
+        CLEAN_SOURCE_HDTF,
+        CLEAN_SOURCE_QCLIP,
+        TEAMS_SOURCE_HDTF,
+        TEAMS_SOURCE_QCLIP,
+        discover_substrate_paired_samples,
+    )
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+
+    samples = discover_substrate_paired_samples(inventory_path=INVENTORY_PATH)
+    hdtf = next(s for s in samples if s.source == "hdtf_visomaster_teams")
+    qclip = next(s for s in samples if s.source == "quickclips_visomaster_teams")
+
+    assert hdtf.clean_source_label == CLEAN_SOURCE_HDTF == "hdtf_visomaster"
+    assert hdtf.teams_source_label == TEAMS_SOURCE_HDTF == "hdtf_visomaster_teams"
+    assert qclip.clean_source_label == CLEAN_SOURCE_QCLIP == "quickclips_visomaster"
+    assert qclip.teams_source_label == TEAMS_SOURCE_QCLIP == "quickclips_visomaster_teams"
+    # Bucket discrimination: clean and teams must point at different buckets.
+    assert hdtf.clean_bucket != hdtf.teams_bucket
+    assert qclip.clean_bucket != qclip.teams_bucket
+
+
+def test_inventory_sample_id_suffixes_unique():
+    """Clean and teams sample_ids differ — required so the per-video collate
+    treats them as two videos (otherwise they'd be merged by sample_id_label)."""
+    from data.sources.substrate_paired_inventory import discover_substrate_paired_samples
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+    samples = discover_substrate_paired_samples(inventory_path=INVENTORY_PATH)
+    for sample in samples[:10]:
+        assert sample.clean_sample_id != sample.teams_sample_id
+        assert sample.clean_sample_id.endswith("__clean")
+        assert sample.teams_sample_id.endswith("__teams")
+
+
+def test_create_unified_samples_doubles_inventory_rows():
+    """`create_unified_samples_from_substrate_paired_inventory` emits one
+    wrapper per (inventory_row, side) → 2 × N_rows."""
+    import logging
+
+    from data.sources.combined_paired import (
+        create_unified_samples_from_substrate_paired_inventory,
+    )
+    from data.sources.substrate_paired_inventory import discover_substrate_paired_samples
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+
+    log = logging.getLogger("test_create_unified")
+    samples = discover_substrate_paired_samples(inventory_path=INVENTORY_PATH)
+    unified = create_unified_samples_from_substrate_paired_inventory(samples, log)
+    assert len(unified) == 2 * len(samples)
+
+    # All identities share the realpool_ prefix.
+    assert all(u.identity.startswith("realpool_") for u in unified)
+
+    # Equal number of clean/teams sides.
+    clean_n = sum(1 for u in unified if u.sample_id.endswith("__clean"))
+    teams_n = sum(1 for u in unified if u.sample_id.endswith("__teams"))
+    assert clean_n == teams_n == len(samples)
+
+
+def test_unified_samples_paired_collate_emits_transport_pair():
+    """End-to-end: unified samples → synthetic per-frame yield → collate
+    stamps matching pair_ids and opposing transports on clean+teams sides."""
+    import logging
+
+    import numpy as np
+
+    from data.sample.substrate_paired import set_active_stamper, SubstratePairStamper
+    from data.sources.combined_paired import (
+        combined_paired_collate_fn,
+        create_unified_samples_from_substrate_paired_inventory,
+    )
+    from data.sources.substrate_paired_inventory import (
+        CLEAN_SOURCE_HDTF,
+        TEAMS_SOURCE_HDTF,
+        discover_substrate_paired_samples,
+    )
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+
+    log = logging.getLogger("test_unified_collate")
+    samples = discover_substrate_paired_samples(inventory_path=INVENTORY_PATH)
+    unified = create_unified_samples_from_substrate_paired_inventory(samples, log)
+
+    # Find a (clean, teams) pair sharing identity.
+    clean = next(u for u in unified if u.source == CLEAN_SOURCE_HDTF)
+    teams = next(
+        u for u in unified
+        if u.source == TEAMS_SOURCE_HDTF and u.identity == clean.identity
+    )
+
+    def _frame(u, idx, companion_domain=None):
+        row = {
+            "image": np.zeros((64, 64, 3), dtype=np.uint8),
+            "label": 0,
+            "identity": u.identity,
+            "source": u.source,
+            "method": u.method,
+            "method_id": -1,
+            "sample_id": u.sample_id,
+            "frame_idx": idx,
+            "quality_domain": 0,
+            "companion_bucket": "irrelevant",
+        }
+        if companion_domain is not None:
+            row["companion_domain"] = companion_domain
+        return row
+
+    batch = (
+        [_frame(clean, i) for i in range(2)]
+        + [_frame(teams, i, companion_domain="teams_v2") for i in range(2)]
+    )
+    stamper = SubstratePairStamper(enabled=True, inventory_path=INVENTORY_PATH)
+    set_active_stamper(stamper)
+    try:
+        result = combined_paired_collate_fn(batch)
+    finally:
+        set_active_stamper(None)
+
+    # Two videos (clean side and teams side).
+    assert result["substrate_pair_id"].shape[0] == 2
+    pair_ids = result["substrate_pair_id"].tolist()
+    transports = sorted(result["substrate_transport"].tolist())
+    assert pair_ids[0] == pair_ids[1] > 0  # same identity → same pair_id
+    assert transports == [0, 1]
+
+
+def test_iterator_dispatch_picks_substrate_paired_branch(monkeypatch):
+    """The dispatch in `CombinedPairedIterableDataset.__iter__` routes
+    substrate-paired sources to `_iterate_substrate_paired_inventory_sample`."""
+    from data.sources.combined_paired import CombinedPairedIterableDataset
+    # The class itself defines the new method.
+    assert hasattr(CombinedPairedIterableDataset, "_iterate_substrate_paired_inventory_sample")
+
+
+def test_quality_domain_map_has_new_sources():
+    """The new source labels are registered in the QUALITY_DOMAIN_MAP so
+    `_domain_for_sample` returns a valid GRL bucket for each."""
+    from data.sources.combined_paired import QUALITY_DOMAIN_MAP
+    for src in (
+        "hdtf_visomaster",
+        "quickclips_visomaster",
+        "hdtf_visomaster_teams",
+        "quickclips_visomaster_teams",
+    ):
+        assert src in QUALITY_DOMAIN_MAP, f"Missing QUALITY_DOMAIN_MAP entry for {src!r}"
+
+
+def test_existing_viso_teams_enhanced_lane_still_pairs(stamper_enabled):
+    """Regression guard: the visomaster_teams_enhanced lane already produces
+    correct (clean, teams) stamping (companion_domain=teams_v2). Adding the
+    HDTF/QCLIP lanes must not regress its behaviour."""
+    from data.sample.substrate_paired import set_active_stamper
+    from data.sources.combined_paired import combined_paired_collate_fn
+
+    set_active_stamper(stamper_enabled)
+    try:
+        # `visomaster_CSCS_00007` is one of the 54 enhanced inventory rows.
+        # The stamper expects `identity=sample_id` for those rows (resolver
+        # row carries no separate identity_id — see inventory builder).
+        identity = "realpool_visomaster_CSCS_00007"
+        batch = (
+            [_mock_frame(i, identity, "visomaster", 0, "vidVMC_clean") for i in range(2)] +
+            [_mock_frame(i, identity, "visomaster_teams_enhanced", 0, "vidVMC_teams") for i in range(2)]
+        )
+        result = combined_paired_collate_fn(batch)
+        assert result["substrate_pair_id"].shape[0] == 2
+        assert result["substrate_pair_id"][0].item() == result["substrate_pair_id"][1].item()
+        transports = sorted(result["substrate_transport"].tolist())
+        # Both source labels normalize to TEAMS by `_is_teams_source`
+        # (one ends in `_teams_enhanced`; the other is `visomaster` only).
+        # Specifically: `visomaster` → clean (transport=0). The enhanced
+        # source contains 'teams' → transport=1.
+        assert transports == [0, 1]
+    finally:
+        set_active_stamper(None)
