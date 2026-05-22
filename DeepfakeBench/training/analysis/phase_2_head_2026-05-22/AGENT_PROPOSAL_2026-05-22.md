@@ -1,9 +1,6 @@
 # Phase 2 HEAD — agent proposal (opinion doc)
 
-Status: **PENDING full-run completion**. Decision gate per
-`/Users/roeedar/.claude/plans/ok-so-we-don-t-valiant-quasar.md` Phase 2 HEAD
-section. This doc will be populated once the full Vertex job reaches
-`JOB_STATE_SUCCEEDED` and the per-ckpt scorecard runs.
+Status: **scoring complete 2026-05-22T17:04:54Z**. Verdict below.
 
 This document IS opinion-bearing — it makes a recommendation. FACTS live in
 `RESULTS_FACTS_2026-05-22.md`.
@@ -20,24 +17,80 @@ This document IS opinion-bearing — it makes a recommendation. FACTS live in
 
 ---
 
-## Recommendation (to be filled post-scoring)
+## Recommendation: **ITERATE → defer to Phase 4 HEAD ALT (dual-readout)**
 
-_TBD._
+The head plateaued at step 250 and the trajectory is flat across all 5
+scored ckpts. Composite λ=1.0 clusters at 0.235-0.243; viso recall stuck at
+0.072-0.075; lockbox real FPR ~0.017-0.018. None of the 5 ckpts clears the
+four-gate deploy criterion.
+
+But the lockbox-side numbers are essentially equivalent to the face-pool
+inference baseline (0.0154 / 0.7668 / 0.249) — within statistical noise.
+HEAD is NOT an abort (lockbox isn't regressing). It IS an iterate: viso
+< 0.15 floor means the face-pool readout's structural loss of non-face
+patches couldn't be recovered by head-fitting. The viso signature must
+live (at least partially) outside the centered 7×7 face region — which is
+exactly what Phase 4 Fallback A (HEAD ALT dual-readout) addresses.
+
+CPU-1 was γ-outcome (non-face saliency mass 72.6%, but non-face recall = 0
+at the calibrated CLS τ so α condition not met). Per the literal rule,
+HEAD ALT is deferred to Phase 4. The HEAD verdict here confirms that
+deferral is the right call: structural face-pool loss IS the binding
+constraint on viso, so HEAD ALT addresses the actual mechanism, not a
+hypothesized one.
 
 ### Argument for deploy
 
-_TBD — depends on whether any periodic ckpt clears all four gates._
+None of the 5 ckpts clears all four gates. Best composite is 0.235 vs ≤
+0.20 threshold (over by 0.035). Lockbox real FPR 0.0176 vs ≤ 0.016 (over by
+0.0016). Viso recall 0.073 vs ≥ 0.15 (under by 0.077). Three gates fail
+simultaneously — deploy is structurally blocked.
 
-### Argument for iterate
+### Argument for iterate (chosen)
 
-_TBD — depends on whether CPU-1 outcome (visomaster non-face-localization at
-gamma per `analysis/viso_fake_signature_localization_2026-05-23/`) justifies
-deferring to Phase 4 HEAD ALT instead of immediate iteration._
+HEAD step 250 (winner) Pareto-equivalent to the $0 face-pool inference
+baseline on the same 9 suites. Marginal composite improvement (0.249 →
+0.235, -5.6%). Marginal lockbox_fake_recall improvement (+0.016). Marginal
+lockbox_real_fpr regression (+0.0022). Marginal viso improvement
+(+0.0054). Net effect: training the head on face-pool features didn't move
+the needle materially — the structural loss is upstream of the head.
+
+The viso miss isn't a head-boundary problem (face-pool features the head
+sees are missing the signal); it's a feature-availability problem
+(centered 7×7 doesn't capture the signal). The fix is to give the head
+BOTH face_pool AND non_face_pool features (concat → 1024-dim head). That's
+HEAD ALT per the plan's Fallback A. Defer to Phase 4.
 
 ### Argument for abort
 
-_TBD — depends on whether the head-fitting on face-pool features regresses
-lockbox vs the face-pool inference baseline (0.0154 / 0.7668)._
+Lockbox metrics did NOT regress vs face-pool inference baseline. Lockbox
+real FPR moved from 0.0154 → 0.0176 (within noise floor; the 0.0022 delta
+is < 1 σ at n_videos=1361). Lockbox fake recall moved from 0.7668 → 0.7826
+(+0.016). Abort criterion (regression vs face-pool inference baseline) does
+NOT fire.
+
+---
+
+## Phase 4 HEAD ALT — go criteria (for the next agent)
+
+If/when Phase 4 is greenlit:
+1. Add a `face_pool_readout.dual_readout: true` flag (or new top-level
+   `dual_readout_readout` block) to `detectors/effort_detector.py`. In
+   forward: compute face_pool (centered 7×7, 49 patches) AND non_face_pool
+   (complement, 147 patches), mean-pool each, apply `ln_post` then
+   `visual.proj` to EACH. Concat → 1024 dim. Pipe to a new
+   `head_dim_override=1024` head.
+2. New yaml `R13_FACE_POOL_DUAL_READOUT_HEAD_2026-MM-DD.yaml` cloning the
+   HEAD ancestor with dual_readout + head_dim_override=1024.
+3. head_only_retrain MUST reinit head (existing 512-dim head doesn't fit
+   1024-dim input).
+4. Smoke first ($3, 30 min) — verify both pool features actually flow.
+5. Cost projection: ~$30 full + smoke. Total Phase 2+4 HEAD spend: ~$45.
+
+The decision gate stays the same (lockbox ≤ 0.016 AND viso ≥ 0.15 AND
+composite ≤ 0.20). If HEAD ALT still misses viso ≥ 0.15, that's evidence
+that viso signature isn't recoverable from any per-patch pool (e.g., lives
+in attention map structure, not in mean-pooled features).
 
 ---
 

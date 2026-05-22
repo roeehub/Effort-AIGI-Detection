@@ -1,6 +1,35 @@
 # State — current rolling snapshot
 
-> **Last refreshed**: 2026-05-22 PM (Phase 2 HEAD full launched on Vertex; BACKBONE paused per operator direction). HEAD full Vertex `3087778639090024448` is RUNNING in us-east1, image `1.3.298`, W&B `dtect-vision/effort-r13-phase2/runs/kwhju7im`, projected wall ~2.5h, projected cost ~$7–9 (head-only retrain freezes 99.9996% of params; cheaper than the $25–32 plan estimate). HEAD smoke (Vertex `4897381264362831872`) was cancelled at $2.94 sunk cost due to a `max_train_steps` yaml bug discovered post-launch; fix landed in both HEAD yamls before the full launch.
+> **Last refreshed**: 2026-05-23 early-AM (Phase 2 HEAD verdict landed, SlotAv2 full SUCCEEDED but inventory-CSV bug found, T5C relaunch in flight).
+>
+> ---
+>
+> #### 2026-05-23 00:00 UTC — Phase 2 HEAD verdict + .gcloudignore bug discovery (FACTS only)
+>
+> **Phase 2 HEAD scoring COMPLETE 2026-05-22T17:04:54Z** — all 5 periodic ckpts (250, 500, 1000, 1500, 2500) scored on 9-suite contract under both lex + composite λ=1.0 policies. Sentinel: `analysis/phase_2_head_2026-05-22/_phase_2_head_scoring_complete_all_steps.json`. Winner: HEAD_KWHJU7IM_STEP250, composite=0.235025, lockbox_real_fpr=0.017634, lockbox_fake_recall=0.782609, viso recall=0.072727, dev_fake_macro=0.492051. All 5 ckpts cluster at composite=0.235-0.243 (head plateaued at step 250 with only 1,026 trainable params). **Decision gate four-way readout**: composite ≤ 0.20 ALL FAIL (best 0.235), lockbox_real_fpr ≤ 0.016 ALL FAIL (best 0.0169), lockbox_fake_recall ≥ 0.74 ALL PASS, viso ≥ 0.15 ALL FAIL (max 0.075). AGENT_PROPOSAL `analysis/phase_2_head_2026-05-22/AGENT_PROPOSAL_2026-05-22.md` recommends **ITERATE → defer to Phase 4 HEAD ALT (dual-readout)**. HEAD step 250 Pareto-equivalent to the $0 face-pool inference baseline (composite 0.249 → 0.235 = −0.014, lockbox FPR +0.0022, lockbox recall +0.016, viso +0.005) — training the head on face-pool features did not materially move the needle.
+>
+> **Phase 2 BACKBONE-SlotAv2 full SUCCEEDED 2026-05-22T21:54:30Z** — Vertex `6793621763772121088`, W&B `6ypu1ds3`, us-west4, 4h 03m wall, image `1.3.299`. Periodic ckpts at steps [250, 500, 1000, 1500, 2500, 3500] under `gs://training-job-outputs/best_checkpoints/6ypu1ds3/`. Holdout AUC: 0.9968 → 0.9969 → 0.9953 → 0.9802 → 0.9942 → 0.9968 (step 1500 dipped, step 3500 matches Slot A v2 base 0.9952).
+>
+> **Phase 2 BACKBONE-T5C full BLOCKED** — auto-launcher v2's W&B loss-fires check verified T5C smoke (W&B `4ruwa8by`) logged `train/loss/substrate_pair_asymmetric` at steps 3/54/112/163 with all 4 values = 0.0. Saved ~$45-65 of GPU spend.
+>
+> **Root cause of T5C loss=0 + SlotAv2 missing-inventory**: `.gcloudignore` excludes `analysis/*` with explicit allows ONLY for `analysis/deeplive_face_geometry_2026-05-05/face_area.parquet`, `analysis/cpu_diagnostics_2026-05-09/*keep_list*.csv`, `analysis/__init__.py`, `analysis/teams_pool_rescore.py`. The substrate-paired inventory CSV at `analysis/substrate_pair_geometry_2026-05-22/inventory_manifest.csv` was NOT in the allowed set → Cloud Build's source tarball excluded it → Docker image 1.3.298 + 1.3.299 don't have the file → `data/sources/substrate_paired_inventory.py` logs "Substrate-paired inventory CSV not found at /workspace/... — emitting 0 samples" → 0 substrate-paired rows reach iterators → `SubstratePairStamper` ALSO disables itself ("inventory not found at ... — disabling") → no substrate_pair_id is stamped on any sample → loss filter `pid < 0` rejects all rows → `substrate_pair_asymmetric_loss` returns 0 across all steps. This bug affected BOTH SlotAv2 full (GroupDRO ran on existing R-D/F-B groups only, NOT substrate-balanced) AND T5C smoke (loss never fired). Verified in Vertex logs `2026-05-22T16:55:41` (T5C smoke) + `2026-05-22T18:12:26` + `2026-05-22T18:34:10` (SlotAv2 full).
+>
+> **Fix landed 2026-05-23 ~00:50 UTC**: `.gcloudignore` now has explicit allow for `analysis/substrate_pair_geometry_2026-05-22/inventory_manifest.csv`. Image rebuilt as `1.3.300` (Cloud Build SUCCEEDED ~23:06 UTC). T5C smoke v2 launched in us-central1 via `1.3.300`; chain (in flight): smoke → W&B loss-check → full → step-3500 scoring. End-to-end ETA ~4h.
+>
+> **SlotAv2 step 3500 scoring** in flight on local MPS (PID 88774 started 2026-05-22T22:55Z). Suite 3/9 (`teams_real_lighting_extreme_dev`) at last check. ~17 min wall remaining. The lever-with-bug verdict (no inventory data) will land first; if it deploys we keep it; if it doesn't I'll evaluate whether to relaunch with `1.3.300`.
+>
+> **Live state (PIDs)**:
+> - SlotAv2 scoring: PID 88774
+> - T5C relaunch chain (build wait → smoke → loss check → full → score): PID 90931 (build phase done, smoke launched)
+>
+> **Open loops touched**:
+> - `t5c-substrate-pair-asymmetric-loss-zero-bug` (HIGH, in-progress) — gcloudignore fix landed; T5C smoke v2 verifies the fix via loss > 0 check.
+> - `per-base-substrate-pair-cohort-math-untested` (HIGH) — closes when T5C smoke v2 logs `train/loss/substrate_pair_asymmetric > 0` for ≥ 5 sampled steps.
+> - `viso-fake-signature-non-face-vs-face-localization` (HIGH) — HEAD verdict supports CPU-1's γ-outcome direction (face-pool readout doesn't recover viso); HEAD ALT is the live next lever.
+>
+> ---
+>
+> #### 2026-05-22 PM — operator pivot + Phase 2 launch state (FACTS only) HEAD full Vertex `3087778639090024448` is RUNNING in us-east1, image `1.3.298`, W&B `dtect-vision/effort-r13-phase2/runs/kwhju7im`, projected wall ~2.5h, projected cost ~$7–9 (head-only retrain freezes 99.9996% of params; cheaper than the $25–32 plan estimate). HEAD smoke (Vertex `4897381264362831872`) was cancelled at $2.94 sunk cost due to a `max_train_steps` yaml bug discovered post-launch; fix landed in both HEAD yamls before the full launch.
 >
 > ---
 >

@@ -59,6 +59,17 @@ analysis/cpu_diagnostics_2026-05-09/*
 !analysis/cpu_diagnostics_2026-05-09/slot2_teams_real_keep_list_2026-05-09.csv
 !analysis/cpu_diagnostics_2026-05-09/slot3_teams_real_per_method_keep_list_2026-05-09.csv
 
+# Required by trainer when combined_paired.substrate_paired_inventory.enabled=True
+# (data/sources/substrate_paired_inventory.py reads the manifest at iter time)
+!analysis/substrate_pair_geometry_2026-05-22/
+analysis/substrate_pair_geometry_2026-05-22/*
+!analysis/substrate_pair_geometry_2026-05-22/inventory_manifest.csv
+
+# Required by trainer when anchor_aware.enabled=True
+# (loss/anchor_aware_penalty.py imports from analysis.teams_pool_rescore)
+!analysis/__init__.py
+!analysis/teams_pool_rescore.py
+
 *.npz
 *.gstmp
 
