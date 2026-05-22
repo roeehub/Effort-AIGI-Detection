@@ -5225,7 +5225,31 @@ def create_combined_paired_pipeline(
         face_area_parquet_path=combined_config.get('face_area_parquet_path'),
     )
     persistent_workers = batching_config.num_workers > 0
-    
+
+    # Capture substrate_pair_sampling cfg into a worker_init_fn so each
+    # DataLoader worker re-instantiates the SubstratePairStamper inside the
+    # worker process. Without this, workers spawned by 'spawn' start method
+    # (or any context that doesn't inherit parent module globals) get
+    # `_ACTIVE_STAMPER = None`, the collate skips the stamping, and the
+    # downstream `substrate_pair_asymmetric_loss` reads all rows as
+    # substrate_pair_id=-1 (returns 0 across all steps). Surfaced
+    # 2026-05-23 via two consecutive T5C smokes that read loss=0.
+    _sps_cfg_for_workers = dict(combined_config.get('substrate_pair_sampling', {}) or {})
+
+    def _substrate_pair_worker_init(worker_id, _sps_cfg=_sps_cfg_for_workers):
+        if not _sps_cfg or not _sps_cfg.get('enabled', False):
+            return
+        try:
+            from data.sample.substrate_paired import (
+                SubstratePairStamper,
+                set_active_stamper,
+            )
+            stamper = SubstratePairStamper.from_config(_sps_cfg)
+            set_active_stamper(stamper)
+        except Exception:
+            # Non-fatal: workers without stamper degrade to no-op (pair_id=-1).
+            pass
+
     train_loader = DataLoader(
         train_iterable,
         batch_size=batching_config.batch_size,
@@ -5234,6 +5258,7 @@ def create_combined_paired_pipeline(
         collate_fn=combined_paired_collate_fn,
         pin_memory=True,
         persistent_workers=persistent_workers,
+        worker_init_fn=_substrate_pair_worker_init if _sps_cfg_for_workers else None,
     )
     
     # Validation loaders (no augmentation, no shuffle)
