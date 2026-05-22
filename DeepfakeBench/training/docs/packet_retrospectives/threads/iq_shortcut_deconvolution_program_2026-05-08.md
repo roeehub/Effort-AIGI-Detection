@@ -1187,3 +1187,246 @@ template inheritance chain. This is a propagated omission rather than a
 deliberate design choice.
 
 - **source**: [`analysis/reschain_grl6_eval_2026-05-16/DEEP_DIVE_FACTS_2026-05-16.md`](../../../analysis/reschain_grl6_eval_2026-05-16/DEEP_DIVE_FACTS_2026-05-16.md) §8.
+
+
+---
+
+## 2026-05-16 update — auto-mode launch (anchor_aware + real_rebalance)
+
+### Headline
+
+User authorized auto mode with 10h / 2 GPU slots after the RESCHAIN_GRL6 scorecard verdict. After a chain of 4 CPU diagnostic rounds the actual mechanism crystallized:
+
+- **v3 (band-shortcuts):** 9 single-property bands each have 4-10× over-fire rate inside their threshold; compositional dose-response confirms shortcut. Decision tree on 11 properties → Slot β over-fire at AUC 0.89; P8A at AUC 0.99.
+- **v4 (training distribution):** training reals have **0 frames at n_bands ≥ 6**. Test cohorts like Roy_D average 7 bands hit. Encoder defaults "fake" in unanchored region.
+- **v5 (encoder probe):** vanilla OpenCLIP ViT-B-16 separates Roy_D from ilan/orel at AUC **1.0**, PC1=-3.5 vs +7.1. The encoder discrimination axis is inherited from pretraining.
+- **v6 (auto-mode):** anchor pool (Slot A target) sits at PC1=+2.67 (clean side, only 17% closer to Roy_D); VCD reals (Slot B boost target) sit at PC1=+1.60 (**67% closer to Roy_D**). Predicts Slot B has stronger generalization to Roy_D-style chronic FPs.
+
+### Two GPU packets launched 2026-05-16 evening
+
+| slot | yaml | mechanism | region | Vertex job | W&B run | seed |
+|---|---|---|---|---:|---|---:|
+| A | R13_T5C_ANCHOR_AWARE_2026-05-16.yaml | enable anchor_aware penalty (weight=5.0, dor false-flag pool, 30 frames) | us-east1 | 1400679201337507840 | n73ic6ez | 9913 |
+| B | R13_T5C_REAL_REBALANCE_2026-05-16.yaml | family_weight rebalance: realpool_real 1.5→5.0, external_real 2.0→6.0, df40_real 0.5→0.25 | us-west4 | 3559896493831749632 | iw2kk1h0 | 9914 |
+
+Both transitioned to RUNNING within 4 minutes. Image `1.3.291`.
+
+### Pre-launch encoder embedding sanity (PC1 axis fit on dev PNG)
+
+| cohort | PC1 mean | Roy_D-bias | % closer to Roy_D |
+|---|---:|---:|---:|
+| Roy_D (target) | −3.54 | +0.221 | 100% |
+| ilan/orel (clean) | +7.18 | −0.207 | 0% |
+| **anchor pool falseflag** (Slot A target) | **+2.67** | −0.015 | **16.7%** |
+| **VCD external_real** (Slot B boost target) | **+1.60** | +0.027 | **67%** |
+| training_real_teams (baseline) | +3.51 | −0.043 | 24% |
+
+### New open loops
+
+### Open loop: slot-b-real-rebalance-via-vcd-reaches-roy-d-region
+
+status: open
+severity: high
+first_seen: 2026-05-16
+last_verified: 2026-05-16
+close_criterion: scorecard outcome on Slot B step3500 against the auto_mode_2026-05-16 checkpoint map. CONFIRMER: lockbox_real_fpr ≤ 0.03 AND dev_fake_macro_recall ≥ 0.40 AND viso_enhanced_macro_dev ≥ 0.15. FALSIFIER: any of dev_fake_macro_recall < 0.30, lockbox_real_fpr > 0.05, viso_enhanced_macro_dev < 0.10.
+
+**Summary**: Pre-launch PCA shows VCD external_real frames live 67% closer
+to Roy_D than to clean controls in encoder embedding space. Slot B boosts
+the VCD family weight 3× (from 2.0 to 6.0). If the encoder-axis hypothesis
+is correct, Slot B should move the chronic-FP rate on Roy_D substantially
+without hurting fake recall.
+
+- **source**: [`analysis/slot_b_property_shortcut_2026-05-16/RESULTS_FACTS_v6_AUTO_MODE_2026-05-16.md`](../../../analysis/slot_b_property_shortcut_2026-05-16/RESULTS_FACTS_v6_AUTO_MODE_2026-05-16.md).
+
+### Open loop: slot-a-anchor-aware-bounded-by-pool-content
+
+status: open
+severity: medium
+first_seen: 2026-05-16
+last_verified: 2026-05-16
+close_criterion: scorecard outcome on Slot A step3500. Slot A's anchor pool is dor-webcam content only (30 frames). The encoder embedding probe shows anchor pool frames at PC1=+2.67 (clean side), only 16.7% closer to Roy_D. Predicts Slot A reduces dor chronic FP but does NOT generalize to Roy_D / xiang / PC_Generator. CONFIRMER: dor chronic_FP reduces ≥30%. NO_TRANSFER FINDING: Roy_D over-fire rate ≈ unchanged from T5C step3500.
+
+**Summary**: Slot A's training-time anchor supervision is content-bounded.
+The 30 dor frames don't inhabit Roy_D's embedding region, so anchoring
+on them shouldn't generalize to Roy_D. The packet tests whether
+single-pool anchor_aware works at all on T5C base, regardless of
+generalization scope.
+
+- **source**: [`analysis/slot_b_property_shortcut_2026-05-16/RESULTS_FACTS_v6_AUTO_MODE_2026-05-16.md`](../../../analysis/slot_b_property_shortcut_2026-05-16/RESULTS_FACTS_v6_AUTO_MODE_2026-05-16.md).
+
+
+---
+
+## 2026-05-16 update — auto-mode VERDICT (anchor_aware vs real_rebal)
+
+### Headline
+
+Slot A v2 (anchor_aware) is rank-2 on the v3-fix contract scorecard with
+massively better fake recall than P8A (rank-1) at 0.07pp lockbox FPR cost.
+
+### Scorecard summary
+
+| rank | ckpt | dev_macro | lockbox_FPR | viso | deeplive | teams_fake_lockbox |
+|---:|---|---:|---:|---:|---:|---:|
+| 1 | P8A | 0.300 (floor) | 0.0184 | 0.136 | 0.239 | 0.387 |
+| **2** | **Slot A v2 (anchor_aware)** | **0.438** | **0.0191** | **0.167** | **0.552** | **0.688** |
+| 3 | T5C base | 0.459 | 0.0279 | 0.138 | 0.626 | 0.660 |
+| 4 | Slot B (rebal) | 0.541 | 0.0896 | 0.158 | 0.795 | 0.435 |
+
+### Encoder mechanism CONFIRMED for Slot A
+
+Encoder probe pre-launch finding: Slot A v2 collapsed anchor_pool from 53% Roy_D-adjacent → 0%. dor_shkedi.png from 60% → 9%.
+
+Scorecard per-identity outcome:
+- Chikara_Takahashi lockbox FPR: P8A 26.2% → Slot A v2 **0%** (FIXED)
+- PC_Generator lockbox FPR: P8A 27.6% → Slot A v2 **0%** (FIXED)
+- Q dev FPR: P8A 88.9% → Slot A v2 **16.7%** (FIXED)
+- PC_Generator dev FPR: P8A 24.1% → Slot A v2 **6.8%** (FIXED)
+- Roy_D dev FPR: P8A 29.2% → Slot A v2 **81.5%** (REGRESSED — encoder probe predicted Roy_D unchanged; Roy_D doesn't appear in lockbox so doesn't affect lex ranking)
+
+### Encoder mechanism REFUTED for Slot B
+
+Slot B encoder probe showed VCD pushed FURTHER from Roy_D (27% → 17% Roy_D-adjacent in trained). Scorecard outcome: Slot B's lockbox FPR blew up to 0.090 (4.8× P8A), driven by dor_shkedi over-firing 0.7% → 10.6%. Encoder-axis prediction was correct.
+
+### New open loops
+
+### Open loop: roy-d-specific-anchor-pool-packet
+
+status: open
+severity: high
+first_seen: 2026-05-16
+last_verified: 2026-05-16
+close_criterion: launch a packet with Roy_D anchor pool (30-50 frames) + dor anchor pool combined. If Roy_D dev FPR drops below 30%, mechanism generalizes. If not, Roy_D encoder region needs a different intervention class.
+
+**Summary**: Slot A's anchor_aware worked exactly as designed — anchor_pool
+collapsed to clean cluster, generalized to Chikara_Takahashi + PC_Generator
++ Q (all FIXED). But did NOT reach Roy_D (29→81% regression). Roy_D needs
+its own anchor pool.
+
+- **source**: [`analysis/auto_mode_2026-05-16_eval/RESULTS_FACTS_2026-05-16.md`](../../../analysis/auto_mode_2026-05-16_eval/RESULTS_FACTS_2026-05-16.md) §5.
+
+### Open loop: slot-a-bla-bla-chow-regression
+
+status: open
+severity: medium
+first_seen: 2026-05-16
+last_verified: 2026-05-16
+close_criterion: encoder probe on Slot A v2's bla_bla_chow embeddings. If bla_bla_chow shifted toward Roy_D region (away from clean), confirm the spillover mechanism and tune weight to reduce.
+
+**Summary**: Slot A introduced a new chronic-FP on bla_bla_chow (0 → 16.2%
+lockbox FPR). Likely the encoder push toward "clean" for the dor pool also
+pushed bla_bla_chow embeddings AWAY from clean. Per-identity probe needed.
+
+- **source**: [`analysis/auto_mode_2026-05-16_eval/RESULTS_FACTS_2026-05-16.md`](../../../analysis/auto_mode_2026-05-16_eval/RESULTS_FACTS_2026-05-16.md) §4.
+
+### Closes existing open loops
+
+- ~~slot-a-anchor-aware-bounded-by-pool-content~~ CLOSED. Predicted bounded
+  to dor cohort. ACTUAL: generalized to Chikara + PC_Gen + Q (anchor pool
+  pulled their embeddings to clean too).
+- ~~slot-b-real-rebalance-via-vcd-reaches-roy-d-region~~ CLOSED.
+  REFUTED. VCD's 67% Roy_D-adjacency in vanilla openclip collapsed to 17% in
+  the trained encoder; Slot B's lockbox FPR blew up to 0.090.
+
+---
+
+## 2026-05-19 update — Validation expansion (E1-E9). E5 operational sign-flip is the only NEW finding; E6 is a CPU re-simulation of already-shipped infra (loop caught mid-session)
+
+User asked an agent to "expand analysis to more data" after a natural-experiment session (two Teams accounts on same person → T5C flipped). The agent ran 8 CPU packets (E1-E9, n=4,420 reals total across the parquet) on T5C step3500 + cross-checked P8A_step5000 + E2B_step3200. Full FACTS at [`../../../analysis/teams_account_validation_2026-05-19/EXPANDED_FACTS_2026-05-19.md`](../../../analysis/teams_account_validation_2026-05-19/EXPANDED_FACTS_2026-05-19.md).
+
+**Cross-reference audit (per AGENTS.md threads-win rule + AGENT_GUIDE Rule 1) found 7/8 packets reproduce findings already established in D1-D10 above.** Only E5 extends the thread materially.
+
+### Net new finding — E5: cross-ckpt operational sign-flip on 5 specific IQ axes
+
+Re-scored 550 cached frames with P8A_step5000 + E2B_step3200 + T5C_step3500 and computed Pearson r between prob_fake and 14 IQ axes on n=350 real frames.
+
+Sign-flip across {P8A} vs {T5C, E2B} on 5 axes with |spread| > 0.5:
+
+| axis | P8A r | E2B r | T5C r | spread |
+|---|---:|---:|---:|---:|
+| min_dim | **−0.484** | +0.070 | +0.116 | 0.60 |
+| contrast_rms | **−0.198** | +0.335 | **+0.363** | 0.56 |
+| luma_std | **−0.171** | +0.338 | **+0.369** | 0.54 |
+| brightness_v_std | **−0.212** | +0.246 | +0.299 | 0.51 |
+| B_mean | −0.166 | +0.149 | +0.118 | 0.31 (smaller; included for completeness) |
+
+**`lap_var` is POSITIVE across all three ckpts** (P8A +0.218, E2B +0.409, T5C +0.343). No sign-flip on the sharpness axis itself.
+
+Pairwise score correlations on real frames (n=350): T5C↔E2B r=0.79, T5C↔P8A r=0.50, E2B↔P8A r=0.50. T5C and E2B agree; P8A is qualitatively different from both.
+
+**Extends D2/D6 from PC1-angle-drift level to score-level**. D2/D6 established that all FT'd ckpts drift TOWARD IQ-PC1 alignment (smaller chronic-6 angles: P8A 5.06°, T5C 9.54°, E2B 10.45°). D2/D6 did NOT establish that the SIGN of operational score-vs-axis correlations differs between P8A and T5C/E2B. E5 does. Mechanism hypothesis (untested): T4's multi-axis-L11-GRL inverted the encoder's IQ-axis projection direction, T5C inherited via classifier-capacity bump. Falsifier: scoring T4 step10500 on the same 550 frames and checking whether T4 is on the P8A-side or T5C-side of the sign-flip table.
+
+Memory `project_image_quality_shortcut.md` amended in the same session — direction qualifier added, last_verified bumped.
+
+### E2 — per-chronic axis heterogeneity confirmed on T5C with new identity pair (extends D1)
+
+D1 (2026-05-12, P8A): "per-identity `saturation_mean` β SIGN-FLIPS across chronic identities (Roy_D −6.15 vs dor_shkedi +3.33)."
+
+E2 (2026-05-19, T5C): per-chronic Pearson on T5C real frames shows the same mechanism with a different identity pair: Cam_Test sat_mean r=−0.86 (n=12) vs Chikara_Takahashi sat_mean r=+0.72 (n=13). Both n's small (CIs wide) but |r| > 0.7 makes the sign-flip robust.
+
+**Implication**: the "per-identity axis-heterogeneity on saturation_mean" is a cross-ckpt phenomenon, not P8A-specific. It refutes any single-axis-normalization fix; the IQ-shortcut acts in different directions on different identities.
+
+### E6 — CPU simulation of already-shipped + ALREADY-REFUTED infra (LOOP CAUGHT)
+
+The expansion proposed a "B3 bundle" (blur + per-channel scale + contrast + brightness + saturation + downsample + jpeg) and reported it closes 79% of the dev↔lockbox W1 distance on prob_fake distribution. This proposal duplicates existing code:
+
+- [`data/augmentations/pipeline_randomization.py`](../../../data/augmentations/pipeline_randomization.py) — jpeg roundtrip, downscale-upscale, chroma blur, YUV roundtrip, gamma jitter, luma blur, brightness shift. P22-era (`R13_P22_AUG_CURRICULUM.yaml`). Per memory `project_p22_cpu_followups_reframe_2026-05-02.md`: step8k DEGRADED (score variance collapsed 140×); step1k robust under joint τ-calibration.
+- [`data/augmentations/resolution_chain_aug.py`](../../../data/augmentations/resolution_chain_aug.py) — Slot α ran 2026-05-15 overnight (run id `lsx4n0t7`). 2026-05-16 SCORECARD VERDICT: **Slot α step3500 ranked 5 and FAILED `dev_fake_macro_recall ≥ 0.30` floor at 0.226** (memory `project_overnight_resolution_chain_2026-05-16.md`, see also TIMELINE 2026-05-15→2026-05-16 entry). The 25% real score_range cut was partially score-distribution compression, not pure encoder invariance — see open loop `cpu-probe-mechanism-discrimination` (2026-05-16) above for the diagnostic gap the CPU probe failed to catch.
+
+E6's 79% CPU-simulated W1 closure is **mechanism-blind in the same way Slot α's CPU probe was**: W1-on-prob_fake-distribution does NOT distinguish encoder-level substrate-invariance (preserves real/fake AUC) from score-distribution compression (mean-fake-score crashes alongside mean-real-score-rise). Both produce identical W1 closure on the prob_fake marginal. Slot α empirically demonstrated this trap — its 25% score_range cut "looked good" until the scorecard showed fake recall collapsed.
+
+E6 is therefore NOT just "redundant with shipped infra"; it is "redundant with a REFUTED lever" measured by a metric (W1 on prob_fake distribution) that cannot detect the failure mode the lever already exhibited. The `dev-to-lockbox-substrate-transfer-gap` open loop is NOT closed by either Slot α or this CPU sim; it remains open pending an aug variant that preserves real/fake AUC while shifting the prob_fake distribution toward lockbox.
+
+**For the next agent**: before proposing any aug lever in this class, the CPU probe must report **fake-vs-real AUC on the panel** (per open loop `cpu-probe-mechanism-discrimination`), not just W1 / score_range. A 25-79% W1 closure with AUC drop > 0.02 is the compression trap, not a win.
+
+AGENT_GUIDE Rule 6 (added 2026-05-19) prevents the aug-lever-rediscovery class going forward; the AUC-as-pre-launch-gate requirement from open loop `cpu-probe-mechanism-discrimination` covers the metric-blindness class.
+
+### E1, E3, E4, E8, E9 — confirmatory at finer granularity (no thread additions)
+
+- **E1** (Pearson with bootstrap CIs on 14 IQ axes): reconfirms D5/D7. T5C has 7 axes with r CI excluding 0; top |r|=0.37 on luma_std. D5/D7 already established T5C's IQ-axis alignment.
+- **E3** (per-IQ-axis KS/W1/Cohen's d, dev vs lockbox): reconfirms D8/D10. Top by effect size: luma_std d=+1.20, contrast_rms d=+1.13. D8/D10 already established the gap is fully discriminable in CLIP-feature space (KLIEP 99.09%).
+- **E4** (15-axis perturbation sweep): reconfirms `project_resolution_chain_instability_2026-05-15`. Top axes by median |Δ prob_fake|: jpeg_q40 (0.160), downsample_3x (0.149), blur_sigma_3.0 (0.129). 73/114 crops have one of these as the dominant axis.
+- **E8** (CLIP/ArcFace logreg AUC=0.997 separating substrates): reconfirms D8 KLIEP 99.09%. ArcFace=0.997 component is marginally novel (face-cluster differences are large enough that face-identity alone separates substrates).
+- **E9** (aug saturation on lockbox: dev +0.13, lockbox −0.02): directional confirmation of IQ-shortcut. Aligned with D4 inverse pattern.
+
+### Open loop status — no changes from E1-E9
+
+- `dev-to-lockbox-substrate-transfer-gap`: STILL OPEN. Slot α scorecard already ran (2026-05-16) and FAILED contract floor at fake recall 0.226; E6 CPU simulation is mechanism-blind to the same compression failure mode (cannot distinguish AUC-preserving substrate invariance from AUC-collapsing score compression on its W1 metric).
+- `chronic-6-encoder-iq-angle-drift-during-ft`: STILL OPEN. E5 doesn't bear on causation; falsifier (T4 step10500 on the same 550 frames) not yet run.
+- `clip-frozen-chronic-6-auc-robustness`: STILL OPEN. E8 ArcFace=0.997 is on a different feature space; doesn't address the n=282 sample-size question.
+- No new open loops opened or closed by E1-E9.
+
+### Self-correction log (this session)
+
+- **C1**: Initial EXPANDED_FACTS doc claimed "T5C's IQ-direction is OPPOSITE of P8A/E2B's" as a generic headline. Correct claim is: opposite on contrast_rms / luma_std / brightness_v_std / min_dim / B_mean. `lap_var` is positive on all three. Corrected in EXPANDED_FACTS in the same session.
+- **C2**: Initial EXPANDED_FACTS doc proposed "B3 bundle as actionable training recommendation". TWO compounding errors caught: (1) Pipeline_randomization.py and resolution_chain_aug.py already implement this; (2) Slot α (`lsx4n0t7`) — the empirical analog — has ALREADY BEEN REFUTED at contract level on 2026-05-16 (rank 5, failed dev_fake_macro_recall floor). The E6 W1-closure metric is mechanism-blind to the exact failure mode Slot α exhibited (score-distribution compression vs encoder invariance — open loop `cpu-probe-mechanism-discrimination`). Reframed E6 as "CPU sim of refuted lever measured by an insufficient metric" in the same session.
+- **C3**: Memory `project_image_quality_shortcut.md` was read as "score correlates negatively with lap_var → contradicts E5's positive r". On re-read, the memory's "score" is ambiguous between prob_fake and real-side-confidence; with real-confidence reading, the memory is compatible with E5. Memory amended to disambiguate.
+
+---
+
+## 2026-05-22 update — face-pool inference removes ~17pp of teams_real_all_dev FPR variance at $0; the IQ-shortcut channel is partly geometric (FACTS only)
+
+**Source**: `analysis/face_pool_scorecard_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3a (Slot A v2 step3500 CLS vs face pool on 9-suite contract); `analysis/face_pool_canary_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3, §5, §7 (800-frame canary + score-distribution table + cross-reference to representation-geometry probe); commits `5f7c8c5` and `fad721a`.
+
+**Direct numerical findings on Slot A v2 step3500**:
+
+- Real-frame canary score distribution under CLS-pool: median 0.175, std 0.305 (n=600 reals on `arena/canaries/teams_chronic_diverse_800_2026-05-07.parquet`).
+- Real-frame canary score distribution under face-pool: median 0.568, std 0.159. Std reduction Δ = −0.146 (relative −47.9 %).
+- Real-frame score range `score_p95 − score_p05` under CLS-pool: 0.890 − 0.063 = 0.827.
+- Real-frame score range `score_p95 − score_p05` under face-pool: 0.788 − 0.432 = 0.356. Range reduction Δ = −0.471 (relative −56.9 %).
+- On the same 9-suite contract surface (Slot A v2 step3500, same eval set, same scorer), `dev_primary_real_fpr` moves 0.0655 → 0.0636 (Δ = −0.0018 absolute, −2.7 % relative) and `dev_worst_real_stress_fpr` moves 0.0992 → 0.0999 (Δ = +0.0007 absolute, +0.7 % relative). The contract τ moves 0.7880 → 0.7368 to absorb the upshift in the real-frame distribution.
+- Representation geometry (Probe 2, Slot A v2 step3500 at L11 on 1,825 paired clean ↔ teams identity frames): face-pool raises `cos_pair` from 0.867 to 0.963 (Δ = +0.095) and shrinks |Δ_pair_vs_within| from 0.077 to 0.016 (relative shrink ≈ 4×) on the same identity-paired pairs (`per_ckpt_face_region_cosines.csv`).
+- KLIEP projection of `(face_pool[teams] − face_pool[clean])` onto the frozen-CLIP-L11 substrate axis on the same 1,825 pairs: CLS-pool μ +0.0135 → face-pool μ +0.0019 (Δ = −0.0116; relative −86 %).
+
+**What this bears on the program's stages**:
+
+- The program's [Stage 2 / Stage 3](#) interventions (encoder-level IQ-decoupling via training-side losses, e.g., the proposed substrate-pair contrastive or GroupDRO levers in `/Users/roeedar/.claude/plans/ok-so-we-don-t-valiant-quasar.md` Phase 2 BACKBONE) target a substrate-shortcut channel the encoder has learned at L11. The 2026-05-22 face-pool readout shows that, at $0 training cost on a frozen ckpt, simply discarding 147/196 non-face patch tokens at L11 collapses the real-frame canary score range from 0.83 to 0.36 (−57 % relative) and the L11 KLIEP-axis projection of the substrate-pair direction from 0.0135 to 0.0019 (−86 %). The IQ-shortcut channel is therefore at least partly spatial / geometric (carried by non-face patches), not exclusively a pixel-statistic-of-the-face-region problem.
+- The 2026-05-16 Slot α scorecard refutation pointed at the W1-on-prob_fake metric trap: a 25–79 % W1 closure with AUC drop > 0.02 is the score-distribution compression failure mode, not encoder invariance. The 2026-05-22 face-pool readout is the inverse pattern: real-score-distribution does compress (std halves) and the contract τ moves to absorb it, but `lockbox_fake_recall` goes UP (+0.079) on the same ckpt with no training (FACTS doc cited above). The compression-vs-invariance dichotomy the open loop `cpu-probe-mechanism-discrimination` was scoped to discriminate now has a third data point: real-score compression PLUS lockbox-fake recall lift (the new behavior is also distinct from compression-with-fake-recall-loss that Slot α showed and from invariance-with-no-real-score-change that pure substrate invariance would show).
+- The Stage 2 / Stage 3 intervention class now competes with a $0 inference-time readout change on the Pareto-improving-lockbox half of the program's goal. The face-pool readout does not address the visomaster_enhanced regression (−0.100 on Slot A v2 step3500, see `viso_bucket_gap.md` 2026-05-22 update); a training-side encoder-level IQ-decoupling lever that also resolves the viso half is structurally distinct from anything face-pool inference alone can do.
+
+**Open loop status — no new loop opened**:
+
+- `cpu-probe-mechanism-discrimination` (existing in this thread, opened 2026-05-16): STILL OPEN. Its close criterion ("any aug-targeting-IQ-axis CPU probe must report fake-vs-real AUC, not just W1 / score_range / KS / KL") is unaffected. The face-pool data adds a third dichotomy case (real-compression + fake-recall-up); the loop's close criterion (mechanism-discriminating metric requirement) remains the binding requirement for any future aug-class probe.
+- Stage 2 / Stage 3 program scoping (proposed at the bottom of this thread): not formally an open-loop block in the structured-block format. The 2026-05-22 face-pool finding shifts the comparator for the program's stages; the program itself is not re-scoped here. Any future agent drafting a Stage 2 packet should reference both this 2026-05-22 update and the `viso-fake-signature-non-face-vs-face-localization` open loop (in `viso_bucket_gap.md`) before proposing.
+

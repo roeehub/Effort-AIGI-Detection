@@ -1,18 +1,18 @@
 # OPEN_LOOPS — Mechanically Generated Issue Inventory
 
-> ⚙ **GENERATED on 2026-05-16** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
+> ⚙ **GENERATED on 2026-05-22** by `tools/regenerate_open_loops.py`. Do not hand-edit. To change an entry, edit the corresponding `### Open loop:` block in the **owning thread file** under `threads/` and re-run the script.
 
 ## Summary
 
-- **Open**: 52
+- **Open**: 58
 - **In progress**: 6
-- **Resolved**: 15
+- **Resolved**: 17
 - **Superseded**: 1
 - **Unknown status**: 1
 
 ## Entries
 
-### Open (52)
+### Open (58)
 
 ### `apply-svd-in-proj-attribution-revision-needed`
 - **status**: open
@@ -110,6 +110,22 @@
 - **close_criterion**: EITHER (a) a head-retrain on a substrate-diverse pool (dev + lockbox-style data, properly held-out for eval) lifts T4 lockbox AUC ≥ 0.90 — confirms the gap is closeable by exposing the head to substrate-diverse training, OR (b) the gap is REPRODUCED on multiple ckpts (T4, P8A, T3) and on the full lockbox cohort — closes as "structural data gap; requires new training data ingestion, not architecture/loss changes"
 - **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:756`
 
+### `roy-d-specific-anchor-pool-packet`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: launch a packet with Roy_D anchor pool (30-50 frames) + dor anchor pool combined. If Roy_D dev FPR drops below 30%, mechanism generalizes. If not, Roy_D encoder region needs a different intervention class.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1294`
+
+### `slot-b-real-rebalance-via-vcd-reaches-roy-d-region`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: scorecard outcome on Slot B step3500 against the auto_mode_2026-05-16 checkpoint map. CONFIRMER: lockbox_real_fpr ≤ 0.03 AND dev_fake_macro_recall ≥ 0.40 AND viso_enhanced_macro_dev ≥ 0.15. FALSIFIER: any of dev_fake_macro_recall < 0.30, lockbox_real_fpr > 0.05, viso_enhanced_macro_dev < 0.10.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1226`
+
 ### `slot-b-viso-lift-mechanism-and-lockbox-fpr-localization`
 - **status**: open
 - **severity**: high
@@ -117,6 +133,22 @@
 - **last_verified**: 2026-05-16
 - **close_criterion**: a per-identity decomposition of Slot β step3500's lockbox_real_fpr (~$0 MPS, ~1h) determines whether the +5.5pp absolute penalty is concentrated on 2-3 chronic identities (rule-rescuable per memory `project_blend_unsharp_lever_2026-05-14`) or distributed across new identities. AND a 5-axis sister-variant (axes = current 4 + color_b_dev_high only, no luma_mean_high) tests whether the viso lift comes from color_b alone or requires both new axes. The combination of these two tests resolves whether Slot β is a deployment path.
 - **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1143`
+
+### `per-base-substrate-pair-cohort-math-untested`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-22
+- **last_verified**: 2026-05-22
+- **close_criterion**: run Wilcoxon on Slot A v2 step3500 on the 275 paired viso fakes from analysis/pair_loss_effect_verification_2026-05-05; CPU-2 in next Phase 1
+- **source**: `threads/clean_teams_identity_pairing.md:146`
+
+### `viso-fake-signature-non-face-vs-face-localization`
+- **status**: open
+- **severity**: high
+- **first_seen**: 2026-05-22
+- **last_verified**: 2026-05-22
+- **close_criterion**: per-patch ablation on viso vs deeplive fake misses; CPU-1 in next Phase 1
+- **source**: `threads/viso_bucket_gap.md:317`
 
 ### `split-mode-delta-unquantified`
 - **status**: open
@@ -228,7 +260,7 @@
 - **first_seen**: 2026-05-07
 - **last_verified**: 2026-05-07
 - **close_criterion**: at least 2 P2 ckpts have BOTH (a) a canary readout at the corresponding training step AND (b) a post-training contract scorecard verdict. Compute Pearson correlation between `canary/lockbox_recall_at_FPR_10pct` and the scorecard's `lockbox_fake_recall` at calibrated τ. Compute the same for `canary/max_per_identity_mean_score` and the F5 close-criterion's binding identity. If r > 0.7 on both, the canary is empirically validated as a deployment proxy. If r < 0.3, the canary's design is wrong and the metric set needs re-deriving from the P2 outcomes. Either result closes the loop.
-- **source**: `threads/in_training_canary_signal.md:82`
+- **source**: `threads/in_training_canary_signal.md:99`
 
 ### `open-loops-stale-state-claims`
 - **status**: open
@@ -293,6 +325,22 @@
 - **last_verified**: 2026-05-16
 - **close_criterion**: a $0 CPU re-rank of the most recent scorecard using `dev_fake_macro_recall` as the tiebreak (instead of `lockbox_real_fpr`) AND a per-IQ-quartile cell decomposition of `lockbox_real_fpr` at each ckpt's selected τ. If the per-quartile FPR is uniformly below dev FPR (per D4 2026-05-12 finding), the tiebreak is measuring τ-tail-density not lockbox substrate difficulty. Decision: whether to amend the contract policy.
 - **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1160`
+
+### `slot-a-anchor-aware-bounded-by-pool-content`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: scorecard outcome on Slot A step3500. Slot A's anchor pool is dor-webcam content only (30 frames). The encoder embedding probe shows anchor pool frames at PC1=+2.67 (clean side), only 16.7% closer to Roy_D. Predicts Slot A reduces dor chronic FP but does NOT generalize to Roy_D / xiang / PC_Generator. CONFIRMER: dor chronic_FP reduces ≥30%. NO_TRANSFER FINDING: Roy_D over-fire rate ≈ unchanged from T5C step3500.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1242`
+
+### `slot-a-bla-bla-chow-regression`
+- **status**: open
+- **severity**: medium
+- **first_seen**: 2026-05-16
+- **last_verified**: 2026-05-16
+- **close_criterion**: encoder probe on Slot A v2's bla_bla_chow embeddings. If bla_bla_chow shifted toward Roy_D region (away from clean), confirm the spillover mechanism and tune weight to reduce.
+- **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1309`
 
 ### `corrected-val-test-hint-split-counts-unrecoverable`
 - **status**: open
@@ -388,7 +436,7 @@
 - **first_seen**: 2026-05-07
 - **last_verified**: 2026-05-07
 - **close_criterion**: a "tiny canary" companion of ~60 frames runs every 200 steps for finer resolution at the cost of ~0.1% extra training time. Useful specifically because P1 BUNDLE_step500 was already in the failed regime by step 500 — the current 1000-step cadence might miss the inflection. Implement only if the 1000-step cadence proves to be too coarse on the P2 runs. Tiny canary composition would be: 5 chronic identities × 6 frames + 30 lockbox fakes = 60 frames.
-- **source**: `threads/in_training_canary_signal.md:96`
+- **source**: `threads/in_training_canary_signal.md:113`
 
 ### `canary-wilcoxon-cohort-split`
 - **status**: open
@@ -396,7 +444,7 @@
 - **first_seen**: 2026-05-07
 - **last_verified**: 2026-05-07
 - **close_criterion**: the Wilcoxon-vs-P8A metric is split into two cohort-specific stats: `canary/wilcoxon_stat_vs_p8a_healthy_reals` (where small drift = good) and `canary/wilcoxon_stat_vs_p8a_chronic_reals` (where large negative drift = good). The aggregate stat is preserved but augmented. Implementation is ~30 lines in `trainer/mixins/canary_probe.py:_aggregate_metrics`. Defer until P2 results validate the basic metric set; if the basic Wilcoxon already correlates with deployment quality, the cohort split may not be needed.
-- **source**: `threads/in_training_canary_signal.md:89`
+- **source**: `threads/in_training_canary_signal.md:106`
 
 ### `clip-frozen-chronic-6-auc-robustness`
 - **status**: open
@@ -480,7 +528,7 @@
 - **close_criterion**: a training-time intervention (T5-C stronger online classifier; OR T5-B multi-layer GRL attachment; OR head-only retrain on a substrate-diverse pool including lockbox-style data) measurably restores chronic_6 inv_mean Δ to ≥ 0 vs P8A on the FULL chronic_6 cohort (including PC_Generator/Roy_D/Q identities, not just bla_bla_chow) while preserving lockbox + HDTF performance
 - **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:741`
 
-### Resolved (15)
+### Resolved (17)
 
 ### `contract-policy-bug-fix-not-committed`
 - **status**: resolved
@@ -505,6 +553,22 @@
 - **last_verified**: 2026-05-12
 - **close_criterion**: EITHER (a) a head-retrain on a substrate-diverse pool (dev + lockbox-style data, properly held-out for eval) lifts T4 lockbox AUC ≥ 0.90 — confirms the gap is closeable by exposing the head to substrate-diverse training, OR (b) the gap is REPRODUCED on multiple ckpts (T4, P8A, T3) and on the full lockbox cohort — closes as "structural data gap; requires new training data ingestion, not architecture/loss changes"
 - **source**: `threads/iq_shortcut_deconvolution_program_2026-05-08.md:1001`
+
+### `canary-silence-when-multi-axis-grl-active`
+- **status**: resolved
+- **severity**: high
+- **first_seen**: 2026-05-20
+- **last_verified**: 2026-05-20
+- **close_criterion**: a code fix lands such that for a yaml configuration with BOTH `multi_axis_grl.enabled: true` AND `canary_probe.enabled: true`, the next training run logs ≥1 `canary/score_p95_on_reals` value to W&B within the first 1000 steps. The fix's root-cause investigation must name the specific raise site in `trainer/mixins/canary_probe.py:_run_canary_probe` or its callee that the try/except is currently swallowing (candidates documented in `analysis/manual_canary_2026-05-20/DEEP_DIVE_FACTS_2026-05-20.md §1.2`: model forward `data_dict` missing GRL-axis labels; ArcFace head 2-tuple unpack at `detectors/effort_detector.py:1813`; dict-key extraction at `canary_probe.py:312-318`). Acceptance: a smoke test in `tests/test_canary_with_grl_wiring.py` (new file) exercises a model with `multi_axis_grl.enabled: true` and `use_arcface_head: true`, invokes `_run_canary_probe` once, and asserts ≥1 metric was logged + 0 warnings of pattern `Canary probe.*FAILED|disabled`. The smoke test must be added to CI alongside `tests/test_lora_adapter.py`. Pending the fix, the workaround is off-line replication via `analysis/manual_canary_2026-05-20/score_canary.py` — slow ($0 CPU, ~30 sec per ckpt) but correctness-preserving for non-LoRA ckpts.
+- **source**: `threads/in_training_canary_signal.md:120`
+
+### `lora-enabled-not-propagated-by-load-model`
+- **status**: resolved
+- **severity**: high
+- **first_seen**: 2026-05-20
+- **last_verified**: 2026-05-20
+- **close_criterion**: a code fix lands at one of (a) the trainer ckpt-save path (`trainer/trainer.py` `save_checkpoint` or equivalent) so the `lora` block from cfg is embedded into the ckpt's `model_config` dict, OR (b) the `load_model` function (`batch_inference_gcs.py:420-466`) infers `lora.enabled=true` from presence of `lora_A`/`lora_B` keys in `state_dict` and derives `target_layers` from the keys, OR (c) the ckpt-save path embeds the full active yaml under a new `training_yaml` key in the ckpt and `load_model` reads it explicitly. Acceptance: a new test `tests/test_lora_ckpt_roundtrip.py` saves a LoRA ckpt with `enabled=true, target_layers=[8,9], rank=8, alpha=16`, calls `load_model` on the saved path, and asserts (1) the resulting model's `named_parameters` includes `backbone.visual.transformer.resblocks.8.attn.out_proj.lora_A.weight`, AND (2) `model.load_state_dict(...)` returned zero `unexpected_keys` from the lora_* family. The test must be added to CI alongside `tests/test_lora_adapter.py` and `tests/test_train_sweep_reapply_allowlist.py`. Until the fix lands, off-line analyses of LoRA ckpts via `load_model` must NOT cite their numbers without first verifying the LoRA tensors loaded (e.g., assert `model.named_parameters()` contains `lora_A` keys; or use `scripts/smoke_lora_wiring_2026-05-12.py` to confirm).
+- **source**: `threads/wandb_yaml_propagation_bugs.md:130`
 
 ### `hints-as-supervision-hypothesis`
 - **status**: resolved

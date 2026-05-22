@@ -294,6 +294,35 @@ close_criterion: the contract scorer's clip-level recall numbers are reconciled 
 
 This loop is paired with the bucket-gap loop above. Frame-level P8A AUCs (viso 0.75 / deeplive 0.86 / teams_fake 0.91) implied "recall is far better than the 1-2% the contract was reporting" — the corrected contract policy reports viso 13.6% / deeplive 23.9% / teams_fake 52.6% which is consistent. **But the reconciliation has not been written down anywhere as a normative rule.** Future agents reading any P-series scorecard pre-fix should not be confused about whether they're looking at scorer artifact or model failure. The bucket-gap finding makes this loop materially more important: a future P14_DATA_FIX scorecard read with the unfixed contract scorer would under-report the bucket-fix lift by 10-30×, exactly as the prior whack-a-mole pattern.
 
+### 2026-05-22 update — face-pool inference splits the viso-bucket pair: viso recall regresses, deeplive recall lifts on the same Teams-recapture eval bucket (FACTS only)
+
+**Source**: `analysis/face_pool_scorecard_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3a (Slot A v2 step3500 contract metrics CLS vs face pool); `analysis/face_pool_canary_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3 (800-frame canary side-by-side); commit `fad721a`.
+
+**Numerical findings on Slot A v2 step3500** (the today-rank-1 deployment candidate; same ckpt, same 9-suite contract surface, identical scorer; only the L11 pooling op changes):
+
+| Metric | CLS pool | Face pool | Δ (face − CLS) |
+|---|---:|---:|---:|
+| `lockbox_real_fpr` | 0.0191 | 0.0154 | −0.0037 |
+| `lockbox_fake_recall` | 0.6877 | 0.7668 | +0.0791 |
+| `deeplive_enhanced_dev` recall | 0.5523 | 0.6844 | **+0.1321** |
+| `teams_fake_all_dev` recall | 0.5949 | 0.6293 | +0.0345 |
+| `visomaster_enhanced_macro_dev` recall | 0.1673 | 0.0673 | **−0.1000** |
+
+Both `visomaster_enhanced_macro_dev` and `deeplive_enhanced_dev` resolve to the same Teams-recapture eval bucket (`gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/` per Slice 7 finding, lines 17–22 above). The face-pool readout splits these two suites in opposite directions: deeplive_enhanced lifts +0.132 while visomaster_enhanced drops −0.100. The same `selected_threshold` (0.7368) and same 49-patch centered face mask apply to both suites; the only differentiator is the underlying fake signature.
+
+**What this reframes**: the 2026-04-30 "Current stance" framed the viso recall ceiling as approximately two-thirds bucket-gap and one-third shortcut in frame-level AUC terms. The 2026-05-22 face-pool readout — at $0 training cost, same ckpt — moves deeplive_enhanced by +13.2pp on the same Teams-recapture bucket while moving visomaster_enhanced in the opposite direction by 10.0pp. The bucket-gap framing (training-data-pipeline-mismatch as the dominant cause) does not predict an inference-time pooling change on a frozen ckpt to be capable of either-direction shifts at this magnitude on the same eval bucket. The new question is whether the visomaster-enhanced fake signature lives in the 147 non-face patches the face-pool drops (structurally lost) or in the 49 face patches plus a head calibration whose distribution was shifted upward by the pooling change (recoverable by head retraining).
+
+A new structured open loop is opened below to track the mechanism question. CPU-1 (per `/Users/roeedar/.claude/plans/ok-so-we-don-t-valiant-quasar.md` Phase 1 CPU-1) closes it via a 14×14 per-patch ablation saliency map on viso vs deeplive fake misses.
+
+### Open loop: viso-fake-signature-non-face-vs-face-localization
+status: open
+severity: high
+first_seen: 2026-05-22
+last_verified: 2026-05-22
+close_criterion: per-patch ablation on viso vs deeplive fake misses; CPU-1 in next Phase 1
+
+The face-pool inference readout on Slot A v2 step3500 raises `deeplive_enhanced_dev` recall by +0.132 while dropping `visomaster_enhanced_macro_dev` recall by −0.100 on the same Teams-recapture eval bucket (FACTS doc cited above). The mechanism is open: is the visomaster fake signature carried by non-face patches that the face-pool drops (structurally lost — future intervention must use a dual-readout HEAD ALT design), or by face patches plus a head calibration that face-pool's upshift of the real-frame distribution destabilizes (recoverable by head retraining on face-pool features)? CPU-1 closes this for $0 via a per-patch ablation saliency map on 550 viso_enhanced_macro_dev fakes + 545 deeplive_enhanced_dev fakes (as control), aggregated into 14×14 saliency masks per suite. Outcome bins: α (non-face mass > 70% on viso) → HEAD ALT dual-readout; β (face mass > 50% on viso) → HEAD ALT face+non-face concat → 1024-dim head; γ (in-between) → indeterminate, HEAD ALT deferred to Phase 4. Source: `analysis/face_pool_scorecard_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3a; planned probe at `analysis/viso_fake_signature_localization_2026-05-23/RESULTS_FACTS_2026-05-23.md`.
+
 ### Cross-thread refs
 
 - [`processing_signature_shortcut`](processing_signature_shortcut.md) — bucket gap and camera-signature shortcut are layered (the bucket gap explains the headline-metric magnitude; the shortcut explains the residual cross-domain failure). Both must close; closing one without the other still leaves the candidate non-deployable. The `shortcut-deployment-block` (critical, in-progress) loop in that thread is the upper bound; this thread's `p14-data-fix-not-launched` is the cheaper-first lift.

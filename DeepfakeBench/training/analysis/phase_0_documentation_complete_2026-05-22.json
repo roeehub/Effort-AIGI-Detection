@@ -1,0 +1,58 @@
+{
+  "status": "done",
+  "wall_seconds": null,
+  "packet_retro_path": "docs/packet_retrospectives/packets/FACE_POOL_2026-05-22.md",
+  "threads_updated": [
+    "docs/packet_retrospectives/threads/clean_teams_identity_pairing.md",
+    "docs/packet_retrospectives/threads/viso_bucket_gap.md",
+    "docs/packet_retrospectives/threads/face_size_label_leak.md",
+    "docs/packet_retrospectives/threads/iq_shortcut_deconvolution_program_2026-05-08.md"
+  ],
+  "rolling_docs_updated": [
+    "docs/packet_retrospectives/STATE.md",
+    "docs/packet_retrospectives/TIMELINE.md",
+    "docs/packet_retrospectives/OPEN_LOOPS.md"
+  ],
+  "memories_created": [
+    "project_substrate_pair_geometry_2026-05-22.md",
+    "project_per_ckpt_substrate_axis_2026-05-22.md",
+    "project_face_pool_scorecard_pareto_2026-05-22.md",
+    "project_face_pool_viso_regression_mechanism_open_2026-05-22.md"
+  ],
+  "memories_revised": [
+    "project_pair_loss_premise_refuted_2026-05-04.md",
+    "project_p17_trained_head_destroys_substrate_invariance.md",
+    "project_deployment_three_modes_slot_a_v2_2026-05-21.md"
+  ],
+  "memory_dir": "/Users/roeedar/.claude/projects/-Users-roeedar-Documents-repos-Effort-AIGI-Detection-DtectVision/memory/",
+  "memory_index_updated": "MEMORY.md (4 new index entries added; 3 blend_unsharp entries compressed to keep total bounded)",
+  "open_loops_regenerated": true,
+  "open_loops_regenerator_summary": "open=58, in-progress=6, resolved=17, superseded=1, stale=0",
+  "new_open_loops": [
+    "per-base-substrate-pair-cohort-math-untested (threads/clean_teams_identity_pairing.md)",
+    "viso-fake-signature-non-face-vs-face-localization (threads/viso_bucket_gap.md)"
+  ],
+  "banned_word_check": "PASSED",
+  "banned_word_check_scope": "new packet retro + 4 new memories + 4 new thread sections + new STATE/TIMELINE additions + Probe-1-driven revisions to 3 existing memories",
+  "verification_artifacts": {
+    "open_loops_md_path": "docs/packet_retrospectives/OPEN_LOOPS.md",
+    "git_status_expected_modified": [
+      "docs/packet_retrospectives/STATE.md",
+      "docs/packet_retrospectives/TIMELINE.md",
+      "docs/packet_retrospectives/OPEN_LOOPS.md",
+      "docs/packet_retrospectives/threads/clean_teams_identity_pairing.md",
+      "docs/packet_retrospectives/threads/viso_bucket_gap.md",
+      "docs/packet_retrospectives/threads/face_size_label_leak.md",
+      "docs/packet_retrospectives/threads/iq_shortcut_deconvolution_program_2026-05-08.md"
+    ],
+    "git_status_expected_new": [
+      "docs/packet_retrospectives/packets/FACE_POOL_2026-05-22.md",
+      "analysis/phase_0_documentation_complete_2026-05-22.json"
+    ]
+  },
+  "structural_issues": [
+    "Memory directory canonical path is /Users/roeedar/.claude/projects/-Users-roeedar-Documents-repos-Effort-AIGI-Detection-DtectVision/memory/ (the path the task brief specified /Users/roeedar/.claude/projects/-Users-roeedar-Documents-repos-Effort-AIGI-Detection-DtectVision-DeepfakeBench-training/memory/ exists but contains only 1 stale file; the canonical path holds MEMORY.md and the 97 active project_*.md files). Used canonical path for all memory work.",
+    "MEMORY.md was already above the 24.4KB soft cap (32.7KB at start of session). Added 4 new index entries (each ~200-450 chars) and compressed 3 blend_unsharp_lever entries to bound total growth. Net file size 33.7KB after edits.",
+    "OPEN_LOOPS regenerator emitted a pre-existing warning at threads/iq_shortcut_deconvolution_program_2026-05-08.md:856 ('open-loop dev-to-lockbox-substrate-transfer-gap has invalid status resolvable'). Not introduced by this session and not modified."
+  ]
+}

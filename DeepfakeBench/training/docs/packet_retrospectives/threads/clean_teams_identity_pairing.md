@@ -119,6 +119,39 @@ Evidence basis (full detail in DEBATE block above; cite `analysis/pair_loss_effe
 
 Context: this remains a **low-severity** loop because the symmetric-pair-loss premise is empirically refuted (DEBATE block above), the asymmetric variant has a ~9pp upper bound at τ=0.05, and substrate cleaning + per-substrate τ are zero-cost and demonstrably larger. The loop is preserved per AGENTS.md ("do not delete resolved loops") so a future agent reading the DEBATE block does not redo the symmetric-pair-loss scoping work or re-derive the cost/benefit comparison.
 
+### DEBATE — 2026-05-22 — Probe 1 reframe of substrate axis; reopen-trigger #2 fires for Slot A v2
+
+**Source**: `analysis/substrate_pair_geometry_2026-05-22/FALLBACK1_PROBE1_FACTS_2026-05-22.md` §1 (Probe 1 KLIEP re-fit on trained encoders; cached L11 features built by A0.2 `analysis/substrate_pair_geometry_2026-05-22/run_phase0_geometry.py`). Companion FACTS: `analysis/substrate_pair_geometry_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3 (12-cell table) and `INVENTORY_FACTS_2026-05-22.md` (1,880 paired-transport rows).
+
+**Direct numerical findings**:
+
+1. Each of the 3 trained encoders (`P8A_step5000`, `SlotAv2_step3500`, `T5C_step3500`) constructs its own L11 substrate axis with held-out classifier accuracy 0.9804 / 0.9836 / 0.9836 respectively. The per-ckpt axes successfully separate clean-side from teams-side L11 CLS features at ~98% accuracy on the A0.1 inventory pairs (`FALLBACK1_PROBE1_FACTS_2026-05-22.md` §1.2 table).
+2. Cosine alignment between each per-ckpt substrate axis and the frozen-CLIP-L11 KLIEP axis (`_kliep_w_hat.npy`, accuracy 0.9909 on dev_real vs lockbox_real per D10) is small: P8A 0.1037, SlotAv2 0.0400, T5C 0.0592. Angular separation `arccos(0.04) ≈ 87.7°`; `arccos(0.10) ≈ 84.0°`.
+3. Per-pair direction `diff_i = L2norm(teams[i]) − L2norm(clean[i])` projects 9.0–22.9× more strongly onto the per-ckpt axis than onto the frozen-CLIP axis: P8A ratio 22.9× (0.1187 / 0.0052), SlotAv2 10.1× (0.1363 / 0.0135), T5C 9.0× (0.1337 / 0.0148). σ ≈ 0.04 on per-ckpt axes; ratios are not noise-driven.
+4. Probe 2 (face-region pool of L11 patch tokens) on SlotAv2 raises `cos_pair` from 0.8673 to 0.9626 and shrinks |Δ_pair_vs_within| from 0.0774 to 0.0160 on the same 1,825 pairs (`analysis/face_pool_canary_2026-05-22/RESULTS_FACTS_2026-05-22.md` §7).
+
+**What this reframes**:
+
+- The 2026-05-04 verification used E2B scores directly for the sign-of-effect computation, and used P8A frozen features as proxy for E2B's feature geometry on the Q1/Q2 measurements. The 2026-05-22 Probe 1 finding does not retroactively change the E2B sign-of-effect or cohort math (which are computed directly from E2B scores) — but it shows that the *direction* of the substrate axis a future pair-loss packet would target is itself encoder-dependent. Any substrate-pair contrastive loss aligned to the frozen-CLIP KLIEP direction would target an axis ~85–88° from the trained encoder's own substrate axis on Slot A v2 and T5C.
+- Slot A v2 step3500 became the deployment-candidate ckpt today (Track B λ=1.0 rerank in `analysis/contract_reframe_2026-05-22/RESULTS_FACTS_2026-05-22.md` §5, and face-pool full scorecard in `analysis/face_pool_scorecard_2026-05-22/RESULTS_FACTS_2026-05-22.md` §3a–§4c). This fires the second reopen-trigger from the 2026-05-04 resolution of `pair-loss-asymmetric-variant-untested`: "A different model base than E2B becomes the production candidate AND the sign-of-effect on (raw, teams) viso pairs has not been measured for that base. Required first step on reopen: re-run the Wilcoxon + cohort partition on the new base's scores before drafting any pair-loss packet."
+
+**What does NOT change**:
+
+- The structural finding that the data is same-identity-two-transport (lines 17–34, this thread) is unchanged.
+- The 2026-05-04 sign-of-effect on E2B (mean E2B raw_score = 0.086, mean E2B teams_score = 0.172, Wilcoxon p = 0.0019) is unchanged — it was computed from E2B scores, not from any axis projection.
+- The `pair-loss-asymmetric-variant-untested` loop above remains `resolved` for E2B; the new loop below is scoped specifically to Slot A v2 step3500 (the new deployment candidate).
+
+A new structured open loop is opened below to track the required CPU-2 probe on Slot A v2.
+
+### Open loop: per-base-substrate-pair-cohort-math-untested
+status: open
+severity: high
+first_seen: 2026-05-22
+last_verified: 2026-05-22
+close_criterion: run Wilcoxon on Slot A v2 step3500 on the 275 paired viso fakes from analysis/pair_loss_effect_verification_2026-05-05; CPU-2 in next Phase 1
+
+The reopen-trigger #2 from the 2026-05-04 resolution of `pair-loss-asymmetric-variant-untested` fires today because Slot A v2 step3500 became the deployment candidate (Track B λ=1.0 rerank + face-pool scorecard Pareto improvement). Before any pair-loss packet is drafted against Slot A v2 step3500, the sign-of-effect on the same 275 paired (raw, teams) viso fakes (from `analysis/pair_loss_effect_verification_2026-05-05/FINDINGS.md`) must be re-measured on Slot A v2 scores — the E2B finding cannot be assumed to generalize. CPU-2 in the next Phase 1 (per `/Users/roeedar/.claude/plans/ok-so-we-don-t-valiant-quasar.md` Phase 1 CPU-2) executes this; close criterion is the FACTS doc at `analysis/pair_loss_slot_a_v2_2026-05-23/RESULTS_FACTS_2026-05-23.md` with an explicit α/β/γ outcome on whether the sign reverses, holds, or is indeterminate at the new base. Source thread reopen text: lines 113–118 above.
+
 *(The original "(none direct — closed by evidence)" framing for this thread's open loops is preserved historically below; that framing referred to the structural same-identity-two-transport finding, not the contrastive-loss inference.)*
 
 *(Original Open loops note, preserved for historical fidelity — none direct — the structural finding is closed by evidence. The actionable corollary lives in [`viso_bucket_gap`](viso_bucket_gap.md) `p14-data-fix-not-launched`. A separate open loop for "explicit eval-bucket join confirmation" was considered but is intentionally rolled into the P14_DATA_FIX close criterion: once the retrain produces a working scorecard, the eval-bucket pairing assumption is validated by construction.)*
