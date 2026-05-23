@@ -21,7 +21,7 @@ Filled post-scoring.
 | Slot A v2 step3500 (face-pool inference, $0) | face-pool | 0.249 | 0.0154 | 0.7668 | 0.0673 | 0.439 | 2 |
 | Slot A v2 step3500 (CLS, base) | CLS | 0.331 | 0.0191 | 0.6877 | 0.1673 | 0.310 | 3 |
 | BACKBONE-SlotAv2 6ypu1ds3 step 3500 | CLS | 0.5019 | 0.0118 | 0.5099 | 0.0055 | 0.3529 | 4 (ABORT) |
-| BACKBONE-T5C \<run-id\> step 3500 (rerun pending) | CLS | _TBD_ | | | | | |
+| BACKBONE-T5C step 3500 | CLS | BLOCKED | sampler design issue — see below | | | | — |
 
 ## Per-arm gate readouts
 
@@ -44,7 +44,32 @@ calibration band above viso's score distribution → viso collapsed to 0.5%.
 Inventory CSV bug not the cause; bug-fixed rerun would intensify, not
 reverse.
 
-### BACKBONE-T5C (rerun pending on image 1.3.300; T5C smoke v2 RUNNING)
+### BACKBONE-T5C — BLOCKED (sampler-design issue surfaced after 3 smoke debugs)
+
+Three consecutive smokes (image 1.3.299 → 1.3.300 → 1.3.301) all read
+`train/loss/substrate_pair_asymmetric` = 0 across all sampled steps.
+
+Bug chain (all root causes, in discovery order):
+1. **`.gcloudignore` excluded inventory CSV** — fixed via explicit allow.
+2. **DataLoader workers missing process-global stamper** — fixed via
+   `worker_init_fn` that re-instantiates SubstratePairStamper in each worker
+   (commit `c2ed748`). Verified by 5× "SubstratePairStamper registered" log
+   lines in smoke v3 (1 main + 4 workers).
+3. **Sampler doesn't pair-group wrappers** (NOT fixed overnight) —
+   substrate-paired wrappers (`<id>__clean`, `<id>__teams`) emit as
+   independent samples in `identity_resample_weighted` sampling. In a
+   32-frame batch drawn across hundreds of identities, matched (clean,
+   teams) pairs effectively never co-occur. The asymmetric pair-loss code
+   requires matched pairs in-batch to compute a hinge; it returns 0 with no
+   gradient flow when no matched pair is present.
+
+Cost: ~$9 across 3 smokes; ~$100 saved by auto-launcher blocking the 2
+T5C fulls that would have been launched on a no-op loss.
+
+Verdict: T5C path BLOCKED, not ABORT. Sampler redesign needed (pair-grouped
+sampling) to actually exercise the asymmetric pair-loss mechanism. Out of
+overnight scope. Tracked in memory
+`project_backbone_t5c_blocked_pair_sampling_design_2026-05-23.md`.
 
 ---
 

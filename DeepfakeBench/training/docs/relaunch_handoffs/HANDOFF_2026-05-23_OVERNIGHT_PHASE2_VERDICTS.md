@@ -2,32 +2,36 @@
 
 ## Tl;dr for the morning
 
-Phase 2 results so far:
+Phase 2 results (COMPLETE, Phase 3 verdict = deploy $0 face-pool inference baseline):
 
 - **HEAD** (face-pool head-only retrain): **ITERATE → Phase 4 HEAD ALT.** Plateaued at step 250 (1,026 trainable params), composite 0.235 vs ≤ 0.20 gate, viso stuck at 7%. Pareto-equivalent to the $0 face-pool inference baseline. Doesn't deploy.
 - **BACKBONE-SlotAv2** (GroupDRO substrate-balanced): **ABORT.** Composite 0.502 vs base 0.331 (abort threshold 0.381 → triggered). Viso recall 0.5%. Conservative-boundary collapse. No rerun.
-- **BACKBONE-T5C** (asymmetric pair-loss): smoke v1 had loss=0 (gcloudignore bug); **smoke v2 RUNNING in flight** on image `1.3.300` (us-central1, W&B `2g6nlncj`). Auto-chain: smoke → W&B loss check → full → step-3500 scoring.
+- **BACKBONE-T5C** (asymmetric pair-loss): **BLOCKED.** Three smokes (images 1.3.299 / 1.3.300 / 1.3.301) all read substrate_pair_asymmetric_loss=0. Three root causes debugged: (1) .gcloudignore CSV missing → fixed; (2) DataLoader workers missing global stamper → fixed via worker_init_fn (`c2ed748`); (3) STRUCTURAL: sampler doesn't pair-group wrappers, matched (clean, teams) pairs effectively never co-occur in same batch → NOT fixable overnight. Auto-launcher saved ~$100 of GPU on blocked T5C fulls.
 
-Phase 3 ranking so far (composite λ=1.0 ascending = better):
+**Phase 3 verdict**: all Phase 2 arms fail. **Deployment recommendation = Slot A v2 step3500 + face-pool inference ($0 baseline)**, composite λ=1.0 = 0.249. Phase 4 HEAD ALT (dual-readout face+non_face → 1024-dim head) is the highest-EV next experiment.
+
+Phase 3 ranking (composite λ=1.0 ascending = better):
 
 | Rank | Arm | composite | Status |
 |---:|---|---:|---|
 | 1 | HEAD step 250 | 0.235 | ITERATE → Phase 4 |
-| 2 | Slot A v2 step3500 + face-pool inference ($0) | 0.249 | DEPLOY CANDIDATE (current baseline) |
+| 2 | **Slot A v2 step3500 + face-pool inference ($0)** | **0.249** | **DEPLOY (recommendation)** |
 | 3 | Slot A v2 step3500 CLS-pool (training base) | 0.331 | — |
 | 4 | BACKBONE-SlotAv2 step 3500 | 0.502 | ABORT |
-| ? | BACKBONE-T5C step 3500 | TBD | smoke v2 in flight |
+| — | BACKBONE-T5C step 3500 | BLOCKED | sampler-design issue |
 
-If T5C also aborts/iterates, the deployment recommendation is **Slot A v2 step3500 + face-pool inference** (same model, free inference variant). HEAD ALT (Phase 4 Fallback A) is the highest-EV next experiment.
+HEAD step 250 is marginally better on composite (-0.014) but Pareto-equivalent on lockbox metrics; the $0 baseline is preferred because it's the same ckpt with no training cost and no introduction of new head weights. HEAD ALT (Phase 4 Fallback A) is the highest-EV next experiment.
 
-## How to inspect the T5C v2 result when it lands
+## T5C debug chain landed at sentinel `_t5c_relaunch_v3_blocked.json`
 
-The relaunch chain (`/tmp/relaunch_t5c_after_build.sh`, parent PID 90931) writes ONE of two sentinels:
+Three smoke attempts, all loss=0:
+- **v1** (image 1.3.299, W&B `4ruwa8by`) — .gcloudignore CSV missing
+- **v2** (image 1.3.300, W&B `2g6nlncj`) — DataLoader workers missing stamper
+- **v3** (image 1.3.301, W&B `ytmi23qn`) — sampler doesn't pair-group wrappers
 
-1. **`analysis/phase_2_backbone_2026-05-22/_phase_2_backbone_t5c_scoring_complete.json`** = smoke loss > 0 + full SUCCEEDED + step 3500 scored. Read the composite scorecard at `analysis/phase_2_backbone_2026-05-22/reports_t5c_<runid>/contract_composite_lambda_1.0/promotion_winner.json`.
-2. **`analysis/phase_2_backbone_2026-05-22/_t5c_relaunch_blocked.json`** = smoke v2 loss check still failed (loss=0 again, indicating a deeper bug). Investigation required.
+Auto-launchers correctly blocked T5C full launches on v1 + v3 (saved ~$100). Root-cause analysis written to `~/.claude/projects/.../memory/project_backbone_t5c_blocked_pair_sampling_design_2026-05-23.md`.
 
-Background poll PID `bgvm9rrlf` watches for either sentinel and fires a Claude task notification.
+Unblocking T5C requires sampler redesign (pair-grouped sampling) — out of overnight scope.
 
 ## Files that landed overnight (commits)
 
