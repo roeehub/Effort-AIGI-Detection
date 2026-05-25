@@ -1,5 +1,6 @@
 import os
 import logging
+import socket
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import tempfile
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field  # noqa
 from torch import nn  # noqa
 
 import video_preprocessor
+import observability  # per-request capture → GCS (fail-open, never blocks inference)
 from detectors import DETECTOR, EffortDetector  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
@@ -627,6 +629,7 @@ def startup_event() -> None:
     # 0) Initialize state
     app.state.models = {}
     app.state.loaded_weights_paths = {}
+    app.state.obs = None  # observability uploader (set in step 9; None = disabled)
 
     # 1) Device Check
     if device.type == "cuda" and not torch.cuda.is_available():
@@ -736,8 +739,45 @@ def startup_event() -> None:
         app.state.yolo_available = False
         logger.warning("⚠️  YOLO model not available: %s. Endpoints requiring face detection will be disabled.", e)
 
+    # 9) Observability uploader (per-request capture → GCS). Fail-open: never
+    #    block model serving on observability init.
+    try:
+        if observability.OBS_ENABLED:
+            static = {
+                "checkpoint_paths": dict(app.state.loaded_weights_paths),
+                "use_arcface": os.getenv("CUSTOM_MODEL_USE_ARCFACE", "false").lower() in ("true", "1", "t"),
+                "device": str(device),
+                "app_version": app.version,
+                "git_sha": observability.GIT_SHA,
+                "hostname": socket.gethostname(),
+                "pid": os.getpid(),
+            }
+            app.state.obs = observability.build_uploader(static)
+            app.state.obs.start()
+            logger.info("✅ Observability uploader active (bucket=%s).", observability.OBS_BUCKET)
+        else:
+            logger.info("Observability disabled via OBS_ENABLED=false.")
+    except Exception:
+        logger.exception("⚠️  Observability init failed — serving inference without it.")
+        app.state.obs = None
+
     logger.info("Startup complete. Available models: %s, YOLO: %s",
                 list(app.state.models.keys()), app.state.yolo_available)
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    # NOTE: @app.on_event is deprecated in newer FastAPI but kept for
+    # consistency with startup_event above (a lifespan migration is a separate
+    # refactor that would touch the model-loading path). Best-effort drain of
+    # the observability queue; SIGKILL (OOM/preemption) loss is accepted —
+    # this is telemetry, not transactional data.
+    obs = getattr(app.state, "obs", None)
+    if obs is not None:
+        try:
+            obs.stop(observability.OBS_DRAIN_TIMEOUT_S)
+        except Exception:
+            logger.exception("Observability shutdown drain failed.")
 
 
 # --- Utility: assert YOLO is loaded ---
@@ -800,6 +840,13 @@ def ping() -> dict:
     return {"message": "pong"}
 
 
+@app.get("/obs_stats")
+def obs_stats() -> dict:
+    """Observability uploader self-stats (queue depth, uploaded/failed/dropped)."""
+    obs = getattr(app.state, "obs", None)
+    return obs.stats() if obs is not None else {"enabled": False}
+
+
 # ──────────────────────────────────────────
 # Inference Endpoints
 # ──────────────────────────────────────────
@@ -828,19 +875,59 @@ async def check_frame(
     #         via `fake_prob < 0`.
     gated_prob = spec["default_prob"]
 
+    # Observability: build the capture record + a single frame slot. Fail-open —
+    # if anything here errors the request is unaffected. One enqueue in `finally`
+    # covers every exit path (decode-fail / gate-fail / no-face / success / error).
+    _obs = getattr(request.app.state, "obs", None)
+    _t0 = time.perf_counter()
+    cap = None
+    fcap = None
+    if _obs is not None:
+        try:
+            cap = observability.new_record(
+                request, "/check_frame", model_type=model_type, threshold=threshold,
+                gate_profile=profile, gate_spec=spec, yolo_conf_threshold=yolo_conf_threshold,
+                recrop=recrop, debug=debug,
+            )
+            fcap = observability.FrameCapture(
+                seq=0, raw_bytes=b"", filename=file.filename, content_type=file.content_type,
+            )
+            cap.frames.append(fcap)
+        except Exception:
+            cap = fcap = None
+
     try:
         model = get_model_for_request(request, model_type)
         raw = await file.read()
+        if fcap is not None:
+            # Bound retained bytes so a giant upload can't pin memory (it's still scored).
+            if _obs is not None and len(raw) > _obs.max_record_bytes:
+                fcap.capture_skipped = True
+            else:
+                fcap.raw_bytes = raw
         img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         if img_bgr is None:
+            if cap is not None:
+                cap.status = "decode_failed"
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot decode image")
+        if fcap is not None:
+            fcap.dims_hw = (int(img_bgr.shape[0]), int(img_bgr.shape[1]))
 
         gate_passes, gate_reason = quality_gate(img_bgr, profile=profile, frame_id=file.filename or "frame")
+        if fcap is not None:
+            fcap.gate_pass = bool(gate_passes)
+            fcap.gate_reason = gate_reason
         if not gate_passes:
             logger.info(
                 "[QUALITY-GATE:%s] /check_frame REJECTED %s (%s) → returning prob=%.2f",
                 profile, file.filename or "[unnamed]", gate_reason, gated_prob,
             )
+            if fcap is not None:
+                fcap.prob = gated_prob
+            if cap is not None:
+                cap.status = "gate_failed"
+                cap.pred_label = "REAL"
+                cap.confidence = gated_prob
             return InferResponse(pred_label="REAL", fake_prob=gated_prob)
 
         if recrop:
@@ -851,7 +938,16 @@ async def check_frame(
                     "[QUALITY-GATE:%s] /check_frame REJECTED %s (no_face_detected) → returning prob=%.2f",
                     profile, file.filename or "[unnamed]", gated_prob,
                 )
+                if fcap is not None:
+                    fcap.face_found = False
+                    fcap.prob = gated_prob
+                if cap is not None:
+                    cap.status = "no_face"
+                    cap.pred_label = "REAL"
+                    cap.confidence = gated_prob
                 return InferResponse(pred_label="REAL", fake_prob=gated_prob)
+            if fcap is not None:
+                fcap.face_found = True
         else:
             # INTER_LINEAR matches training preprocessing (combined_paired.py:3518).
             processed_face_bgr = cv2.resize(img_bgr, (224, 224), interpolation=cv2.INTER_LINEAR)
@@ -873,11 +969,26 @@ async def check_frame(
             prob = preds["prob"].squeeze().cpu().item()
             pred_label = "FAKE" if prob >= threshold else "REAL"
 
+        if fcap is not None:
+            fcap.prob = float(prob)
+            fcap.scored = True
+            fcap.verdict = pred_label
+        if cap is not None:
+            cap.status = "ok"
+            cap.pred_label = pred_label
+            cap.confidence = float(prob)
+
     except HTTPException:
         raise
     except Exception as e:
+        if cap is not None:
+            cap.status = "inference_error"
         logger.exception("Inference failed for frame.")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Model inference failed.") from e
+    finally:
+        if cap is not None:
+            cap.latency_ms = (time.perf_counter() - _t0) * 1000.0
+            observability._safe_enqueue(_obs, cap)
 
     logger.info("Frame inference result: label=%s, fake_prob=%.4f, threshold=%.2f", pred_label, prob, threshold)
     return InferResponse(pred_label=pred_label, fake_prob=prob)
@@ -922,6 +1033,24 @@ async def check_frame_batch(
     # In t5c profile this is the sentinel (-1.0). In legacy it's the 0.25 vote.
     gated_slot_prob = spec["default_prob"]
 
+    # Observability: one record per request; one FrameCapture per input file
+    # (kept 1:1 with `files`/`per_frame_status`). Fail-open; single enqueue in
+    # `finally`. Defined before the try so the finally is always safe.
+    _obs = getattr(request.app.state, "obs", None)
+    _t0 = time.perf_counter()
+    cap = None
+    capture_frames: List[Any] = []
+    captured_bytes = 0  # running total of retained originals (bounds in-handler memory)
+    if _obs is not None:
+        try:
+            cap = observability.new_record(
+                request, "/check_frame_batch", model_type=model_type, threshold=threshold,
+                gate_profile=profile, gate_spec=spec, yolo_conf_threshold=yolo_conf_threshold,
+                recrop=recrop, debug=debug,
+            )
+        except Exception:
+            cap = None
+
     try:
         model = get_model_for_request(request, model_type)
 
@@ -938,11 +1067,27 @@ async def check_frame_batch(
         total_frames = len(files)
 
         for i, f in enumerate(files):
+            fc = None
+            if cap is not None:
+                fc = observability.FrameCapture(
+                    seq=i, raw_bytes=b"", filename=f.filename, content_type=f.content_type,
+                )
+                capture_frames.append(fc)
             try:
                 raw = await f.read()
+                if fc is not None:
+                    # Bound retained originals across the whole batch so a large
+                    # batch can't pin unbounded memory (frames are still scored).
+                    if _obs is not None and captured_bytes + len(raw) > _obs.max_record_bytes:
+                        fc.capture_skipped = True
+                    else:
+                        fc.raw_bytes = raw
+                        captured_bytes += len(raw)
                 img_bgr = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
                 if img_bgr is None:
                     logger.warning(f"Frame {i+1}/{total_frames}: Cannot decode image: {f.filename or '[unnamed]'}")
+                    if fc is not None:
+                        fc.gate_reason = "decode_failed"
                     entry = {"kind": "failed"}
                     # In aligned profile (t5c), decode failures still get a slot
                     # with the sentinel so downstream index-based attribution
@@ -954,7 +1099,15 @@ async def check_frame_batch(
                     failed_frames += 1
                     continue
 
+                if fc is not None:
+                    fc.dims_hw = (int(img_bgr.shape[0]), int(img_bgr.shape[1]))
+
                 gate_passes, gate_reason = quality_gate(img_bgr, profile=profile, frame_id=f.filename or f"frame_{i+1}")
+                if fc is not None:
+                    fc.gate_pass = bool(gate_passes)
+                    fc.gate_reason = gate_reason
+                    if not gate_passes:
+                        fc.prob = gated_slot_prob
                 if not gate_passes:
                     logger.info(
                         "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (%s)%s",
@@ -979,6 +1132,10 @@ async def check_frame_batch(
                             profile, i + 1, total_frames, f.filename or "[unnamed]",
                             f" → sentinel={GATE_SENTINEL_PROB}" if exclude_gated else f" → prob={gated_slot_prob:.2f}",
                         )
+                        if fc is not None:
+                            fc.face_found = False
+                            fc.gate_reason = "no_face_detected"
+                            fc.prob = gated_slot_prob
                         per_frame_status.append({
                             "kind": "gated",
                             "reason": "no_face_detected",
@@ -986,6 +1143,8 @@ async def check_frame_batch(
                         })
                         gated_frames += 1
                         continue
+                    if fc is not None:
+                        fc.face_found = True
                 else:
                     # Use the frame as-is, assuming it's already cropped, but resize to model input size.
                     # INTER_LINEAR matches training preprocessing (combined_paired.py:3518).
@@ -1006,6 +1165,8 @@ async def check_frame_batch(
 
             except Exception as e:
                 logger.warning(f"Frame {i+1}/{total_frames}: Processing failed: {e}")
+                if fc is not None and not fc.gate_reason:
+                    fc.gate_reason = "processing_failed"
                 per_frame_status.append({"kind": "failed"})
                 failed_frames += 1
                 continue
@@ -1026,6 +1187,10 @@ async def check_frame_batch(
                 model_probs = [float(p) for p in raw_probs]
             for idx, prob in zip(tensor_indices, model_probs):
                 per_frame_status[idx]["prob"] = prob
+                if cap is not None and idx < len(capture_frames):
+                    capture_frames[idx].prob = float(prob)
+                    capture_frames[idx].scored = True
+                    capture_frames[idx].verdict = "FAKE" if prob >= threshold else "REAL"
 
         # Build the response probs list.
         # - t5c (align_to_input=True): every input file gets a slot. Real model
@@ -1049,6 +1214,10 @@ async def check_frame_batch(
                 "No frames available for scoring. Profile=%s. Failed: %d/%d, gated: %d (excluded=%s)",
                 profile, failed_frames, total_frames, gated_frames, exclude_gated,
             )
+            if cap is not None:
+                cap.status = "no_voting_frames"
+                cap.pred_label = "REAL"
+                cap.confidence = 0.0
             return BatchInferResponse(pred_label="REAL", confidence=0.0, probs=probs_list)
 
         confidence = float(np.mean(voting_probs))
@@ -1065,13 +1234,24 @@ async def check_frame_batch(
 
         pretty_print_batch(files, per_frame_status, confidence, threshold, pred_label)
 
+        if cap is not None:
+            cap.status = "ok"
+            cap.pred_label = pred_label
+            cap.confidence = confidence
         return BatchInferResponse(pred_label=pred_label, confidence=confidence, probs=probs_list)
 
     except HTTPException:
         raise
     except Exception as e:
+        if cap is not None:
+            cap.status = "inference_error"
         logger.exception("Batch inference failed.")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Batch inference failed.") from e
+    finally:
+        if cap is not None:
+            cap.frames = capture_frames
+            cap.latency_ms = (time.perf_counter() - _t0) * 1000.0
+            observability._safe_enqueue(_obs, cap)
 
 
 @app.post("/check_video", response_model=VideoAnalysisResponse)
