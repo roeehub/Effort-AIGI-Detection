@@ -60,6 +60,13 @@ def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
     `lr * backbone_lr_mult` to those params while keeping the head at the base lr.
     Default is 1.0, which preserves the previous single-LR behavior bit-identically.
 
+    Optional capability (May 12, 2026): a `lora` param group with weight_decay=0.0
+    and its own LR multiplier `optimizer.adam.lora_lr_mult`. Parameters whose names
+    contain `lora_A` or `lora_B` (i.e., the LoRA A/B matrices introduced by
+    `detectors/lora_adapter.py`) are routed here. Standard LoRA practice uses zero
+    weight decay on these params. When LoRA is disabled (no matching names), this
+    group is simply empty and behavior is bit-identical to the pre-LoRA path.
+
     Args:
         model: PyTorch model whose parameters will be optimized
         config: Configuration dictionary with structure:
@@ -83,22 +90,28 @@ def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
         base_lr = adam_cfg['lr']
         weight_decay = adam_cfg['weight_decay']
         backbone_lr_mult = adam_cfg.get('backbone_lr_mult', 1.0)
+        lora_lr_mult = adam_cfg.get('lora_lr_mult', 1.0)
         backbone_lr = base_lr * backbone_lr_mult
+        lora_lr = base_lr * lora_lr_mult
 
-        # Three categories of trainable params:
+        # Four categories of trainable params:
         #   1. SVD residual params (no weight decay; tracked separately since
         #      Jan 11 2026 to prevent orthogonality/keepsv interference).
         #   2. Native CLIP backbone params that may be unfrozen via the
         #      backbone.unfreeze_final_proj / unfreeze_final_ln flags.
-        #   3. Everything else (head, ArcFace, etc.).
-        # Categories (1) and (2) share `backbone_lr`; (3) uses `base_lr`.
-        # When backbone_lr_mult == 1.0, all groups end up with the same LR,
-        # so behavior is identical to the prior 2-group split.
+        #   3. LoRA A/B matrices (no weight decay; standard LoRA practice;
+        #      added May 12 2026 with the layers-10-11 LoRA packet).
+        #   4. Everything else (head, ArcFace, etc.).
+        # Categories (1) and (2) share `backbone_lr`; (3) uses `lora_lr`;
+        # (4) uses `base_lr`. When all multipliers are 1.0 and no LoRA is
+        # installed, behavior is bit-identical to the prior 3-group split.
         svd_param_names = ('U_residual', 'S_residual', 'V_residual')
         backbone_native_names = ('visual.proj', 'visual.ln_post')
+        lora_param_names = ('lora_A', 'lora_B')
 
         svd_params = []
         backbone_native_params = []
+        lora_params = []
         other_params = []
 
         for name, param in model.named_parameters():
@@ -108,11 +121,14 @@ def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
                 svd_params.append(param)
             elif any(bn_name in name for bn_name in backbone_native_names):
                 backbone_native_params.append(param)
+            elif any(lora_name in name for lora_name in lora_param_names):
+                lora_params.append(param)
             else:
                 other_params.append(param)
 
         svd_param_count = sum(p.numel() for p in svd_params)
         backbone_native_param_count = sum(p.numel() for p in backbone_native_params)
+        lora_param_count = sum(p.numel() for p in lora_params)
         other_param_count = sum(p.numel() for p in other_params)
 
         param_groups = []
@@ -130,6 +146,13 @@ def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
                 'lr': backbone_lr,
                 'name': 'backbone_native',
             })
+        if lora_params:
+            param_groups.append({
+                'params': lora_params,
+                'weight_decay': 0.0,  # standard LoRA practice
+                'lr': lora_lr,
+                'name': 'lora',
+            })
         if other_params:
             param_groups.append({
                 'params': other_params,
@@ -138,9 +161,13 @@ def choose_optimizer(model: torch.nn.Module, config: dict) -> optim.Optimizer:
                 'name': 'other',
             })
 
-        print(f"INFO: Optimizer param groups (backbone_lr_mult={backbone_lr_mult}):")
+        print(
+            f"INFO: Optimizer param groups (backbone_lr_mult={backbone_lr_mult}, "
+            f"lora_lr_mult={lora_lr_mult}):"
+        )
         print(f"  - SVD residual params: {svd_param_count:,} (lr={backbone_lr:g}, weight_decay=0.0)")
         print(f"  - Backbone native params: {backbone_native_param_count:,} (lr={backbone_lr:g}, weight_decay={weight_decay})")
+        print(f"  - LoRA params: {lora_param_count:,} (lr={lora_lr:g}, weight_decay=0.0)")
         print(f"  - Other params: {other_param_count:,} (lr={base_lr:g}, weight_decay={weight_decay})")
 
         optimizer = optim.Adam(

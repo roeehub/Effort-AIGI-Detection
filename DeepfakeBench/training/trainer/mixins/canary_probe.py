@@ -306,13 +306,32 @@ class CanaryProbeMixin:
                 # The model's forward takes data_dict['image']; we pass a per-frame batch
                 # and read the softmax fake-class probability.
                 data_dict = {'image': batch}
-                pred = self.model(data_dict)
+                # inference=True bypasses (a) the ArcFace 2-tuple unpack at
+                # detectors/effort_detector.py:1813 (use_arcface_head + label=None)
+                # and (b) the use_quality_head + use_multi_axis_grl forward
+                # branches at lines 1836+1843 — those are training-side heads
+                # that aren't needed for canary scoring. Without inference=True,
+                # any run with use_multi_axis_grl=true silently throws here and
+                # the canary disables itself for the rest of training (the
+                # 2026-05-20 T5C_TRIPLE batch lost 4h+1h of canary visibility
+                # on Slots 1+3 to this bug). See open loop
+                # `canary-silence-when-multi-axis-grl-active` in
+                # docs/packet_retrospectives/threads/in_training_canary_signal.md.
+                pred = self.model(data_dict, inference=True)
                 # Pred can be a dict {'cls': logits, ...} or a tensor; cover both.
+                # Prefer 'prob' (the model emits softmax fake-class directly
+                # when inference=True). Falls back to cls/raw_logits otherwise.
                 if isinstance(pred, dict):
+                    if 'prob' in pred and pred['prob'] is not None:
+                        probs = pred['prob']
+                        if probs.dim() == 2:
+                            probs = probs[:, 1] if probs.shape[1] >= 2 else probs[:, 0]
+                        scores.extend(probs.float().cpu().tolist())
+                        continue
                     logits = pred.get('cls')
                     if logits is None:
                         # try common alternative keys
-                        for k in ('logits', 'classifier_logits', 'pred_logits'):
+                        for k in ('raw_logits', 'logits', 'classifier_logits', 'pred_logits'):
                             if k in pred:
                                 logits = pred[k]
                                 break

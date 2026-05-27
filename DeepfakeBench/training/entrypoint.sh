@@ -146,6 +146,20 @@ case "$JOB_MODE" in
     echo "[entrypoint] Full command: python -u $INFER_SCRIPT ${EXTRA_ARGS[*]:-}"
     python -u "$INFER_SCRIPT" "${EXTRA_ARGS[@]}"
     ;;
+  feature_space|feature-space)
+    echo "[entrypoint] Running feature-space extraction across data sources…"
+    FS_SCRIPT="analysis/feature_space_2026-04-23/extract_features.py"
+    echo "[entrypoint] Script: $FS_SCRIPT"
+    echo "[entrypoint] Full command: python -u $FS_SCRIPT ${EXTRA_ARGS[*]:-}"
+    python -u "$FS_SCRIPT" "${EXTRA_ARGS[@]}"
+    ;;
+  probe_features|probe-features)
+    echo "[entrypoint] Running probe-battery feature extraction…"
+    PROBE_SCRIPT="analysis/probe_battery_2026-04-26/extract_features_for_probes.py"
+    echo "[entrypoint] Script: $PROBE_SCRIPT"
+    echo "[entrypoint] Full command: python -u $PROBE_SCRIPT ${EXTRA_ARGS[*]:-}"
+    python -u "$PROBE_SCRIPT" "${EXTRA_ARGS[@]}"
+    ;;
   *)
     echo "[entrypoint] ERROR: Unknown mode '$JOB_MODE'"; print_help; exit 1 ;;
 esac

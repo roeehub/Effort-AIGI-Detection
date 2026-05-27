@@ -39,7 +39,8 @@ WANDB_ENTITY="${WANDB_ENTITY:-dtect-vision}"
 
 # Docker image
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="${VERSION:-$(cat "${SCRIPT_DIR}/VERSION")}"
+TRAINING_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+VERSION="${VERSION:-$(cat "${TRAINING_DIR}/VERSION")}"
 IMAGE_URI="us-docker.pkg.dev/${PROJECT}/effort-detector/effort-detector:${VERSION}"
 
 GCS_OUTPUT_BUCKET="training-job-outputs"
@@ -65,7 +66,7 @@ while [[ $# -gt 0 ]]; do
         --num-workers=*)   NUM_WORKERS="${1#*=}"; shift ;;
         --version)         VERSION="$2"; IMAGE_URI="us-docker.pkg.dev/${PROJECT}/effort-detector/effort-detector:${VERSION}"; shift 2 ;;
         --version=*)       VERSION="${1#*=}"; IMAGE_URI="us-docker.pkg.dev/${PROJECT}/effort-detector/effort-detector:${VERSION}"; shift ;;
-        -y|--yes)          AUTO_CONFIRM=true ;;
+        -y|--yes)          AUTO_CONFIRM=true; shift ;;
         -h|--help)
             echo "Usage: $0 [--checkpoint GS_URI] [--buckets B1 B2 ...] [--region REGION] [--run-id ID] [--batch-size N] [--num-workers N] [--version V] [-y]"
             exit 0

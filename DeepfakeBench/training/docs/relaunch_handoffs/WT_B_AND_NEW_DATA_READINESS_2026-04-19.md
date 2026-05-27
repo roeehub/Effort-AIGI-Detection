@@ -30,10 +30,18 @@ Detailed working handoff for the active proper-data task:
   - `R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
   - `R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
   - `R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL.yaml`
+  - `R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`
 - training-side proper-data loading now exists on the explicit
   `combined_paired.proper_data` path and consumes the WT-F provisional
   inventory/manifest artifacts without folding the data into legacy
   `visomaster`, `visomaster_hints`, or other weak-signal lanes
+- the proper-data runtime now keys training-side partition identities on WT-F
+  `split_group_id`, so the training split contract matches the future manifest
+  split hygiene
+- first real-packet configs now exist for the combined `WTB3 + proper_data`
+  arms:
+  - `R13_WTB3_with_proper_data_unenhanced_provisional.yaml`
+  - `R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`
 - discovery-cache wiring exists for:
   - DeepLive
   - VisoMaster hints
@@ -116,9 +124,10 @@ Detailed working handoff for the active proper-data task:
 - the April 19 proper-data inventory, manifest, suite, and smoke proof are
   valid for the current proof boundary but still provisional for count-sensitive
   experiment planning
-- the current proper-data training loader keeps the exact `proper_*` lanes but
-  tolerates clean-side ragged residue by taking the intersection of requested
-  anchor indices available on both sides of a pair
+- the current committed provisional proper-data artifacts were regenerated under
+  a strict clean-and-Teams `16/16` contract; the runtime still keeps
+  ragged-pair intersection as a fallback, but the first packet no longer relies
+  on it
 - the current repo tree still needs commit closeout; the successful smoke used
   the built working tree image, not a finalized committed state
 
@@ -132,6 +141,8 @@ Current state:
 - training-side proper-data loader: landed and remotely proven via startup smoke
 - proper-data snapshot: provisional until Teams propagation finishes and the
   WT-F artifacts are regenerated
+- first combined `WTB3 + proper_data` configs: landed locally, not yet remotely
+  proven
 - experiment planning with the new data: can begin now
 
 Recommendation for the first planning pass:

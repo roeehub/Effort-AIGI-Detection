@@ -406,6 +406,7 @@ def load_external_real_videos(
     grouping: str = "by_folder",
     deterministic_frame_count: Optional[int] = None,
     path_contains: Optional[str] = None,
+    path_exclude_contains: Optional[Iterable[str]] = None,
     video_id_depth: int = -2,
 ) -> List[VideoInfo]:
     """
@@ -492,6 +493,27 @@ def load_external_real_videos(
             "path_contains filter '%s': %d -> %d frame paths",
             path_contains, before_filter, len(frame_paths),
         )
+
+    # Apply path_exclude_contains filter (drop paths matching any pattern).
+    # Used e.g. to strip VisoMaster "hint" folders (failed deepfakes) from the
+    # teams_ood_fake pool: those frames look near-real by design and polluting
+    # the fake-side TPR metric with them depresses `other_fakes_tpr` in the
+    # value_composite.
+    if path_exclude_contains:
+        if isinstance(path_exclude_contains, str):
+            exclude_patterns = [path_exclude_contains]
+        else:
+            exclude_patterns = list(path_exclude_contains)
+        if exclude_patterns:
+            before_filter = len(frame_paths)
+            frame_paths = [
+                p for p in frame_paths
+                if not any(pat in p for pat in exclude_patterns)
+            ]
+            log.info(
+                "path_exclude_contains filter %s: %d -> %d frame paths",
+                exclude_patterns, before_filter, len(frame_paths),
+            )
 
     videos: List[VideoInfo] = []
 
@@ -581,6 +603,7 @@ def load_external_fake_videos(
     grouping: str = "by_folder",
     deterministic_frame_count: Optional[int] = None,
     path_contains: Optional[str] = None,
+    path_exclude_contains: Optional[Iterable[str]] = None,
     video_id_depth: int = -2,
 ) -> List[VideoInfo]:
     """Load fake-only external videos from GCS (e.g., WMA failure set)."""
@@ -596,6 +619,7 @@ def load_external_fake_videos(
         grouping=grouping,
         deterministic_frame_count=deterministic_frame_count,
         path_contains=path_contains,
+        path_exclude_contains=path_exclude_contains,
         video_id_depth=video_id_depth,
     )
 

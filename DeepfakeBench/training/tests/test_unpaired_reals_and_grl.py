@@ -40,6 +40,16 @@ def _load_module(rel_path: str, module_name: str):
     return module
 
 
+def _load_pipelines():
+    """Import data.augmentations.pipelines via the package machinery so its
+    `from .transforms import ...` relative import resolves. spec_from_file_location
+    bypasses package context and breaks the relative import.
+    """
+    import importlib
+
+    return importlib.import_module("data.augmentations.pipelines")
+
+
 def _load_combined_paired():
     """Load combined_paired.py with proper package context for relative imports."""
     import types
@@ -240,13 +250,13 @@ class TestVCDTargetedPreset:
 
     def test_vcd_targeted_in_presets(self):
         pytest.importorskip("albumentations")
-        mod = _load_module("data/augmentations/pipelines.py", "pipelines_mod")
+        mod = _load_pipelines()
         presets = mod._QUALITY_TARGETED_PRESETS
         assert "vcd_targeted" in presets
 
     def test_vcd_targeted_has_real_noise_keys(self):
         pytest.importorskip("albumentations")
-        mod = _load_module("data/augmentations/pipelines.py", "pipelines_mod")
+        mod = _load_pipelines()
         preset = mod._QUALITY_TARGETED_PRESETS["vcd_targeted"]
         assert "real_noise_p" in preset
         assert "real_noise_var" in preset
@@ -257,13 +267,13 @@ class TestVCDTargetedPreset:
     def test_vcd_targeted_codec_modest(self):
         """VCD codec sim should stay modest (plan says ≤15%)."""
         pytest.importorskip("albumentations")
-        mod = _load_module("data/augmentations/pipelines.py", "pipelines_mod")
+        mod = _load_pipelines()
         preset = mod._QUALITY_TARGETED_PRESETS["vcd_targeted"]
         assert preset["webcam_codec_p"] <= 0.15
 
     def test_create_router_with_vcd_targeted(self):
         pytest.importorskip("albumentations")
-        mod = _load_module("data/augmentations/pipelines.py", "pipelines_mod")
+        mod = _load_pipelines()
         router = mod.create_quality_targeted_family_router(strength="vcd_targeted")
         assert router is not None
 

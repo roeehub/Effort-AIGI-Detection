@@ -38,6 +38,9 @@ Then review the current code patch in:
 - `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
 - `DeepfakeBench/training/experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
 - `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL.yaml`
+- `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`
+- `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_unenhanced_provisional.yaml`
+- `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`
 
 ## Executive Summary
 
@@ -54,9 +57,9 @@ Then review the current code patch in:
   operational and planning-oriented:
   - close out the current patch in git
   - regenerate provisional proper-data artifacts after Teams propagation
-    stabilizes
-  - decide whether the current ragged-clean intersection policy is acceptable
-    for the first packet
+    stabilizes, keeping the strict clean-and-Teams `16/16` contract unless we
+    intentionally relax it later
+  - run the first combined `WTB3 + proper_data` startup smoke
   - finalize and launch the first real experiment matrix
   - optionally run the WT-E promotion contract if promotion judgment is needed
 
@@ -217,9 +220,13 @@ Remote proof:
 
 What remains:
 
-- broader unrelated `test_phase4_family_pipeline.py` failures still exist
-- a reporting oddity (`unknown_fake: 20` alongside `external_real: 20`) is
-  still worth keeping in mind when touching family accounting
+- the current review-surface family pipeline tests are green again
+  (`37 passed, 5 skipped`) but broader relaunch launch surfaces still need the
+  first combined smoke/real-packet pass
+- the earlier `unknown_fake` / `external_real` W&B reporting oddity has now
+  been traced to unpaired-real family accounting and fixed in the current
+  working tree; historical pre-2026-04-20 summaries should be treated as
+  noisy reporting, not data truth
 
 Primary docs:
 
@@ -328,6 +335,7 @@ What happened:
 - provisional WT-F inventory / manifest / suite artifacts were generated for
   the current snapshot
 - a real training-side `combined_paired.proper_data` path was added
+- training-side proper-data partitioning was aligned to WT-F `split_group_id`
 - a tiny launcher-only startup smoke proved that the new proper-data lanes load
   honestly through training
 
@@ -359,14 +367,62 @@ Still provisional:
   land
 - the current inventory / manifest / suite files are therefore provisional and
   must be regenerated later
-- the current loader keeps ragged-clean pairs by intersecting available anchor
-  indices across the real/fake pair; that policy still needs an explicit human
-  accept/reject decision before longer runs
+- the current committed provisional artifacts already use a strict clean-and-
+  Teams `16/16` contract; runtime ragged-pair intersection remains only as a
+  defensive fallback for future manifests
 
 Primary docs:
 
 - `DeepfakeBench/training/docs/relaunch_handoffs/WT_B_AND_NEW_DATA_READINESS_2026-04-19.md`
 - `DeepfakeBench/training/docs/relaunch_handoffs/NEW_DATA_LOADER_AND_EXPERIMENT_HANDOFF_2026-04-19.md`
+
+## Post-Launch Critical Findings (2026-04-20)
+
+The first live R13 packet surfaced three issues that the April 19 written
+handoffs either understated or missed.
+
+### 1. Proper-data counts in the prose handoffs were stale
+
+- the copied `221 / 985 / 2412` numbers no longer match either current source
+  of truth:
+  - the checked-in WT-F builder report / manifest now show `1826` retained
+    captures and `7304` manifest videos, with fake-lane totals:
+    - `proper_visomaster_clean`: `342`
+    - `proper_visomaster_teams`: `342`
+    - `proper_visomaster_enhanced_clean`: `1484`
+    - `proper_visomaster_enhanced_teams`: `1484`
+  - the launched RLP1 startup summaries exposed materially larger packet arms:
+    - `RLP1_04`: `684` proper fake rows
+    - `RLP1_05/06/07/08`: `3186` proper fake rows
+- the live `03 -> 04` and especially `04 -> 05` packet transitions are
+  therefore larger interventions than the written plan described
+- future rule: treat the generated builder report / manifest plus the launched
+  run's startup W&B summary as the only authoritative count sources; do not
+  plan packets from copied prose counts
+
+### 2. Shared holdout comparability drifted across packet arms
+
+- `combined_paired.split_samples_by_identity` used a global shuffled identity
+  list
+- when later arms add identities, earlier identities can move between
+  `train` / `val` / `test` even with the same `split_seed`
+- that contaminates strict like-for-like packet comparisons across arms such
+  as `01 -> 05`
+- code fix is now in-tree: future configs can set
+  `combined_paired.identity_split_mode: "hash_stable"` so identities keep the
+  same partition assignment as the packet grows
+- future rule: any comparison packet or rerun that cares about arm-to-arm
+  fairness should use `hash_stable`
+
+### 3. The `unknown_fake` external-real summary oddity was a real reporting bug
+
+- unpaired external real samples were being counted into fake-family reporting
+  and fake-method run-overview summaries
+- this does **not** appear to have created a training-sampling bug, but it did
+  pollute W&B family accounting
+- the code fix is now in-tree; historical W&B summaries that show
+  `unknown_fake` alongside matching `external_real` counts should be treated as
+  reporting noise, not evidence of extra fake data
 
 ## Current Review Scope In The Working Tree
 
@@ -394,6 +450,9 @@ important changed surfaces:
   - `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
   - `DeepfakeBench/training/experiments/phase2_round13/R13_SMOKE_WTB3_weak_signal_hints_plus_teams_hints.yaml`
   - `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL.yaml`
+  - `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`
+  - `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_unenhanced_provisional.yaml`
+  - `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`
 - packaging / repo closeout:
   - `DeepfakeBench/training/.dockerignore`
   - `DeepfakeBench/training/VERSION`
@@ -407,12 +466,22 @@ The current docs are aligned on the first-night planning shape:
 - do not explode the first packet into many proper-data sub-arms until the
   Teams snapshot stabilizes and the provisional artifacts are regenerated
 
-Recommended first planning packet:
+Recommended first planning packet, using the **live RLP1 startup counts** rather
+than the older copied prose:
 
 - control: `WTB3`
 - `WTB3 + proper` using the retained unenhanced proper lanes
+  (`342 clean + 342 teams = 684` fake rows in the launched packet) via
+  `R13_WTB3_with_proper_data_unenhanced_provisional.yaml`
 - `WTB3 + full retained proper snapshot` using both unenhanced and enhanced
-  proper lanes
+  proper lanes (`342 + 1251 + 1251 + 342 = 3186` fake rows in the launched
+  packet) via
+  `R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`
+
+If you rebuild the WT-F artifacts before a rerun, re-read the current builder
+report again. The checked-in artifact files now encode an even larger retained
+snapshot (`342 / 1484 / 1484 / 342` fake-lane totals overall), so future
+packets must record fresh startup counts instead of inheriting this paragraph.
 
 Primary docs:
 
@@ -422,11 +491,12 @@ Primary docs:
 ## What Is Still Open
 
 - commit / land the current proper-data patch cleanly
-- decide whether the current ragged-clean intersection policy is acceptable for
-  the first packet or whether the provisional artifacts should be regenerated
-  with a stricter clean-side `16/16` filter
 - regenerate the proper-data inventory / manifest / suite after Teams
-  propagation finishes
+  propagation finishes using the same strict clean-and-Teams `16/16` contract
+- make sure follow-up comparison packets use
+  `combined_paired.identity_split_mode: "hash_stable"` so the holdout slice
+  does not move when arm membership changes
+- run the first combined `WTB3 + proper_data` startup smoke
 - run the first real experiment packet
 - run WT-E / WT-D promotion analysis if model promotion is needed in parallel
 
@@ -444,7 +514,7 @@ The current state is:
 The remaining uncertainty is about:
 
 - provisional data counts
-- clean-versus-ragged policy on the new proper-data path
 - operational closeout and experiment selection
+- the first combined smoke / packet execution
 
 That is the right context to hand to the next reviewer.

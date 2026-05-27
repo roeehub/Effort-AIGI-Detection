@@ -56,9 +56,26 @@ Cost: ~12 sec per probe (forward pass on 800 frames, A100). 8 probes per 8000-st
 
 **The single most important thing the canary watches for**, given today's evidence: a rising `score_p95_on_reals` while `lockbox_recall_at_FPR_10pct` stays flat or falls. That's the pair_rank-tail-collapse signature (memory `project_p1_diagnostics_complete_*`) — it would give us 8-12h of warning that a run is heading to ROC-degeneracy before the post-train scorecard arrives.
 
+## 2026-05-20 update — canary silently disabled when `multi_axis_grl.enabled: true`
+
+The 3-packet T5C_TRIPLE batch (Slots 1+2+3 launched 2026-05-20 ~08:50 UTC, all SUCCEEDED by 13:03 UTC) shipped with `canary_probe.enabled: true` in all 3 yamls. W&B summary-key counts after training:
+
+| Slot | yaml `multi_axis_grl.enabled` | `canary/*` keys in W&B | `anchor/*` keys |
+|---|---:|---:|---:|
+| Slot 1 (6-axis + anchor) | **true** | **0** | 23 |
+| Slot 2 (LoRA L8-L9) | false | **29** | 25 |
+| Slot 3 (5-axis no-luma) | **true** | **0** | 25 |
+
+Pattern: `canary/*` keys are present iff `multi_axis_grl.enabled: false`. The canary's bulletproof try/except (line 128-137) is swallowing an exception that fires when GRL hooks are active. We lost mid-training deployment-shaped visibility for 4h 13m + 1h 59m of training on Slots 1+3 — exactly the "blind during training" pattern the canary was designed to prevent.
+
+The canary's empirical-validation open loop (`canary-empirical-validation` below) was partially satisfied by Slot 2 in this batch (W&B canary at probe_step 3000: `lockbox_recall_at_FPR_5pct=0.25`; scorecard for Slot 2 not yet run, so the in-training-vs-scorecard correlation is still untested). The validation that DID happen this session: off-line replication of `_aggregate_metrics` (`analysis/manual_canary_2026-05-20/score_canary.py`) on 8 ckpts gave Slot 1 trajectory `lockbox_R @ FPR=10%` 0.53 → 0.39 → 0.30 over steps 1500/2500/3500 — a clean monotonic decline that would have been visible at step 1000 if the canary had fired.
+
+Full evidence: [`analysis/manual_canary_2026-05-20/DEEP_DIVE_FACTS_2026-05-20.md §1`](../../../analysis/manual_canary_2026-05-20/DEEP_DIVE_FACTS_2026-05-20.md) (candidate exception traces; impact analysis; workaround used). Packet retro: [`packets/T5C_TRIPLE_2026-05-19.md`](../packets/T5C_TRIPLE_2026-05-19.md).
+
 ## Packet timeline
 
 - [P2](../packets/P2.md) (2026-05-07 → 2026-05-08) — first packet to ship with the canary probe enabled. Three slots, all from-scratch, all canary-monitored. The canary's first empirical fire; its predictive value is testable post-launch.
+- [T5C_TRIPLE](../packets/T5C_TRIPLE_2026-05-19.md) (2026-05-20) — canary silently dead on Slots 1+3 (`multi_axis_grl.enabled: true`); Slot 2 (`multi_axis_grl.enabled: false`) logged 29 canary keys cleanly. Off-line replication via `analysis/manual_canary_2026-05-20/score_canary.py` recovered the trajectory; opens load-bearing open loop below.
 
 ## Evidence locations
 
@@ -99,3 +116,16 @@ severity: low
 first_seen: 2026-05-07
 last_verified: 2026-05-07
 close_criterion: a "tiny canary" companion of ~60 frames runs every 200 steps for finer resolution at the cost of ~0.1% extra training time. Useful specifically because P1 BUNDLE_step500 was already in the failed regime by step 500 — the current 1000-step cadence might miss the inflection. Implement only if the 1000-step cadence proves to be too coarse on the P2 runs. Tiny canary composition would be: 5 chronic identities × 6 frames + 30 lockbox fakes = 60 frames.
+
+### Open loop: canary-silence-when-multi-axis-grl-active
+status: resolved
+severity: high
+first_seen: 2026-05-20
+last_verified: 2026-05-20
+close_criterion: a code fix lands such that for a yaml configuration with BOTH `multi_axis_grl.enabled: true` AND `canary_probe.enabled: true`, the next training run logs ≥1 `canary/score_p95_on_reals` value to W&B within the first 1000 steps. The fix's root-cause investigation must name the specific raise site in `trainer/mixins/canary_probe.py:_run_canary_probe` or its callee that the try/except is currently swallowing (candidates documented in `analysis/manual_canary_2026-05-20/DEEP_DIVE_FACTS_2026-05-20.md §1.2`: model forward `data_dict` missing GRL-axis labels; ArcFace head 2-tuple unpack at `detectors/effort_detector.py:1813`; dict-key extraction at `canary_probe.py:312-318`). Acceptance: a smoke test in `tests/test_canary_with_grl_wiring.py` (new file) exercises a model with `multi_axis_grl.enabled: true` and `use_arcface_head: true`, invokes `_run_canary_probe` once, and asserts ≥1 metric was logged + 0 warnings of pattern `Canary probe.*FAILED|disabled`. The smoke test must be added to CI alongside `tests/test_lora_adapter.py`. Pending the fix, the workaround is off-line replication via `analysis/manual_canary_2026-05-20/score_canary.py` — slow ($0 CPU, ~30 sec per ckpt) but correctness-preserving for non-LoRA ckpts.
+
+**Resolution (2026-05-20 PM):** Fix landed in `trainer/mixins/canary_probe.py:309` — added `inference=True` to the model call. This routes around BOTH the ArcFace 2-tuple unpack (line 1813 of `detectors/effort_detector.py`) AND the training-only `multi_axis_grl_block` / `quality_head` branches at lines 1836+1843 (both guarded by `not inference`). The canary now also prefers `pred['prob']` (the softmax fake-class probability emitted directly by the forward path) and falls back to `pred['cls']` / `raw_logits` / common alternative keys. The exact raise site under the live trainer was NOT empirically isolated — multiple candidate sites all become unreachable once `inference=True` short-circuits the training-only forward branches.
+
+Acceptance test added at `tests/test_canary_with_grl_wiring.py` (3 tests; all pass): (1) `test_forward_with_inference_true_skips_grl_branch` asserts the GRL branch does not fire when `inference=True`; (2) `test_forward_without_inference_kwarg_hits_grl_and_raises` reproduces the pre-fix failure mode (KeyError on per-axis data_dict access); (3) `test_canary_mixin_call_pattern_succeeds_with_inference_true` end-to-end-runs the post-fix canary mixin's per-batch loop and asserts valid scores. The test suite uses a minimal `_TinyEffortDetector` mirroring the relevant `detectors/effort_detector.py:1742-1846` branch structure, no CLIP backbone download required.
+
+Empirical close (on a GPU training run) deferred — the user pivoted away from the GRL-stacked direction; the next training run that enables both `multi_axis_grl.enabled: true` AND `canary_probe.enabled: true` will be the empirical confirmation. Mark `last_verified` should bump to that date when it happens.

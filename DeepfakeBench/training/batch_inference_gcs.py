@@ -454,8 +454,85 @@ def load_model(
             model.head.s.data.fill_(model_config["current_arcface_s"])
             logger.info("Restored ArcFace scale to %.3f", model_config["current_arcface_s"])
 
+    # LoRA: if the ckpt was trained with LoRA, the state_dict contains
+    # lora_A/lora_B tensors. The base EffortDetector does NOT install LoRA
+    # layers — that's done in train_sweep.py post-checkpoint-load. Mirror that
+    # logic here so load_state_dict has somewhere to put the lora_* tensors.
+    # Fix for `lora-enabled-not-propagated-by-load-model` (open loop in
+    # docs/packet_retrospectives/threads/wandb_yaml_propagation_bugs.md).
+    lora_cfg = cfg.get("lora") or {}
+
+    # Fallback for ckpts saved BEFORE the 2026-05-20 trainer.py:save_ckpt
+    # fix: infer lora config from state_dict's lora_* keys when cfg doesn't
+    # carry the block. Pattern: backbone.visual.transformer.resblocks.<N>.<...>.lora_A.weight
+    # - target_layers = unique <N>s
+    # - rank = lora_A's first dim
+    # - alpha = NOT recoverable from state_dict; defaults to 2*rank (the
+    #   apply_lora_to_openclip_visual default), which is the train_sweep.py
+    #   convention for these packets.
+    if not lora_cfg.get("enabled", False):
+        lora_keys = [k for k in state_dict.keys() if "lora_a.weight" in k.lower()]
+        if lora_keys:
+            import re
+            layers = sorted({
+                int(m.group(1))
+                for m in (re.search(r"resblocks\.(\d+)\.", k) for k in lora_keys)
+                if m
+            })
+            if layers:
+                # rank from first lora_A tensor's shape
+                sample_key = next(k for k in lora_keys if "lora_a.weight" in k.lower())
+                rank_inferred = int(state_dict[sample_key].shape[0])
+                lora_cfg = {
+                    "enabled": True,
+                    "target_layers": layers,
+                    "rank": rank_inferred,
+                    "alpha": 2.0 * rank_inferred,
+                }
+                logger.warning(
+                    "load_model: ckpt's model_config has no 'lora' block but state_dict "
+                    "contains %d lora_* tensors. Inferring lora cfg from state_dict: "
+                    "target_layers=%s rank=%d alpha=%g. This is a fallback for ckpts "
+                    "saved before the 2026-05-20 trainer.py save_ckpt fix; please "
+                    "re-save the ckpt to embed lora cfg explicitly.",
+                    len(lora_keys), layers, rank_inferred, 2.0 * rank_inferred,
+                )
+
+    if lora_cfg.get("enabled", False):
+        from detectors.lora_adapter import (
+            DEFAULT_TARGET_MODULES as _LORA_DEFAULT_TARGETS,
+            apply_lora_to_openclip_visual,
+        )
+        target_layers = list(lora_cfg.get("target_layers", [10, 11]))
+        lora_rank = int(lora_cfg.get("rank", 16))
+        lora_alpha = float(lora_cfg.get("alpha", 2 * lora_rank))
+        target_modules = tuple(lora_cfg.get("target_modules", _LORA_DEFAULT_TARGETS))
+        visual = model.backbone.visual
+        n_wrapped = apply_lora_to_openclip_visual(
+            visual,
+            target_layers=target_layers,
+            rank=lora_rank,
+            alpha=lora_alpha,
+            target_modules=target_modules,
+        )
+        model.to(device)  # newly-allocated LoRA params to device
+        logger.info(
+            "Loaded LoRA: layers=%s rank=%d alpha=%g wrapped=%d",
+            target_layers, lora_rank, lora_alpha, n_wrapped,
+        )
+
     clean_state = OrderedDict((k.replace("module.", ""), v) for k, v in state_dict.items())
     missing, unexpected = model.load_state_dict(clean_state, strict=False)
+    # Surface unexpected lora_* keys as a HARD warning — silent-drop here is
+    # exactly what the 2026-05-20 Slot 2 bug looked like.
+    unexpected_lora = [k for k in (unexpected or []) if "lora_" in k.lower()]
+    if unexpected_lora:
+        logger.warning(
+            "load_model: %d lora_* tensors in ckpt state_dict were NOT loaded "
+            "(model has no LoRA layers). cfg['lora']['enabled']=%s. "
+            "First 3 dropped keys: %s",
+            len(unexpected_lora), lora_cfg.get("enabled", False), unexpected_lora[:3],
+        )
     if missing:
         logger.debug("Missing keys: %s", missing)
     if unexpected:

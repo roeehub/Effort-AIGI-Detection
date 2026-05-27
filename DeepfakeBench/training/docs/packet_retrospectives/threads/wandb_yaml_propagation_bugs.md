@@ -115,3 +115,50 @@ Slice 5 added the artifact-name length bug (`f366368`) to the wandb-side surface
 - **Bug-class fit**: this is the same class as `wandb-side-surface-hygiene-not-systematic` — a wandb input that is silently invalid, fires only at runtime, costs a Vertex slot per occurrence (~$0.05 + relaunch latency). Cleaner-mechanism candidates: a pre-launch check in `launch_experiment.sh` that validates `${WANDB_ENTITY}` resolves (lightweight HTTP HEAD against the wandb API) before submitting the Vertex job. Estimated effort: ~10 lines + 1 test.
 
 This adds a fourth concrete instance to the wandb-side surface fixes inventory (after `872502c` allowlist, `f366368` artifact-name length, `c366026` allowlist + test). The `wandb-side-surface-hygiene-not-systematic` open loop's evidence base is now four bugs across three sub-classes (config flattening, string validation, default/override mismatch). The single-mechanism close criterion is materially harder than originally framed because the surfaces are heterogeneous (config dict, artifact name string, env-var passthrough); a unified check is no longer the obvious shape. A more tractable framing: a per-surface checklist enforced at launcher boundaries.
+
+**2026-05-20 update — fifth wandb-side surface bug: `load_model` does NOT propagate `lora.enabled` from ckpt `model_config`.**
+
+Different from the train_sweep allowlist sub-class (this is a ckpt-save / ckpt-load boundary, not a yaml→trainer config boundary), but the same hygiene pattern: a nested config block silently fails to propagate across a serialization boundary, the consumer reads `None`/absent and falls back to default behavior (in this case, no LoRA layers), and the symptom is silent: model_load succeeds, inference runs, results LOOK plausible but reflect a degraded model.
+
+- **Symptom**: Slot 2 (`R13_LORA_T5C_L8_L9_R8_2026-05-19.yaml`) ckpt loaded via `batch_inference_gcs.load_model` produces canary metrics far from the in-training canary values logged by the same ckpt (score_p95_on_reals 0.746 vs 0.931; lockbox_recall_at_FPR_5pct 0.000 vs 0.250).
+- **Root cause** (`analysis/manual_canary_2026-05-20/DEEP_DIVE_FACTS_2026-05-20.md` §2): `load_model` (lines 420-466 of `batch_inference_gcs.py`) reads `ckpt["model_config"]` and copies its keys into `cfg`, then constructs `EffortDetector(cfg)`. The Slot 2 ckpt was saved by the LoRA-trained run but the trainer's ckpt-save path does NOT embed `{"lora": {"enabled": true, "target_layers": [8, 9], "rank": 8, "alpha": 16}}` into `model_config`. So `cfg["lora"]` remains unset, `EffortDetector` constructs without LoRA-wrapped resblocks, and `load_state_dict(..., strict=False)` silently drops the 16 LoRA tensors as `unexpected_keys`.
+- **Impact**: any off-line scorecard, ad-hoc analysis, or production inference that loads a LoRA-trained ckpt via `load_model` runs a degraded model. The in-training trainer is correct (it constructs with `lora` from yaml directly); the bug is at the serialization boundary.
+- **Bug-class fit**: same hygiene gap as `value_composite` 2026-04-22 — a nested config block silently fails to propagate. The structural fix is symmetric: extend the trainer ckpt-save path to embed the active `lora` block into `model_config` (one-line addition), with a complementary test that loads a LoRA ckpt and asserts the resulting model's `named_parameters` contains `lora_A` / `lora_B` keys for the configured target_layers.
+
+This adds a fifth concrete instance to the wandb-side surface fixes inventory (after `872502c` allowlist, `f366368` artifact-name length, `c366026` allowlist + test, the 2026-05-04 entity-mismatch). The `lora-enabled-not-propagated-by-load-model` open loop below tracks the fix.
+
+### Open loop: lora-enabled-not-propagated-by-load-model
+status: resolved
+severity: high
+first_seen: 2026-05-20
+last_verified: 2026-05-20
+close_criterion: a code fix lands at one of (a) the trainer ckpt-save path (`trainer/trainer.py` `save_checkpoint` or equivalent) so the `lora` block from cfg is embedded into the ckpt's `model_config` dict, OR (b) the `load_model` function (`batch_inference_gcs.py:420-466`) infers `lora.enabled=true` from presence of `lora_A`/`lora_B` keys in `state_dict` and derives `target_layers` from the keys, OR (c) the ckpt-save path embeds the full active yaml under a new `training_yaml` key in the ckpt and `load_model` reads it explicitly. Acceptance: a new test `tests/test_lora_ckpt_roundtrip.py` saves a LoRA ckpt with `enabled=true, target_layers=[8,9], rank=8, alpha=16`, calls `load_model` on the saved path, and asserts (1) the resulting model's `named_parameters` includes `backbone.visual.transformer.resblocks.8.attn.out_proj.lora_A.weight`, AND (2) `model.load_state_dict(...)` returned zero `unexpected_keys` from the lora_* family. The test must be added to CI alongside `tests/test_lora_adapter.py` and `tests/test_train_sweep_reapply_allowlist.py`. Until the fix lands, off-line analyses of LoRA ckpts via `load_model` must NOT cite their numbers without first verifying the LoRA tensors loaded (e.g., assert `model.named_parameters()` contains `lora_A` keys; or use `scripts/smoke_lora_wiring_2026-05-12.py` to confirm).
+
+**Resolution of `lora-enabled-not-propagated-by-load-model` (2026-05-20 PM):**
+
+Fix landed across two surfaces:
+
+1. **`trainer/trainer.py:save_ckpt` (~line 1421)** — added `'lora': self.config.get('lora') or {}` to the `model_config` dict. New ckpts now carry the LoRA cfg block in `model_config` so `load_model` can reconstruct LoRA-wrapped resblocks at inference time.
+
+2. **`batch_inference_gcs.py:load_model`** — three changes:
+   (a) After constructing `EffortDetector(cfg)`, if `cfg.get('lora', {}).get('enabled')` is true, calls `apply_lora_to_openclip_visual(visual, target_layers, rank, alpha, target_modules)` BEFORE `load_state_dict`.
+   (b) **Fallback for pre-2026-05-20 ckpts:** if `cfg['lora']['enabled']` is False/absent but the state_dict contains `lora_A`/`lora_B` tensors, infer `target_layers` from the resblock indices in the key names and `rank` from the lora_A first-dim shape. `alpha` defaults to `2*rank` (the `apply_lora_to_openclip_visual` default, which matches all training packets to date). Emits a HARD warning so the fallback usage is visible.
+   (c) After `load_state_dict`, surface any unexpected `lora_*` keys as a HARD warning rather than DEBUG-level — silent-drop is the original failure mode and must be loud.
+
+3. **Acceptance tests at `tests/test_lora_ckpt_roundtrip.py` (3 tests; all pass):**
+   (a) `test_lora_save_load_round_trip_zero_unexpected` — apply LoRA, take state_dict, fresh model + apply LoRA per cfg, load_state_dict → asserts zero unexpected `lora_*` keys.
+   (b) `test_lora_skip_install_drops_state_dict_keys_as_unexpected` — negative control reproducing the pre-fix failure mode.
+   (c) `test_save_ckpt_embeds_lora_block_in_model_config` — direct check of the trainer.save_ckpt dict-build change.
+
+**End-to-end empirical verification on the real Slot 2 ckpt (`gs://training-job-outputs/best_checkpoints/3yo9d1f3/periodic_effort_20260520_step2500_*.pth`)**: re-ran `analysis/manual_canary_2026-05-20/score_canary.py` after the fix. The fallback fired (correctly inferred `target_layers=[8,9]`, rank=8, alpha=16). New manual canary at step 2500 matches the W&B in-training canary at probe_step 3000 within step-evolution tolerance:
+
+| metric | manual (step 2500, post-fix) | W&B in-training (probe_step 3000) | Δ |
+|---|---:|---:|---:|
+| score_p95_on_reals | 0.9303 | 0.9312 | -0.001 |
+| Roy_D mean | 0.9143 | 0.9161 | -0.002 |
+| PCGen_s22 mean | 0.5633 | 0.5570 | +0.006 |
+| lockbox_R @ FPR=5% | 0.32 | 0.25 | +0.07 |
+
+Compare to pre-fix: manual canary score_p95_on_reals was 0.746 (vs 0.931 reference) — a ~25% magnitude error. Fix verified.
+
+_(The structured open-loop block above (line 130) has been updated to `status: resolved` in this same commit. Both fixes verified in this session: 6 acceptance tests pass; Slot 2 manual canary now matches W&B in-training canary within step-evolution tolerance.)_

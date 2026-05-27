@@ -300,6 +300,111 @@ a:hover { text-decoration: underline; }
 .detail-no-pair { color: var(--text2); font-size: 12px; font-style: italic; padding: 12px;
   text-align: center; background: var(--bg2); border-radius: 6px; }
 
+/* ──── Model Diagnostics ──── */
+.model-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.model-toolbar select, .model-toolbar button { background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+.model-toolbar select { min-width: 260px; }
+.model-button, .model-gallery-actions button { background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border); padding: 6px 11px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.model-button:hover, .model-gallery-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.model-gallery-actions button.active { border-color: var(--accent); background: #102236; color: var(--accent); }
+.model-run-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.model-run-title h2 { font-size: 20px; font-weight: 600; }
+.model-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+  background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+.model-evidence-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+.evidence-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text2); }
+.evidence-badge.on { color: #56d364; border-color: #238636; background: #12261a; }
+.model-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.metric-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; min-height: 86px; }
+.metric-card .metric-label { color: var(--text2); font-size: 11px; text-transform: uppercase; }
+.metric-card .metric-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.metric-card .metric-sub { color: var(--text2); font-size: 11px; margin-top: 2px; }
+.model-grid-2 { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
+  gap: 16px; align-items: start; }
+.model-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.manifold-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.manifold-wrap { position: relative; height: 520px; background: #0a0f15; border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; }
+#model-manifold-canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+.manifold-hint { color: var(--text2); font-size: 12px; margin-top: 8px; }
+.manifold-legend { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto; }
+.legend-note { width: 100%; color: var(--text2); font-size: 11px; margin-top: 2px; }
+.legend-chip { display: inline-flex; gap: 5px; align-items: center; padding: 3px 7px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg2); color: var(--text); font-size: 11px; }
+.legend-swatch { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.model-selection-status { color: var(--text2); font-size: 12px; margin-top: 6px; min-height: 18px; }
+.selected-cluster-panel { display: none; margin-top: 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg2); padding: 10px; }
+.selected-cluster-panel.active { display: block; }
+.selected-cluster-head { display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  margin-bottom: 8px; color: var(--text2); font-size: 12px; }
+.selected-cluster-title { color: var(--text); font-weight: 600; font-size: 13px; }
+.selected-cluster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px; max-height: 260px; overflow: auto; }
+.selected-mini-card { border: 1px solid var(--border); border-radius: 7px; overflow: hidden;
+  background: var(--bg3); cursor: pointer; }
+.selected-mini-card:hover, .selected-mini-card.selected { border-color: var(--accent); }
+.selected-mini-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.selected-mini-info { padding: 5px; font-size: 10px; color: var(--text2); }
+.model-frame-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.model-frame-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; cursor: pointer; }
+.model-frame-card:hover { border-color: var(--accent); }
+.model-frame-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--bg3); }
+.model-frame-card .frame-info { padding: 8px; font-size: 11px; color: var(--text2); }
+.model-frame-card .frame-title { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.model-frame-card.selected { border-color: var(--accent); background: #102236; }
+.model-empty { color: var(--text2); font-size: 13px; padding: 24px; text-align: center;
+  background: var(--bg2); border: 1px dashed var(--border); border-radius: 8px; }
+.probe-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.probe-kv { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+.probe-kv .k { color: var(--text2); font-size: 11px; }
+.probe-kv .v { font-size: 18px; font-weight: 600; margin-top: 2px; }
+.face-size-help { color: var(--text2); font-size: 12px; line-height: 1.45; margin-top: 10px; }
+.face-size-hover-preview { display: grid; grid-template-columns: 76px 1fr; gap: 10px; align-items: center;
+  min-height: 86px; margin-top: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); }
+.face-size-hover-preview img { width: 76px; height: 76px; object-fit: cover; border-radius: 6px; background: var(--bg3); }
+.face-size-hover-preview .placeholder { width: 76px; height: 76px; display: flex; align-items: center; justify-content: center;
+  color: var(--text2); font-size: 11px; border-radius: 6px; background: var(--bg3); }
+.face-size-strip-title { color: var(--text); font-size: 12px; font-weight: 600; margin: 12px 0 8px; }
+.face-size-strip { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.face-size-path-view { display: none; margin-top: 10px; padding: 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg2); }
+.face-size-path-view.active { display: block; }
+.face-size-path-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  color: var(--text2); font-size: 12px; margin-bottom: 8px; }
+.face-size-path-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); gap: 8px; }
+.face-size-variant-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--bg3); cursor: pointer; }
+.face-size-variant-card:hover, .face-size-variant-card.active { border-color: var(--accent); background: #102236; }
+.face-size-variant-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.face-size-variant-card .variant-info { padding: 7px; font-size: 11px; color: var(--text2); }
+.face-size-variant-card .variant-title { color: var(--text); font-weight: 600; }
+.evidence-note { border-left: 3px solid var(--accent); padding: 10px 12px; background: var(--bg2);
+  margin-bottom: 10px; border-radius: 0 6px 6px 0; }
+.evidence-note.warning { border-left-color: var(--yellow); background: #211b12; }
+.evidence-note.failed { border-left-color: var(--red); background: #241414; }
+.evidence-note .note-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.frame-detail-box { display: none; margin-top: 12px; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; background: var(--bg2); }
+.frame-detail-box.active { display: grid; grid-template-columns: minmax(180px, 300px) 1fr; }
+.frame-detail-box img { width: 100%; height: 100%; object-fit: cover; background: var(--bg3); }
+.frame-detail-meta { padding: 12px; font-size: 12px; color: var(--text2); max-height: 420px; overflow: auto; }
+.frame-detail-meta code { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.frame-detail-heading { color: var(--text); font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.frame-detail-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.detail-section { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px; }
+.detail-section h4 { margin: 0 0 7px; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .02em; }
+.detail-row { display: flex; justify-content: space-between; gap: 10px; margin: 4px 0; }
+.detail-row span:first-child { color: var(--text2); }
+.detail-row span:last-child { color: var(--text); text-align: right; word-break: break-word; }
+.raw-metadata summary { cursor: pointer; color: var(--accent); margin-top: 6px; }
+.raw-metadata .raw-row { margin: 5px 0; }
+
 /* Pair viewer modal */
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; }
@@ -355,6 +460,7 @@ a:hover { text-decoration: underline; }
 <!-- Tabs -->
 <div class="tabs">
   <div class="tab active" data-tab="overview">Overview</div>
+  <div class="tab" data-tab="model-diagnostics">Model Diagnostics</div>
   <div class="tab" data-tab="explorer">Sample Explorer</div>
   <div class="tab" data-tab="analysis">Data Health</div>
 </div>
@@ -459,6 +565,114 @@ a:hover { text-decoration: underline; }
           <tbody></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB 2: Model Diagnostics ═══════════════ -->
+  <div class="tab-panel" id="tab-model-diagnostics">
+    <div class="model-toolbar">
+      <select id="model-run-select"></select>
+      <select id="model-manifold-color">
+        <option value="label">Color: Label</option>
+        <option value="method">Color: Method</option>
+        <option value="capture_mode">Color: Capture Mode</option>
+        <option value="face_area_bucket">Color: Face Area Bucket</option>
+        <option value="score_bin">Color: Score Bin</option>
+        <option value="correctness">Color: Correctness</option>
+        <option value="caught_by_subset">Color: Caught-By Subset (E-packet)</option>
+      </select>
+      <button onclick="loadSelectedModelRun()">Reload Run</button>
+      <span id="model-dashboard-status" style="font-size:13px;color:var(--text2);"></span>
+    </div>
+
+    <div class="card">
+      <div class="model-run-title">
+        <h2 id="model-run-title">Select a model</h2>
+        <span id="model-run-id" style="color:var(--text2);font-size:13px;"></span>
+      </div>
+      <div id="model-run-tags"></div>
+      <p id="model-run-recipe" style="color:var(--text2);font-size:13px;margin:8px 0 10px;"></p>
+      <div class="model-evidence-row" id="model-evidence-row"></div>
+      <div class="model-metrics" id="model-metrics"></div>
+    </div>
+
+    <div class="model-grid-2">
+      <div class="card">
+        <h3>Feature Manifold</h3>
+        <div class="manifold-toolbar">
+          <span id="model-manifold-count" style="font-size:13px;color:var(--text2);"></span>
+          <button class="model-button" onclick="resetManifoldSelection()">Reset Selection</button>
+          <div id="model-manifold-legend" class="manifold-legend"></div>
+        </div>
+        <div class="manifold-wrap">
+          <canvas id="model-manifold-canvas" width="1000" height="650"></canvas>
+        </div>
+        <div class="manifold-hint">
+          Drag a rectangle to select a cluster. Click a point to inspect its frame. Scores are shown only where checkpoint-specific score artifacts exist.
+        </div>
+        <div id="model-selection-status" class="model-selection-status">No manifold cluster selected.</div>
+        <div id="model-selected-cluster" class="selected-cluster-panel"></div>
+        <div class="frame-detail-box" id="model-frame-detail">
+          <img id="model-frame-detail-img" alt="">
+          <div class="frame-detail-meta" id="model-frame-detail-meta"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Evidence Notes</h3>
+        <div id="model-evidence-notes"></div>
+      </div>
+    </div>
+
+    <div class="model-grid-3">
+      <div class="card">
+        <h3>Face-Size Invariance</h3>
+        <div id="face-size-summary" class="probe-summary"></div>
+        <div class="face-size-help">
+          Each line is one frame under a crop-tightness sweep; line colors only separate frames. X=1.0 is the reference crop; Y is model prob_fake. Flat lines mean crop-stable behavior; steep lines or threshold crossings mean the decision changes when the crop changes. Click a chart point or a thumbnail below to inspect the frame.
+        </div>
+        <div class="chart-container" style="margin-top:12px;"><canvas id="face-size-chart"></canvas></div>
+        <div id="face-size-hover-preview" class="face-size-hover-preview"></div>
+        <div id="face-size-path-view" class="face-size-path-view"></div>
+        <div class="face-size-strip-title">Most crop-sensitive frames</div>
+        <div id="face-size-frame-strip" class="model-frame-gallery face-size-strip"></div>
+      </div>
+      <div class="card">
+        <h3>Domain Probe</h3>
+        <div id="domain-probe-summary" class="probe-summary"></div>
+        <div id="domain-confusion-table" style="margin-top:12px;"></div>
+      </div>
+      <div class="card">
+        <h3>Scorecard Suites</h3>
+        <div class="table-wrapper" style="max-height:320px;">
+          <table class="data-table" id="model-scorecard-table">
+            <thead>
+              <tr>
+                <th>Suite</th>
+                <th>n</th>
+                <th>Metric</th>
+                <th>Mean Prob</th>
+                <th>p90</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="model-gallery-actions" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;">Frame Gallery</h3>
+        <button data-gallery-kind="sensitive" onclick="loadModelFrames('sensitive')">Crop-Sensitive</button>
+        <button data-gallery-kind="manifold" onclick="loadModelFrames('manifold')">Manifold Sample</button>
+        <button data-gallery-kind="false_positive" onclick="loadModelFrames('false_positive')">False Positives</button>
+        <button data-gallery-kind="false_negative" onclick="loadModelFrames('false_negative')">False Negatives</button>
+        <button data-gallery-kind="near_threshold" onclick="loadModelFrames('near_threshold')">Near Threshold</button>
+        <button onclick="resetManifoldSelection()">Reset To Crop-Sensitive</button>
+        <span id="model-gallery-status" style="font-size:13px;color:var(--text2);"></span>
+      </div>
+      <div class="model-frame-gallery" id="model-frame-gallery"></div>
     </div>
   </div>
 
@@ -660,6 +874,16 @@ a:hover { text-decoration: underline; }
 let stats = null;
 let currentPage = 1;
 let currentFilters = {};
+let modelRuns = [];
+let currentModelRun = null;
+let currentManifold = null;
+let currentFaceFrames = [];
+let currentGalleryKind = 'sensitive';
+let selectedModelFrameKey = null;
+let selectedFacePathFrameKey = null;
+let selectedFacePathTightness = null;
+let modelCharts = { faceSize: null };
+let manifoldDrawState = { points: [], scale: null, dragging: false, start: null, rect: null, selectedKeys: new Set(), dragDistance: 0 };
 const COLORS = [
   '#58a6ff','#3fb950','#f85149','#d29922','#bc8cff','#f0883e',
   '#79c0ff','#56d364','#ff7b72','#e3b341','#d2a8ff','#ffa657',
@@ -679,22 +903,33 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   pollDiscovery();
   updateCacheSize();
+  loadModelDiagnostics();
 });
 
 function setupTabs() {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      switchTab(tab.dataset.tab);
+      if (tab.dataset.tab === 'model-diagnostics' && modelRuns.length === 0) {
+        loadModelDiagnostics();
+      }
     });
   });
+}
+
+function switchTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  const panel = document.getElementById('tab-' + tabName);
+  if (tab) tab.classList.add('active');
+  if (panel) panel.classList.add('active');
 }
 
 // ══════════════════ Discovery Polling ══════════════════
 async function pollDiscovery() {
   // Check immediately on first call, then poll every 5s
+  let interval = null;
   async function check() {
     try {
       const resp = await fetch('/api/discovery-status');
@@ -714,8 +949,15 @@ async function pollDiscovery() {
       
       if (data.done) {
         overlay.classList.add('hidden');
+        if ((data.total_samples || 0) === 0) {
+          document.getElementById('header-status').textContent = 'Model diagnostics ready';
+          switchTab('model-diagnostics');
+          if (modelRuns.length === 0) loadModelDiagnostics();
+          if (interval) clearInterval(interval);
+          return true;
+        }
         document.getElementById('header-status').textContent = `${data.total_samples} samples loaded`;
-        clearInterval(interval);
+        if (interval) clearInterval(interval);
         loadDashboard();
         return true;
       }
@@ -723,7 +965,15 @@ async function pollDiscovery() {
       if (data.error) {
         overlay.innerHTML = `<h2 style="color:var(--red)">Discovery Failed</h2><p>${data.error}</p>
           <button onclick="refreshDiscovery()" style="margin-top:12px;">Retry</button>`;
-        clearInterval(interval);
+        if (interval) clearInterval(interval);
+        return true;
+      }
+
+      if (!data.running && !data.done) {
+        overlay.classList.add('hidden');
+        document.getElementById('header-status').textContent = 'Model diagnostics ready';
+        switchTab('model-diagnostics');
+        if (modelRuns.length === 0) loadModelDiagnostics();
         return true;
       }
     } catch(e) {}
@@ -732,12 +982,20 @@ async function pollDiscovery() {
   // Immediate first check
   const done = await check();
   if (done) return;
-  const interval = setInterval(check, 5000);
+  interval = setInterval(check, 5000);
 }
 
 async function refreshDiscovery() {
-  await fetch('/api/discover', { method: 'POST',
+  const resp = await fetch('/api/discover', { method: 'POST',
     headers: {'Content-Type':'application/json'}, body: JSON.stringify({force: true}) });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    document.getElementById('discovery-overlay').classList.add('hidden');
+    document.getElementById('header-status').textContent = data.error || 'No training-data config loaded';
+    switchTab('model-diagnostics');
+    if (modelRuns.length === 0) loadModelDiagnostics();
+    return;
+  }
   document.getElementById('discovery-overlay').classList.remove('hidden');
   pollDiscovery();
 }
@@ -1418,6 +1676,825 @@ function renderWeightTable() {
       <td>${(r.weighted / totalWeighted * 100).toFixed(1)}%</td>
     </tr>
   `).join('');
+}
+
+// ══════════════════ Model Diagnostics Tab ══════════════════
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function fmtPct(value) {
+  return value === null || value === undefined || Number.isNaN(Number(value))
+    ? 'N/A' : `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function fmtNum(value, digits = 3) {
+  return value === null || value === undefined || Number.isNaN(Number(value))
+    ? 'N/A' : Number(value).toFixed(digits);
+}
+
+function compactText(value, max = 34) {
+  const text = String(value ?? '');
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function currentColorLabel() {
+  const select = document.getElementById('model-manifold-color');
+  return select?.selectedOptions?.[0]?.textContent?.replace('Color: ', '') || 'Label';
+}
+
+function manifoldColorExplanation(color) {
+  return {
+    label: 'Ground-truth label, not model prediction.',
+    method: 'Generation method or real pool from the artifact metadata.',
+    capture_mode: 'Capture-mode metadata such as phone_screen or unknown.',
+    face_area_bucket: 'Face size bucket computed from face pixel area.',
+    score_bin: 'Checkpoint-specific per-frame score rows are required; this run may only show unavailable.',
+    correctness: 'Correctness needs checkpoint-specific scores joined to labels; unavailable means no local score rows were found.',
+  }[color] || 'Artifact metadata field.';
+}
+
+function frameTitle(f) {
+  const base = f?.frame_id || f?.video_id || f?.identity_key || f?.method || f?.frame_key || 'Frame';
+  const tightness = f?.crop_tightness ?? f?.tightness;
+  if ((f?.artifact_source === 'face_size_variant' || f?.parent_frame_key) && tightness !== undefined && tightness !== null) {
+    return `${base} @ t=${fmtNum(tightness, 2)}`;
+  }
+  return base;
+}
+
+function encodeFramePayload(frame) {
+  return encodeURIComponent(JSON.stringify(frame || {}));
+}
+
+async function loadModelDiagnostics() {
+  const status = document.getElementById('model-dashboard-status');
+  if (!status) return;
+  status.textContent = 'Loading local artifacts...';
+  try {
+    const resp = await fetch('/api/model-runs');
+    const data = await resp.json();
+    modelRuns = data.runs || [];
+    const sel = document.getElementById('model-run-select');
+    sel.innerHTML = modelRuns.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.label)}</option>`).join('');
+    const defaultRun = modelRuns.find(r => r.id === 'slot3_jitter') || modelRuns[0];
+    if (defaultRun) {
+      sel.value = defaultRun.id;
+      await loadSelectedModelRun();
+    } else {
+      status.textContent = 'No model runs configured';
+    }
+    if (!sel.dataset.listening) {
+      sel.addEventListener('change', loadSelectedModelRun);
+      document.getElementById('model-manifold-color').addEventListener('change', loadModelManifold);
+      sel.dataset.listening = '1';
+    }
+  } catch(e) {
+    status.textContent = `Failed to load model artifacts: ${e.message}`;
+  }
+}
+
+async function loadSelectedModelRun() {
+  const runId = document.getElementById('model-run-select').value;
+  if (!runId) return;
+  currentModelRun = runId;
+  selectedModelFrameKey = null;
+  currentFaceFrames = [];
+  manifoldDrawState.rect = null;
+  manifoldDrawState.selectedKeys = new Set();
+  selectedFacePathFrameKey = null;
+  selectedFacePathTightness = null;
+  document.getElementById('model-dashboard-status').textContent = 'Loading run...';
+  const [summaryResp, scoreResp, faceResp, domainResp] = await Promise.all([
+    fetch(`/api/model-runs/${encodeURIComponent(runId)}/summary`),
+    fetch(`/api/model-runs/${encodeURIComponent(runId)}/scorecard`),
+    fetch(`/api/model-runs/${encodeURIComponent(runId)}/face-size-invariance`),
+    fetch(`/api/model-runs/${encodeURIComponent(runId)}/domain-probe`),
+  ]);
+  const summary = await summaryResp.json();
+  const scorecard = await scoreResp.json();
+  const face = await faceResp.json();
+  const domain = await domainResp.json();
+  renderModelRunHeader(summary);
+  renderModelScorecard(scorecard);
+  renderFaceSizeProbe(face);
+  renderDomainProbe(domain);
+  await loadModelManifold();
+  await loadModelFrames('sensitive');
+  document.getElementById('model-dashboard-status').textContent = 'Ready';
+}
+
+function renderModelRunHeader(summary) {
+  const run = summary.run || {};
+  const metrics = run.trainer_metrics || {};
+  const score = summary.scorecard_brief || {};
+  const face = summary.face_size_brief || {};
+  const domain = summary.domain_probe_brief || {};
+  document.getElementById('model-run-title').textContent = run.label || run.id || 'Model';
+  document.getElementById('model-run-id').textContent = run.run_id ? `run ${run.run_id}` : '';
+  document.getElementById('model-run-tags').innerHTML = (run.tags || [])
+    .map(t => `<span class="model-tag">${escapeHtml(t)}</span>`).join(' ');
+  document.getElementById('model-run-recipe').textContent = run.recipe || '';
+
+  const evidence = run.evidence || {};
+  document.getElementById('model-evidence-row').innerHTML = Object.entries({
+    scorecard: 'Scorecard',
+    manifold: 'Manifold',
+    face_size_invariance: 'Face-size probe',
+    domain_probe: 'Domain probe',
+    per_frame_scores: 'Frame scores',
+  }).map(([key, label]) =>
+    `<span class="evidence-badge ${evidence[key] ? 'on' : ''}">${label}</span>`
+  ).join('');
+
+  const metricCards = [
+    ['Trainer value', metrics.value_composite, '', 3],
+    ['Other fakes TPR', metrics.other_fakes_tpr, '', 3],
+    ['Selected tau', score.selected_threshold, 'contract', 3],
+    ['Lockbox real FPR', score.lockbox_real_fpr, 'contract', 3],
+    ['Teams fake recall', score.teams_fake_all_dev__fake_recall, 'contract', 3],
+    ['Viso recall', score.visomaster_enhanced_macro_dev__fake_recall, 'contract', 3],
+    ['Crop flip rate', face.flip_rate, 'probe', 3],
+    ['Domain AUC', domain.macro_ovr_auc, 'probe', 4],
+  ];
+  document.getElementById('model-metrics').innerHTML = metricCards.map(([label, value, sub, digits]) => `
+    <div class="metric-card">
+      <div class="metric-label">${label}</div>
+      <div class="metric-value">${label.includes('FPR') || label.includes('recall') || label.includes('TPR') || label.includes('rate') ? fmtPct(value) : fmtNum(value, digits)}</div>
+      <div class="metric-sub">${sub || '&nbsp;'}</div>
+    </div>
+  `).join('');
+
+  const notes = summary.evidence_notes || [];
+  document.getElementById('model-evidence-notes').innerHTML = notes.length ? notes.map(n => `
+    <div class="evidence-note ${escapeHtml(n.status || '')}">
+      <div class="note-title">${escapeHtml(n.title || 'Evidence')}</div>
+      <div style="font-size:12px;color:var(--text2);">${escapeHtml(n.text || '')}</div>
+    </div>
+  `).join('') : '<div class="model-empty">No evidence notes configured for this run.</div>';
+}
+
+function renderModelScorecard(scorecard) {
+  const tbody = document.querySelector('#model-scorecard-table tbody');
+  if (!scorecard.available) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text2);">No local scorecard artifact for this run.</td></tr>`;
+    return;
+  }
+  const rows = scorecard.selected_threshold_rows || [];
+  tbody.innerHTML = rows.map(r => {
+    const metric = r.real_fpr !== null && r.real_fpr !== undefined
+      ? `FPR ${fmtPct(r.real_fpr)}`
+      : `Recall ${fmtPct(r.fake_recall)}`;
+    return `<tr>
+      <td>${escapeHtml(r.suite_name)}</td>
+      <td>${r.n_videos ?? 'N/A'}</td>
+      <td>${metric}</td>
+      <td>${fmtNum(r.mean_prob, 3)}</td>
+      <td>${fmtNum(r.p90_prob, 3)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="color:var(--text2);">Scorecard summary exists but suite rows are unavailable.</td></tr>`;
+}
+
+async function loadModelManifold() {
+  if (!currentModelRun) return;
+  const color = document.getElementById('model-manifold-color').value;
+  manifoldDrawState.rect = null;
+  manifoldDrawState.selectedKeys = new Set();
+  const resp = await fetch(`/api/model-runs/${encodeURIComponent(currentModelRun)}/manifold?reducer=tsne&color=${encodeURIComponent(color)}&limit=800&seed=737`);
+  currentManifold = await resp.json();
+  document.getElementById('model-selection-status').textContent = 'No manifold cluster selected.';
+  renderManifoldCanvas();
+}
+
+function renderManifoldCanvas() {
+  const canvas = document.getElementById('model-manifold-canvas');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  const targetWidth = Math.max(600, Math.floor(rect.width * ratio));
+  const targetHeight = Math.max(360, Math.floor(rect.height * ratio));
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  const w = canvas.width / ratio;
+  const h = canvas.height / ratio;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0a0f15';
+  ctx.fillRect(0, 0, w, h);
+
+  if (!currentManifold?.available || !currentManifold.points?.length) {
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    ctx.fillText(currentManifold?.reason || 'No manifold artifact available', 24, 32);
+    document.getElementById('model-manifold-count').textContent = '0 points';
+    document.getElementById('model-manifold-legend').innerHTML = '';
+    return;
+  }
+
+  const points = currentManifold.points;
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 28;
+  const scaleX = x => pad + (x - minX) / ((maxX - minX) || 1) * (w - 2 * pad);
+  const scaleY = y => h - pad - (y - minY) / ((maxY - minY) || 1) * (h - 2 * pad);
+  const categories = [...new Set(points.map(p => String(p.color_value || 'unknown')))].sort();
+  const colorMap = Object.fromEntries(categories.map((c, i) => [c, COLORS[i % COLORS.length]]));
+
+  manifoldDrawState.points = points.map(p => ({ ...p, sx: scaleX(p.x), sy: scaleY(p.y) }));
+  manifoldDrawState.scale = { minX, maxX, minY, maxY };
+  for (const p of manifoldDrawState.points) {
+    ctx.beginPath();
+    ctx.fillStyle = colorMap[String(p.color_value || 'unknown')];
+    ctx.globalAlpha = 0.82;
+    ctx.arc(p.sx, p.sy, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  const selectedKeys = manifoldDrawState.selectedKeys || new Set();
+  if (selectedKeys.size) {
+    for (const p of manifoldDrawState.points) {
+      if (!selectedKeys.has(p.frame_key)) continue;
+      ctx.beginPath();
+      ctx.strokeStyle = '#f0f6fc';
+      ctx.lineWidth = 1.5;
+      ctx.arc(p.sx, p.sy, 5.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  if (manifoldDrawState.rect) {
+    const r = manifoldDrawState.rect;
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+  }
+  const total = currentManifold.total_points || points.length;
+  document.getElementById('model-manifold-count').textContent =
+    `${points.length} / ${total} points · stratified cap`;
+  renderManifoldLegend(categories, colorMap);
+  setupManifoldEvents();
+}
+
+function renderManifoldLegend(categories, colorMap) {
+  const color = document.getElementById('model-manifold-color').value;
+  const visible = categories.slice(0, 10);
+  const chips = visible.map(c => `
+    <span class="legend-chip" title="${escapeHtml(c)}">
+      <span class="legend-swatch" style="background:${colorMap[c]};"></span>${escapeHtml(compactText(c, 18))}
+    </span>
+  `).join('');
+  const extra = categories.length > visible.length
+    ? `<span class="legend-chip">+${categories.length - visible.length} more</span>`
+    : '';
+  document.getElementById('model-manifold-legend').innerHTML = `
+    ${chips}${extra}
+    <div class="legend-note">Coloring by ${escapeHtml(currentColorLabel())}. ${escapeHtml(manifoldColorExplanation(color))}</div>
+  `;
+}
+
+function setupManifoldEvents() {
+  const canvas = document.getElementById('model-manifold-canvas');
+  if (canvas.dataset.listening) return;
+  const pointerPosition = e => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    canvas.setPointerCapture?.(e.pointerId);
+    manifoldDrawState.dragging = true;
+    manifoldDrawState.start = pointerPosition(e);
+    manifoldDrawState.rect = null;
+    manifoldDrawState.dragDistance = 0;
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!manifoldDrawState.dragging) return;
+    e.preventDefault();
+    const { x, y } = pointerPosition(e);
+    const s = manifoldDrawState.start;
+    manifoldDrawState.dragDistance = Math.max(manifoldDrawState.dragDistance || 0, Math.hypot(x - s.x, y - s.y));
+    manifoldDrawState.rect = { x: Math.min(s.x, x), y: Math.min(s.y, y), w: Math.abs(x - s.x), h: Math.abs(y - s.y) };
+    renderManifoldCanvas();
+  });
+  canvas.addEventListener('pointerup', e => {
+    e.preventDefault();
+    canvas.releasePointerCapture?.(e.pointerId);
+    const r = manifoldDrawState.rect;
+    manifoldDrawState.dragging = false;
+    if (r && r.w > 8 && r.h > 8) {
+      const selected = manifoldDrawState.points.filter(p => p.sx >= r.x && p.sx <= r.x + r.w && p.sy >= r.y && p.sy <= r.y + r.h);
+      manifoldDrawState.selectedKeys = new Set(selected.map(p => p.frame_key));
+      document.getElementById('model-selection-status').textContent = selected.length
+        ? `${selected.length} manifold points selected. The Frame Gallery now shows only those selected points.`
+        : 'Selection rectangle contained no points.';
+      document.querySelectorAll('[data-gallery-kind]').forEach(btn => btn.classList.remove('active'));
+      renderSelectedCluster(selected, `${selected.length} selected manifold points`);
+      renderModelFrameGallery(selected, `${selected.length} selected manifold points`);
+    } else {
+      const { x, y } = pointerPosition(e);
+      const nearest = nearestManifoldPoint(x, y);
+      if (nearest) {
+        manifoldDrawState.selectedKeys = new Set([nearest.frame_key]);
+        document.getElementById('model-selection-status').textContent = `Selected one point: ${frameTitle(nearest)}.`;
+        renderSelectedCluster([nearest], '1 selected manifold point');
+        openModelFrameDetail(nearest.frame_key, nearest);
+      } else {
+        document.getElementById('model-selection-status').textContent = 'No point under cursor. Drag a box around a cluster or click closer to a dot.';
+      }
+    }
+    manifoldDrawState.rect = null;
+    renderManifoldCanvas();
+  });
+  canvas.addEventListener('pointercancel', () => {
+    manifoldDrawState.dragging = false;
+    manifoldDrawState.rect = null;
+    renderManifoldCanvas();
+  });
+  window.addEventListener('resize', () => { if (currentManifold) renderManifoldCanvas(); });
+  canvas.dataset.listening = '1';
+}
+
+function nearestManifoldPoint(x, y) {
+  let best = null;
+  let bestD = Infinity;
+  for (const p of manifoldDrawState.points) {
+    const d = Math.hypot(p.sx - x, p.sy - y);
+    if (d < bestD) { best = p; bestD = d; }
+  }
+  return bestD <= 10 ? best : null;
+}
+
+function resetManifoldSelection() {
+  manifoldDrawState.dragging = false;
+  manifoldDrawState.rect = null;
+  manifoldDrawState.selectedKeys = new Set();
+  document.getElementById('model-selection-status').textContent = 'No manifold cluster selected.';
+  clearSelectedCluster();
+  renderManifoldCanvas();
+  loadModelFrames('sensitive');
+}
+
+function clearSelectedCluster() {
+  const panel = document.getElementById('model-selected-cluster');
+  panel.classList.remove('active');
+  panel.innerHTML = '';
+}
+
+function renderSelectedCluster(frames, title) {
+  const panel = document.getElementById('model-selected-cluster');
+  if (!frames.length) {
+    clearSelectedCluster();
+    return;
+  }
+  const colorCounts = {};
+  const labelCounts = {};
+  for (const f of frames) {
+    const colorKey = String(f.color_value || 'unknown');
+    const labelKey = String(f.label || 'unknown');
+    colorCounts[colorKey] = (colorCounts[colorKey] || 0) + 1;
+    labelCounts[labelKey] = (labelCounts[labelKey] || 0) + 1;
+  }
+  const colorSummary = Object.entries(colorCounts).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  const labelSummary = Object.entries(labelCounts).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  panel.classList.add('active');
+  panel.innerHTML = `
+    <div class="selected-cluster-head">
+      <div><span class="selected-cluster-title">Selected Cluster</span> · ${escapeHtml(title || `${frames.length} points`)}</div>
+      <div>${escapeHtml(currentColorLabel())}: ${escapeHtml(colorSummary)}${labelSummary !== colorSummary ? ` · labels: ${escapeHtml(labelSummary)}` : ''}</div>
+    </div>
+    <div class="selected-cluster-grid">
+      ${frames.map(f => {
+        const payload = encodeFramePayload(f);
+        const sub = [f.color_value, f.method, f.capture_mode, f.face_area_bucket].filter(Boolean).join(' · ');
+        return `<div class="selected-mini-card ${selectedModelFrameKey === f.frame_key ? 'selected' : ''}" data-frame-key="${escapeHtml(f.frame_key)}" onclick='openModelFrameDetail("${escapeHtml(f.frame_key)}", JSON.parse(decodeURIComponent("${payload}")))'>
+          ${f.image_url ? `<img src="${escapeHtml(f.image_url)}" loading="lazy" alt="">` : '<div style="aspect-ratio:1;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:10px;">No image</div>'}
+          <div class="selected-mini-info">
+            <div class="frame-title" title="${escapeHtml(frameTitle(f))}">${escapeHtml(compactText(frameTitle(f), 18))}</div>
+            <div>${escapeHtml(compactText(sub, 32))}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderFaceSizeProbe(face) {
+  const box = document.getElementById('face-size-summary');
+  if (!face.available) {
+    box.innerHTML = '<div class="model-empty">No face-size invariance artifact for this run.</div>';
+    if (modelCharts.faceSize) modelCharts.faceSize.destroy();
+    document.getElementById('face-size-hover-preview').innerHTML = '<div class="placeholder">No image</div><div>No face-size artifact for this run.</div>';
+    document.getElementById('face-size-path-view').classList.remove('active');
+    document.getElementById('face-size-path-view').innerHTML = '';
+    document.getElementById('face-size-frame-strip').innerHTML = '';
+    return;
+  }
+  const s = face.summary || {};
+  box.innerHTML = [
+    ['Frames', s.n_frames],
+    ['Flip rate', fmtPct(s.flip_rate)],
+    ['Median delta', fmtNum(s.median_abs_delta, 3)],
+    ['Flips', `${s.flip_count ?? 'N/A'}`],
+  ].map(([k, v]) => `<div class="probe-kv"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+  const frames = (face.frames || []).slice().sort((a, b) => (b.delta_prob || 0) - (a.delta_prob || 0)).slice(0, 18);
+  currentFaceFrames = frames;
+  selectedFacePathFrameKey = null;
+  selectedFacePathTightness = null;
+  renderFaceSizeFrameStrip(frames.slice(0, 8));
+  updateFaceSizeHoverPreview(frames[0], null);
+  const tightnessLabels = [...new Set(frames.flatMap(f => (f.points || []).map(p => p.tightness)))].sort((a, b) => a - b);
+  const frameDatasets = frames.map((f, i) => ({
+    label: f.frame_id,
+    data: tightnessLabels.map(t => {
+      const row = (f.points || []).find(p => Number(p.tightness) === Number(t));
+      return row ? row.prob_fake : null;
+    }),
+    borderColor: COLORS[i % COLORS.length],
+    backgroundColor: COLORS[i % COLORS.length],
+    borderWidth: f.flip ? 2 : 1,
+    pointRadius: 2.5,
+    pointHoverRadius: 5,
+    tension: 0.2,
+    _frame: f,
+    _baseBorderWidth: f.flip ? 2 : 1,
+  }));
+  const thresholdDataset = {
+    label: '0.5 decision threshold',
+    data: tightnessLabels.map(() => 0.5),
+    borderColor: '#8b949e',
+    backgroundColor: '#8b949e',
+    borderWidth: 1,
+    borderDash: [5, 4],
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    _isThreshold: true,
+  };
+  if (modelCharts.faceSize) modelCharts.faceSize.destroy();
+  modelCharts.faceSize = new Chart(document.getElementById('face-size-chart'), {
+    type: 'line',
+    data: {
+      labels: tightnessLabels,
+      datasets: [...frameDatasets, thresholdDataset],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      onClick: (event, elements, chart) => {
+        if (!elements.length) return;
+        const dataset = chart.data.datasets[elements[0].datasetIndex];
+        if (!dataset?._frame) return;
+        const tightness = chart.data.labels[elements[0].index];
+        const point = (dataset._frame.points || []).find(p => Number(p.tightness) === Number(tightness));
+        selectFaceSizePath(dataset._frame, point, true);
+      },
+      onHover: (event, elements, chart) => {
+        chart.canvas.style.cursor = elements.length && chart.data.datasets[elements[0].datasetIndex]?._frame ? 'pointer' : 'default';
+        if (!elements.length) return;
+        const el = elements[0];
+        const dataset = chart.data.datasets[el.datasetIndex];
+        if (!dataset?._frame) return;
+        const tightness = chart.data.labels[el.index];
+        const point = (dataset._frame.points || []).find(p => Number(p.tightness) === Number(tightness));
+        updateFaceSizeHoverPreview(dataset._frame, point);
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => !item.dataset._isThreshold,
+          callbacks: {
+            title: items => items.length ? `tightness ${items[0].label}` : '',
+            label: item => {
+              const frame = item.dataset._frame || {};
+              const point = (frame.points || []).find(p => Number(p.tightness) === Number(item.label));
+              const pred = point?.predicted_label ? `, pred ${point.predicted_label}` : '';
+              return `${frameTitle(frame)}: prob_fake ${fmtNum(point?.prob_fake ?? item.raw, 3)}${pred}`;
+            },
+            afterLabel: item => {
+              const frame = item.dataset._frame || {};
+              return `delta ${fmtNum(frame.delta_prob, 3)} · ${frame.flip ? 'prediction flips' : 'stable label'}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { title: { display: true, text: 'crop tightness (1.0 = reference)', color: '#8b949e' }, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+        y: { title: { display: true, text: 'prob_fake', color: '#8b949e' }, min: 0, max: 1, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+      },
+    },
+  });
+  if (frames[0]) {
+    selectFaceSizePath(frames[0], null, false);
+  }
+}
+
+function updateFaceSizeHoverPreview(frame, point) {
+  const preview = document.getElementById('face-size-hover-preview');
+  if (!frame) {
+    preview.innerHTML = '<div class="placeholder">Hover</div><div>Hover a chart point or click a thumbnail to inspect a frame.</div>';
+    return;
+  }
+  const tightness = point?.tightness ?? frame.native_tightness;
+  const prob = point?.prob_fake ?? frame.native_prob_fake;
+  const pred = point?.predicted_label ?? frame.native_predicted_label;
+  const imageUrl = point?.image_url || frame.image_url;
+  preview.innerHTML = `
+    ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" loading="lazy" alt="">` : '<div class="placeholder">No image</div>'}
+    <div>
+      <div style="color:var(--text);font-weight:600;margin-bottom:4px;">${escapeHtml(frameTitle(frame))}</div>
+      <div>tightness ${fmtNum(tightness, 2)} · prob_fake ${fmtNum(prob, 3)}${pred ? ` · pred ${escapeHtml(pred)}` : ''}</div>
+      <div>range ${fmtNum(frame.min_prob, 3)} to ${fmtNum(frame.max_prob, 3)} · delta ${fmtNum(frame.delta_prob, 3)} · ${frame.flip ? 'prediction flips' : 'stable prediction'}</div>
+    </div>
+  `;
+}
+
+function fallbackForFaceSizePoint(frame, point) {
+  const target = point || (frame.points || []).find(p => Number(p.tightness) === Number(frame.native_tightness))
+    || (frame.points || []).find(p => Number(p.tightness) === 1)
+    || (frame.points || [])[0]
+    || {};
+  return {
+    ...frame,
+    ...target,
+    frame_key: target.frame_key || frame.frame_key,
+    parent_frame_key: frame.frame_key,
+    crop_tightness: target.tightness ?? target.crop_tightness ?? frame.native_tightness,
+    prob_fake: target.prob_fake ?? frame.native_prob_fake,
+    predicted_label: target.predicted_label ?? frame.native_predicted_label,
+    image_url: target.image_url || frame.image_url,
+    artifact_source: target.frame_key ? 'face_size_variant' : frame.artifact_source,
+  };
+}
+
+function selectFaceSizePath(frame, point = null, openDetail = false) {
+  if (!frame) return;
+  const selectedPoint = point || (frame.points || []).find(p => Number(p.tightness) === Number(frame.native_tightness))
+    || (frame.points || []).find(p => Number(p.tightness) === 1)
+    || (frame.points || [])[0]
+    || null;
+  selectedFacePathFrameKey = frame.frame_key;
+  selectedFacePathTightness = selectedPoint?.tightness ?? null;
+  updateFaceSizeHoverPreview(frame, selectedPoint);
+  renderFaceSizePath(frame, selectedPoint);
+  applyFaceSizeHighlight(frame.frame_key);
+  if (openDetail) {
+    const fallback = fallbackForFaceSizePoint(frame, selectedPoint);
+    openModelFrameDetail(fallback.frame_key, fallback);
+  }
+}
+
+function applyFaceSizeHighlight(frameKey) {
+  if (!modelCharts.faceSize) return;
+  for (const dataset of modelCharts.faceSize.data.datasets) {
+    if (!dataset._frame) continue;
+    const active = dataset._frame.frame_key === frameKey;
+    dataset.borderWidth = active ? 4 : dataset._baseBorderWidth;
+    dataset.pointRadius = active ? 4 : 2.5;
+    dataset.pointHoverRadius = active ? 6 : 5;
+  }
+  modelCharts.faceSize.update('none');
+}
+
+function renderFaceSizePath(frame, selectedPoint) {
+  const panel = document.getElementById('face-size-path-view');
+  const points = (frame.points || []).slice().sort((a, b) => Number(a.tightness) - Number(b.tightness));
+  if (!points.length) {
+    panel.classList.remove('active');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.classList.add('active');
+  panel.innerHTML = `
+    <div class="face-size-path-head">
+      <div><strong style="color:var(--text);">Selected crop path:</strong> ${escapeHtml(frame.frame_id || frameTitle(frame))}</div>
+      <div>delta ${fmtNum(frame.delta_prob, 3)} · ${frame.flip ? 'prediction flips across crops' : 'stable prediction across crops'}</div>
+    </div>
+    <div class="face-size-path-grid">
+      ${points.map(p => {
+        const fallback = fallbackForFaceSizePoint(frame, p);
+        const payload = encodeFramePayload(fallback);
+        const active = selectedPoint && Number(selectedPoint.tightness) === Number(p.tightness);
+        return `<div class="face-size-variant-card ${active ? 'active' : ''}" data-frame-key="${escapeHtml(fallback.frame_key)}" onclick='selectFaceSizePath(JSON.parse(decodeURIComponent("${encodeFramePayload(frame)}")), JSON.parse(decodeURIComponent("${encodeFramePayload(p)}")), true)'>
+          ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" loading="lazy" alt="">` : '<div style="aspect-ratio:1;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:11px;">No image</div>'}
+          <div class="variant-info">
+            <div class="variant-title">t=${fmtNum(p.tightness, 2)}</div>
+            <div>prob ${fmtNum(p.prob_fake, 3)} · ${escapeHtml(p.predicted_label || '')}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderFaceSizeFrameStrip(frames) {
+  const strip = document.getElementById('face-size-frame-strip');
+  if (!frames.length) {
+    strip.innerHTML = '<div class="model-empty">No sensitive frames in this artifact.</div>';
+    return;
+  }
+  strip.innerHTML = frames.map(f => {
+    const payload = encodeFramePayload(f);
+    return `<div class="model-frame-card" data-frame-key="${escapeHtml(f.frame_key)}" onclick='selectFaceSizePath(JSON.parse(decodeURIComponent("${payload}")), null, true)'>
+      ${f.image_url ? `<img src="${escapeHtml(f.image_url)}" loading="lazy" alt="">` : '<div style="aspect-ratio:1;background:var(--bg3);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:12px;">No local image</div>'}
+      <div class="frame-info">
+        <div class="frame-title" title="${escapeHtml(frameTitle(f))}">${escapeHtml(frameTitle(f))}</div>
+        <div>delta ${fmtNum(f.delta_prob, 3)} · ${f.flip ? 'flips' : 'stable'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDomainProbe(domain) {
+  const box = document.getElementById('domain-probe-summary');
+  const table = document.getElementById('domain-confusion-table');
+  if (!domain.available) {
+    box.innerHTML = '<div class="model-empty">No domain probe artifact for this run.</div>';
+    table.innerHTML = '';
+    return;
+  }
+  const r = domain.result || {};
+  box.innerHTML = [
+    ['Macro AUC', fmtNum(r.macro_ovr_auc, 4)],
+    ['Classes', (r.classes || []).join(', ')],
+    ['Probe key', domain.probe_key || ''],
+  ].map(([k, v]) => `<div class="probe-kv"><div class="k">${k}</div><div class="v">${escapeHtml(v)}</div></div>`).join('');
+  const cm = r.confusion_matrix || [];
+  table.innerHTML = cm.length ? `<table class="data-table"><tbody>${cm.map(row =>
+    `<tr>${row.map(v => `<td>${v}</td>`).join('')}</tr>`
+  ).join('')}</tbody></table>` : '<div class="model-empty">No confusion matrix in artifact.</div>';
+}
+
+async function loadModelFrames(kind) {
+  if (!currentModelRun) return;
+  currentGalleryKind = kind;
+  document.querySelectorAll('[data-gallery-kind]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.galleryKind === kind);
+  });
+  const resp = await fetch(`/api/model-runs/${encodeURIComponent(currentModelRun)}/frames?kind=${encodeURIComponent(kind)}&limit=48`);
+  const data = await resp.json();
+  if (!data.available) {
+    document.getElementById('model-gallery-status').textContent = data.reason || 'No frames available';
+    document.getElementById('model-frame-gallery').innerHTML = `<div class="model-empty">${escapeHtml(data.reason || 'No local artifact rows for this gallery.')}</div>`;
+    return;
+  }
+  renderModelFrameGallery(data.frames, galleryStatus(kind, data.frames.length));
+}
+
+function galleryStatus(kind, count) {
+  const descriptions = {
+    sensitive: `${count} crop-sensitive frames, sorted by prob_fake range across crop tightness`,
+    manifold: `${count} frames from the current stratified manifold sample`,
+    false_positive: `${count} false positives from local per-frame score reports`,
+    false_negative: `${count} false negatives from local per-frame score reports`,
+    near_threshold: `${count} frames closest to the selected threshold`,
+  };
+  return descriptions[kind] || `${count} frames`;
+}
+
+function renderModelFrameGallery(frames, title) {
+  document.getElementById('model-gallery-status').textContent = title || `${frames.length} frames`;
+  const grid = document.getElementById('model-frame-gallery');
+  if (!frames.length) {
+    grid.innerHTML = '<div class="model-empty">No frames in this selection.</div>';
+    return;
+  }
+  grid.innerHTML = frames.map(f => {
+    const titleText = frameTitle(f);
+    const sub = [
+      f.prob_fake !== undefined && f.prob_fake !== null ? `prob ${fmtNum(f.prob_fake, 3)}` : '',
+      f.native_prob_fake !== undefined && f.native_prob_fake !== null ? `native ${fmtNum(f.native_prob_fake, 3)}` : '',
+      f.method,
+      f.label,
+      f.capture_mode,
+      f.face_area_bucket,
+      f.delta_prob !== undefined ? `delta ${fmtNum(f.delta_prob, 3)}` : '',
+      f.flip !== undefined ? (f.flip ? 'flips' : 'stable') : '',
+    ].filter(Boolean).join(' · ');
+    const payload = encodeFramePayload(f);
+    return `<div class="model-frame-card ${selectedModelFrameKey === f.frame_key ? 'selected' : ''}" data-frame-key="${escapeHtml(f.frame_key)}" onclick='openModelFrameDetail("${escapeHtml(f.frame_key)}", JSON.parse(decodeURIComponent("${payload}")))'>
+      ${f.image_url ? `<img src="${escapeHtml(f.image_url)}" loading="lazy" alt="">` : '<div style="aspect-ratio:1;background:var(--bg3);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:12px;">No local image</div>'}
+      <div class="frame-info">
+        <div class="frame-title" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</div>
+        <div>${escapeHtml(sub)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openModelFrameDetail(frameKey, fallback) {
+  if (!frameKey || !currentModelRun) return;
+  selectedModelFrameKey = frameKey;
+  let detail = { metadata: fallback || {}, image_url: fallback?.image_url || '' };
+  try {
+    const resp = await fetch(`/api/model-runs/${encodeURIComponent(currentModelRun)}/frame-detail/${encodeURIComponent(frameKey)}`);
+    if (resp.ok) detail = await resp.json();
+  } catch(e) {}
+  const box = document.getElementById('model-frame-detail');
+  box.classList.add('active');
+  const img = document.getElementById('model-frame-detail-img');
+  const imageUrl = detail.image_url || fallback?.image_url || '';
+  if (imageUrl) {
+    img.src = imageUrl + '?full=1';
+    img.style.display = '';
+  } else {
+    img.removeAttribute('src');
+    img.style.display = 'none';
+  }
+  const manifoldMatch = (currentManifold?.points || []).find(p => p.frame_key === frameKey);
+  const metadata = { ...(detail.metadata || {}), ...(manifoldMatch || {}), ...(fallback || {}) };
+  if (metadata.manifold_x !== undefined && metadata.manifold_x !== null) {
+    metadata.manifold_status = 'in current t-SNE sample';
+  }
+  renderFrameDetailMetadata(frameKey, metadata);
+  document.querySelectorAll('.model-frame-card, .selected-mini-card, .face-size-variant-card').forEach(card => {
+    card.classList.toggle('selected', card.dataset.frameKey === frameKey);
+    card.classList.toggle('active', card.dataset.frameKey === frameKey);
+  });
+}
+
+function detailValue(value, digits = null) {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  if (digits !== null && !Number.isNaN(Number(value))) return Number(value).toFixed(digits);
+  return String(value);
+}
+
+function detailRow(label, value, digits = null) {
+  if (value === null || value === undefined || value === '') return '';
+  return `<div class="detail-row"><span>${escapeHtml(label)}</span><span>${escapeHtml(detailValue(value, digits))}</span></div>`;
+}
+
+function renderFrameDetailMetadata(frameKey, metadata) {
+  const hasPerFrameScore = metadata.prob_fake !== null && metadata.prob_fake !== undefined;
+  const hasNativeScore = metadata.native_prob_fake !== null && metadata.native_prob_fake !== undefined;
+  const score = hasPerFrameScore ? metadata.prob_fake : (hasNativeScore ? metadata.native_prob_fake : metadata.score);
+  const threshold = metadata.threshold ?? 0.5;
+  const predicted = metadata.predicted_label || metadata.native_predicted_label ||
+    (score !== null && score !== undefined && !Number.isNaN(Number(score)) ? (Number(score) >= Number(threshold) ? 'fake' : 'real') : null);
+  const scoreTitle = hasPerFrameScore ? 'Checkpoint score' : (hasNativeScore ? 'Native crop score' : 'Checkpoint score');
+  const scoreRows = [
+    detailRow(scoreTitle, score, 3),
+    detailRow('Predicted', predicted),
+    detailRow('Threshold', hasPerFrameScore ? threshold : (hasNativeScore ? 0.5 : null), 3),
+    metadata.score_note ? `<div style="color:var(--text2);margin-top:6px;">${escapeHtml(metadata.score_note)}</div>` : '',
+    !hasPerFrameScore && !hasNativeScore && !metadata.score_note
+      ? '<div style="color:var(--text2);">No checkpoint-specific score row is indexed for this frame.</div>'
+      : '',
+  ].join('');
+
+  const manifoldRows = metadata.manifold_x !== null && metadata.manifold_x !== undefined
+    ? [
+        detailRow('t-SNE x', metadata.manifold_x, 3),
+        detailRow('t-SNE y', metadata.manifold_y, 3),
+        detailRow(`Color: ${currentColorLabel()}`, metadata.color_value),
+        detailRow('Status', metadata.manifold_status || 'in current t-SNE sample'),
+      ].join('')
+    : `<div style="color:var(--text2);">${escapeHtml(metadata.manifold_status || 'This frame is not in the current stratified manifold sample.')}</div>`;
+
+  const cropRows = [
+    detailRow('Selected tightness', metadata.crop_tightness ?? metadata.tightness, 2),
+    detailRow('Delta prob_fake', metadata.delta_prob, 3),
+    detailRow('Min prob_fake', metadata.min_prob, 3),
+    detailRow('Max prob_fake', metadata.max_prob, 3),
+    detailRow('Native tightness', metadata.native_tightness, 2),
+    detailRow('Flip under crop', metadata.flip === undefined ? null : (metadata.flip ? 'yes' : 'no')),
+  ].join('') || '<div style="color:var(--text2);">No crop-sweep row is indexed for this frame.</div>';
+
+  const sourceRows = [
+    detailRow('Ground truth', metadata.label),
+    detailRow('Method', metadata.method),
+    detailRow('Capture mode', metadata.capture_mode || metadata.clip_capture_mode),
+    detailRow('Face area', metadata.face_pixel_area, 0),
+    detailRow('Face bucket', metadata.face_area_bucket),
+    detailRow('Identity', metadata.identity_key),
+    detailRow('Video', metadata.video_id),
+  ].join('');
+
+  const rawRows = Object.entries(metadata)
+    .filter(([k, v]) => !['points'].includes(k) && v !== null && v !== undefined && String(v).length < 700)
+    .map(([k, v]) => `<div class="raw-row"><span style="color:var(--text);">${escapeHtml(k)}</span>: <code>${escapeHtml(v)}</code></div>`)
+    .join('');
+
+  document.getElementById('model-frame-detail-meta').innerHTML = `
+    <div class="frame-detail-heading">${escapeHtml(frameTitle(metadata))}</div>
+    <div class="frame-detail-sections">
+      <div class="detail-section"><h4>Model Result</h4>${scoreRows}</div>
+      <div class="detail-section"><h4>Manifold Placement</h4>${manifoldRows}</div>
+      <div class="detail-section"><h4>Crop Sensitivity</h4>${cropRows}</div>
+      <div class="detail-section"><h4>Frame Metadata</h4>${sourceRows || '<div style="color:var(--text2);">No metadata rows indexed.</div>'}</div>
+    </div>
+    <details class="raw-metadata">
+      <summary>Raw artifact fields</summary>
+      ${rawRows || '<div style="color:var(--text2);margin-top:6px;">No compact raw fields to show.</div>'}
+    </details>
+  `;
 }
 
 // ══════════════════ Sample Explorer ══════════════════

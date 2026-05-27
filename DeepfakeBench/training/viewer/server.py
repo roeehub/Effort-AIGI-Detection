@@ -7,6 +7,8 @@ Endpoints:
   POST /api/discover               → Start or force-refresh discovery
   GET  /api/stats                  → Aggregated statistics JSON
   GET  /api/samples                → Paginated sample listing with filters
+  GET  /api/model-runs             → Local model diagnostics run manifest
+  GET  /api/model-runs/<run>/...   → Read-only model artifact diagnostics
   GET  /api/sample/<source>/<sid>  → Single sample detail
   GET  /api/frame/<bucket>/<path>  → Proxied GCS frame (cached locally)
   DELETE /api/cache                → Clear local cache
@@ -28,7 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 from google.cloud import storage
 from PIL import Image
 
@@ -45,6 +47,7 @@ from .visomaster_policy import (
     load_visomaster_bad_data_policy,
     policy_summary_for_response,
 )
+from .model_dashboard import ModelDashboard
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +68,60 @@ _state: Dict[str, Any] = {
     "visomaster_policy": None,
 }
 _lock = threading.Lock()
+_model_dashboard: Optional[ModelDashboard] = None
 
 
 def _progress_cb(source: str, current: int, total: int):
     with _lock:
         _state["discovery_progress"][source] = (current, total)
+
+
+def _get_model_dashboard() -> ModelDashboard:
+    global _model_dashboard
+    if _model_dashboard is None:
+        _model_dashboard = ModelDashboard()
+    return _model_dashboard
+
+
+def _make_tightness_variant(img: Image.Image, tightness: float) -> Image.Image:
+    """Mirror the local face-size invariance crop sweep preview transform."""
+    if abs(tightness - 1.0) < 1e-6:
+        return img.copy()
+    width, height = img.size
+    if tightness > 1.0:
+        new_w = max(1, int(round(width / tightness)))
+        new_h = max(1, int(round(height / tightness)))
+        x0 = (width - new_w) // 2
+        y0 = (height - new_h) // 2
+        return img.crop((x0, y0, x0 + new_w, y0 + new_h)).resize((width, height), Image.LANCZOS)
+
+    inner_w = max(1, int(round(width * tightness)))
+    inner_h = max(1, int(round(height * tightness)))
+    inner = img.resize((inner_w, inner_h), Image.LANCZOS)
+    canvas = Image.new(img.mode, (width, height))
+    pad_x = (width - inner_w) // 2
+    pad_y = (height - inner_h) // 2
+    if pad_y > 0:
+        canvas.paste(inner.crop((0, 0, inner_w, 1)).resize((inner_w, pad_y)), (pad_x, 0))
+    if pad_y > 0 and (height - pad_y - inner_h) > 0:
+        canvas.paste(inner.crop((0, inner_h - 1, inner_w, inner_h)).resize((inner_w, height - pad_y - inner_h)), (pad_x, pad_y + inner_h))
+    if pad_x > 0:
+        canvas.paste(inner.crop((0, 0, 1, inner_h)).resize((pad_x, inner_h)), (0, pad_y))
+    if pad_x > 0 and (width - pad_x - inner_w) > 0:
+        canvas.paste(inner.crop((inner_w - 1, 0, inner_w, inner_h)).resize((width - pad_x - inner_w, inner_h)), (pad_x + inner_w, pad_y))
+    if pad_x > 0 and pad_y > 0:
+        canvas.paste(inner.crop((0, 0, 1, 1)).resize((pad_x, pad_y)), (0, 0))
+    if pad_x > 0 and pad_y > 0 and (width - pad_x - inner_w) > 0:
+        canvas.paste(inner.crop((inner_w - 1, 0, inner_w, 1)).resize((width - pad_x - inner_w, pad_y)), (pad_x + inner_w, 0))
+    if pad_x > 0 and pad_y > 0 and (height - pad_y - inner_h) > 0:
+        canvas.paste(inner.crop((0, inner_h - 1, 1, inner_h)).resize((pad_x, height - pad_y - inner_h)), (0, pad_y + inner_h))
+    if pad_x > 0 and pad_y > 0 and (width - pad_x - inner_w) > 0 and (height - pad_y - inner_h) > 0:
+        canvas.paste(
+            inner.crop((inner_w - 1, inner_h - 1, inner_w, inner_h)).resize((width - pad_x - inner_w, height - pad_y - inner_h)),
+            (pad_x + inner_w, pad_y + inner_h),
+        )
+    canvas.paste(inner, (pad_x, pad_y))
+    return canvas
 
 
 # ── Discovery thread ────────────────────────────────────────────────────────
@@ -349,12 +401,18 @@ def discovery_status():
             "error": _state["discovery_error"],
             "progress": _state["discovery_progress"],
             "total_samples": len(_state["samples"]),
+            "has_config": bool(_state.get("config")),
         })
 
 
 @app.route("/api/discover", methods=["POST"])
 def trigger_discovery():
     force = request.json.get("force", False) if request.is_json else False
+    if not _state.get("config"):
+        return jsonify({
+            "status": "no_config",
+            "error": "No training-data config loaded. Model Diagnostics uses local artifacts and does not scan buckets.",
+        }), 400
     with _lock:
         if _state["discovery_running"]:
             return jsonify({"status": "already_running"}), 409
@@ -476,6 +534,159 @@ def filter_options():
         "tiers": sorted(set(s.tier for s in samples if s.tier)),
         "labels": [0, 1],
     })
+
+
+@app.route("/api/model-runs")
+def model_runs():
+    """Return the curated local model diagnostics run manifest."""
+    dashboard = _get_model_dashboard()
+    return jsonify({"runs": dashboard.list_runs()})
+
+
+@app.route("/api/model-runs/<run_id>/summary")
+def model_run_summary(run_id):
+    dashboard = _get_model_dashboard()
+    try:
+        return jsonify(dashboard.summary(run_id))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/scorecard")
+def model_run_scorecard(run_id):
+    dashboard = _get_model_dashboard()
+    try:
+        return jsonify(dashboard.scorecard(run_id))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/manifold")
+def model_run_manifold(run_id):
+    dashboard = _get_model_dashboard()
+    reducer = request.args.get("reducer", "tsne")
+    color = request.args.get("color", "label")
+    limit = int(request.args.get("limit", 800))
+    seed = int(request.args.get("seed", 737))
+    try:
+        return jsonify(dashboard.manifold(run_id, reducer=reducer, color=color, limit=limit, seed=seed))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/frames")
+def model_run_frames(run_id):
+    dashboard = _get_model_dashboard()
+    kind = request.args.get("kind", "sensitive")
+    limit = int(request.args.get("limit", 48))
+    try:
+        return jsonify(dashboard.frames(run_id, kind=kind, limit=limit))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/frame-detail/<frame_key>")
+def model_run_frame_detail(run_id, frame_key):
+    dashboard = _get_model_dashboard()
+    try:
+        return jsonify(dashboard.frame_detail(run_id, frame_key))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/frame/<frame_key>")
+def model_run_frame(run_id, frame_key):
+    """Serve only images indexed by local diagnostics artifacts."""
+    dashboard = _get_model_dashboard()
+    thumb = request.args.get("full") != "1"
+    thumb_size = int(request.args.get("size", 240))
+    try:
+        path = dashboard.frame_path(run_id, frame_key)
+        detail = dashboard.frame_detail(run_id, frame_key)
+    except KeyError:
+        abort(404)
+
+    try:
+        img = Image.open(path).convert("RGB")
+        metadata = detail.get("metadata") or {}
+        tightness = metadata.get("crop_tightness")
+        if tightness is not None:
+            img = _make_tightness_variant(img, float(tightness))
+        if not thumb:
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=92)
+            buf.seek(0)
+            return send_file(buf, mimetype="image/jpeg")
+        img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+        return send_file(buf, mimetype="image/jpeg")
+    except Exception:
+        return send_file(str(path))
+
+
+@app.route("/api/model-runs/<run_id>/face-size-invariance")
+def model_run_face_size_invariance(run_id):
+    dashboard = _get_model_dashboard()
+    try:
+        return jsonify(dashboard.face_size_invariance(run_id))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/domain-probe")
+def model_run_domain_probe(run_id):
+    dashboard = _get_model_dashboard()
+    try:
+        return jsonify(dashboard.domain_probe(run_id))
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/api/model-runs/<run_id>/static-report")
+def model_run_static_report(run_id):
+    """Serve a static HTML report referenced from a run's `score_distribution_report` artifact.
+
+    The artifact value is treated as a path relative to TRAINING_DIR. Only files inside
+    TRAINING_DIR are served (no path traversal). Returns 404 if the artifact is not
+    configured or the file is outside the allowed root.
+    """
+    dashboard = _get_model_dashboard()
+    try:
+        run = dashboard._run(run_id)
+    except KeyError:
+        abort(404)
+    rel = run.artifacts.get("score_distribution_report")
+    if not rel:
+        abort(404)
+    base = dashboard.training_dir.resolve()
+    target = (base / rel).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        abort(403)
+    if not target.exists():
+        abort(404)
+    return send_file(str(target))
+
+
+@app.route("/api/static-report-asset/<path:rel_path>")
+def static_report_asset(rel_path):
+    """Serve assets (PNG/JSON/CSV) referenced from a static report.
+
+    Only files under TRAINING_DIR/analysis/ are servable (no traversal).
+    """
+    dashboard = _get_model_dashboard()
+    base = (dashboard.training_dir / "analysis").resolve()
+    target = (base / rel_path).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        abort(403)
+    if not target.exists() or not target.is_file():
+        abort(404)
+    return send_file(str(target))
 
 
 @app.route("/api/method-health")
@@ -875,25 +1086,32 @@ def _frame_url_for_sample(s: SampleInfo, frame_idx: int = 0) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Training Data Viewer")
-    parser.add_argument("--config", required=True, help="Path to experiment YAML")
+    parser.add_argument("--config", help="Path to experiment YAML")
     parser.add_argument("--port", type=int, default=8501)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--auto-discover", action="store_true", default=True,
                         help="Start discovery automatically on launch")
+    parser.add_argument("--no-auto-discover", dest="auto_discover", action="store_false",
+                        help="Start only the local artifact dashboard; do not scan GCS")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    with open(args.config) as f:
-        config = yaml.safe_load(f)
+    if args.config:
+        with open(args.config) as f:
+            config = yaml.safe_load(f)
+    else:
+        config = {}
     _state["config"] = config
 
-    logger.info("Loaded config: %s", args.config)
+    logger.info("Loaded config: %s", args.config or "(none)")
     logger.info("Starting viewer at http://%s:%d", args.host, args.port)
 
-    if args.auto_discover:
+    if args.auto_discover and args.config:
         t = threading.Thread(target=_run_discovery, daemon=True)
         t.start()
+    elif args.auto_discover and not args.config:
+        logger.info("No --config supplied; skipping training-data discovery")
 
     app.run(host=args.host, port=args.port, debug=False)
 

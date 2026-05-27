@@ -33,23 +33,17 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Populated by `gcloud storage cp -r gs://.../p1-pe-pair-rank-scorecard-2026-05-07/reports/ <NEW_DIR>`
 # after the Phase A scorecard finishes.
-NEW_DIR = OUT_DIR / "raw_reports"
-# Baseline raw_reports — pulled by an earlier scorecard run (PA/PC).
-PA_PC_DIR = ROOT / "analysis/pa_pc_eval_2026-05-05/raw_reports"
+NEW_DIR = OUT_DIR / "raw_reports/phase_a"
 
 CKPTS = {
-    # Baselines (Phase A also re-runs these; matched-frame variant lives in
-    # NEW_DIR after Phase A — uncomment those to switch).
-    "p8a":         {"dir": PA_PC_DIR, "tag": "p8a_reference_step5000"},
-    "e2b":         {"dir": PA_PC_DIR, "tag": "e2b_top_n_step3200"},
-
-    # Phase A ckpts — uncomment after raw_reports/ is populated:
-    # "p1_bundle_top_n_4000":         {"dir": NEW_DIR, "tag": "p1_bundle_top_n_step4000"},
-    # "p1_bundle_top_n_3750":         {"dir": NEW_DIR, "tag": "p1_bundle_top_n_step3750"},
-    # "p1_bundle_periodic_500":       {"dir": NEW_DIR, "tag": "p1_bundle_periodic_step500"},
-    # "p1_pairrank_top_n_6750":       {"dir": NEW_DIR, "tag": "p1_pairrank_top_n_step6750"},
-    # "p1_pairrank_top_n_6000":       {"dir": NEW_DIR, "tag": "p1_pairrank_top_n_step6000"},
-    # "p1_pairrank_periodic_500":     {"dir": NEW_DIR, "tag": "p1_pairrank_periodic_step500"},
+    "p8a":                          {"dir": NEW_DIR, "tag": "p8a_reference_step5000"},
+    "e2b":                          {"dir": NEW_DIR, "tag": "e2b_top_n_step3200"},
+    "p1_bundle_periodic_500":       {"dir": NEW_DIR, "tag": "p1_bundle_periodic_step500"},
+    "p1_bundle_top_n_3750":         {"dir": NEW_DIR, "tag": "p1_bundle_top_n_step3750"},
+    "p1_bundle_top_n_4000":         {"dir": NEW_DIR, "tag": "p1_bundle_top_n_step4000"},
+    "p1_pairrank_periodic_500":     {"dir": NEW_DIR, "tag": "p1_pairrank_periodic_step500"},
+    "p1_pairrank_top_n_6000":       {"dir": NEW_DIR, "tag": "p1_pairrank_top_n_step6000"},
+    "p1_pairrank_top_n_6750":       {"dir": NEW_DIR, "tag": "p1_pairrank_top_n_step6750"},
 }
 
 # Suites available in pa_pc_eval_2026-05-05/raw_reports

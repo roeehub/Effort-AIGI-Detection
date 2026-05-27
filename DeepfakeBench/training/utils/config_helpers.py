@@ -613,7 +613,14 @@ def apply_wandb_backbone_params(config: Dict, wandb_config: Any, logger: Any = N
         if variant_entry:
             gcs_path = variant_entry.get('gcs_path')
             local_path = variant_entry.get('local_path')
-            hidden_size = variant_entry.get('hidden_size', BACKBONE_HIDDEN_SIZES.get(variant, 1024))
+            # Honor explicit yaml-supplied hidden_size (e.g. P17 intermediate-layer
+            # readout sets 768 to override the registry's projected 512). Fall back
+            # to registry/default only if the yaml didn't specify.
+            explicit_hidden_size = backbone_config.get('hidden_size')
+            if explicit_hidden_size is not None:
+                hidden_size = explicit_hidden_size
+            else:
+                hidden_size = variant_entry.get('hidden_size', BACKBONE_HIDDEN_SIZES.get(variant, 1024))
             config['backbone']['hidden_size'] = hidden_size
         else:
             # Fallback: construct path from naming convention

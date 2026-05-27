@@ -2609,6 +2609,16 @@ class CombinedBatchingConfig:
     substrate_paired_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
     substrate_paired_parallel_download_workers: int = 4
 
+    # Why: substrate_pair_asymmetric_loss requires that matched (clean, teams)
+    # wrappers for the SAME identity co-occur in the same training batch.
+    # Without pair-grouped sampling, identity_resample_weighted emits exactly
+    # ONE wrapper per identity per epoch (either clean OR teams), so the loss
+    # never fires (root cause #3, surfaced 2026-05-23 across 3 T5C smokes).
+    # When enabled, _get_identity_balanced_samples emits BOTH wrappers as a
+    # contiguous pair with probability `substrate_pair_sampling_fraction`.
+    substrate_pair_sampling_enabled: bool = False
+    substrate_pair_sampling_fraction: float = 0.25
+
     # Teams passthrough-specific
     teams_sparse_indices: List[int] = field(default_factory=lambda: [0, 2, 4, 6, 8, 10, 12, 14])
     # Optional per-frame keep-list for Teams REAL frames (T3 SLOT1/2/3 IQ-shortcut packets,
@@ -2703,8 +2713,33 @@ class CombinedPairedIterableDataset(IterableDataset):
                 sample,
                 enhanced_strategy_names=self._enhanced_strategy_names,
             )
-        
+
         self._identities = list(self._samples_by_identity.keys())
+
+        # Why: substrate-pair sampling requires emitting BOTH (clean, teams)
+        # wrappers as a co-occurring pair so substrate_pair_asymmetric_loss
+        # has matched-pair rows in-batch to hinge on. Build a per-identity
+        # partner map from sample_id suffixes (__clean / __teams) populated by
+        # create_unified_samples_from_substrate_paired_inventory.
+        self._substrate_pair_partners: Dict[str, Tuple[UnifiedPairedSample, UnifiedPairedSample]] = {}
+        if getattr(config, "substrate_pair_sampling_enabled", False):
+            for identity, identity_samples in self._samples_by_identity.items():
+                clean_wrapper: Optional[UnifiedPairedSample] = None
+                teams_wrapper: Optional[UnifiedPairedSample] = None
+                for s in identity_samples:
+                    sid = getattr(s, "sample_id", "") or ""
+                    if sid.endswith("__clean") and clean_wrapper is None:
+                        clean_wrapper = s
+                    elif sid.endswith("__teams") and teams_wrapper is None:
+                        teams_wrapper = s
+                if clean_wrapper is not None and teams_wrapper is not None:
+                    self._substrate_pair_partners[identity] = (clean_wrapper, teams_wrapper)
+            logger.info(
+                "Substrate-pair sampling ENABLED: %d identities with paired "
+                "(clean, teams) wrappers; pair_fraction=%.2f",
+                len(self._substrate_pair_partners),
+                float(getattr(config, "substrate_pair_sampling_fraction", 0.25)),
+            )
         
         # Log statistics
         samples_per_identity = [len(s) for s in self._samples_by_identity.values()]
@@ -2867,11 +2902,32 @@ class CombinedPairedIterableDataset(IterableDataset):
         worker_id: int,
         num_workers: int
     ) -> List[UnifiedPairedSample]:
-        """Get one sample per identity with randomly selected method."""
-        selected_samples = []
-        
+        """Get one sample per identity with randomly selected method.
+
+        When ``substrate_pair_sampling_enabled`` is set and the identity has
+        a ``(clean, teams)`` substrate-paired wrapper duo, with probability
+        ``substrate_pair_sampling_fraction`` BOTH wrappers are emitted as a
+        contiguous pair so the per-frame iterator yields clean and teams
+        frames adjacently, which keeps matched ``substrate_pair_id`` rows in
+        the same batch for the asymmetric pair-loss to hinge on.
+        """
+        # Why: each "group" stays together through shuffle + worker slice
+        # so substrate-paired (clean, teams) wrappers never get separated
+        # across DataLoader workers. Non-paired groups are singletons.
+        groups: List[List[UnifiedPairedSample]] = []
+
+        sp_enabled = bool(getattr(self.config, "substrate_pair_sampling_enabled", False))
+        sp_fraction = float(getattr(self.config, "substrate_pair_sampling_fraction", 0.25))
+        sp_partners = self._substrate_pair_partners if sp_enabled else {}
+
         for identity in self._identities:
             identity_samples = self._samples_by_identity[identity]
+            paired_partners = sp_partners.get(identity)
+            if paired_partners is not None and rng.random() < sp_fraction:
+                clean_wrapper, teams_wrapper = paired_partners
+                groups.append([clean_wrapper, teams_wrapper])
+                continue
+
             if self.config.identity_sampling_strategy == "identity_resample_weighted":
                 weights = []
                 for sample in identity_samples:
@@ -2885,12 +2941,18 @@ class CombinedPairedIterableDataset(IterableDataset):
                     selected = rng.choice(identity_samples)
             else:
                 selected = rng.choice(identity_samples)
-            selected_samples.append(selected)
-        
-        if self.shuffle:
-            rng.shuffle(selected_samples)
+            groups.append([selected])
 
-        return selected_samples[worker_id::num_workers]
+        if self.shuffle:
+            rng.shuffle(groups)
+
+        # Slice groups (not flat samples) across workers so a (clean, teams)
+        # pair always lands on the same worker.
+        my_groups = groups[worker_id::num_workers]
+        selected_samples: List[UnifiedPairedSample] = []
+        for grp in my_groups:
+            selected_samples.extend(grp)
+        return selected_samples
 
     def _apply_transform(
         self,
@@ -5201,6 +5263,12 @@ def create_combined_paired_pipeline(
             combined_config.get('substrate_paired_inventory', {}).get(
                 'parallel_download_workers', 4
             ) or 4
+        ),
+        substrate_pair_sampling_enabled=bool(
+            combined_config.get('substrate_pair_sampling', {}).get('enabled', False)
+        ),
+        substrate_pair_sampling_fraction=float(
+            combined_config.get('substrate_pair_sampling', {}).get('pair_fraction', 0.25)
         ),
     )
 

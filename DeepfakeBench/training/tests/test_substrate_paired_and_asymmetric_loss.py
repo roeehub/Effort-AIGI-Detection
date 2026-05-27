@@ -554,3 +554,310 @@ def test_existing_viso_teams_enhanced_lane_still_pairs(stamper_enabled):
         assert transports == [0, 1]
     finally:
         set_active_stamper(None)
+
+
+# ---------------------------------------------------------------------------
+# Substrate-pair-grouped sampler (fix for the 2026-05-23 T5C smoke loss=0
+# structural bug). Validates that `_get_identity_balanced_samples` emits
+# matched (clean, teams) wrappers as a co-occurring pair so the
+# asymmetric pair-loss has matched rows in-batch to hinge on.
+# ---------------------------------------------------------------------------
+
+def _build_substrate_paired_wrappers(n_identities: int = 50):
+    """Build N identities each with a (clean, teams) substrate-paired wrapper
+    duo + one unrelated visomaster wrapper. Mirrors what
+    `create_unified_samples_from_substrate_paired_inventory` produces.
+    """
+    from data.sources.combined_paired import UnifiedPairedSample
+    samples = []
+    for i in range(n_identities):
+        identity = f"realpool_RD_Radio{i:03d}"
+        base_capture = f"HDTF_{i:05d}"
+        clean = UnifiedPairedSample(
+            identity=identity,
+            source="hdtf_visomaster",
+            original_sample=object(),
+            method="substrate_paired_clean_real",
+            has_landmarks=False,
+            sample_id=f"{base_capture}__clean",
+        )
+        teams = UnifiedPairedSample(
+            identity=identity,
+            source="hdtf_visomaster_teams",
+            original_sample=object(),
+            method="substrate_paired_teams_real",
+            has_landmarks=False,
+            sample_id=f"{base_capture}__teams",
+        )
+        # Add an unrelated wrapper so the per-identity bucket has > 2 entries
+        # (the non-paired fallback path).
+        other = UnifiedPairedSample(
+            identity=identity,
+            source="visomaster",
+            original_sample=object(),
+            method="visomaster_CSCS",
+            has_landmarks=False,
+            sample_id=f"vmc_{i:03d}",
+        )
+        samples.extend([clean, teams, other])
+    return samples
+
+
+def _make_pair_dataset(samples, *, sp_enabled: bool, pair_fraction: float = 0.25, seed: int = 9916):
+    """Build a CombinedPairedIterableDataset configured for substrate-pair sampling."""
+    from data.sources.combined_paired import (
+        CombinedBatchingConfig,
+        CombinedPairedIterableDataset,
+    )
+    cfg = CombinedBatchingConfig(
+        identity_balanced_sampling=True,
+        identity_sampling_strategy="identity_resample_weighted",
+        identity_family_weights={"realpool_real": 1.5, "visomaster_fake": 4.0},
+        df40_sparse_indices=[0],
+        deeplive_sparse_indices=[0],
+        visomaster_sparse_indices=[0],
+        substrate_pair_sampling_enabled=sp_enabled,
+        substrate_pair_sampling_fraction=pair_fraction,
+    )
+    return CombinedPairedIterableDataset(
+        samples=samples,
+        df40_dataset=None,
+        deeplive_dataset=None,
+        config=cfg,
+        transform=None,
+        shuffle=True,
+        seed=seed,
+        method_mapping={},
+    )
+
+
+def test_sampler_emits_clean_teams_pair_when_substrate_pair_sampling_enabled():
+    """When substrate-pair sampling is enabled, _get_identity_balanced_samples
+    emits BOTH the clean and teams wrappers of a paired identity as a
+    contiguous pair (so they co-occur in the same batch).
+    """
+    import random as _random
+    samples = _build_substrate_paired_wrappers(n_identities=80)
+    ds = _make_pair_dataset(samples, sp_enabled=True, pair_fraction=1.0, seed=9916)
+
+    # Sanity: partner map populated.
+    assert len(ds._substrate_pair_partners) == 80
+
+    # pair_fraction=1.0 → every identity emits both wrappers.
+    selected = ds._get_identity_balanced_samples(_random.Random(9916), worker_id=0, num_workers=1)
+
+    # Each of 80 identities emits 2 wrappers → 160 total.
+    assert len(selected) == 160
+
+    # Walk the list: pairs are emitted as adjacent (clean, teams) entries.
+    # Build per-identity index of clean/teams locations.
+    pos_by_identity = {}
+    for i, s in enumerate(selected):
+        sid = s.sample_id
+        side = "clean" if sid.endswith("__clean") else ("teams" if sid.endswith("__teams") else "other")
+        pos_by_identity.setdefault(s.identity, {}).setdefault(side, []).append(i)
+
+    # For every identity, clean and teams should both exist with adjacent indices.
+    adjacent_count = 0
+    for identity, positions in pos_by_identity.items():
+        assert "clean" in positions and "teams" in positions, f"missing side for {identity}"
+        c = positions["clean"][0]
+        t = positions["teams"][0]
+        if abs(c - t) == 1:
+            adjacent_count += 1
+    # All pair partners must be adjacent (so the per-frame collate sees them
+    # in the same batch).
+    assert adjacent_count == 80
+
+
+def test_sampler_pair_fraction_honored_statistically():
+    """With pair_fraction=0.5, ~50% of identities should emit pairs."""
+    import random as _random
+    samples = _build_substrate_paired_wrappers(n_identities=400)
+    ds = _make_pair_dataset(samples, sp_enabled=True, pair_fraction=0.5, seed=9916)
+
+    selected = ds._get_identity_balanced_samples(_random.Random(9916), worker_id=0, num_workers=1)
+
+    # Count identities that emitted both clean and teams.
+    sides_by_identity = {}
+    for s in selected:
+        sid = s.sample_id
+        side = "clean" if sid.endswith("__clean") else ("teams" if sid.endswith("__teams") else "other")
+        sides_by_identity.setdefault(s.identity, set()).add(side)
+    paired = sum(1 for sides in sides_by_identity.values() if "clean" in sides and "teams" in sides)
+    # Expect ~0.5 of 400 = 200. Allow ±15% tolerance (binomial noise).
+    assert 160 <= paired <= 240, f"paired count {paired} outside [160, 240]"
+
+
+def test_sampler_disabled_flag_byte_identical_to_legacy():
+    """When substrate_pair_sampling_enabled=False, sampler must behave
+    identically to the pre-fix path (no rng.random() consumed for pair toss,
+    no partner map built, one wrapper per identity per epoch).
+    """
+    import random as _random
+    samples = _build_substrate_paired_wrappers(n_identities=80)
+    ds = _make_pair_dataset(samples, sp_enabled=False, seed=9916)
+
+    # Partner map must be empty when disabled.
+    assert ds._substrate_pair_partners == {}
+
+    selected = ds._get_identity_balanced_samples(_random.Random(9916), worker_id=0, num_workers=1)
+    # One wrapper per identity → exactly 80 entries.
+    assert len(selected) == 80
+    # No identity should have both clean and teams in the output.
+    sides_by_identity = {}
+    for s in selected:
+        sid = s.sample_id
+        side = "clean" if sid.endswith("__clean") else ("teams" if sid.endswith("__teams") else "other")
+        sides_by_identity.setdefault(s.identity, set()).add(side)
+    for sides in sides_by_identity.values():
+        assert not ("clean" in sides and "teams" in sides)
+
+
+def test_sampler_pair_partners_stay_in_same_worker():
+    """Worker slicing must keep (clean, teams) wrappers on the same worker.
+    Otherwise the pair partners would be split across DataLoader workers and
+    never co-occur in a batch.
+    """
+    import random as _random
+    samples = _build_substrate_paired_wrappers(n_identities=40)
+    ds = _make_pair_dataset(samples, sp_enabled=True, pair_fraction=1.0, seed=9916)
+
+    # Use 4 workers; each worker must see complete pairs only.
+    for worker_id in range(4):
+        selected = ds._get_identity_balanced_samples(
+            _random.Random(9916), worker_id=worker_id, num_workers=4,
+        )
+        sides_by_identity = {}
+        for s in selected:
+            sid = s.sample_id
+            side = "clean" if sid.endswith("__clean") else ("teams" if sid.endswith("__teams") else "other")
+            sides_by_identity.setdefault(s.identity, set()).add(side)
+        # Every paired identity that landed on this worker has BOTH sides.
+        for identity, sides in sides_by_identity.items():
+            if "clean" in sides or "teams" in sides:
+                assert "clean" in sides and "teams" in sides, (
+                    f"worker {worker_id}: identity {identity} split across workers (sides={sides})"
+                )
+
+
+def test_dataloader_real_path_matched_pair_coverage(stamper_enabled, monkeypatch):
+    """End-to-end through the real iterable dataset + collate path:
+    iterate ≥20 batches and assert that ≥X% of them contain a matched pair,
+    where X ≈ configured pair_fraction. Also validates the asymmetric loss
+    returns > 0 on a batch with a matched pair.
+
+    The iterator's GCS-backed branch is monkeypatched to yield synthetic
+    frames; everything else (sampler, collate, stamper) runs as in production.
+    """
+    import logging
+    import random as _random
+
+    from data.sample.substrate_paired import set_active_stamper
+    from data.sources.combined_paired import (
+        CombinedPairedIterableDataset,
+        combined_paired_collate_fn,
+        create_unified_samples_from_substrate_paired_inventory,
+    )
+    from data.sources.substrate_paired_inventory import discover_substrate_paired_samples
+    from loss.substrate_pair_asymmetric import SubstratePairAsymmetricLoss
+
+    if not os.path.exists(INVENTORY_PATH):
+        pytest.skip(f"Inventory CSV missing at {INVENTORY_PATH}")
+
+    log = logging.getLogger("test_e2e_pair")
+    inventory = discover_substrate_paired_samples(inventory_path=INVENTORY_PATH)
+    # Use 400 inventory rows so we have enough frames for ≥20 batches at
+    # batch_size=32 with 8 frames per video. 400 × 2 sides × 8 frames = 6400
+    # frames; with pair_fraction=0.5 the actual emission is ~75% of that,
+    # well above the 20×32=640 frame threshold.
+    inventory = inventory[:400]
+    unified = create_unified_samples_from_substrate_paired_inventory(inventory, log)
+
+    # Monkeypatch the GCS-backed substrate-paired iterator to yield synthetic
+    # frames matching the row shape the collate consumes. Use 8 frames per
+    # video to mirror the production frames_per_video=8 configuration.
+    def _fake_iter(self, unified_sample, rng):
+        src = unified_sample.source
+        side = "clean" if src in ("hdtf_visomaster", "quickclips_visomaster") else "teams"
+        companion_domain = "teams_v2" if side == "teams" else None
+        for idx in range(8):
+            row = {
+                "image": np.zeros((64, 64, 3), dtype=np.uint8),
+                "label": 0,
+                "identity": unified_sample.identity,
+                "source": src,
+                "method": unified_sample.method,
+                "method_id": -1,
+                "sample_id": unified_sample.sample_id,
+                "frame_idx": idx,
+                "quality_domain": 0,
+                "companion_bucket": "irrelevant",
+            }
+            if companion_domain is not None:
+                row["companion_domain"] = companion_domain
+            yield row
+
+    monkeypatch.setattr(
+        CombinedPairedIterableDataset,
+        "_iterate_substrate_paired_inventory_sample",
+        _fake_iter,
+    )
+
+    pair_fraction = 0.5
+    ds = _make_pair_dataset(unified, sp_enabled=True, pair_fraction=pair_fraction, seed=9916)
+
+    set_active_stamper(stamper_enabled)
+    try:
+        # Manually iterate the dataset to produce batches of fixed size.
+        frames = list(ds)
+        # frames[k] is a per-frame dict; collate into 32-frame batches.
+        batch_size = 32
+        n_batches = max(20, min(50, len(frames) // batch_size))
+        assert n_batches >= 20, f"not enough frames to form 20 batches (have {len(frames)})"
+
+        matched_batches = 0
+        loss = SubstratePairAsymmetricLoss(lambda_pair=0.3, margin=0.0, enabled=True)
+        loss_fired = 0
+        for b in range(n_batches):
+            batch_rows = frames[b * batch_size:(b + 1) * batch_size]
+            collated = combined_paired_collate_fn(batch_rows)
+            pair_ids = collated["substrate_pair_id"].tolist()
+            transports = collated["substrate_transport"].tolist()
+            # Count batches with at least one matched (clean, teams) pair_id.
+            per_pid_sides = {}
+            for pid, tr in zip(pair_ids, transports):
+                if pid < 0:
+                    continue
+                per_pid_sides.setdefault(pid, set()).add(tr)
+            if any(0 in sides and 1 in sides for sides in per_pid_sides.values()):
+                matched_batches += 1
+                # Loss must fire on this batch — construct prob aligned to videos.
+                n = collated["substrate_pair_id"].shape[0]
+                prob = torch.zeros((n, 2))
+                for i, tr in enumerate(transports):
+                    if tr == 1:
+                        prob[i] = torch.tensor([0.3, 0.7])  # teams high
+                    elif tr == 0:
+                        prob[i] = torch.tensor([0.7, 0.3])  # clean low
+                    else:
+                        prob[i] = torch.tensor([0.5, 0.5])
+                value = loss.compute_from_batch(prob, collated).item()
+                if value > 0.0:
+                    loss_fired += 1
+
+        # With pair_fraction=0.5 and 32-frame batches drawn from per-identity
+        # emission, at least ~30% of batches should contain a matched pair.
+        # Use a conservative floor of 30% to allow for batch-boundary noise.
+        matched_pct = 100.0 * matched_batches / n_batches
+        assert matched_pct >= 30.0, (
+            f"matched-pair batch pct {matched_pct:.1f}% < 30% "
+            f"(matched={matched_batches}/{n_batches})"
+        )
+        # Loss must fire on every matched batch.
+        assert loss_fired == matched_batches, (
+            f"loss fired on {loss_fired}/{matched_batches} matched batches"
+        )
+        assert loss_fired > 0, "asymmetric pair-loss never fired"
+    finally:
+        set_active_stamper(None)

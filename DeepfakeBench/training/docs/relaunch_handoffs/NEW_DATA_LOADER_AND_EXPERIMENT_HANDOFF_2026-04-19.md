@@ -34,9 +34,12 @@ Current ground truth:
   be treated as provisional and regenerated later
 - the provisional builder now fails fast if explicit `frame_files` are missing;
   it refuses to synthesize fallback frame names
-- the current loader keeps explicit `proper_*` lanes and tolerates ragged
-  clean-side residue by taking the intersection of requested anchor indices
-  available on both sides of a paired sample
+- the current committed provisional artifacts were regenerated under a strict
+  clean-and-Teams `16/16` contract, so the first packet no longer relies on
+  ragged-clean residue
+- the runtime loader still keeps anchor-index intersection as a defensive
+  fallback if a future proper-data manifest admits ragged rows, but that is no
+  longer the intended first-packet contract
 
 Immediate next action if continuing implementation:
 
@@ -44,9 +47,10 @@ Immediate next action if continuing implementation:
   smoke gate and the proper-data startup smoke have succeeded
 - keep the new buckets on the explicit `proper_data` path; do not force them
   through `DeepfakeBench/training/data/sources/visomaster.py`
-- before longer experiments, close out the current repo state in git and decide
-  whether the current ragged-clean intersection policy is acceptable for the
-  first packet or should be tightened after the next artifact regeneration
+- before longer experiments, close out the current repo state in git and rerun
+  the provisional WT-F artifact build after Teams propagation stabilizes,
+  keeping the strict clean-and-Teams `16/16` contract unless we intentionally
+  relax it later
 - update this same file in place when you finish
 
 ## Update This File
@@ -179,14 +183,13 @@ What has already been proven by the running smokes:
   - Teams passthrough cache at `2026-04-19T11:50:45Z`
   - external VCD real cache at `2026-04-19T11:51:00Z`
 
-Known observation to keep in mind:
+Known observation from the April 19 integration smoke:
 
-- the integration smoke W&B summary currently includes `unknown_fake: 20`
-  alongside `external_real: 20`
-- do not silently ignore this if the new-data work touches grouping or family
-  inference
-- do not derail the loader task to chase it unless the new bucket path overlaps
-  that code
+- the smoke W&B summary included `unknown_fake: 20` alongside `external_real: 20`
+- this has since been traced to unpaired-real family accounting and fixed in
+  the current working tree
+- historical pre-2026-04-20 W&B summaries should not be treated as evidence of
+  real extra fake-family mass
 
 ## What The Next Agent Owns
 
@@ -362,17 +365,20 @@ When the agent finishes, replace the placeholders below.
 - `DeepfakeBench/training/arena/build_visomaster_proper_data_artifacts.py`: new provisional WT-F converter that:
   - loads the four incoming buckets directly from GCS manifests
   - intersects clean and Teams rows on exact `sample_id`
-  - filters Teams rows to exact `16/16`
+  - filters both clean and Teams rows to exact `16/16` for the current
+    first-packet artifacts
   - normalizes each kept row pair into a future proper-data capture with explicit clean/Teams variants
   - writes explicit `frame_paths` into the inventory so manifest generation stays local after the initial bucket scan
   - applies explicit current-wave band defaults (`hdtf_20260416 -> high/big_face`, `quickclips_20260417_20260418_combined -> medium/standard`) because the incoming bucket manifests do not yet carry `quality_band` / `face_scale_band`
+  - defaults the emitted manifest/suite paths to the canonical runtime artifact
+    names already used by configs and Docker packaging
   - renders both the future proper-data manifest and a concrete suite YAML from the WT-F template
-- `DeepfakeBench/training/tests/test_build_visomaster_proper_data_artifacts.py`: focused tests covering exact `sample_id` overlap selection, strict Teams fixed-frame filtering, enhanced-method preservation, and rendered suite-YAML validity.
+- `DeepfakeBench/training/tests/test_build_visomaster_proper_data_artifacts.py`: focused tests covering exact `sample_id` overlap selection, strict clean-and-Teams fixed-frame filtering, canonical output naming, enhanced-method preservation, and rendered suite-YAML validity.
 - `DeepfakeBench/training/arena/reports/visomaster_proper_clean_bucket_census_2026-04-19.json`: generated live census report for the two currently available clean buckets.
 - `DeepfakeBench/training/arena/reports/visomaster_proper_teams_bucket_census_2026-04-19.json`: generated live census report for the two Teams buckets.
 - `DeepfakeBench/training/arena/reports/hdtf_visomaster_clean_vs_teams_join_2026-04-19.json`: generated live join-validation report for HDTF clean versus Teams.
 - `DeepfakeBench/training/arena/reports/quickclips_visomaster_clean_vs_teams_join_2026-04-19.json`: generated live join-validation report for quickclips clean versus Teams.
-- `DeepfakeBench/training/arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml`: provisional WT-F inventory snapshot built from exact clean-versus-Teams `sample_id` overlap and strict Teams `16/16` filtering.
+- `DeepfakeBench/training/arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml`: provisional WT-F inventory snapshot built from exact clean-versus-Teams `sample_id` overlap and strict clean-and-Teams `16/16` filtering.
 - `DeepfakeBench/training/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json`: provisional future proper-data manifest rendered from the inventory above.
 - `DeepfakeBench/training/arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml`: concrete proper-data suite YAML with the manifest path filled in.
 - `DeepfakeBench/training/arena/reports/proper_visomaster_wave_2026_04_19_provisional_build_report.json`: build report recording kept/skipped sample counts, dataset-band defaults, manifest summary, and suite occupancy.
@@ -391,8 +397,10 @@ When the agent finishes, replace the placeholders below.
   - `combined_paired.proper_data`
   - proper-data discovery summaries and per-lane counts
   - quality-domain routing for the four proper fake lanes
-  - paired iteration from explicit frame paths with anchor-index intersection
-    on ragged pairs
+  - proper-data identity grouping on WT-F `split_group_id` so training-side
+    dev/train partitioning matches the future manifest split contract
+  - paired iteration from explicit frame paths, with anchor-index intersection
+    retained only as a defensive fallback for future ragged manifests
 - `DeepfakeBench/training/utils/grouping.py`: explicit grouping / family routing
   for:
   - `proper_visomaster_clean_fake`
@@ -411,9 +419,12 @@ When the agent finishes, replace the placeholders below.
   iteration on explicit frame paths, ragged-pair behavior, and manifest-path
   validation
 - `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL.yaml`: tiny 2-step launcher smoke for the new proper-data lanes
-- `DeepfakeBench/training/.dockerignore`: adjusted so the provisional
-  proper-data manifest JSON is included in the image build context for the
-  remote smoke
+- `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`: tiny combined 2-step launcher smoke for the first `WTB3 + proper_data` arm
+- `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_unenhanced_provisional.yaml`: first real-packet config for `WTB3` plus the retained unenhanced proper-data lanes
+- `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`: first real-packet config for `WTB3` plus the full retained provisional proper-data snapshot
+- `DeepfakeBench/training/.dockerignore`: adjusted so future proper-data
+  target-domain manifests are included in the image build context for remote
+  smokes and follow-up launches
 
 ### Verification
 
@@ -439,7 +450,7 @@ When the agent finishes, replace the placeholders below.
 - `python3 DeepfakeBench/training/arena/inspect_visomaster_proper_buckets.py census --source hdtf_visomaster_cropped_frames_teams --source quickclips_visomaster_cropped_frames_teams --output DeepfakeBench/training/arena/reports/visomaster_proper_teams_bucket_census_2026-04-19.json`: report written with `0` load errors on both Teams buckets
 - `python3 DeepfakeBench/training/arena/inspect_visomaster_proper_buckets.py validate-join --left-source hdtf_visomaster_cropped_frames --right-source hdtf_visomaster_cropped_frames_teams --output DeepfakeBench/training/arena/reports/hdtf_visomaster_clean_vs_teams_join_2026-04-19.json`: `sample_id` is a perfect one-to-one overlap for all `835` Teams rows; `real_id`, `target_video_name`, and `clip_stem` are ambiguous because multiple fake variants share the same base capture
 - `python3 DeepfakeBench/training/arena/inspect_visomaster_proper_buckets.py validate-join --left-source quickclips_visomaster_cropped_frames --right-source quickclips_visomaster_cropped_frames_teams --output DeepfakeBench/training/arena/reports/quickclips_visomaster_clean_vs_teams_join_2026-04-19.json`: `sample_id` is a perfect one-to-one overlap for all `520` Teams rows; base-capture keys are ambiguous for the same reason
-- `python3 DeepfakeBench/training/arena/build_visomaster_proper_data_artifacts.py --wave-id proper_visomaster_wave_2026_04_19_provisional --inventory-output DeepfakeBench/training/arena/inventories/proper_visomaster_wave_2026_04_19_provisional.yaml --manifest-output DeepfakeBench/training/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json --suite-output DeepfakeBench/training/arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml --report-output DeepfakeBench/training/arena/reports/proper_visomaster_wave_2026_04_19_provisional_build_report.json --manifest-path-for-suite arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json`: completed successfully and wrote all four provisional WT-F artifacts
+- `python3 DeepfakeBench/training/arena/build_visomaster_proper_data_artifacts.py`: completed successfully and wrote all four provisional WT-F artifacts using the canonical runtime output names
 - live census highlights from `visomaster_proper_clean_bucket_census_2026-04-19.json`:
   - `hdtf_visomaster_cropped_frames`:
     - `sample_id` is fully one-to-one (`1322 / 1322` unique)
@@ -454,37 +465,50 @@ When the agent finishes, replace the placeholders below.
     - `sample_id` is fully one-to-one (`835 / 835` unique)
     - exact clean-versus-Teams overlap is `835` paired sample IDs, leaving `487` clean-only HDTF rows with no Teams counterpart
     - all `9` swap models and all `8` enhancer labels are still represented, but `12` low-frequency clean combo keys are absent from the Teams subset
-    - only `735` rows match the expected fixed-frame shape on both sides; `100` Teams rows are underfilled relative to the clean-side `16/16` target and should be filtered unless the training path learns to handle ragged frame counts
+    - the raw Teams subset still contains `100` underfilled rows; the strict
+      clean-and-Teams artifact build retains `707` HDTF pairs after also
+      excluding clean-side ragged rows from the overlap
   - `quickclips_visomaster_cropped_frames_teams`:
     - `sample_id` is fully one-to-one (`520 / 520` unique)
     - exact clean-versus-Teams overlap is `520` paired sample IDs, leaving `247` clean-only quickclips rows with no Teams counterpart
     - the full clean combo grid is preserved in the Teams subset
-    - `507` rows match the expected fixed-frame shape on both sides; `13` Teams rows are underfilled relative to the clean-side `16/16` target
-- provisional WT-F build highlights from `proper_visomaster_wave_2026_04_19_provisional_build_report.json` and `proper_visomaster_target_domain_manifest_2026-04-19_provisional.json`:
-  - inventory kept `1242` exact clean-versus-Teams pairs after strict Teams filtering:
-    - HDTF: `735` kept, `100` ragged Teams rows skipped, `487` clean-only rows still unmatched
-    - quickclips: `507` kept, `13` ragged Teams rows skipped, `247` clean-only rows still unmatched
-  - generated manifest contains `4968` videos across the six canonical exact lanes:
-    - `proper_real_clean`: `1242`
-    - `proper_real_teams`: `1242`
-    - `proper_visomaster_clean`: `234`
-    - `proper_visomaster_teams`: `234`
-    - `proper_visomaster_enhanced_clean`: `1008`
-    - `proper_visomaster_enhanced_teams`: `1008`
-  - generated split counts are nonzero on both sides: `3964` `dev`, `1004` `lockbox`
+    - the raw Teams subset still contains `13` underfilled rows; the strict
+      clean-and-Teams artifact build retains `499` quickclips pairs after also
+      excluding clean-side ragged rows from the overlap
+- provisional WT-F build highlights from the **current** checked-in
+  `proper_visomaster_wave_2026_04_19_provisional_build_report.json` and
+  `proper_visomaster_target_domain_manifest_2026-04-19_provisional.json`:
+  - inventory currently keeps `1826` exact clean-versus-Teams captures after
+    strict clean and Teams filtering:
+    - HDTF: `1094` kept, `35` ragged clean rows skipped, `151` ragged Teams
+      rows skipped, `42` clean-only rows still unmatched
+    - quickclips: `732` kept, `14` ragged clean rows skipped, `16` ragged
+      Teams rows skipped, `5` clean-only rows still unmatched
+  - generated manifest currently contains `7304` videos across the six
+    canonical exact lanes:
+    - `proper_real_clean`: `1826`
+    - `proper_real_teams`: `1826`
+    - `proper_visomaster_clean`: `342`
+    - `proper_visomaster_teams`: `342`
+    - `proper_visomaster_enhanced_clean`: `1484`
+    - `proper_visomaster_enhanced_teams`: `1484`
+  - generated split counts are nonzero on both sides: `5776` `dev`, `1528`
+    `lockbox`
   - rendered suite YAML has **no empty suites**
-  - rendered suite occupancy is nonzero for every canonical proper-data suite, including:
-    - `proper_real_teams_dev`: `991`
-    - `proper_real_teams_lockbox`: `251`
-    - `proper_visomaster_teams_dev`: `186`
-    - `proper_visomaster_teams_lockbox`: `48`
-    - `proper_visomaster_enhanced_teams_dev`: `805`
-    - `proper_visomaster_enhanced_teams_lockbox`: `203`
-  - retained clean-side ragged residue still exists inside the kept overlap set:
-    - HDTF kept rows with non-`16` clean fake count: `28`
-    - quickclips kept rows with non-`16` clean real count: `7`
-    - quickclips kept rows with non-`16` clean fake count: `8`
-    - this does not block target-domain manifest generation, but it is a likely future training-loader policy decision
+  - rendered suite occupancy is nonzero for every canonical proper-data suite,
+    including:
+    - `proper_real_teams_dev`: `1444`
+    - `proper_real_teams_lockbox`: `382`
+    - `proper_visomaster_teams_dev`: `262`
+    - `proper_visomaster_teams_lockbox`: `80`
+    - `proper_visomaster_enhanced_teams_dev`: `1182`
+    - `proper_visomaster_enhanced_teams_lockbox`: `302`
+  - the current first-packet artifact contract is exact `16/16` on both clean
+    and Teams sides; runtime ragged-pair intersection remains only as a
+    defensive fallback for future manifests
+- `python3 -m pytest DeepfakeBench/training/tests/test_build_visomaster_proper_data_artifacts.py -q`: `6 passed`
+- `python3 -m pytest DeepfakeBench/training/tests/test_phase4_family_pipeline.py -q`: `34 passed, 5 skipped`
+- `python3 -m py_compile DeepfakeBench/training/data/sources/combined_paired.py DeepfakeBench/training/arena/build_visomaster_proper_data_artifacts.py`: passed
 - `gcloud ai custom-jobs describe 9012653657048481792 --region=asia-southeast1 --project=train-cvit2`: `JOB_STATE_SUCCEEDED`, start `2026-04-19T11:01:25Z`, end `2026-04-19T12:03:14Z`
 - `gcloud ai custom-jobs describe 2921535161029885952 --region=asia-southeast1 --project=train-cvit2`: `JOB_STATE_SUCCEEDED`, start `2026-04-19T11:01:01Z`, end `2026-04-19T12:23:56Z`
 - `gcloud ai custom-jobs describe 2064725331922649088 --region=asia-southeast1 --project=train-cvit2`: `JOB_STATE_SUCCEEDED`, start `2026-04-19T17:54:05Z`, end `2026-04-19T17:58:07Z`
@@ -504,6 +528,10 @@ When the agent finishes, replace the placeholders below.
   - manifest: `DeepfakeBench/training/arena/manifests/proper_visomaster_target_domain_manifest_2026-04-19_provisional.json`
   - suites: `DeepfakeBench/training/arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml`
   - smoke config: `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL.yaml`
+- The first combined `WTB3 + proper_data` launch surfaces now also exist in-repo:
+  - startup smoke: `DeepfakeBench/training/experiments/phase2_round13/R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`
+  - real packet arm 1: `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_unenhanced_provisional.yaml`
+  - real packet arm 2: `DeepfakeBench/training/experiments/phase2_round13/R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`
 - Proper-data startup smoke status:
   - custom job id: `2064725331922649088`
   - display name: `exp-R13_STARTUP_SMOKE_PROPER_DATA_WTF_PROVISIONAL-20260419-194708`
@@ -514,15 +542,32 @@ When the agent finishes, replace the placeholders below.
 - User-reported operational note: the current Teams propagation is still incomplete, with roughly `30%` more data from the original new-data buckets expected to appear in the Teams buckets over the next few hours. This is enough to continue converter, inventory, manifest-shape, and loader work now, but it is not a stable final snapshot for count-sensitive artifacts.
 - Observed pass boundary from the generated snapshot:
   - nonzero rows now exist for `proper_visomaster_clean`, `proper_visomaster_enhanced_clean`, `proper_real_teams`, `proper_visomaster_teams`, and `proper_visomaster_enhanced_teams`
-  - Teams rows were constructed from exact `sample_id` overlaps and filtered to fixed-frame rows (`735` HDTF + `507` quickclips`)
+  - retained rows were constructed from exact `sample_id` overlaps and filtered
+    to fixed-frame rows on both sides (`1094` HDTF + `732` quickclips)
   - the rendered proper-data suite file has no empty suites
 - Observed pass boundary from the remote training smoke:
   - `ProperData: enabled=True -> 128 samples`
   - all four fake proper-data lanes loaded with nonzero counts in both all/train
-    summaries
+  summaries
   - training reached `max_train_steps: 2`
   - checkpoint write succeeded
 - Any inventory, manifest, or suite file generated before propagation completes should be treated as a provisional snapshot and regenerated once the Teams buckets finish updating.
+
+### Post-Launch Corrections For Future Packet Work
+
+- the April 19 written `221 / 985 / 2412` packet counts were stale; the live
+  RLP1 startup summaries exposed `684` proper fake rows in `RLP1_04` and
+  `3186` proper fake rows in `RLP1_05/06/07/08`
+- the checked-in builder report / manifest are larger still
+  (`342 / 1484 / 1484 / 342` fake-lane totals overall), so future packet docs
+  must cite the builder report and then re-check the launched run's startup W&B
+  summary
+- strict arm-to-arm holdout comparability drifted because the legacy identity
+  split used a global shuffled identity list; future comparison configs should
+  set `combined_paired.identity_split_mode: "hash_stable"`
+- the historical `unknown_fake` / `external_real` oddity was a reporting bug,
+  not a real extra fake family; older pre-fix W&B summaries should be read with
+  that in mind
 
 ### Recommended Experiment Packet
 
@@ -534,10 +579,13 @@ When the agent finishes, replace the placeholders below.
   - axis 1: frozen WT-B weak-signal family (`WTB1`, `WTB2`, `WTB3`)
   - axis 2: explicit `proper_data` add-on as a single `off/on` axis
 - Recommended first packet:
-  - control: `WTB3` unchanged
-  - add-on 1: `WTB3 + proper` using only the currently retained unenhanced proper VisoMaster lanes (`proper_visomaster_clean` / `proper_visomaster_teams`, currently `234 + 234` fake rows)
-  - add-on 2: `WTB3 + full retained proper snapshot` using both unenhanced and enhanced proper lanes (`234 + 1008` clean fake rows mirrored by `234 + 1008` Teams fake rows)
+  - control: `WTB3` unchanged via `R13_WTB3_weak_signal_hints_plus_teams_hints.yaml`
+  - add-on 1: `WTB3 + proper` via `R13_WTB3_with_proper_data_unenhanced_provisional.yaml`, using only the retained unenhanced proper VisoMaster lanes; the launched RLP1 startup summary exposed `684` proper fake rows in this arm (`342 clean + 342 teams`)
+  - add-on 2: `WTB3 + full retained proper snapshot` via `R13_WTB3_with_proper_data_full_snapshot_provisional.yaml`, using both unenhanced and enhanced proper lanes; the launched RLP1 startup summary exposed `3186` proper fake rows in this arm (`342 + 1251 + 1251 + 342`)
+  - startup smoke for the first combined arm: `R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`
   - if the training-side loader needs source-specific increments rather than lane-only increments, do that from the inventory layer by filtering on the `HDTF...` versus `QCLIP...` `base_capture_id` prefixes rather than by hiding the distinction inside a merged lane
+- before any rerun or packet-2 launch, rebuild the WT-F artifacts and record
+  the startup W&B summary again instead of reusing these copied counts
 - The tiny proof run now exists; do not explode the first packet into many
   proper-data sub-arms yet.
 
@@ -545,18 +593,16 @@ When the agent finishes, replace the placeholders below.
 
 - The current Teams data is still incomplete. Per user report, about `30%` more of the original new-data buckets has not yet been propagated through Teams. The current snapshot is sufficient for continued implementation and pre-integration work, but not for freezing final manifests or final experiment counts.
 - The Teams buckets are available, but they are partial subsets rather than full mirrors:
-  - HDTF: `835 / 1322` clean sample IDs have Teams counterparts
-  - quickclips: `520 / 767` clean sample IDs have Teams counterparts
+  - HDTF: `1280 / 1322` clean sample IDs have Teams counterparts
+  - quickclips: `762 / 767` clean sample IDs have Teams counterparts
   Inventory generation must therefore intersect on `sample_id` rather than assuming every clean row has a Teams pair.
 - The Teams manifests are wrapper documents. Semantic provenance fields such as `real_id`, `dataset_key`, target clip metadata, swap model, and enhancer live under `original_manifest`, while the Teams-specific capture state lives in the outer manifest. Any converter must read both layers correctly.
-- The Teams buckets are not yet clean fixed-frame drops:
-  - HDTF Teams: `100` rows are underfilled versus the expected `16/16` frame shape
-  - quickclips Teams: `13` rows are underfilled
-  Unless a later loader supports ragged frame counts, the proper-data inventory should filter these out and only keep the `735 + 507` fixed-frame Teams rows.
-- The retained clean side is not perfectly fixed-frame even after the strict Teams filter:
-  - HDTF kept overlap: `28` rows still have a clean fake-side frame count other than `16`
-  - quickclips kept overlap: `7` rows have clean real-side count other than `16`, and `8` rows have clean fake-side count other than `16`
-  This does not block current WT-F inventory / target-domain manifest generation because those artifacts can carry explicit frame paths, but it does mean the current training-side loader policy should be reviewed before longer runs: keep ragged-clean intersection behavior or regenerate with a second clean-side fixed-frame filter.
+- The raw buckets are not yet perfectly fixed-frame drops:
+  - HDTF overlap contains `35` ragged-clean rows and `151` ragged-Teams rows
+  - quickclips overlap contains `14` ragged-clean rows and `16` ragged-Teams rows
+  The current committed provisional artifacts already filter these out, so the
+  first packet now relies on the retained strict subset (`1094 + 732` pairs)
+  rather than on ragged-pair fallback behavior.
 - The live census shows that `real_id` and `clip_stem` are not one-to-one inside a clean bucket:
   - HDTF: `1322` samples over `721` unique base clips, max multiplicity `4`
   - quickclips: `767` samples over `386` unique base clips, max multiplicity `2`
@@ -570,19 +616,29 @@ When the agent finishes, replace the placeholders below.
   - `hdtf_20260416 -> high / big_face`
   - `quickclips_20260417_20260418_combined -> medium / standard`
   This is acceptable for the current provisional manifest/suite proof boundary, but the long-term clean contract should move those band fields upstream into the authoritative capture/inventory metadata rather than hiding them in loader defaults.
+- The current proper-data training path now uses WT-F `split_group_id` when it
+  forms proper-data identities for train/dev partitioning. That closes the
+  launch-blocking split-hygiene gap from the earlier review, but it should be
+  preserved if we refactor the loader again later.
+- Future comparison packets should also set
+  `combined_paired.identity_split_mode: "hash_stable"`. The legacy shuffled
+  identity split can move the effective holdout slice when later arms add new
+  identities, which weakens strict like-for-like packet comparisons.
+- Historical pre-2026-04-20 W&B summaries that show `unknown_fake` alongside
+  `external_real` are slightly polluted by a reporting bug in family accounting.
 - The current repo state still needs git closeout. The successful proper-data
   smoke used the built working-tree image, not a finalized committed state.
 - The current proper-data smoke is only a 2-step launcher proof. It proves
   discovery, loading, grouping, iteration, and checkpoint write, but it is not
   yet a long-duration training result.
 
-### Next Human Decision Needed
+### Next Required Steps
 
-- Decide whether to keep the current training-loader policy for the first
-  experiment packet:
-  1. current behavior: tolerate ragged clean-side residue by taking the
-     anchor-index intersection available on both sides of the pair
-  2. stricter alternative: regenerate the provisional artifacts with a second
-     clean-side `16/16` filter before longer runs
+- Run the new combined startup smoke
+  (`R13_STARTUP_SMOKE_WTB3_with_proper_data_unenhanced_provisional.yaml`) before
+  launching the longer first-packet arms.
+- Make `combined_paired.identity_split_mode: "hash_stable"` the default stance
+  for reruns and future comparison packets so arm membership changes do not move
+  the holdout slice.
 - If you want source-specific first-night experiments (`HDTF` first, then `quickclips`), plan to do that from the inventory layer using the `HDTF...` / `QCLIP...` `base_capture_id` prefixes until config-level selectors for those source slices are made explicit.
 - Because the current Teams propagation is still incomplete, schedule one mandatory regeneration pass of the provisional inventory, manifest, and suite files after the Teams buckets stabilize.

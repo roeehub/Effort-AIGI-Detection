@@ -2,10 +2,14 @@
 
 Counters the camera/pipeline-signature shortcut documented in
 `memory/project_signature_shortcut_finding.md` (the same identity flips
-real↔fake under different processing pipelines). Applying these sub-augs
-to BOTH real AND fake samples — with slightly different probabilities —
-breaks the "pipeline → label" correlation the model would otherwise pick
-up.
+real↔fake under different processing pipelines), AND the image-quality
+shortcut documented in `memory/project_image_quality_shortcut.md` (the
+score correlates negatively with sharpness/luminance, and eval data is
+4-25× less sharp than training).
+
+Applying these sub-augs to BOTH real AND fake samples — with slightly
+different probabilities — breaks the "pipeline → label" correlation AND
+the "sharpness → label" correlation that the model would otherwise pick up.
 
 Sub-augs (each fired independently with its own probability):
     1. JPEG roundtrip       — quality ∈ [jpeg_quality_lo, jpeg_quality_hi]
@@ -13,6 +17,8 @@ Sub-augs (each fired independently with its own probability):
     3. Chroma blur          — light Cb/Cr Gaussian blur
     4. RGB ⇄ YUV roundtrip  — color-space round-trip
     5. Gamma jitter         — gamma ∈ [gamma_lo, gamma_hi]
+    6. Gaussian blur (luma) — sigma ∈ [blur_sigma_lo, blur_sigma_hi]   (P22)
+    7. Brightness shift     — beta ∈ [brightness_lo, brightness_hi]    (P22)
 
 Defensive guards after each sub-aug:
     - np.nan_to_num to flush any NaN/Inf produced by color math
@@ -54,6 +60,10 @@ class PipelineRandomization:
         self.downscale_range = tuple(cfg.get('downscale_range', (0.85, 1.0)))
         self.chroma_blur_ksize = int(cfg.get('chroma_blur_ksize', 3))
         self.gamma_range = tuple(cfg.get('gamma_range', (0.92, 1.08)))
+        # P22 — luma Gaussian blur + brightness shift to close the train-eval
+        # sharpness/luma gap. Default to no-op so existing callers see no change.
+        self.blur_sigma_range = tuple(cfg.get('blur_sigma_range', (0.0, 0.0)))
+        self.brightness_range = tuple(cfg.get('brightness_range', (0.0, 0.0)))
         # Per-sub-aug fire probabilities (each independent of the gate).
         self.sub_p = {
             'jpeg': float(cfg.get('jpeg_p', 0.5)),
@@ -61,14 +71,18 @@ class PipelineRandomization:
             'chroma_blur': float(cfg.get('chroma_blur_p', 0.5)),
             'yuv_roundtrip': float(cfg.get('yuv_roundtrip_p', 0.5)),
             'gamma': float(cfg.get('gamma_p', 0.5)),
+            'blur': float(cfg.get('blur_p', 0.0)),
+            'brightness': float(cfg.get('brightness_p', 0.0)),
         }
         self._logger = logger or logging.getLogger(__name__)
         if self.enabled:
             self._logger.info(
                 "PipelineRandomization ENABLED p_real=%.2f p_fake=%.2f "
-                "jpeg_q=%s downscale=%s gamma=%s sub_p=%s",
+                "jpeg_q=%s downscale=%s gamma=%s blur_sigma=%s "
+                "brightness=%s sub_p=%s",
                 self.p_real, self.p_fake, self.jpeg_quality,
-                self.downscale_range, self.gamma_range, self.sub_p,
+                self.downscale_range, self.gamma_range,
+                self.blur_sigma_range, self.brightness_range, self.sub_p,
             )
         else:
             self._logger.info("PipelineRandomization DISABLED")
@@ -104,6 +118,14 @@ class PipelineRandomization:
 
         if np.random.random() < self.sub_p['jpeg']:
             out = _apply_jpeg_roundtrip(out, self.jpeg_quality)
+            out = self._sanitize_to_uint8(out)
+
+        if self.sub_p['blur'] > 0.0 and np.random.random() < self.sub_p['blur']:
+            out = self._apply_gaussian_blur(out, self.blur_sigma_range)
+            out = self._sanitize_to_uint8(out)
+
+        if self.sub_p['brightness'] > 0.0 and np.random.random() < self.sub_p['brightness']:
+            out = self._apply_brightness_shift(out, self.brightness_range)
             out = self._sanitize_to_uint8(out)
 
         return out
@@ -145,3 +167,19 @@ class PipelineRandomization:
         downscaled = cv2.resize(img_rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
         upscaled = cv2.resize(downscaled, (w, h), interpolation=cv2.INTER_LINEAR)
         return upscaled
+
+    @staticmethod
+    def _apply_gaussian_blur(img: np.ndarray, sigma_range: tuple) -> np.ndarray:
+        sigma = float(np.random.uniform(*sigma_range))
+        if sigma <= 0.05:
+            return img
+        # Kernel must be odd; cover ±3σ.
+        ksize = int(2 * np.ceil(3 * sigma) + 1)
+        return cv2.GaussianBlur(img, (ksize, ksize), sigma)
+
+    @staticmethod
+    def _apply_brightness_shift(img: np.ndarray, beta_range: tuple) -> np.ndarray:
+        beta = float(np.random.uniform(*beta_range))
+        if abs(beta) < 0.5:
+            return img
+        return np.clip(img.astype(np.int32) + int(round(beta)), 0, 255).astype(np.uint8)

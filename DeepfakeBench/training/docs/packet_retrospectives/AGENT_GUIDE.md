@@ -98,6 +98,41 @@ This is so the user can monitor the analysis without having to read JSON. The vi
 
 When you write an analysis script, ask: "where does this show up in the viewer?" If the answer is "it doesn't", consider whether you should add a viewer panel for it. Default is yes for any analysis the user might want to inspect frame-by-frame.
 
+### Rule 6 — Aug-lever-rediscovery check (added 2026-05-19)
+
+Added after an agent ran an 8-packet validation expansion (E1-E9), measured a CPU-simulated "B3 bundle" augmentation closing 79% of dev↔lockbox W1 distance on prob_fake distribution, and proposed it as a new training-side intervention recommendation in [`analysis/teams_account_validation_2026-05-19/EXPANDED_FACTS_2026-05-19.md`](../../analysis/teams_account_validation_2026-05-19/EXPANDED_FACTS_2026-05-19.md). The "B3 bundle" duplicated `data/augmentations/pipeline_randomization.py` + `data/augmentations/resolution_chain_aug.py` — both already in-tree, the latter already empirically run as Slot α (`lsx4n0t7`) 2026-05-15 overnight with observed 25% real score_range cut.
+
+The aug-lever rediscovery class is structurally distinct from Rule 1 (toggle / yaml validation) because the existing code is in `data/augmentations/`, not in an experiment yaml. Rule 1's `grep experiments/phase2_round13/*.yaml` does not catch this. A dedicated check is needed.
+
+**Rule**: Before proposing any data augmentation (blur, jpeg, color jitter, downsample, resolution chain, contrast, brightness, saturation, gamma, hue, channel scaling, noise, JPEG compression, ANY pixel-level perturbation), **you MUST run all of the following**:
+
+1. `ls data/augmentations/` — enumerate all augmentation modules.
+2. For each existing module, read its docstring + class signature. Check whether your proposed sub-aug is already implemented (under any name).
+3. `grep -l "<sub_aug_name>" experiments/phase2_round13/*.yaml | head -20` — which prior packets enabled this aug?
+4. For each match: read the recipe block (typically the `augmentation:` or `pipeline_randomization:` block in the yaml), check whether the magnitude / probability range you're proposing is within the already-tested envelope.
+5. Search MEMORY.md and `threads/anti_shortcut_bundle_decomposition.md` for the aug name and its prior outcomes.
+
+If any sub-aug in your proposal matches existing infra:
+- Default disposition: do NOT propose a new aug. The empirical question is "did the existing aug recipe close the loop you're targeting?" — that's a scorecard-readout question, not an aug-design question.
+- Acceptable exception: you can propose a magnitude-range extension OR a probability-rebalance OR a NEW sub-aug not in the existing modules. In that case, explicitly state "this is a delta to <module>:<sub_aug>" and quote the existing magnitude/probability you're proposing to change.
+
+Existing aug modules as of 2026-05-19 (verify against `ls data/augmentations/` at session start, this list may have grown):
+
+| module | sub-augs implemented |
+|---|---|
+| `data/augmentations/pipeline_randomization.py` | jpeg roundtrip, downscale-upscale (mild), chroma blur, RGB↔YUV roundtrip, gamma jitter, Gaussian luma blur, brightness shift |
+| `data/augmentations/resolution_chain_aug.py` | downsample-upsample chain (more aggressive than pipeline_randomization's downscale) |
+| `data/augmentations/teams_simulation.py` | helper kernels for pipeline_randomization (chroma blur, jpeg roundtrip primitives) |
+
+Empirically-tested yaml entry points as of 2026-05-19 (status column reflects most recent contract verdict — verify against `analysis/<latest>_eval_<date>/RESULTS_FACTS_*.md` before citing):
+- `R13_P22_AUG_CURRICULUM.yaml` — pipeline_randomization, P22-era; status: **MIXED** (step8k degraded; step1k robust per memory `project_p22_cpu_followups_reframe_2026-05-02.md`)
+- `R13_T5C_RESCHAIN_2026-05-15.yaml` — resolution_chain_aug on T5C-base, Slot α (`lsx4n0t7`); status: **REFUTED at 2026-05-16 contract scorecard** (rank 5, `dev_fake_macro_recall=0.226` below 0.30 floor; the 25% score_range CPU cut was score-distribution compression, not encoder invariance — memory `project_overnight_resolution_chain_2026-05-16.md`, eval folder `analysis/reschain_grl6_eval_2026-05-16/`)
+- `R13_T5C_ANCHOR_AWARE_2026-05-16.yaml` — Slot A v2 (different lever class, included for context); status: rank-2 in band_shortcut_ood scorecard per memory `project_band_shortcut_ood_hypothesis_2026-05-16.md`
+
+**Critical metric trap (added 2026-05-19 from Slot α post-mortem)**: any CPU probe for an aug-targeting-IQ-axis lever MUST report fake-vs-real AUC, not just W1 / score_range / KS / KL. AUC distinguishes encoder-level substrate invariance (AUC preserved; the success case) from score-distribution compression (AUC collapses; the Slot α failure mode). A 25-79% W1 closure with AUC drop > 0.02 IS the compression trap, not a win. Open loop `cpu-probe-mechanism-discrimination` in `threads/iq_shortcut_deconvolution_program_2026-05-08.md` (2026-05-16) tracks this requirement.
+
+If your proposal stacks two augs that have not been stacked, that IS a novel proposal — but specify both as deltas to their respective modules; do not re-implement either.
+
 ### Rule 5 — Separate FACT from OPINION when writing handoffs
 
 The pattern of past handoffs has been: a single doc mixes "we ran X with config Y and got result Z" (FACT) with "this means we should pivot to W" (OPINION). When the next agent reads the doc, they inherit both. They should only inherit the facts.
@@ -124,6 +159,11 @@ PRIOR-WORK CHECK:
     
 [ ] Grep'd `experiments/phase2_round13/*.yaml` for each toggle.
     Matches found: _______________________________________________
+
+[ ] If proposal involves ANY data augmentation (Rule 6):
+    Listed `data/augmentations/` modules: _________________________
+    Cross-check each proposed sub-aug against existing modules: ___
+    Stated explicitly whether proposal is a NEW aug or a delta: ___
 
 [ ] For each match: read yaml, found W&B run id, found scorecard or
     "drafted-not-launched" status.
@@ -197,6 +237,47 @@ One sentence. Plus a "what would falsify this hypothesis" note. If you can't say
 - Go/no-go gates the user can use to intervene mid-sequence.
 
 ---
+
+## Robustness measurement protocol (added 2026-05-10)
+
+When the user asks "which model is the most robust" or "should we ship X," macro recall metrics on a single substrate are not sufficient. Recommended diagnostic protocol before recommending any deployment switch:
+
+1. **Catastrophic-tail count on broad real cohort**: count of reals scoring above {0.5, 0.7, 0.9} per ckpt at fixed thresholds, regardless of calibrated τ. Plus unique catastrophic-FP frames (where one ckpt > 0.9 AND others < 0.5). A model with many unique catastrophic-FP frames has a characteristic failure mode the others avoid.
+
+2. **Per-axis-bin FPR variance**: at each ckpt's calibrated τ (calibrated to 5% overall FPR on `teams_real_all_dev`), bin reals by IQ axis quartile and measure per-bin FPR. The ckpt with lowest FPR variance across bins is the most decoupled per-axis. The worst single bin per ckpt names the ckpt's fragility axis.
+
+3. **Production-frame retest if available**: score all candidate ckpts on production-fragility cohorts (e.g., the may6/may5 frames at `analysis/xinhe_cross_camera_audit_2026-05-06/`). Day-to-day drift (mean(today) − mean(reference_day)) is the production-fragility signature.
+
+4. **Post-IQ-gate FPR per ckpt**: at multiple gate thresholds, measure FPR on the gate-PASSING subset. A gate that filters by axis X may not shield a ckpt whose fragility is on axis Y. Note: gate filtering can work "by accident" on the eval substrate when the failure axis correlates with the gate axis there but not in production.
+
+5. **Cross-ckpt disagreement structure**: pairwise score correlations + outlier-high/low distribution on disputed real frames. Ckpts that are consistently outlier-high are aggressive on reals; outlier-low are under-confident on fakes.
+
+Reference implementation: `analysis/cpu_diagnostics_2026-05-10/scripts/job_{a,b,c,c2,d}_*.py`.
+
+## Cross-substrate τ comparison rule (added 2026-05-10)
+
+When comparing recall numbers across ckpts on a substrate, use **each ckpt's FPR-calibrated τ on that substrate**, not a fixed τ=0.5. Different ckpts have different score distributions; a fixed-τ comparison can show one ckpt at 30% recall when its FPR-cal recall is 77%. The macro metric "fake recall at FPR=5%" is the apples-to-apples comparison; "fake recall at τ=0.5" is not.
+
+This rule was the source of an in-session error 2026-05-10: an HDTF analysis at τ=0.5 made T3_SLOT1_step1500 look broken (28.8%) when its FPR-cal recall was 77.4%. Always use FPR-cal τ for cross-substrate / cross-ckpt fake recall comparisons.
+
+The corollary: **cross-cohort FPR comparisons should use the same FPR target on each cohort**, not the same τ. A ckpt calibrated to 5% FPR on cohort A may have very different FPR on cohort B at the same τ.
+
+## "Deployed model" vs "production anchor" — attribution discipline (added 2026-05-10)
+
+The deployed model and the production anchor are different ckpts:
+- **Deployed model** (currently `E2B_TOP_N_STEP3200`): the binary in production. What the user's hands-on experience refers to when they describe "model behavior in the field."
+- **Production anchor** (currently `P8A_REFERENCE_STEP5000`): the substrate-invariance reference. The ckpt new candidates are compared against for promotion decisions.
+
+When a memory entry says "[deploy] does X" or "the production model behavior is Y," disambiguate:
+- Read the entry against `project_deployment_is_e2b_2026-05-06` (or successor entries).
+- The Pearson r=+1.000 between deploy and E2B local is the load-bearing fact.
+- "Deploy" in any 2026-05-06+ entry = E2B unless an explicit successor memory says otherwise.
+
+When a user says "model X feels Y" — verify:
+- Are they referring to the deployed model (their hands-on production experience) or to a specific ckpt they're locally testing?
+- The wording "I use X" can mean either. Ask if unclear before acting on the anecdote.
+
+This rule was the source of an in-session error 2026-05-10: the may6 false-flag memory was assumed to be P8A's behavior because P8A is the production anchor we discuss most often. The 5-ckpt may6 retest showed the false-flagging was E2B's, and P8A handles may6 perfectly.
 
 ## How to keep this guide alive
 
