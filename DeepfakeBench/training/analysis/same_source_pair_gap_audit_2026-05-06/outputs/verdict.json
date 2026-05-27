@@ -1,0 +1,93 @@
+{
+  "audit_name": "SAME_SOURCE_PAIR_GAP_AUDIT_2026-05-06",
+  "phase": "0g",
+  "headline": "MIXED leaning LANE_RESTRICTED_LAUNCH on FT-from-P8A; cache-first audit found 0 tight (sample_id, frame_idx) pairs; cross-product proxy covers 2 of 6 paired lanes",
+  "decision_rule": {
+    "green_threshold_p_le_0": 0.25,
+    "amber_threshold_p_le_0": 0.10,
+    "min_green_lanes_for_unconditional_p1": 2
+  },
+  "n_tight_pairs_found_in_cache": 0,
+  "lanes_directly_measured": [],
+  "lanes_proxied_via_cross_product": [
+    "deeplive",
+    "visomaster_enhanced"
+  ],
+  "lanes_unmeasured": [
+    "df40",
+    "visomaster_v1_base",
+    "visomaster_teams_enhanced",
+    "deeplive_teams"
+  ],
+  "ft_base_lane_verdicts": {
+    "P8A": {
+      "deeplive": {"p_gap_le_0": 0.235, "n_missed": 68, "verdict": "AMBER", "evidence": "cross_product_proxy"},
+      "visomaster_enhanced": {"p_gap_le_0": 0.281, "n_missed": 765, "verdict": "GREEN", "evidence": "cross_product_proxy"},
+      "df40": {"verdict": "INSUFFICIENT_DATA"},
+      "visomaster_v1_base": {"verdict": "INSUFFICIENT_DATA"},
+      "visomaster_teams_enhanced": {"verdict": "INSUFFICIENT_DATA"},
+      "deeplive_teams": {"verdict": "INSUFFICIENT_DATA"}
+    },
+    "E2B": {
+      "deeplive": {"p_gap_le_0": 0.069, "n_missed": 29, "verdict": "RED", "evidence": "cross_product_proxy"},
+      "visomaster_enhanced": {"p_gap_le_0": 0.086, "n_missed": 1331, "verdict": "RED", "evidence": "cross_product_proxy"},
+      "df40": {"verdict": "INSUFFICIENT_DATA"},
+      "visomaster_v1_base": {"verdict": "INSUFFICIENT_DATA"},
+      "visomaster_teams_enhanced": {"verdict": "INSUFFICIENT_DATA"},
+      "deeplive_teams": {"verdict": "INSUFFICIENT_DATA"}
+    },
+    "PA_3800": {
+      "deeplive": {"p_gap_le_0": 0.111, "n_missed": 9, "verdict": "AMBER", "evidence": "cross_product_proxy"},
+      "visomaster_enhanced": {"p_gap_le_0": 0.435, "n_missed": 2167, "verdict": "GREEN", "evidence": "cross_product_proxy"},
+      "df40": {"verdict": "INSUFFICIENT_DATA"},
+      "visomaster_v1_base": {"verdict": "INSUFFICIENT_DATA"},
+      "visomaster_teams_enhanced": {"verdict": "INSUFFICIENT_DATA"},
+      "deeplive_teams": {"verdict": "INSUFFICIENT_DATA"}
+    }
+  },
+  "p1_recommendation_per_ckpt": {
+    "P8A": "LANE_RESTRICTED_LAUNCH or AUTHORISE_FORWARD_PASS_BLUEPRINT",
+    "E2B": "DEMOTE_P1 (both measured lanes RED; not the recommended FT base anyway)",
+    "PA_3800": "LANE_RESTRICTED_LAUNCH (informational only — PA does NOT generalise per memory pa_does_not_generalize_to_hdtf_2026-05-05)"
+  },
+  "p1_load_bearing_recommendation_for_user": {
+    "ft_base": "P8A",
+    "primary_options": [
+      {
+        "option": "AUTHORISE_FORWARD_PASS",
+        "scope": "df40 + deeplive lanes only",
+        "estimated_cost_usd": 3,
+        "estimated_wall_min": 40,
+        "rationale": "Converts 2/6 → 4/6 lane coverage; resolves the largest unmeasured cohort (df40 = 4,698 base samples). Best $-per-bit option. See coverage_blueprint.md."
+      },
+      {
+        "option": "LANE_RESTRICTED_LAUNCH",
+        "scope": "FT-from-P8A with pair-rank applied UNIFORMLY (per pair_coverage_audit recommendation); training signal carried by visomaster_enhanced (GREEN, n_missed=765) and likely deeplive (AMBER, n_missed=68 small)",
+        "rationale": "loss = 0 on RED-lane batches doesn't hurt; signal comes from GREEN lane(s); unmeasured lanes are zero-contribution risks not training-noise risks. Run P2 (SBI) in parallel.",
+        "caveat": "df40 (largest base population, 4,698 samples) is completely unmeasured — small chance it is RED and dilutes effective gradient. Probe 4 feature-space evidence (visomaster bimodal cosine-distance) supports tight-pair survival on viso lane only."
+      }
+    ],
+    "user_decision_required": true,
+    "decision_point_note": "per feedback_decision_points.md — do not auto-launch; wait for explicit pick"
+  },
+  "comparison_to_cross_product_audit": {
+    "cross_product_aggregate_p_le_0": {
+      "P8A": 0.0988,
+      "E2B": 0.0563,
+      "PA_3800": 0.1779
+    },
+    "cross_product_aggregate_verdict": "RED",
+    "lane_re_aggregation_p_le_0": {
+      "P8A_visomaster_enhanced": 0.281,
+      "P8A_deeplive": 0.235,
+      "P8A_teams_passthrough_NOT_TRAINING_LANE": 0.028
+    },
+    "reframe": "The cross-product RED was driven by teams_passthrough (2.8%, n_missed=2286) which is NOT one of the 6 paired training lanes. Re-aggregating by lane (excluding eval-only substrates) shifts P8A verdict from RED → GREEN/AMBER on the lanes pair-rank loss can actually fire on. Tight-pair flip is supported by Probe 4 bimodal cosine-distance evidence on viso enhanced."
+  },
+  "constraints_honoured": {
+    "cpu_only_step_1": true,
+    "no_forward_pass_executed": true,
+    "n_jobs_set_to_1": "n/a (no sklearn used)",
+    "no_gcs_pulls": true
+  }
+}

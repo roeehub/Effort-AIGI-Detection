@@ -1,0 +1,28 @@
+Validation Summary Report for: td_visomaster_enhanced_macro_dev_p8a_reference_step5000
+Run Name: TargetDomain visomaster_enhanced_macro_dev P8A_REFERENCE_STEP5000
+Generated on: 2026-05-06 13:54:48
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 550
+Accuracy: 0.3564
+True Positives (Correctly identified Fake): 196
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 354
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: visomaster_enhanced_macro (FAKE) -----
+Total Videos: 550
+Accuracy: 0.3564 (196/550 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+visomaster_enhanced_fake (family=visomaster_enhanced_fake): n=550, acc=0.3564, tpr=0.3564, fpr=0.0000, fnr=0.6436
+
+Best-group accuracy: visomaster_enhanced_fake = 0.3564
+Worst-group accuracy: visomaster_enhanced_fake = 0.3564
+Best-vs-worst group accuracy gap: 0.0000

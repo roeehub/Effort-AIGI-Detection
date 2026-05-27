@@ -1,0 +1,357 @@
+# ============================================================================
+# R13_S2_SLOT3_WEAK_PAIRRANK.yaml
+# Stage 2, Slot 3 — WEAK PAIR_RANK (single-lever LOSS-axis test).
+#
+# Single-lever change vs P1 BUNDLE_FT_FROM_P8A:
+#   - pair_rank_loss.lambda: 0.05  (vs BUNDLE's 0.2 — 4× weaker)
+#
+# Otherwise identical to P1 BUNDLE — pair_rank ON, GroupDRO ON with same
+# multi-axis R-D / F-B keys + chronic_flag, FT-from-P8A. The only knob
+# that moves is pair_rank lambda.
+#
+# HYPOTHESIS (DOSE-RESPONSE):
+#   P1 BUNDLE_step500 hit 96.5% lockbox recall at FPR=10% (τ=0.989) — the
+#   highest lockbox lift in the entire P-series. It failed promotion only
+#   because of score-distribution compression: Roy_D (chronic-FP identity
+#   not in any paired training lane) underwent encoder cluster collapse:
+#     - Score std on 130 Roy_D real frames: 0.0005 (vs P8A 0.4051 — 800×)
+#     - Pearson r vs P8A scores: -0.16 (anti-correlated)
+#     - All 130 frames score in [0.9897, 0.9932] — span 0.0035
+#   Same shape as P2-D's Dor cluster collapse: identity-specific encoder
+#   degeneracy on identities NOT covered by paired training lanes.
+#
+#   The lift mechanism (paired lane gradient → confident lockbox-fake
+#   scoring) is REAL. The collateral damage (cluster collapse on unpaired
+#   identities) is the failure. If pair_rank is dose-responsive, λ=0.05
+#   should give ~25% of the lift with much less compression. If non-linear
+#   / saturated, λ=0.05 will either give no lift or still compress.
+#
+# WHAT WOULD FALSIFY:
+#   (a) λ=0.05 gives no lockbox lift (looks like P8A baseline) ⇒ ON/OFF
+#       lever, not dose-responsive. Fix is structural, not tuning.
+#   (b) λ=0.05 still produces extreme score compression on Roy_D ⇒
+#       collapse mechanism is non-linear; fix is upstream of pair_rank.
+#   (c) λ=0.05 gives moderate lift WITHOUT collapse ⇒ deployment candidate
+#       at a manageable τ.
+#
+# WHY KEEP GROUPDRO:
+#   This is the cleanest single-lever ablation vs BUNDLE; preserving the
+#   rest of BUNDLE isolates the pair_rank-strength axis. (PAIRRANK-ONLY
+#   ablation already exists in R13_P1_PAIRRANK_ONLY_FT_FROM_P8A.yaml; this
+#   is BUNDLE-style not PAIRRANK-ONLY-style.)
+#
+# WHY FT-FROM-P8A:
+#   Same as Slots 1 + 2 — P8A has the all-pillar profile.
+#
+# COST: ~$50-70 Vertex (us-central1, A100×1, ~4500 steps, FT regime).
+# CONFIDENCE (single-packet): 30-35%.
+#   Highest information yield of the three slots — definitively closes
+#   the "is pair_rank lift dose-responsive?" question regardless of outcome.
+# Seed: 9003
+# ============================================================================
+
+name: "R13_S2_SLOT3_WEAK_PAIRRANK"
+description: "Stage 2 Slot 3 — pair_rank_loss.lambda=0.05; FT-from-P8A; tests dose-response of pair_rank lift mechanism."
+seed: 9003
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "stage2"
+    - "s2-slot3"
+    - "weak-pair-rank"
+    - "lambda-0.05"
+    - "margin-0.5"
+    - "group-dro-multi-axis"
+    - "rd-real-side-key"
+    - "fb-fake-side-key"
+    - "chronic-flag"
+    - "ft-from-p8a"
+    - "single-lever-vs-bundle"
+    - "no-correlation-penalty"
+    - "no-arcface"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "cross-entropy-loss"
+    - "seed-9003"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 12
+total_training_steps: 4500
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 450
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# SLOT 3 LEVER: pair_rank lambda 4× weaker than BUNDLE.
+pair_rank_loss:
+  lambda: 0.05
+  margin: 0.5
+
+# Multi-axis GroupDRO. Identical to P1 BUNDLE (data pipeline auto-builds
+# group_id_mapping; ~27 groups expected).
+use_group_dro: true
+group_dro_params:
+  beta: 3.0
+  ema_alpha: 0.1
+  clip_min: 1.0
+  clip_max: 4.0
+  warmup_steps: 100
+
+correlation_penalty:
+  enabled: false
+
+anchor_aware:
+  enabled: false
+
+face_scale_jitter:
+  enabled: false
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 9003
+  seed: 9003
+
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_enhanced:
+    enabled: true
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    exclude_tiers: ["ARTIFACT"]
+
+  visomaster_hints_teams:
+    enabled: false
+
+  visomaster_teams_enhanced:
+    enabled: true
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    companion_domains:
+      - "teams_v2"
+    include_statuses:
+      - "teams_v2_companion"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 9003
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      visomaster_enhanced_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: false
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 6.0
+anneal_steps: 1
+
+evaluate_every_steps: 250
+ood_monitoring_start_step: 250
+ood_monitoring_every_steps: 500
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 12
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 500
+    - 1000
+    - 1500
+    - 2500
+    - 3500
+    - 4500
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

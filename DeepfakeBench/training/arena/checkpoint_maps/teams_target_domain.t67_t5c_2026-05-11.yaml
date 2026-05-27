@@ -1,0 +1,64 @@
+# =============================================================================
+# Promotion-contract validation map — T6 / T7 / T5C combined packet (2026-05-11)
+#
+# Authored 2026-05-11 after the three GPU runs (T6/T7/T5C) completed overnight.
+# All three trained from FT-from-P8A_step5000 with single-lever deltas:
+#
+#   T6  (smmcn6tj) = T3 SLOT1 keep-list + face_scale_jitter @ scale_limit=0.50
+#                    Deployment refinement bet on T3 base (NO GRL).
+#   T7  (c2ju9fbn) = T4 multi-axis-L11-GRL + face_scale_jitter @ scale_limit=0.50
+#                    Tests jitter on the GRL-trained encoder.
+#   T5C (jrlldtem) = T4 multi-axis-L11-GRL with online classifier hidden_dim
+#                    256 -> 1024. Tests whether stronger online classifier
+#                    forces UNIFORM encoder invariance covering chronic_6
+#                    (A3 found T4 step10500 regressed chronic_6 inv_mean
+#                    -0.0315 vs P8A at L11).
+#
+# CKPT SELECTION (3 per run, 9 total candidates + 3 anchors = 12 ckpts):
+# Pruned via AUC-progression heuristics + memory rules (per
+# project_train_auc_not_valid_promotion_signal, late high-AUC ckpts may
+# have re-saturated the shortcut; mid-training ckpts often outperform AUC
+# peaks at deployment).
+#
+# T6 selection (run trained PAST nominal cap to step 10250):
+#   step1500   — early, AUC 0.990 (mirrors T3_SLOT1_step1500 winning point)
+#   step3500   — mid, AUC 0.992 (post-T3-style operating point)
+#   top_n_step10250 — late AUC peak 0.9972 (tests shortcut-saturation
+#                      hypothesis at the extreme)
+#
+# T7 selection (run early-stopped at step 5000, 2h 56min):
+#   step2500   — best periodic AUC 0.993 before the dip
+#   step3500   — AUC DIP to 0.987 (possible attractor moment, mirrors T4
+#                inv_mean oscillation; cheap data point to probe)
+#   top_n_step4750 — late AUC peak 0.9956
+#
+# T5C selection (run trained to step 5000, full):
+#   step1500   — AUC DIP to 0.987 (mirrors T4 step10500 attractor pattern;
+#                MOST LIKELY chronic_6-fix candidate per A3 mechanism)
+#   step3500   — mid, AUC 0.994 (operating point)
+#   top_n_step3750 — top_n peak 0.9948 (best classifier outcome)
+#
+# Anchors:
+#   P8A_REFERENCE_STEP5000  — production anchor (rank-1 on v3-fix policy).
+#   E2B_TOP_N_STEP3200      — currently deployed.
+#   T3_SLOT1_PERIODIC_STEP1500 — last week's strongest F0-passing candidate.
+#
+# Policy: standing v3-fix (recall floor 0.30, real_fpr 0.07, stress_fpr 0.10).
+# Suite manifest: target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml
+# =============================================================================
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:            "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+T3_SLOT1_PERIODIC_STEP1500:    "gs://training-job-outputs/best_checkpoints/bxnuz22g/periodic_effort_20260509_step1500_auc0.9817_eer0.0745.pth"
+
+T6_PERIODIC_STEP1500:          "gs://training-job-outputs/best_checkpoints/smmcn6tj/periodic_effort_20260511_step1500_auc0.9903_eer0.0340.pth"
+T6_PERIODIC_STEP3500:          "gs://training-job-outputs/best_checkpoints/smmcn6tj/periodic_effort_20260511_step3500_auc0.9918_eer0.0220.pth"
+T6_TOP_N_STEP10250:            "gs://training-job-outputs/best_checkpoints/smmcn6tj/top_n_effort_20260511_step10250_auc0.9972_eer0.0180.pth"
+
+T7_PERIODIC_STEP2500:          "gs://training-job-outputs/best_checkpoints/c2ju9fbn/periodic_effort_20260511_step2500_auc0.9929_eer0.0311.pth"
+T7_PERIODIC_STEP3500:          "gs://training-job-outputs/best_checkpoints/c2ju9fbn/periodic_effort_20260511_step3500_auc0.9874_eer0.0497.pth"
+T7_TOP_N_STEP4750:             "gs://training-job-outputs/best_checkpoints/c2ju9fbn/top_n_effort_20260511_step4750_auc0.9956_eer0.0207.pth"
+
+T5C_PERIODIC_STEP1500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step1500_auc0.9874_eer0.0570.pth"
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+T5C_TOP_N_STEP3750:            "gs://training-job-outputs/best_checkpoints/jrlldtem/top_n_effort_20260511_step3750_auc0.9948_eer0.0154.pth"

@@ -1,0 +1,38 @@
+{
+  "contract": {
+    "dev_fake_suites": [
+      "teams_fake_all_dev",
+      "visomaster_enhanced_macro_dev",
+      "deeplive_enhanced_dev"
+    ],
+    "dev_real_stress_suites": [
+      "teams_real_poor_quality_dev",
+      "teams_real_lighting_extreme_dev"
+    ],
+    "dev_real_suite": "teams_real_all_dev",
+    "lockbox_fake_suite": "teams_fake_all_lockbox",
+    "lockbox_real_suite": "teams_real_all_lockbox",
+    "target_fake_recall_min": 0.3,
+    "target_real_fpr": 0.07,
+    "target_stress_fpr": 0.1
+  },
+  "winner": {
+    "checkpoint_key": "P8A_REFERENCE_STEP5000",
+    "checkpoint_path": "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+    "deeplive_enhanced_dev__fake_recall": 0.238532,
+    "dev_fake_macro_recall": 0.30028,
+    "dev_primary_real_fpr": 0.069474,
+    "dev_worst_real_stress_fpr": 0.068522,
+    "lockbox_fake_n_videos": 253,
+    "lockbox_fake_recall": 0.387352,
+    "lockbox_fake_suite": "teams_fake_all_lockbox",
+    "lockbox_real_fpr": 0.018369,
+    "lockbox_real_n_videos": 1361,
+    "lockbox_real_suite": "teams_real_all_lockbox",
+    "promotion_rank": 1,
+    "selected_threshold": 0.915605,
+    "teams_fake_all_dev__fake_recall": 0.525944,
+    "threshold_candidate_count": 5361,
+    "visomaster_enhanced_macro_dev__fake_recall": 0.136364
+  }
+}

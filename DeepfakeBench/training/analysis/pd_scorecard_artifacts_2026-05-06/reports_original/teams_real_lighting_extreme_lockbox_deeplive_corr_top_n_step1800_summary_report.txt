@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_lighting_extreme_lockbox_deeplive_corr_top_n_step1800
+Run Name: TargetDomain teams_real_lighting_extreme_lockbox DEEPLIVE_CORR_TOP_N_STEP1800
+Generated on: 2026-05-06 15:03:52
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 207
+Accuracy: 0.8696
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 180
+False Positives (Real misclassified as Fake): 27
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 207
+Accuracy: 0.8696 (180/207 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=207, acc=0.8696, tpr=0.0000, fpr=0.1304, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.8696
+Worst-group accuracy: unknown_real = 0.8696
+Best-vs-worst group accuracy gap: 0.0000

@@ -1,0 +1,1176 @@
+runs:
+  - id: p8a
+    label: P8A Reference Step 5000
+    run_id: 9lmvb5b4
+    checkpoint_key: P8A_REFERENCE_STEP5000
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth
+    aliases:
+      - P8A
+      - P8A_REFERENCE_STEP5000
+    tags:
+      - baseline
+      - p8a
+      - ft-base
+    recipe: P8A baseline used as the reference checkpoint for the 2026-04-30 probe slate.
+    artifacts:
+      scorecard_dir: analysis/policy_reruns_2026-04-29_floor_0p70
+      manifold_tsne: analysis/embedding_triptych_2026-04-30/outputs/triptych_p8a_slot2_slot3/triptych_coords_tsne.csv
+      manifold_checkpoint: P8A
+      face_size_invariance: analysis/face_size_invariance_2026-04-30/outputs/p8a_invariance.csv
+      domain_probe_summary: analysis/domain_confusion_probe_2026-04-30/outputs/probe_p8a_slot2_slot3/summary.json
+      domain_probe_key: P8A
+      per_frame_scores:
+        - analysis/score_distribution_2026-05-02/raw_reports/visomaster_enhanced_macro_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/deeplive_enhanced_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_fake_all_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_fake_all_lockbox_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_all_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_all_lockbox_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_dor_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_lighting_extreme_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_poor_quality_dev_p8a_reference_step5000_frames_report.csv
+      score_distribution_report: analysis/score_distribution_2026-05-02/outputs/REPORT.html
+    notes:
+      - title: Baseline Reference
+        status: context
+        text: P8A is the comparison point for jitter, GRL, and DATA_FIX probes; triptych scores are treated as metadata, not run-specific frame scores.
+      - title: Score Distribution Report (2026-05-02)
+        status: context
+        text: Open analysis/score_distribution_2026-05-02/outputs/REPORT.html for per-suite histograms, paired raw/teams substrate analysis, and pixel-diff forensics.
+      - title: Stage A CPU diagnostics (2026-05-12)
+        status: context
+        text: |
+          Stage A CPU diagnostics at analysis/cpu_diagnostics_2026-05-12_stage_a/ (with README.md reading order) characterize P8A vs T5C step3500 vs T3_SLOT1 step1500 across 9 contract suites (13,636 frames) + the 952-frame may6/dor/chronic_6 cohort matrix. Sibling diagnostics at analysis/cpu_diagnostics_2026-05-11_t67_t5c_probe/ extend the L11 atlas inv_mean readouts (per-substrate slice) and add candidate ckpt scoring beyond the formal scorecard. Specialist-routing finding documented for research; NOT a deployment path per MODEL_GOALS.md NO ENSEMBLE rule.
+
+  - id: slot2_grl
+    label: Slot 2 GRL (w5tky6ss)
+    run_id: w5tky6ss
+    checkpoint_key: SLOT2_GRL
+    checkpoint: analysis/_features_cache_2026-04-30/value_composite_effort_20260430_step8500_auc0.9842_eer0.0457.pth
+    aliases:
+      - SLOT2_GRL
+      - w5tky6ss
+    tags:
+      - p15
+      - grl
+      - dann
+    recipe: FT-from-P8A with the anti-shortcut bundle plus static GRL lambda 0.20.
+    trainer_metrics:
+      value_composite: 0.516
+      other_fakes_tpr: 0.659
+      max_pool_fpr: 0.04
+      stability: 0.086
+    artifacts:
+      manifold_tsne: analysis/embedding_triptych_2026-04-30/outputs/triptych_p8a_slot2_slot3/triptych_coords_tsne.csv
+      manifold_checkpoint: SLOT2_GRL
+      face_size_invariance: analysis/face_size_invariance_2026-04-30/outputs/slot2_w5tky6ss_invariance.csv
+      domain_probe_summary: analysis/domain_confusion_probe_2026-04-30/outputs/probe_p8a_slot2_slot3/summary.json
+      domain_probe_key: SLOT2_GRL
+    notes:
+      - title: GRL Design-Intent Check
+        status: warning
+        text: The domain-confusion probe is the load-bearing artifact for whether GRL collapsed the CLS domain manifold.
+
+  - id: slot3_jitter
+    label: Slot 3 Jitter (mclioexb)
+    run_id: mclioexb
+    checkpoint_key: MCLIOEXB_STEP500
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/mclioexb/value_composite_effort_20260429_step500_auc0.9797_eer0.0521.pth
+    aliases:
+      - SLOT3_JITTER
+      - MCLIOEXB_STEP500
+      - mclioexb
+    tags:
+      - p14
+      - jitter
+      - leader
+    recipe: FT-from-P8A with face_scale_jitter scale_limit 0.50 only; anchor-aware and pipeline randomization disabled.
+    trainer_metrics:
+      value_composite: 0.661
+      other_fakes_tpr: 0.591
+      max_pool_fpr: 0.04
+      stability: 0.871
+    artifacts:
+      scorecard_dir: analysis/scorecard_mclioexb_2026-04-30
+      manifold_tsne: analysis/embedding_triptych_2026-04-30/outputs/triptych_p8a_slot2_slot3/triptych_coords_tsne.csv
+      manifold_checkpoint: SLOT3_JITTER
+      face_size_invariance: analysis/face_size_invariance_2026-04-30/outputs/slot3_mclioexb_invariance.csv
+      domain_probe_summary: analysis/domain_confusion_probe_2026-04-30/outputs/probe_p8a_slot2_slot3/summary.json
+      domain_probe_key: SLOT3_JITTER
+    notes:
+      - title: Mechanism Open
+        status: warning
+        text: Jitter@0.50 won trainer-side value_composite, but the face-size invariance probe shows the crop-tightness leak was not closed.
+
+  - id: datafix
+    label: DATA_FIX (xan4dfto)
+    run_id: xan4dfto
+    checkpoint_key: DATAFIX_XAN4DFTO
+    aliases:
+      - DATAFIX_XAN4DFTO
+      - xan4dfto
+    tags:
+      - p14
+      - data-fix
+      - collapse
+    recipe: FT-from-P8A with P14 bundle plus visomaster_teams_enhanced family weight 8.0.
+    trainer_metrics:
+      value_composite: 0.126
+      other_fakes_tpr: 0.047
+      max_pool_fpr: 0.04
+      stability: 0.360
+    artifacts:
+      face_size_invariance: analysis/face_size_invariance_2026-04-30/outputs/datafix_xan4dfto_invariance.csv
+    notes:
+      - title: DATA_FIX Collapse
+        status: failed
+        text: The local artifact record marks DATA_FIX as a generalization collapse candidate; v1 has the face-size probe but no local scorecard or manifold artifact for this run.
+
+  - id: p18t
+    label: P18 GRL Treatment Step 4000
+    run_id: xpbvc1e4
+    checkpoint_key: P18T_GRL_TREATMENT_STEP4000
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/xpbvc1e4/periodic_effort_20260501_step4000_auc0.9907_eer0.0279.pth
+    aliases:
+      - P18T
+      - P18T_GRL_TREATMENT_STEP4000
+      - xpbvc1e4
+    tags:
+      - p18
+      - grl-12bucket
+      - treatment
+    recipe: FT-from-P8A_step5000 with 12-class method-conditional GRL (lambda ramped 0.245 -> 0.948).
+    trainer_metrics:
+      val_auc_step4000: 0.9907
+      val_eer_step4000: 0.0279
+      arcface_s_step4000: 12.0
+    artifacts:
+      per_frame_scores:
+        - analysis/score_distribution_2026-05-02/raw_reports/visomaster_enhanced_macro_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/deeplive_enhanced_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_fake_all_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_fake_all_lockbox_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_all_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_all_lockbox_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_dor_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_lighting_extreme_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_poor_quality_dev_p18t_grl_treatment_step4000_frames_report.csv
+      score_distribution_report: analysis/score_distribution_2026-05-02/outputs/REPORT.html
+    notes:
+      - title: GRL Defensive, Not Additive
+        status: context
+        text: P18T preserves P8A's 0% dor-real FPR at deployment tau but does not lift visomaster recall above ~1.5% at the contract tau. See score_distribution_2026-05-02 REPORT for per-suite distributions.
+
+  - id: p18c
+    label: P18 No-GRL Control Step 4000
+    run_id: rgt4kw2u
+    checkpoint_key: P18C_NO_GRL_CONTROL_STEP4000
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/rgt4kw2u/periodic_effort_20260501_step4000_auc0.9871_eer0.0330.pth
+    aliases:
+      - P18C
+      - P18C_NO_GRL_CONTROL_STEP4000
+      - rgt4kw2u
+    tags:
+      - p18
+      - no-grl
+      - control
+    recipe: FT-from-P8A_step5000 with same data but no GRL head (control for P18T treatment).
+    trainer_metrics:
+      val_auc_step4000: 0.9871
+      val_eer_step4000: 0.0330
+      arcface_s_step4000: 12.0
+    artifacts:
+      per_frame_scores:
+        - analysis/score_distribution_2026-05-02/raw_reports/visomaster_enhanced_macro_dev_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/deeplive_enhanced_dev_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_fake_all_dev_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_fake_all_lockbox_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_all_dev_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_all_lockbox_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_dor_dev_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_lighting_extreme_dev_p18c_no_grl_control_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/teams_real_poor_quality_dev_p18c_no_grl_control_step4000_frames_report.csv
+      score_distribution_report: analysis/score_distribution_2026-05-02/outputs/REPORT.html
+    notes:
+      - title: Control Regresses dor FPR
+        status: failed
+        text: P18C catastrophically regresses dor lockbox real FPR from 0% (P8A) to 52% at deployment tau. Sub-stratifies viso slice differently than P8A (raw vs teams substrate symmetry).
+
+  - id: p22
+    label: P22 Aug-Curriculum (image-quality shortcut attack — SUCCESS)
+    run_id: dot1buye
+    checkpoint_key: P22_AUG_STEP8000
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/dot1buye/periodic_effort_20260502_step8000_auc0.9406_eer0.1441.pth
+    aliases:
+      - P22
+      - P22_AUG_STEP8000
+      - P22_AUG_CURRICULUM
+    tags:
+      - p22
+      - image-quality-shortcut
+      - blur-jpeg-brightness-curriculum
+      - new-ft-base
+      - succeeded
+    recipe: FT-from-P8A_step5000 with symmetric pipeline_randomization (Gaussian luma blur sigma in [0.5, 4.0] p=0.7, JPEG q in [40, 95] p=0.6, brightness shift in [-40, 40] p=0.5). Single-lever discipline (no GRL, no anchor_aware, no face_scale_jitter, no data-axis source weights). Targets the image-quality shortcut documented in 2026-05-02 PM CPU audit.
+    trainer_metrics:
+      train_auc_step8000: 0.9406
+      train_eer_step8000: 0.1441
+      train_auc_peak_step1000: 0.9903
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.524
+      dev_primary_real_fpr: 0.020
+      dev_fake_macro_recall: 0.393
+      teams_fake_all_dev_recall: 0.574
+      visomaster_enhanced_macro_dev_recall: 0.044
+      deeplive_enhanced_dev_recall: 0.561
+      lockbox_real_fpr: 0.0426
+      lockbox_fake_recall: 0.217
+    falsifier_verdict:
+      F1_pearson_r_drop: PASSED
+      F2_R2_drop: FAILED
+      F3_viso_recall_2pct: PASSED
+      score: 2/3
+      verdict: SUCCESS
+    artifacts:
+      cpu_decision_packet: analysis/cpu_decision_2026-05-02_pm_late/FINDINGS_AND_DECISION.md
+      cpu_smoke_gate: analysis/cpu_decision_2026-05-02_pm_late/figures/p22_smoke_realtrainer_pipeline.png
+      cpu_smoke_csv: analysis/cpu_decision_2026-05-02_pm_late/outputs/p22_smoke_pipeline_random.csv
+      eval_findings: analysis/p22_eval_2026-05-02/FINDINGS.md
+      threshold_grid: analysis/p22_eval_2026-05-02/scorecard_data/promotion_contract/threshold_grid.csv
+      operating_point_grid: analysis/p22_eval_2026-05-02/scorecard_data/promotion_contract/operating_point_grid.csv
+      checkpoint_summary: analysis/p22_eval_2026-05-02/scorecard_data/promotion_contract/checkpoint_summary.csv
+      falsifier_outputs: analysis/p22_eval_2026-05-02/falsifiers_per_checkpoint.csv
+    notes:
+      - title: SUCCESS — 2/3 falsifiers, 3x macro fake recall
+        status: success
+        text: P22 step 8000 trades 5pp train AUC (0.9926 -> 0.9406) for 3x dev fake_macro_recall at calibrated FPR=2% (0.136 -> 0.393). Deeplive recall +24x (2.4% -> 56.1%). Viso recall +4x at FPR=2% (1.1% -> 4.4%). Pearson |r|(score, laplacian) on viso dropped 0.44 -> 0.12 — direct evidence shortcut weakened.
+      - title: Caveat — shortcut shifted onto luma/skin, not erased
+        status: caveat
+        text: F2 (R² of all 3 attrs ↦ score) ROSE 0.107 -> 0.175 instead of dropping. P22 weakened the direct Laplacian dependency but partially shifted load onto luma+skin. Next packet should target luma randomization (P23-LUMA candidate).
+      - title: Caveat — viso underperforms above FPR=5%
+        status: caveat
+        text: Viso recall regresses vs P8A at FPR ≥ 5%. Viso shortcut signature is under-swap softness, not sharpness; curriculum doesn't directly address it.
+      - title: Caveat — lockbox calibration drift
+        status: caveat
+        text: P22 step8k violates 2% lockbox real-FPR constraint (actual 4.26%). Recalibrating τ on dev+lockbox or augmenting calibration suite with cam_test_s33-style frames recovers.
+
+  - id: s1_redux_short
+    label: S1 P22-redux short cap (FAILED)
+    run_id: padjfsoq
+    checkpoint_key: S1_REDUX_SHORT_STEP600
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step600_auc0.9867_eer0.0447.pth
+    aliases:
+      - S1
+      - S1_REDUX_SHORT
+      - S1_REDUX_SHORT_STEP600
+    tags:
+      - phase2-round13
+      - s1
+      - p22-redux
+      - short-training-cap
+      - failed
+    recipe: P22 aug curriculum with 1000-step cap + ArcFace s capped at 8.0. Same base as P22 (P8A_step5000). Tests "training too long" hypothesis.
+    trainer_metrics:
+      class_separation_peak: 3.91
+      class_separation_peak_step: 600
+      val_holdout_auc_peak: 0.9870
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.972
+      dev_primary_real_fpr: 0.020
+      dev_fake_macro_recall: 0.113
+      teams_fake_all_dev_recall: 0.332
+      visomaster_enhanced_macro_dev_recall: 0.005
+      deeplive_enhanced_dev_recall: 0.000
+      lockbox_fake_recall: 0.166
+    falsifier_verdict:
+      F1_class_sep_4: FAIL
+      F2_viso_recall_24pct: FAIL
+      F3_lockbox_dor_invariance: UNCHECKED
+      score: 0/3
+      verdict: FAILED
+    artifacts:
+      eval_findings: analysis/s1_s2_2026-05-02_planning/FINDINGS_FINAL.md
+      threshold_grid: analysis/s1_s2_eval/scorecard_A_s1/promotion_contract/threshold_grid.csv
+      operating_point_grid: analysis/s1_s2_eval/scorecard_A_s1/promotion_contract/operating_point_grid.csv
+      probe1_output: analysis/s1_s2_2026-05-02_planning/probes/outputs/01_select_best_ckpt_padjfsoq.json
+      facts_doc: docs/relaunch_handoffs/PSERIES_FACTS_2026-05-02.md
+    notes:
+      - title: FAILED — capping training does not help
+        status: failed
+        text: Class_sep peak 3.91 (FAIL F-A 4.0). At calibrated τ S1 step600 has 0% deeplive recall. Worse than P8A and P22 step1k on dev metrics. Refutes "training-too-long" as the binding constraint.
+
+  - id: s2_earlier_base
+    label: S2 P22-redux earlier base (LOCKBOX CHAMPION)
+    run_id: evm4y66r
+    checkpoint_key: S2_EARLIER_BASE_STEP600
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step600_auc0.9867_eer0.0361.pth
+    aliases:
+      - S2
+      - S2_EARLIER_BASE
+      - S2_EARLIER_BASE_STEP600
+    tags:
+      - phase2-round13
+      - s2
+      - p22-redux
+      - earlier-p8a-base
+      - fork-p8a-step2500
+      - lockbox-champion
+    recipe: Same as S1 (1000-step cap, s_end=8.0) but FT from P8A_step2500 (run 9lmvb5b4 step 2500, val AUC 0.9936) — less-saturated base.
+    trainer_metrics:
+      class_separation_peak: 4.89
+      class_separation_peak_step: 200
+      val_holdout_auc_peak: 0.9890
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.958
+      dev_primary_real_fpr: 0.020
+      dev_fake_macro_recall: 0.147
+      teams_fake_all_dev_recall: 0.376
+      visomaster_enhanced_macro_dev_recall: 0.016
+      deeplive_enhanced_dev_recall: 0.050
+      lockbox_fake_recall: 0.431
+    contract_metrics_at_joint_fpr_10pct:
+      teams_fake_all_lockbox_recall: 0.915  # CHAMPION
+      teams_fake_all_dev_recall: 0.707
+      deeplive_enhanced_dev_recall: 0.536
+      visomaster_enhanced_macro_dev_recall: 0.118
+    falsifier_verdict:
+      F1_class_sep_4: PASS
+      F2_viso_recall_30pct: FAIL
+      F3_lockbox_dor_invariance: UNCHECKED
+      score: 1/3
+      verdict: MIXED
+    artifacts:
+      eval_findings: analysis/s1_s2_2026-05-02_planning/FINDINGS_FINAL.md
+      threshold_grid: analysis/s1_s2_eval/scorecard_B_s2/promotion_contract/threshold_grid.csv
+      operating_point_grid: analysis/s1_s2_eval/scorecard_B_s2/promotion_contract/operating_point_grid.csv
+      probe1_output: analysis/s1_s2_2026-05-02_planning/probes/outputs/01_select_best_ckpt_evm4y66r.json
+      facts_doc: docs/relaunch_handoffs/PSERIES_FACTS_2026-05-02.md
+    notes:
+      - title: WIN — chain champion on lockbox transfer
+        status: success
+        text: At joint dev+lockbox FPR=10%, S2 step600 reaches 91.5% teams_fake_all_lockbox recall — a 1.7× / 37pp lift over P8A's 54.1%. Currently the strongest single ckpt for lockbox-substrate-dominated deployments.
+      - title: FAIL — viso recall did not lift
+        status: failed
+        text: At joint FPR=10% S2 step600 viso = 11.8%, vs P8A's 27.0%. The earlier-base hypothesis worked for lockbox transfer but did not address the viso ceiling.
+
+  - id: s3_viso_weight
+    label: S3 viso family weight 8.0 (FAILED)
+    run_id: 1sakmkv4
+    checkpoint_key: S3_VISO_WEIGHT_STEP500
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/1sakmkv4/periodic_effort_20260503_step500_auc0.9877_eer0.0358.pth
+    aliases:
+      - S3
+      - S3_VISO_WEIGHT
+      - S3_VISO_WEIGHT_STEP500
+    tags:
+      - phase2-round13
+      - s3
+      - viso-weight-bump
+      - fw-8.0
+      - failed
+    recipe: Same as S2 except family_weights.visomaster_fake = 8.0 (vs S2's 4.0). Tests whether higher viso exposure in batches lifts viso recall.
+    trainer_metrics:
+      class_separation_peak: 4.97  # highest in chain — but does not predict scorecard
+      class_separation_peak_step: 550
+      val_holdout_auc_peak: 0.9905
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.945
+      dev_primary_real_fpr: 0.020
+      dev_fake_macro_recall: 0.151
+      teams_fake_all_dev_recall: 0.378
+      visomaster_enhanced_macro_dev_recall: 0.015  # no lift
+      deeplive_enhanced_dev_recall: 0.061
+      lockbox_fake_recall: 0.348  # regressed vs S2's 0.431
+    falsifier_verdict:
+      F1_class_sep_4: PASS  # 4.97 ≥ 4.0
+      F2_viso_recall_30pct: FAIL  # 13.8% at FPR=10% (target > 30%)
+      F3_lockbox_dor_invariance: UNCHECKED
+      score: 1/3
+      verdict: FAILED
+    artifacts:
+      eval_findings: analysis/s1_s2_2026-05-02_planning/FINDINGS_FINAL.md
+      threshold_grid: analysis/s1_s2_eval/scorecard_C_s3/promotion_contract/threshold_grid.csv
+      operating_point_grid: analysis/s1_s2_eval/scorecard_C_s3/promotion_contract/operating_point_grid.csv
+      probe1_output: analysis/s1_s2_2026-05-02_planning/probes/outputs/01_select_best_ckpt_1sakmkv4.json
+      facts_doc: docs/relaunch_handoffs/PSERIES_FACTS_2026-05-02.md
+    notes:
+      - title: FAILED — viso family weight did nothing
+        status: failed
+        text: viso recall at joint FPR=10% = 13.8%, far below P8A's 27% ceiling. Third independent data-axis attempt (after P14_DATA_FIX fw=8.0 and P16 fw=2.0) — all failed. The data-axis lever is exhausted for viso.
+      - title: REGRESSION on lockbox transfer vs S2
+        status: caveat
+        text: S3 step500 lockbox_fake_recall = 83.8% at joint FPR=10%, vs S2 step600's 91.5%. The viso weight bump 4.0→8.0 mildly hurt the lockbox transfer S2 had achieved.
+      - title: class_sep peak 4.97 — highest in chain but worst scorecard
+        status: caveat
+        text: Refutes the morning-of-2026-05-02 recommendation that class_sep is a reliable ckpt selector. class_sep is necessary not sufficient.
+
+  # ─────────────────────────────────────────────────────────────────
+  # Pseudo-run: viso eval bucket overview (the data, not a model)
+  # Aggregates every viso-relevant lens in one viewer entry so the user
+  # can browse bucket info, per-frame thumbnails, recall trajectory,
+  # per-packet verdicts, and 2026-05-03 CPU diagnostics in one place.
+  # ─────────────────────────────────────────────────────────────────
+  - id: viso_overview
+    label: Viso Eval Bucket — Overview (visomaster_enhanced_macro_dev)
+    run_id: viso_overview
+    checkpoint_key: VISO_OVERVIEW
+    checkpoint: "(pseudo-run; this entry aggregates eval-suite data, not a model checkpoint)"
+    aliases:
+      - viso
+      - visomaster_enhanced_macro_dev
+      - viso_bucket
+      - P8A
+      - CLIP_B16_RAW
+    tags:
+      - eval-suite
+      - viso
+      - bucket-overview
+      - "2026-05-03"
+    recipe: |
+      Pseudo-run aggregating the visomaster_enhanced_macro_dev eval bucket (n=550, all fake).
+      Use the 'Open report' button to view the full HTML digest. The Frame Browser panel
+      shows the 550 viso fakes via per_frame_scores wired to the existing P8A scorecard.
+    artifacts:
+      score_distribution_report: analysis/viso_overview_2026-05-03/INDEX.html
+      per_frame_scores:
+        - analysis/score_distribution_2026-05-02/raw_reports/visomaster_enhanced_macro_dev_p8a_reference_step5000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/visomaster_enhanced_macro_dev_p18t_grl_treatment_step4000_frames_report.csv
+        - analysis/score_distribution_2026-05-02/raw_reports/visomaster_enhanced_macro_dev_p18c_no_grl_control_step4000_frames_report.csv
+      bucket_metadata: analysis/viso_overview_2026-05-03/outputs/bucket_metadata.json
+      recall_through_chain: analysis/viso_overview_2026-05-03/outputs/recall_through_chain.csv
+      per_packet_verdicts: analysis/viso_overview_2026-05-03/outputs/per_packet_verdicts.csv
+      cpu_diagnostic_p8a_param_audit: analysis/p8a_param_audit_2026-05-03/FINDINGS.md
+      cpu_diagnostic_skin_frac_gap: analysis/skin_frac_viso_gap_2026-05-03/FINDINGS.md
+      cpu_diagnostic_skin_frac_distributions_png: analysis/skin_frac_viso_gap_2026-05-03/outputs/distributions.png
+      cpu_diagnostic_clip_vs_p8a: analysis/clip_vs_p8a_viso_2026-05-03/FINDINGS.md
+      cpu_diagnostic_clip_vs_p8a_summary_json: analysis/clip_vs_p8a_viso_2026-05-03/outputs/probe_summary.json
+      # Manifold defaults to P8A-only (1100 frames: 550 viso_fake + 550 teams_real_dev).
+      # The combined and CLIP-only files are exposed as secondary artifacts for direct comparison.
+      # NOTE: combined CSV's CLIP and P8A points are in DIFFERENT coordinate spaces
+      # (separate t-SNE runs on different feature spaces) — they should be viewed as two
+      # parallel maps, not a unified embedding. Color by `method` shows viso_fake vs teams_real_dev.
+      manifold_tsne: analysis/viso_overview_2026-05-03/outputs/tsne_for_viewer__p8a.csv
+      manifold_tsne_combined: analysis/viso_overview_2026-05-03/outputs/tsne_for_viewer__combined.csv
+      manifold_tsne_clip_only: analysis/viso_overview_2026-05-03/outputs/tsne_for_viewer__clip_b16_raw.csv
+      manifold_tsne_raw_stream_b: analysis/clip_vs_p8a_viso_2026-05-03/outputs/tsne_combined.csv
+    notes:
+      - title: Bucket gap is real but quantitatively bounded
+        status: context
+        text: |
+          Eval substrate is GAN-enhanced viso recaptured through Teams (the conjunction).
+          Training viso is the union of single-axis sources (enhancers OR Teams transport).
+          The conjunction-match training source `visomaster_teams_enhanced` exists in code but
+          has only been enabled in P16 (fw=2.0, no lift) and xan4dfto (fw=8.0, collapse).
+          See PSERIES_FACTS §1.3 — frozen-feature linear probe AUC 0.92–0.998 across all
+          training-bucket variants → the bucket gap is identity-confounded, not a discriminability cliff.
+      - title: 27% viso recall ceiling unbroken across 10+ packets
+        status: failed
+        text: |
+          P8A_step5000 holds the viso lead at every joint dev+lockbox FPR floor we've evaluated.
+          No post-P8A R13 packet (P14, P15, P16, P17, P18T/C, P22, S1, S2, S3 + step variants)
+          has lifted viso recall at FPR=10% above ~25%. Three independent data-axis attempts
+          all failed (P14_DATA_FIX fw=8.0 collapsed; P16 fw=2.0 no lift; S3 fw=8.0 lost lockbox).
+      - title: 2026-05-03 P8A param audit — PARTIAL
+        status: warning
+        text: |
+          in_proj-SVD residuals are noise-dominated for L0–L4 (early layers, where camera-signature
+          and image-quality shortcuts live), genuinely trained for L5–L11. 13/36 in_proj slots (36%)
+          effectively unlearned. Median in_proj contribution L2 is 23× smaller than out_proj.
+          The "B16 capacity ceiling" framing is partially confirmed but localized to early layers.
+          Open the FINDINGS.md artifact for the full breakdown + cheap-test suggestion.
+      - title: Stream B (CLIP vs P8A frozen probe) — PASSED, FT chain diffused viso signal
+        status: warning
+        text: |
+          Raw CLIP-B16 outperforms P8A by 9-17pp on viso fake vs teams_real probe under
+          classifier-capacity stress (C-sweep) and data-starvation (N-sweep). At C=1e-4:
+          CLIP 0.9988 vs P8A 0.8259 (+17pp). At n=16: CLIP 0.998 vs P8A 0.912 (+9pp).
+          Both saturate at AUC=1.0 with default hyperparameters because viso vs teams-real
+          carries a trivial bucket gap. The C/N sweeps are what break the tie.
+          Three interpretations all support revisiting scratch-from-CLIP: (1) Effort's
+          orthogonal regularization spread weight across many axes, (2) P8A FT'd toward
+          teams-domain axis weakly correlated with viso, (3) 5-stage FT ossification.
+          Cheaper pre-test before scratch retry: rank-restoration FT (~$40) that
+          concentrates signal back onto top-k singular directions (inverse Effort).
+          Caveat: viso-fake-vs-viso-real probe not run (no viso-real frames available).
+      - title: Stream C (skin_frac distribution gap) — REFUTED, but bigger finding surfaced
+        status: warning
+        text: |
+          Original hypothesis (skin-aware aug as cheap lever) is refuted: skin_frac KS p=6.7e-54
+          but |Δmean|=0.041 < 0.05 floor. Skin-aware aug DROPPED from candidate list.
+          BIGGER FINDING: laplacian_var gap is 5.3× — training viso fakes are vastly sharper
+          than eval viso fakes (mean 482 vs 91, KS=0.89, p≈10⁻²⁷⁴). luma_mean gap +51 (eval
+          brighter, p≈10⁻¹⁷⁴). The eval suite is a thin ridge in image-quality feature space.
+          P22's blur-jitter has the right shape but is too weak. Recommendation seeded:
+          P-* sister to P22 with augmentation distribution shifted toward eval-viso joint
+          (laplacian_var ~50-150, luma_mean ~135-185), single lever. ~$15-25 GPU.
+
+  - id: e2b_3200
+    label: E2B TopN Step3200 (B16 SCRATCH + CrossEntropy + heavy aug)
+    run_id: rmat8lwx
+    checkpoint_key: E2B_TOP_N_STEP3200
+    checkpoint: gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth
+    aliases:
+      - E2B
+      - E2B_TOP_N_STEP3200
+    tags:
+      - e-packet
+      - e2b
+      - b16-scratch
+      - crossentropy
+      - heavy-aug
+      - "2026-05-03"
+    recipe: |
+      B16 ViT-B/16 (LAION) trained from CLIP weights with CrossEntropy loss
+      and the heavier eval-targeted aug curriculum (blur_sigma_range=(2,8),
+      brightness_range=(-30,+70), jpeg_quality=(30,90)). 8000 step cap, seed 3022.
+      Originally E2 with ArcFace; collapsed at step 3400. E2b is the CrossEntropy
+      rewrite per the original Effort paper.
+
+      OPERATIONAL FINDING: shatters deeplive ceiling 43%→88% at FPR=10%, but
+      regresses viso 27%→7%. Mechanism unclear (different artifact emphasis?).
+      See analysis/cpu_followups_2026-05-04/INDEX.html for full diagnostics.
+
+      Manifold note: the Feature Manifold view here uses the SHARED viso score-space
+      t-SNE (550 viso fakes, projected from (P8A, E2B, E3) score vectors). Color by
+      "Caught-By Subset" to see where E2B_3200 specifically catches.
+    artifacts:
+      scorecard_dir: /tmp/e2b_scorecard
+      manifold_tsne: analysis/cpu_followups_2026-05-04/outputs/viso_score_space_tsne.csv
+      manifold_checkpoint: VISO_UNCAUGHT
+      score_distribution_report: analysis/cpu_followups_2026-05-04/INDEX.html
+      per_frame_scores:
+        - analysis/cpu_followups_2026-05-04/raw_reports/visomaster_enhanced_macro_dev_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/deeplive_enhanced_dev_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_dev_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_lockbox_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_dev_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_lockbox_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_dor_dev_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_lighting_extreme_dev_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_poor_quality_dev_e2b_top_n_step3200_frames_report.csv
+
+  - id: viso_uncaught
+    label: Viso Fakes — Uncaught-by-All Browser (550 viso fakes, sortable)
+    run_id: viso_uncaught_2026-05-04
+    checkpoint_key: VISO_UNCAUGHT
+    checkpoint: "(pseudo-run; aggregates viso fakes with all 3 ckpt scores)"
+    aliases:
+      - VISO_UNCAUGHT
+      - viso_uncaught
+    tags:
+      - eval-suite
+      - viso
+      - browser
+      - "2026-05-04"
+    recipe: |
+      Browser for the 'why is viso so hard?' question. Aggregates the 550
+      visomaster_enhanced_macro_dev fake frames + 500 sampled real frames per ckpt.
+
+      For each viso fake: P8A score, E2B_3200 score, E3_6600 score, and
+      caught_by_subset (which {ckpt} subset catches it at FPR=10%).
+
+      Use the Manifold Sample button: t-SNE projection of viso fakes in
+      (P8A, E2B, E3) score space. Clusters of points with the same caught_by
+      pattern are visible. Hover/click to see image + scores.
+
+      Key facts:
+        - 364/550 (66.2%) viso fakes caught by NO ckpt at FPR=10% (caught_by=NONE)
+        - 93/550 (16.9%) caught by P8A only
+        - 25/550 (4.5%) caught by all 3
+        - τ at FPR=10%: P8A=0.705, E2B=0.508, E3=0.853
+
+      Per-frame scores below mix viso fakes (550) + dev real (500 each ckpt).
+      So you can use the False Negatives button to view the uncaught viso fakes.
+    artifacts:
+      manifold_tsne: analysis/cpu_followups_2026-05-04/outputs/viso_score_space_tsne.csv
+      manifold_checkpoint: VISO_UNCAUGHT
+      score_distribution_report: analysis/cpu_followups_2026-05-04/INDEX.html
+      per_frame_scores:
+        - analysis/cpu_followups_2026-05-04/viewer_artifacts/viso_uncaught_browse/viso_browse_p8a_reference_step5000_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/viewer_artifacts/viso_uncaught_browse/viso_browse_e2b_top_n_step3200_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/viewer_artifacts/viso_uncaught_browse/viso_browse_e3_top_n_step6600_frames_report.csv
+
+  - id: e3_6600
+    label: E3 TopN Step6600 (L14 SCRATCH + CrossEntropy + heavy aug)
+    run_id: jzroefab
+    checkpoint_key: E3_TOP_N_STEP6600
+    checkpoint: gs://training-job-outputs/best_checkpoints/jzroefab/top_n_effort_20260503_step6600_auc0.9972_eer0.0093.pth
+    aliases:
+      - E3
+      - L14
+      - E3_TOP_N_STEP6600
+    tags:
+      - e-packet
+      - e3
+      - l14-scratch
+      - crossentropy
+      - heavy-aug
+      - "2026-05-03"
+    recipe: |
+      L14 ViT-L/14 (OpenAI HuggingFace weights) trained from CLIP with CrossEntropy
+      and the heavier eval-targeted aug curriculum. 8000 step cap, seed 3003.
+      Best val AUC of entire R13 chain (0.9976 at step7200, EER 0.0047 at step4800).
+
+      OPERATIONAL FINDING: ~ties B16 scratch on deeplive (86% vs 88%), does NOT
+      break viso ceiling (12% vs P8A 27%). 4× inference cost vs B16 → not worth it.
+      Confirms viso ceiling is structural, not encoder-capacity-bound.
+      See analysis/cpu_followups_2026-05-04/INDEX.html for full diagnostics.
+
+      Manifold note: shared viso score-space t-SNE. Color by "Caught-By Subset"
+      to see where E3_6600 specifically catches.
+    artifacts:
+      scorecard_dir: /tmp/e3_trim4_scorecard
+      manifold_tsne: analysis/cpu_followups_2026-05-04/outputs/viso_score_space_tsne.csv
+      manifold_checkpoint: VISO_UNCAUGHT
+      score_distribution_report: analysis/cpu_followups_2026-05-04/INDEX.html
+      per_frame_scores:
+        - analysis/cpu_followups_2026-05-04/raw_reports/visomaster_enhanced_macro_dev_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/deeplive_enhanced_dev_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_dev_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_lockbox_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_dev_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_lockbox_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_dor_dev_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_lighting_extreme_dev_e3_top_n_step6600_frames_report.csv
+        - analysis/cpu_followups_2026-05-04/raw_reports/teams_real_poor_quality_dev_e3_top_n_step6600_frames_report.csv
+
+  # ─────────────────────────────────────────────────────────────────
+  # 2026-05-05: P8A W=48 spike-robust deployment-policy failures.
+  # Browse what the recommended policy gets wrong — both real frames
+  # in falsely-flagged videos and fake frames in missed videos.
+  # ─────────────────────────────────────────────────────────────────
+  - id: p8a_w48_failures
+    label: P8A W=48 Aggregation Failures (real-flagged-fake + fake-missed)
+    run_id: p8a_w48_failures_2026-05-05
+    checkpoint_key: P8A_W48_FAILURES
+    checkpoint: "(pseudo-run; aggregates failure frames for the recommended P8A W=48 spike-robust deployment policy)"
+    aliases:
+      - p8a_w48_failures
+      - W48_FAILURES
+    tags:
+      - p8a
+      - aggregation-failures
+      - deployment
+      - "2026-05-05"
+    recipe: |
+      Browser for the failures of the P8A W=48 spike-robust deployment policy:
+        ckpt:                     P8A_REFERENCE_STEP5000
+        window_size:              48
+        strategy:                 majority_vote
+        per_frame_threshold:      0.70
+        vote_majority_fraction:   0.40
+        override_rule:            none
+
+      Four frame_report CSVs are wired below:
+        1. viewer_p8a_w48_FP_real_in_FP_videos.csv      (real frames in videos the policy flagged fake)
+        2. viewer_p8a_w48_FN_fake_in_FN_videos.csv      (fake frames in videos the policy missed)
+        3. viewer_p8a_w48_frame_level_FP_above_0.5.csv  (real frames scoring >=0.5 anywhere — broader)
+        4. viewer_p8a_w48_frame_level_FN_below_0.3.csv  (fake frames scoring <0.3 anywhere — clean misses)
+
+      Use the False Negatives view + sort by frame_prob to drill in. Filter by
+      suite (group_key) to focus on a specific eval pool.
+    artifacts:
+      per_frame_scores:
+        - analysis/aggregation_failures_2026-05-05/viewer_p8a_w48_FP_real_in_FP_videos.csv
+        - analysis/aggregation_failures_2026-05-05/viewer_p8a_w48_FN_fake_in_FN_videos.csv
+        - analysis/aggregation_failures_2026-05-05/viewer_p8a_w48_frame_level_FP_above_0.5.csv
+        - analysis/aggregation_failures_2026-05-05/viewer_p8a_w48_frame_level_FN_below_0.3.csv
+    notes:
+      - title: Top FPs are PC_Generator__s22 (chronic-6 dev identity)
+        status: warning
+        text: |
+          The highest-scoring real frames are PC_Generator__s22 segments scoring ~0.99 — the
+          known chronic-6 dev real identity. Note that "Xinhe" in the team_sanity_check
+          (different captures of the same person) scored 0/60 above tau=0.5. Same identity,
+          totally different model behavior — capture-substrate is the operative axis.
+          Browse these PC_Generator__s22 frames vs the Xinhe team frames to see the visual
+          difference that triggers the shortcut.
+      - title: Top FNs in teams_fake_all_dev are visomaster_enhanced
+        status: caveat
+        text: |
+          The lowest-scoring fake frames are dominated by visomaster_enhanced variants. Per
+          user scope ("avoid visomaster — not what we are testing against right now"), these
+          may not be the relevant FNs. Filter by group_key=deeplive_enhanced_dev or
+          group_key=teams_fake_all_lockbox to see deeplive- and teams-relevant misses.
+      - title: 1-3 frame video samples — window math does not fire
+        status: caveat
+        text: |
+          Eval suites are extracted at 1-3 frames per video_id. The W=48 sliding-window math
+          never triggers on this data — every video falls back to short-stream voting on the
+          available frames. Failures shown here are effectively frame-level threshold
+          (>=0.70) failures. True window-aggregation behavior needs a continuous-frame eval
+          set (8-12 sec at 4 fps minimum per video).
+
+  # ─────────────────────────────────────────────────────────────────
+  # 2026-05-09: T3 Stage 3 IQ-shortcut single-lever packet — Slot 1
+  # FT-from-P8A_step5000 with drop-top-25%-high-IQ-teams-reals lever.
+  # Two checkpoint operating points wired below; per-frame scores
+  # cover 4 suites (real_all_dev, viso_enhanced_macro, deeplive_enhanced,
+  # teams_fake_all_dev). Per packet retro at packets/T3.md.
+  # ─────────────────────────────────────────────────────────────────
+  - id: t3_slot1_step1500
+    label: T3 Slot1 Step 1500 (drop high-IQ teams reals — F0-floor passing)
+    run_id: bxnuz22g
+    checkpoint_key: T3_SLOT1_PERIODIC_STEP1500
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/bxnuz22g/periodic_effort_20260509_step1500.pth
+    aliases:
+      - T3_SLOT1_STEP1500
+      - T3_SLOT1_PERIODIC_STEP1500
+    tags:
+      - t3
+      - phase2-round13
+      - slot1
+      - drop-high-iq-teams-reals
+      - "2026-05-09"
+      - production-robust-candidate
+    recipe: |
+      FT-from-P8A_step5000 with single-lever data-axis intervention: drop the
+      top-25% high-Lap teams real frames from training pool via keep-list.
+      Inherits PA's visomaster_enhanced + visomaster_teams_enhanced data sources
+      at family_weights.visomaster_enhanced_fake=4.0.
+
+      OPERATIONAL FINDING (2026-05-10 robustness diagnostics): the most
+      production-robust ckpt of the 4-candidate set (P8A, E2B, step1500, step2500).
+      Lowest pre-gate FPR (8.43%), lowest post-gate FPR (2.65% medium gate, 4.17%
+      strict gate), zero unique catastrophic FPs (vs P8A 11, step2500 60). NEVER
+      the outlier-high on disputed real frames. Trades 17pp on HDTF
+      visomaster_enhanced_teams_dev recall (77.4% vs P8A 94.6%) for substantial
+      real-side robustness across all production-relevant axes.
+
+      See analysis/cpu_diagnostics_2026-05-10/ROBUSTNESS_FACTS_2026-05-10.md +
+      ROBUSTNESS_OPINIONS_2026-05-10.md.
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.682
+      lockbox_real_fpr: 0.0309
+      lockbox_fake_recall: 0.7747
+      dev_fake_macro_recall: 0.3763
+      teams_fake_all_dev_recall: 0.5907
+      visomaster_enhanced_macro_dev_recall: 0.1218
+      deeplive_enhanced_dev_recall: 0.4165
+      dev_worst_real_stress_fpr: 0.0992
+    f4_substrate_recall:
+      f4_viso_at_fpr_10pct: 0.7327
+      f4_deeplive_at_fpr_10pct: 1.000
+      f4_teams_fake_at_fpr_10pct: 0.9513
+    artifacts:
+      scorecard_dir: analysis/cpu_diagnostics_2026-05-09/_t3_scorecards/slot1_step1500
+      per_frame_scores:
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step1500/visomaster_enhanced_macro_dev_t3_slot1_periodic_step1500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step1500/deeplive_enhanced_dev_t3_slot1_periodic_step1500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step1500/teams_fake_all_dev_t3_slot1_periodic_step1500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step1500/teams_real_all_dev_t3_slot1_periodic_step1500_frames_report.csv
+    notes:
+      - title: Production-robust candidate (2026-05-10 robustness diagnostics)
+        status: success
+        text: |
+          Lowest catastrophic-tail width (9.03% reals > 0.5), zero unique
+          catastrophic FPs on teams_real_all_dev, never outlier-high on disputed
+          real frames. IQ gate REDUCES FPR 3.18× (largest reduction of any
+          candidate). On warm-color (color_a_dev Q4) post-medium-gate: 11.5%
+          FPR vs P8A 13.3%, step2500 33.6%, E2B 36.3%.
+      - title: Trade-off — weaker on HDTF visomaster_enhanced_teams
+        status: caveat
+        text: |
+          77.4% recall at FPR-cal 5% on HDTF visomaster_enhanced_teams_dev (n=1182),
+          vs P8A 94.6%. If production attack class concentrates on this transport,
+          P8A still wins Pillar 1.
+      - title: Per-identity FPR — beats P8A on every identity except Roy_D
+        status: context
+        text: |
+          PC_Generator FPR -11.3pp (24.1% → 12.8%), non-chronic FPR -4.5pp
+          (6.5% → 2.0%), Roy_D FPR +50pp (29.2% → 79.2%). Roy_D is the
+          color-axis fragility; under medium IQ gate, ~94% of Roy_D frames are
+          filtered. Production exposure depends on whether warm-color users
+          appear at sharp+large resolution.
+
+  - id: t3_slot1_step2500
+    label: T3 Slot1 Step 2500 (drop high-IQ teams reals — capability leader)
+    run_id: bxnuz22g
+    checkpoint_key: T3_SLOT1_PERIODIC_STEP2500
+    checkpoint: gs://training-job-outputs/phase2r13_experiments/bxnuz22g/periodic_effort_20260509_step2500.pth
+    aliases:
+      - T3_SLOT1_STEP2500
+      - T3_SLOT1_PERIODIC_STEP2500
+    tags:
+      - t3
+      - phase2-round13
+      - slot1
+      - drop-high-iq-teams-reals
+      - "2026-05-09"
+      - capability-leader
+      - color-axis-fragile
+    recipe: |
+      Same training run as T3_SLOT1_STEP1500 — different operating point at step 2500.
+      Highest fake-side capability of any R13 ckpt (F4 viso 79.3%, F4 deeplive 100%,
+      F4 teams_fake 96.1% all at FPR=10%; HDTF visomaster_enhanced_teams_dev 85.0%
+      at FPR-cal 5%).
+
+      OPERATIONAL FINDING (2026-05-10 robustness diagnostics): widest
+      catastrophic-tail of the 4-candidate set (19.96% reals > 0.5; 60 unique
+      catastrophic FPs). Color-axis (color_a_dev Q4) FPR is 20.4% pre-gate,
+      14.2% post-medium-gate, 18.4% post-strict-gate — the IQ gate does NOT
+      shield this fragility. NEVER the outlier-low on disputed reals (always
+      most aggressive when ckpts disagree).
+
+      Recommend AGAINST shipping in production until color-axis regression is
+      addressed (T4 packet candidate: Slot 1 keep-list + face_scale_jitter@0.50).
+
+      See analysis/cpu_diagnostics_2026-05-10/ROBUSTNESS_FACTS_2026-05-10.md.
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.971
+      lockbox_real_fpr: 0.0382
+      lockbox_fake_recall: 0.8933
+      dev_fake_macro_recall: 0.2295
+      teams_fake_all_dev_recall: 0.4525
+      visomaster_enhanced_macro_dev_recall: 0.0782
+      deeplive_enhanced_dev_recall: 0.1578
+      dev_worst_real_stress_fpr: 0.0999
+      passes_floor: false
+    f4_substrate_recall:
+      f4_viso_at_fpr_10pct: 0.7927
+      f4_deeplive_at_fpr_10pct: 1.000
+      f4_teams_fake_at_fpr_10pct: 0.9608
+    artifacts:
+      scorecard_dir: analysis/cpu_diagnostics_2026-05-09/_t3_scorecards/slot1_step2500
+      per_frame_scores:
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step2500/visomaster_enhanced_macro_dev_t3_slot1_periodic_step2500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step2500/deeplive_enhanced_dev_t3_slot1_periodic_step2500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step2500/teams_fake_all_dev_t3_slot1_periodic_step2500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-09/_t3_f4_inputs/slot1_step2500/teams_real_all_dev_t3_slot1_periodic_step2500_frames_report.csv
+    notes:
+      - title: Highest capability, widest catastrophic tail
+        status: warning
+        text: |
+          Strongest fake-side recall everywhere (F4 viso 79.3%, F4 deeplive 100%,
+          F4 teams_fake 96.1%). But also the widest false-flag tail: 19.96% of
+          reals score > 0.5, 60 unique catastrophic FPs that no other ckpt has.
+      - title: Color-axis fragility not shielded by IQ gate
+        status: warning
+        text: |
+          color_a_dev Q4 (warm-color, Roy_D-type) FPR: 20.4% pre-gate, 14.2%
+          post-medium-gate, 18.4% post-strict-gate. The strict gate AMPLIFIES
+          the fragility because sharp+large warm-color frames are exactly
+          what step2500 over-fires on most. Production warm-color users at
+          sharp resolution would pass the gate and be wrongly flagged.
+      - title: F0 contract floor failure is a calibration artifact
+        status: context
+        text: |
+          dev_fake_macro_recall 22.95% < 30% floor. Auto-τ clips at 0.971 to
+          control real-FPR with chronic-6 in F0 reals. Under F4 (chronic-6
+          dropped), step2500 hits 79% viso / 100% deeplive / 96% teams_fake
+          at 10% FPR — but the real-side fragility does not disappear
+          under F4, just becomes invisible to the contract scorer.
+
+  # ─────────────────────────────────────────────────────────────────
+  # 2026-05-13: Best-candidate search — T5C_step3500 + P2D_fourier_step3000
+  # are the two strongest under F4 substrate cleaning across 38 candidates.
+  # Wired here alongside P8A + E2B for visual identity-frame comparison.
+  # Source: analysis/best_candidate_search_2026-05-13/02_VERDICT.md
+  # ─────────────────────────────────────────────────────────────────
+  - id: t5c_step3500
+    label: T5C Step 3500 (T4 + classifier 256→1024) — STRONGEST F4 RECALL
+    run_id: jrlldtem
+    checkpoint_key: T5C_PERIODIC_STEP3500
+    checkpoint: gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth
+    aliases:
+      - T5C
+      - T5C_STEP3500
+      - T5C_PERIODIC_STEP3500
+    tags:
+      - t5c
+      - phase2-round13
+      - classifier-1024
+      - f4-recall-leader
+      - "2026-05-11"
+      - "2026-05-13-best-candidate-search"
+    recipe: |
+      FT-from-T4 with single lever — online classifier hidden_dim 256 → 1024.
+      NO other recipe change vs T4. Seed 9501. Run trained to step 5000 full.
+
+      OPERATIONAL FINDING (2026-05-13 best-candidate-search):
+      Strongest macro fake recall on F4 substrate of any of 38 candidates:
+        - F4 viso     78.0% / 87.6% at FPR=5% / 10%
+        - F4 deeplive 98.9% / 100.0%
+        - F4 teams_fake 94.8% / 97.4%
+        - macro       90.6% at FPR=5%  (only candidate ≥ 90% at this FPR)
+        - macro       95.0% at FPR=10%
+      Highest forgery AUC on F4 reals (0.982). Lowest pearson r(score, min_dim)
+      on F4 (−0.011 — least shortcut-driven on production-realistic substrate).
+
+      RISK — Roy_D catastrophic collapse: T5C scores 100% of 130 Roy_D dev
+      real frames > 0.5 (median 0.912). Without a soft-focus gate
+      (lap_var < 80), production warm-color + soft-camera substrate will
+      misfire badly. Compare in Frame Browser vs P8A and P2D_fourier_step3000
+      which handle Roy_D more gracefully (45% / 63% > 0.5 respectively).
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.4218  # F4-calibrated tau at FPR=5%
+      f4_real_fpr: 0.05
+      p2_real_fpr: 0.07  # what production sees if only G1+G2 gate applied
+      f0_real_fpr: 0.176  # what production sees with no gate
+      macro_fake_recall_f4_FPR5: 0.906
+      visomaster_enhanced_macro_dev_recall: 0.780
+      deeplive_enhanced_dev_recall: 0.989
+      teams_fake_all_dev_recall: 0.948
+    f4_substrate_recall:
+      f4_viso_at_fpr_10pct: 0.876
+      f4_deeplive_at_fpr_10pct: 1.000
+      f4_teams_fake_at_fpr_10pct: 0.974
+    artifacts:
+      verdict_doc: analysis/best_candidate_search_2026-05-13/02_VERDICT.md
+      threshold_table: analysis/best_candidate_search_2026-05-13/_thresholds/DEPLOYMENT_THRESHOLDS.csv
+      roy_d_probe: analysis/best_candidate_search_2026-05-13/_roy_d_probe/roy_d_iq_features.csv
+      per_frame_scores:
+        - analysis/cpu_diagnostics_2026-05-12_stage_a/_scorecard_reports/visomaster_enhanced_macro_dev_t5c_periodic_step3500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-12_stage_a/_scorecard_reports/deeplive_enhanced_dev_t5c_periodic_step3500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-12_stage_a/_scorecard_reports/teams_fake_all_dev_t5c_periodic_step3500_frames_report.csv
+        - analysis/cpu_diagnostics_2026-05-12_stage_a/_scorecard_reports/teams_real_all_dev_t5c_periodic_step3500_frames_report.csv
+    notes:
+      - title: F4-recall leader (best-candidate search 2026-05-13)
+        status: success
+        text: |
+          90.6% macro fake recall at 5% FPR on F4 substrate — the only candidate
+          of 38 to clear 90% at this FPR. Forgery AUC F4 = 0.982 (highest).
+          Pearson r(score, min_dim) on F4 = −0.011 (lowest among finalists —
+          essentially no face-size shortcut on production-realistic substrate).
+      - title: Roy_D catastrophic collapse without soft-focus gate
+        status: warning
+        text: |
+          T5C scores ALL 130 Roy_D dev real frames > 0.5 (median 0.912). Roy_D
+          characteristic: median min_wh=270, sharpness=69 (Laplacian variance),
+          warm color saturation=125. Passes the G2 min-resolution gate (270 >
+          200). Production deployment requires either: (a) soft-focus
+          gate (G3: lap_var < 80) OR (b) accepting that warm-color +
+          soft-camera traffic will misfire. See analysis/best_candidate_search_2026-05-13/03_DEPLOYMENT_GATE_AND_THRESHOLDS.md.
+      - title: Frame Browser comparison vs P8A and P2D_fourier_step3000
+        status: context
+        text: |
+          Use the Frame Browser to compare identities side-by-side. Roy_D
+          frames are the most discriminating case: T5C scores them ~0.91 vs
+          P8A 0.44, E2B 0.29, P2D 0.62. PC_Generator__s22 (the chronic
+          tiny-face cohort): T5C 0.46 vs P8A 0.91 — directionally opposite
+          failure mode.
+
+  - id: p2d_fourier_step3000
+    label: P2 D Fourier Step 3000 — Roy_D-robust runner-up (89% F4@FPR=5%)
+    run_id: 89tt9xyz
+    checkpoint_key: P2_D_FOURIER_PERIODIC_STEP3000
+    checkpoint: gs://training-job-outputs/best_checkpoints/89tt9xyz/periodic_effort_20260507_step3000_auc0.9738_eer0.0823.pth
+    aliases:
+      - P2D_FOURIER
+      - P2D_FOURIER_STEP3000
+      - P2_D_FOURIER_PERIODIC_STEP3000
+    tags:
+      - p2
+      - phase2-round13
+      - fourier-band-aug
+      - "2026-05-08"
+      - "2026-05-13-best-candidate-search"
+      - roy-d-robust
+    recipe: |
+      Scratch from CLIP-B16 with the band-limited Fourier amplitude
+      augmentation as the SINGLE active anti-shortcut lever. Radial bands
+      8-13 randomized (multiplicative log-uniform [-0.3, +0.3]), bands 5-6
+      preserved (manipulation-signal-carrying per fourier_band_overlap probe
+      2026-05-06), phase preserved universally, p_apply=0.5. Seed 5304.
+
+      OPERATIONAL FINDING (2026-05-13 best-candidate-search):
+      Runner-up by F4 macro recall (89.16% at FPR=5%, 94.08% at FPR=10%).
+      Handles Roy_D substantially better than T5C: 63% > 0.5 vs T5C's 100%
+      (median 0.62 vs 0.91). Pearson r(score, min_dim) on F4 = +0.049
+      (very low shortcut). Forgery AUC F4 = 0.974.
+
+      Trade-off vs T5C: ~1.4pp lower headline recall at FPR=5%, but
+      substantially safer if production substrate includes Roy_D-like
+      (warm-color + soft-focus) traffic. No soft-focus gate required.
+    contract_metrics_at_calibrated_tau:
+      selected_threshold: 0.1638  # F4-calibrated tau at FPR=5%
+      f4_real_fpr: 0.05
+      p2_real_fpr: 0.07
+      f0_real_fpr: 0.178
+      macro_fake_recall_f4_FPR5: 0.892
+      visomaster_enhanced_macro_dev_recall: 0.747
+      deeplive_enhanced_dev_recall: 0.987
+      teams_fake_all_dev_recall: 0.940
+    f4_substrate_recall:
+      f4_viso_at_fpr_10pct: 0.856
+      f4_deeplive_at_fpr_10pct: 0.996
+      f4_teams_fake_at_fpr_10pct: 0.970
+    artifacts:
+      verdict_doc: analysis/best_candidate_search_2026-05-13/02_VERDICT.md
+      threshold_table: analysis/best_candidate_search_2026-05-13/_thresholds/DEPLOYMENT_THRESHOLDS.csv
+      per_frame_scores:
+        - analysis/p2_eval_2026-05-08/p2_deeper_analysis/frame_reports/visomaster_enhanced_macro_dev_p2_d_fourier_periodic_step3000_frames_report.csv
+        - analysis/p2_eval_2026-05-08/p2_deeper_analysis/frame_reports/deeplive_enhanced_dev_p2_d_fourier_periodic_step3000_frames_report.csv
+        - analysis/p2_eval_2026-05-08/p2_deeper_analysis/frame_reports/teams_fake_all_dev_p2_d_fourier_periodic_step3000_frames_report.csv
+        - analysis/p2_eval_2026-05-08/p2_deeper_analysis/frame_reports/teams_real_all_dev_p2_d_fourier_periodic_step3000_frames_report.csv
+    notes:
+      - title: Runner-up by F4 recall but Roy_D-robust
+        status: success
+        text: |
+          F4 macro recall 89.16% / 94.08% at FPR=5% / 10% — 1.4pp / 0.9pp
+          behind T5C but handles Roy_D substantially better (63% > 0.5 vs
+          T5C 100% > 0.5). Recommended when production substrate is
+          unknown or includes warm-color + soft-focus subjects.
+      - title: Different recipe family — scratch + Fourier-band aug
+        status: context
+        text: |
+          P2D is structurally distinct from T5C: B16 scratch (not FT from
+          P8A/T4), single-lever Fourier-band augmentation (vs T5C's
+          classifier-capacity lever). Provides an architecture-orthogonal
+          comparison point for the Frame Browser.
+
+  - id: pre_plan_2026_05_19
+    label: Pre-Plan CPU Diagnostics — 2026-05-19 (10 jobs, $0)
+    run_id: pre_plan_2026_05_19
+    checkpoint_key: PRE_PLAN_2026_05_19
+    checkpoint: "(pseudo-run; aggregates 10 CPU diagnostics across 5 ckpts)"
+    aliases:
+      - pre_plan
+      - cpu_diagnostics_2026_05_19
+    tags:
+      - cpu-diagnostic
+      - "2026-05-19"
+      - pre-plan
+      - tiebreak-audit
+      - bimodal-partition
+    recipe: |
+      Ten CPU jobs ($0 cost) executed before drafting the next packet plan. Jobs cover:
+      C — fake-vs-real AUC on the 2026-05-15 resolution-chain panel (per AGENT_GUIDE Rule 6).
+      A — Slot β step3500 per-identity lockbox FPR × joint-marginal bimodal partition.
+      E — Per-ckpt chronic-6 partition matrix across all 5 ckpts.
+      B — Tiebreak audit + per-IQ-quartile FPR decomposition.
+      F — Slot β NEW failure modes vs T5C.
+      G — Anchor-aware rescue identities × bimodal partition cross-reference.
+      H — Joint-marginal §4.2 pocket spec verification (REFUTED).
+      I — Roy_D train-vs-dev path audit (closes `roy-d-color-b-dev-mechanism`).
+      J — Slot β vs T5C disagreement structure + all-ckpt correlation.
+      Headline findings in FACTS_2026-05-19.md; planning interpretation in OPINIONS_2026-05-19.md.
+    artifacts:
+      facts_doc: analysis/cpu_diagnostics_2026-05-19_pre_plan/FACTS_2026-05-19.md
+      opinions_doc: analysis/cpu_diagnostics_2026-05-19_pre_plan/OPINIONS_2026-05-19.md
+      summary_figure: analysis/cpu_diagnostics_2026-05-19_pre_plan/figs/summary_2026-05-19.png
+      auc_figure: analysis/cpu_diagnostics_2026-05-19_pre_plan/figs/job_c_auc_vs_size.png
+      job_a_per_identity: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs/job_a_per_identity_slot_b.csv
+      job_b_ranking_comparison: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs/job_b_ranking_comparison.csv
+      job_c_auc_summary: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs/job_c_auc_summary.csv
+      job_e_fpr_matrix: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs/job_e_fpr_matrix_wide.csv
+      job_h_spec_variants: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs/job_h_spec_variants.csv
+      job_j_all_ckpt_corr: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs/job_j_all_ckpt_corr_real.csv
+    notes:
+      - title: P8A rank-1 is a tiebreak artifact
+        status: warning
+        text: |
+          Under 7 of 8 evaluated tiebreaks (dev_recall_desc, lockbox_fake_recall_desc,
+          viso_desc, composite k=1/2/5/10), P8A is not rank-1. T5C step3500 is rank-1
+          under 5 of 8. The v3-fix policy's lockbox_real_fpr_asc tiebreak weights real
+          FPR ≥20× over fake recall — implicit and probably not aligned with
+          production cost. Closes loop `lockbox-real-fpr-tiebreak-is-load-bearing`.
+      - title: Slot β over-fires concentrate 93.5% on dor_shkedi (under-covered)
+        status: success
+        text: |
+          124 lockbox over-fires from Slot β step3500 — 116 on dor_shkedi (under-covered,
+          joint-marginal ratio 0.21), 8 on bla_bla_chow__s1 (moderate). 0 on non-chronic.
+          The data lever IS structurally aligned with the binding failure mode — but the
+          §4.2 pre-launch spec catches 0 of these frames (see next note).
+      - title: §4.2 pre-launch pocket spec is REFUTED
+        status: failed
+        text: |
+          The audit's pre-registered spec (min_dim>350 AND (color_a_dev<4 OR >12) AND
+          skin_frac<0.35) matches 0 frames in lockbox_real and 0 frames in any of the
+          3 under-covered chronic identities it was meant to target. It matches 51%
+          of bla_bla_chow (over-covered — wrong direction). The data-ingestion lever
+          remains structurally live but requires a fresh per-identity spec.
+      - title: P8A vs T5C-family are operationally orthogonal on lockbox reals
+        status: context
+        text: |
+          Pearson on lockbox-real scores: P8A vs T5C-family 0.10-0.34; within
+          T5C-family 0.90+. P8A's worst quartile is face_pixel_area Q1_low (0.21 FPR);
+          Slot β's is brightness Q4_high (0.26). Disjoint failure axes — ensemble or
+          per-IQ-axis routing path is structurally live (different lever class than
+          label-free recall ensembling).
+      - title: Roy_D mechanism resolved — generalization, not memorization
+        status: success
+        text: |
+          Roy_D appears in arena dev manifests + the `combined_paired.CHRONIC_IDENTITIES`
+          constant + 13 R13 yaml descriptions, but NOT in any train-side artifact
+          (train_teams_real_pool, unified_tags, lockbox_tagging). P8A's
+          r(score, color_b_dev) = -0.714 on Roy_D is a generalization signal.
+          Closes loop `roy-d-color-b-dev-mechanism` pending GCS-side confirmation.
+
+  - id: pre_plan_extension_2026_05_20
+    label: Pre-Plan Extension — 2026-05-20 (Slot A v2 rescue)
+    run_id: pre_plan_extension_2026_05_20
+    checkpoint_key: PRE_PLAN_EXTENSION_2026_05_20
+    checkpoint: "(pseudo-run; aggregates 5 extension CPU diagnostics)"
+    aliases:
+      - pre_plan_ext
+      - slot_a_v2_rescue_2026_05_20
+    tags:
+      - cpu-diagnostic
+      - "2026-05-20"
+      - pre-plan-extension
+      - slot-a-v2
+      - anchor-aware
+      - ensemble-routing
+      - tiebreak-audit
+    recipe: |
+      Five extension CPU diagnostics ($0) discovered an entirely missed scorecard
+      from 2026-05-16 (auto-mode-scorecard-2026-05-16) that includes Slot A v2
+      anchor_aware step1500/step3500 and Slot B real_rebalance step1500/step3500.
+      Yesterday's pre-plan analysis used only the overnight scorecard (5 ckpts);
+      the auto-mode scorecard (6 ckpts) had a much stronger ckpt that was missed.
+
+      Jobs:
+        K — anchor_aware Vertex job state resolution (FAILED job was a re-launch
+            attempt; the actual successful run is W&B hp35c51p, Vertex 8471062799328477184).
+        A ext — per-identity lockbox FPR for all 9 ckpts across both scorecards.
+            Slot A v2 step3500 reduces dor_shkedi over-fires 6× vs Slot β.
+        B ext — tiebreak audit including 6 auto-mode ckpts. Slot A v2 step3500
+            is rank-1 under 6 of 8 evaluated tiebreaks (vs T5C's 5 yesterday).
+        L — ensemble routing simulation. T5C OR Slot A v2 s3500 is the strongest
+            rule (composite k=1 = 0.701) — beats single Slot A v2 by +0.033.
+        N — Roy_D GCS audit closes `roy-d-color-b-dev-mechanism` definitively
+            (reuses 2026-05-12 audit: 0 matches in 250 manifests + 1646 listings).
+
+      Headline findings in FACTS_EXTENSION_2026-05-20.md;
+      planning interpretation in OPINIONS_EXTENSION_2026-05-20.md.
+    artifacts:
+      facts_doc: analysis/cpu_diagnostics_2026-05-19_pre_plan/FACTS_EXTENSION_2026-05-20.md
+      opinions_doc: analysis/cpu_diagnostics_2026-05-19_pre_plan/OPINIONS_EXTENSION_2026-05-20.md
+      job_a_per_ckpt_summary: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs_2026-05-20/ext_job_a_per_ckpt_summary_9ckpts.csv
+      job_a_per_identity: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs_2026-05-20/ext_job_a_per_ckpt_per_identity.csv
+      job_a_chronic_matrix: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs_2026-05-20/ext_job_a_chronic_fpr_matrix_9ckpts.csv
+      job_b_ranking: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs_2026-05-20/ext_job_b_ranking_9ckpts.csv
+      job_l_ensemble: analysis/cpu_diagnostics_2026-05-19_pre_plan/outputs_2026-05-20/ext_job_l_ensemble_combo.csv
+    notes:
+      - title: Slot A v2 step3500 is the strongest single deployment-grade candidate
+        status: success
+        text: |
+          Rank-1 under 6 of 8 tiebreaks (lockbox_fake_recall_desc, viso_desc, composites
+          k=1/2/5/10). lockbox_real_fpr 0.0191 (0.07pp above P8A's 0.0184) at
+          +30pp lockbox_fake_recall, +14pp dev_fake_macro_recall, +3pp viso_recall.
+          Reduces dor_shkedi over-fires 6× vs Slot β (116→19) at the contract τ.
+          Yesterday's analysis missed this ckpt because the pre-plan only loaded
+          the overnight scorecard (5 ckpts), not the auto-mode scorecard (6 ckpts).
+      - title: P8A's rank-1 is even more tiebreak-dependent than yesterday's analysis showed
+        status: warning
+        text: |
+          Yesterday's tiebreak audit showed P8A rank-1 under 1 of 8 tiebreaks (T5C
+          under 5). Adding Slot A v2 to the panel: P8A still rank-1 under exactly
+          v3-fix's lockbox_real_fpr_asc; under every reasonable cost-ratio composite
+          (k=1 to k=10), Slot A v2 step3500 is rank-1. The 0.07pp lockbox_real_fpr gap
+          is essentially noise vs the +30pp recall lift.
+      - title: Ensemble routing path validated but de-prioritized vs single ckpt
+        status: context
+        text: |
+          T5C OR Slot A v2 OR-ensemble composite k=1 = 0.701 (beats single Slot A v2
+          by +0.033). P8A AND Slot A v2 AND-ensemble FPR = 0.00423 (4.4× lower than
+          either single ckpt). Useful for stress-FPR-dominated deployments. But adds
+          inference-time complexity (two models served) — Slot A v2 alone may be the
+          simpler ship.
+      - title: Roy_D mechanism resolved HIGH confidence — generalization
+        status: success
+        text: |
+          0 Roy_D matches in 2026-05-12 train teams-v2 audit (250 manifests + 1646
+          listings). P8A's r(score, color_b_dev) = -0.714 on Roy_D is generalization,
+          not memorization. Closes `roy-d-color-b-dev-mechanism` (MEDIUM, 2026-05-07).

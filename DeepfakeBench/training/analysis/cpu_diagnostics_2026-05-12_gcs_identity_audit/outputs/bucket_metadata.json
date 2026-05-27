@@ -1,0 +1,83 @@
+{
+  "description": "Teams-captured face crops. Structure mirrors live-deepfake-methods-real-and-fake-frames-cropped. Each sample has paired real+fake face frames captured through Microsoft Teams video call compression.",
+  "source": "teams_capture",
+  "source_session": "overnight_20260305",
+  "original_bucket": "live-deepfake-methods-real-and-fake-frames-cropped",
+  "uploaded_at": "2026-03-05T22:58:33.213788+00:00",
+  "pipeline_version": "teams_2.0",
+  "image_format": "jpg",
+  "total_samples": 1346,
+  "complete_pairs": 1346,
+  "total_real_frames": 26461,
+  "total_fake_frames": 26427,
+  "annotations_applied": {
+    "unusable_batches_removed": 76,
+    "bad_frames_removed": 411
+  },
+  "quality_thresholds": {
+    "min_file_size_bytes": 15000,
+    "complete_threshold_frames": 3
+  },
+  "strategy_breakdown": {
+    "edge_cases": {
+      "samples": 389,
+      "complete_pairs": 389,
+      "real_frames": 7670,
+      "fake_frames": 7616
+    },
+    "minimal_processing": {
+      "samples": 410,
+      "complete_pairs": 410,
+      "real_frames": 8065,
+      "fake_frames": 8133
+    },
+    "quality_enhancement": {
+      "samples": 312,
+      "complete_pairs": 312,
+      "real_frames": 6161,
+      "fake_frames": 6136
+    },
+    "visomaster_CSCS": {
+      "samples": 33,
+      "complete_pairs": 33,
+      "real_frames": 647,
+      "fake_frames": 651
+    },
+    "visomaster_GhostFace-v1": {
+      "samples": 36,
+      "complete_pairs": 36,
+      "real_frames": 692,
+      "fake_frames": 695
+    },
+    "visomaster_GhostFace-v2": {
+      "samples": 32,
+      "complete_pairs": 32,
+      "real_frames": 612,
+      "fake_frames": 614
+    },
+    "visomaster_GhostFace-v3": {
+      "samples": 35,
+      "complete_pairs": 35,
+      "real_frames": 669,
+      "fake_frames": 682
+    },
+    "visomaster_InStyleSwapper256-A": {
+      "samples": 34,
+      "complete_pairs": 34,
+      "real_frames": 670,
+      "fake_frames": 654
+    },
+    "visomaster_InStyleSwapper256-B": {
+      "samples": 36,
+      "complete_pairs": 36,
+      "real_frames": 692,
+      "fake_frames": 688
+    },
+    "visomaster_Inswapper128": {
+      "samples": 29,
+      "complete_pairs": 29,
+      "real_frames": 583,
+      "fake_frames": 558
+    }
+  }
+}

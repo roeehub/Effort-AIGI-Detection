@@ -1,0 +1,318 @@
+{
+  "tau": 0.9741,
+  "score_col": "prob_fake_p8a",
+  "baseline_lockbox": {
+    "fpr": 0.0459,
+    "recall": 0.3294,
+    "n_real": 414,
+    "n_fake": 425,
+    "auc": 0.8285
+  },
+  "baseline_dev": {
+    "fpr": 0.0607,
+    "recall": 0.6573,
+    "n_real": 4006,
+    "n_fake": 2489
+  },
+  "g2_capture_mode": [
+    {
+      "split": "lockbox",
+      "mode_filter": "all",
+      "n_real": 414,
+      "n_fake": 425,
+      "coverage": 1.0,
+      "fpr": 0.0459,
+      "recall": 0.3294
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "normal_photo",
+      "n_real": 240,
+      "n_fake": 41,
+      "coverage": 0.3349,
+      "fpr": 0.0083,
+      "recall": 0.7317
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "phone_screen",
+      "n_real": 68,
+      "n_fake": 348,
+      "coverage": 0.4958,
+      "fpr": 0.0,
+      "recall": 0.2126
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "screen",
+      "n_real": 1,
+      "n_fake": 0,
+      "coverage": 0.0012,
+      "fpr": 1.0,
+      "recall": NaN
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "screen_recording",
+      "n_real": 0,
+      "n_fake": 1,
+      "coverage": 0.0012,
+      "fpr": NaN,
+      "recall": 1.0
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "webcam",
+      "n_real": 105,
+      "n_fake": 35,
+      "coverage": 0.1669,
+      "fpr": 0.1524,
+      "recall": 1.0
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "prod_modes_only",
+      "n_real": 308,
+      "n_fake": 389,
+      "coverage": 0.8308,
+      "fpr": 0.0065,
+      "recall": 0.2674
+    },
+    {
+      "split": "lockbox",
+      "mode_filter": "exclude_webcam",
+      "n_real": 309,
+      "n_fake": 390,
+      "coverage": 0.8331,
+      "fpr": 0.0097,
+      "recall": 0.2692
+    },
+    {
+      "split": "dev",
+      "mode_filter": "all",
+      "n_real": 4006,
+      "n_fake": 2489,
+      "coverage": 1.0,
+      "fpr": 0.0607,
+      "recall": 0.6573
+    },
+    {
+      "split": "dev",
+      "mode_filter": "normal_photo",
+      "n_real": 1128,
+      "n_fake": 1025,
+      "coverage": 0.3315,
+      "fpr": 0.0186,
+      "recall": 0.7649
+    },
+    {
+      "split": "dev",
+      "mode_filter": "phone_screen",
+      "n_real": 1372,
+      "n_fake": 526,
+      "coverage": 0.2922,
+      "fpr": 0.0131,
+      "recall": 0.884
+    },
+    {
+      "split": "dev",
+      "mode_filter": "screen",
+      "n_real": 208,
+      "n_fake": 11,
+      "coverage": 0.0337,
+      "fpr": 0.0577,
+      "recall": 0.8182
+    },
+    {
+      "split": "dev",
+      "mode_filter": "screen_recording",
+      "n_real": 46,
+      "n_fake": 93,
+      "coverage": 0.0214,
+      "fpr": 0.0435,
+      "recall": 0.0215
+    },
+    {
+      "split": "dev",
+      "mode_filter": "webcam",
+      "n_real": 1252,
+      "n_fake": 834,
+      "coverage": 0.3212,
+      "fpr": 0.1518,
+      "recall": 0.4508
+    },
+    {
+      "split": "dev",
+      "mode_filter": "prod_modes_only",
+      "n_real": 2500,
+      "n_fake": 1551,
+      "coverage": 0.6237,
+      "fpr": 0.0156,
+      "recall": 0.8053
+    },
+    {
+      "split": "dev",
+      "mode_filter": "exclude_webcam",
+      "n_real": 2754,
+      "n_fake": 1655,
+      "coverage": 0.6788,
+      "fpr": 0.0192,
+      "recall": 0.7613
+    }
+  ],
+  "g3_pixel_area": [
+    {
+      "gate": "face_pixel_area",
+      "min_px": 1000,
+      "coverage": 1.0,
+      "n_real": 414,
+      "n_fake": 425,
+      "fpr": 0.0459,
+      "recall": 0.3294
+    },
+    {
+      "gate": "face_pixel_area",
+      "min_px": 5000,
+      "coverage": 0.9249,
+      "n_real": 351,
+      "n_fake": 425,
+      "fpr": 0.0285,
+      "recall": 0.3294
+    },
+    {
+      "gate": "face_pixel_area",
+      "min_px": 10000,
+      "coverage": 0.9249,
+      "n_real": 351,
+      "n_fake": 425,
+      "fpr": 0.0285,
+      "recall": 0.3294
+    },
+    {
+      "gate": "face_pixel_area",
+      "min_px": 20000,
+      "coverage": 0.8808,
+      "n_real": 314,
+      "n_fake": 425,
+      "fpr": 0.0064,
+      "recall": 0.3294
+    },
+    {
+      "gate": "face_pixel_area",
+      "min_px": 40000,
+      "coverage": 0.4923,
+      "n_real": 68,
+      "n_fake": 345,
+      "fpr": 0.0,
+      "recall": 0.1855
+    },
+    {
+      "gate": "face_pixel_area",
+      "min_px": 60000,
+      "coverage": 0.3981,
+      "n_real": 0,
+      "n_fake": 334,
+      "fpr": NaN,
+      "recall": 0.1677
+    },
+    {
+      "gate": "face_pixel_area",
+      "min_px": 80000,
+      "coverage": 0.3576,
+      "n_real": 0,
+      "n_fake": 300,
+      "fpr": NaN,
+      "recall": 0.1533
+    }
+  ],
+  "g4_quality_floor": [
+    {
+      "split": "lockbox",
+      "quality_filter": "drop_no_face",
+      "coverage": 1.0,
+      "n_real": 414,
+      "n_fake": 425,
+      "fpr": 0.0459,
+      "recall": 0.3294
+    },
+    {
+      "split": "lockbox",
+      "quality_filter": "drop_low_quality",
+      "coverage": 0.2277,
+      "n_real": 191,
+      "n_fake": 0,
+      "fpr": 0.0,
+      "recall": NaN
+    },
+    {
+      "split": "lockbox",
+      "quality_filter": "drop_both",
+      "coverage": 0.2277,
+      "n_real": 191,
+      "n_fake": 0,
+      "fpr": 0.0,
+      "recall": NaN
+    },
+    {
+      "split": "dev",
+      "quality_filter": "drop_no_face",
+      "coverage": 0.9663,
+      "n_real": 3832,
+      "n_fake": 2444,
+      "fpr": 0.0632,
+      "recall": 0.6628
+    },
+    {
+      "split": "dev",
+      "quality_filter": "drop_low_quality",
+      "coverage": 0.1389,
+      "n_real": 458,
+      "n_fake": 444,
+      "fpr": 0.0,
+      "recall": 0.0833
+    },
+    {
+      "split": "dev",
+      "quality_filter": "drop_both",
+      "coverage": 0.1386,
+      "n_real": 456,
+      "n_fake": 444,
+      "fpr": 0.0,
+      "recall": 0.0833
+    }
+  ],
+  "g5_highlights": [
+    {
+      "far_threshold": 0.25,
+      "coverage": 0.0,
+      "fpr": NaN,
+      "recall": NaN,
+      "n_real": 0,
+      "n_fake": 0
+    },
+    {
+      "far_threshold": 0.35,
+      "coverage": 0.0,
+      "fpr": NaN,
+      "recall": NaN,
+      "n_real": 0,
+      "n_fake": 0
+    },
+    {
+      "far_threshold": 0.45,
+      "coverage": 0.0,
+      "fpr": NaN,
+      "recall": NaN,
+      "n_real": 0,
+      "n_fake": 0
+    },
+    {
+      "far_threshold": 0.55,
+      "coverage": 0.0,
+      "fpr": NaN,
+      "recall": NaN,
+      "n_real": 0,
+      "n_fake": 0
+    }
+  ]
+}

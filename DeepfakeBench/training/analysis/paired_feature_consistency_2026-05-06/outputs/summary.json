@@ -1,0 +1,71 @@
+{
+  "n_pairs": 275,
+  "median_pair_cosine_distance_p8a": 0.05834866945555128,
+  "median_pair_cosine_distance_clip_b16": 0.09448082254755252,
+  "p25_p75_p95_p8a_cos_dist": [
+    0.009488342458238375,
+    0.17978769226320102,
+    0.42371786373163034
+  ],
+  "p25_p75_p95_clip_cos_dist": [
+    0.06301803157639196,
+    0.11378868238914785,
+    0.13411259736556438
+  ],
+  "median_p8a_l2": 0.3416099221496685,
+  "median_clip_l2": 0.4346971878159612,
+  "pct_pairs_p8a_dist_smaller_than_clip": 54.90909090909091,
+  "regression": {
+    "feat_metric": "cosine_distance (1 - cos)",
+    "p8a_feat_vs_p8a_abs_score_delta": {
+      "pearson_r": 0.6967356261102641,
+      "pearson_p": 2.8163748959800263e-41,
+      "slope": 1.1292271278889705,
+      "intercept": 0.056584552548531425,
+      "r2": 0.48544053269126186,
+      "n": 275
+    },
+    "p8a_feat_vs_p8a_signed_score_delta": {
+      "pearson_r": 0.7065967694812194,
+      "pearson_p": 6.722762627644589e-43,
+      "slope": 1.2148754949406306,
+      "intercept": 0.026711733446613706,
+      "r2": 0.49927899464129566,
+      "n": 275
+    },
+    "p8a_feat_vs_e2b_abs_score_delta": {
+      "pearson_r": -0.08941921500191358,
+      "pearson_p": 0.13912429324714407,
+      "slope": -0.11618798234342306,
+      "intercept": 0.14544715236349764,
+      "r2": 0.00799579601155842,
+      "n": 275
+    },
+    "p8a_feat_vs_e2b_signed_score_delta": {
+      "pearson_r": 0.2280089472796655,
+      "pearson_p": 0.00013660253722212667,
+      "slope": 0.33378143204404437,
+      "intercept": -0.1263259387233155,
+      "r2": 0.05198808003958144,
+      "n": 275
+    },
+    "clip_feat_vs_p8a_abs_score_delta": {
+      "pearson_r": 0.45023949684120146,
+      "pearson_p": 3.928465947240659e-15,
+      "slope": 3.775183755025063,
+      "intercept": -0.1467646568170362,
+      "r2": 0.20271560451581827,
+      "n": 275
+    },
+    "clip_feat_vs_e2b_abs_score_delta": {
+      "pearson_r": -0.39766731017589335,
+      "pearson_p": 7.433557796657186e-12,
+      "slope": -2.673200101588327,
+      "intercept": 0.37267578650998034,
+      "r2": 0.15813928958253032,
+      "n": 275
+    }
+  },
+  "verdict": "ENCODER_PARTIAL_INVARIANCE",
+  "recommendation": "Encoder is partially invariant. Both head-axis (AugMix on frozen encoder + new head) and encoder-axis (PD-class FT, SBI) levers are worth pursuing."
+}

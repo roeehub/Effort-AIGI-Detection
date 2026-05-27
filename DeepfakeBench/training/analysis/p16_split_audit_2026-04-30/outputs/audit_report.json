@@ -1,0 +1,38 @@
+{
+  "audit": "p16_split_audit",
+  "date": "2026-04-30",
+  "eval_manifest": "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json",
+  "eval_slice": "visomaster_enhanced_macro",
+  "eval_split": "dev",
+  "resolver_cache": "analysis/p16_split_audit_2026-04-30/_cache/enhanced_visomaster_resolver_2026-04-06.json",
+  "context": {
+    "n_eval_videos": 550,
+    "n_eval_sequence_ids": 275,
+    "n_eval_buckets": 1,
+    "n_eval_frame_paths": 550,
+    "n_train_sample_ids": 999,
+    "n_train_buckets": 2,
+    "n_train_frame_paths": 0
+  },
+  "checks": [
+    {
+      "name": "bucket_disjointness",
+      "passed": true,
+      "detail": "train_buckets=2, eval_buckets=1, overlap=0",
+      "overlap_examples": []
+    },
+    {
+      "name": "sequence_id_disjointness",
+      "passed": true,
+      "detail": "n_eval_sequence_ids=275, n_train_sample_ids=999, matched_pairs=0",
+      "overlap_examples": []
+    },
+    {
+      "name": "frame_path_disjointness",
+      "passed": true,
+      "detail": "train_frame_paths=0, eval_frame_paths=550, overlap=0",
+      "overlap_examples": []
+    }
+  ],
+  "verdict": "PASS"
+}

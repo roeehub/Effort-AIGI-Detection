@@ -1,0 +1,29 @@
+{
+  "suite_name": "visomaster_enhanced_macro_dev",
+  "n_frames": 550,
+  "label": "fake (all)",
+  "methods": {
+    "visomaster_enhanced_macro": 550
+  },
+  "families": {
+    "visomaster_enhanced_fake": 550
+  },
+  "gcs_bucket_dir": "gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake",
+  "manifest_source": "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json",
+  "training_source_for_viso": [
+    "live-deepfake-methods-real-and-fake-frames-cropped/samples/visomaster_*",
+    "(visomaster_teams_enhanced is the conjunction match \u2014 disabled in P8A; enabled in P16/xan4dfto/R13_P14_DATA_FIX)"
+  ],
+  "swap_methods_in_viso": [
+    "CSCS",
+    "GhostFace-v1",
+    "GhostFace-v2",
+    "GhostFace-v3",
+    "InStyleSwapper256-A",
+    "InStyleSwapper256-B",
+    "InStyleSwapper256-C",
+    "Inswapper128",
+    "SimSwap512"
+  ],
+  "notes_2026_05_03": "All 550 frames are recaptures-through-Teams of GAN-enhanced viso fakes. The training data has the enhancer-pass viso WITHOUT the Teams transport \u2014 this is the bucket gap (~2\u00d7 delta-from-1 vs deeplive). See PSERIES_FACTS \u00a71.3, \u00a76.9.1."
+}

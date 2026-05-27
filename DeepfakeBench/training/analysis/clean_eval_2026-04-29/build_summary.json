@@ -1,0 +1,8 @@
+{
+  "clean_eval_v1_real_count": 28,
+  "clean_eval_v1_fake_count": 26,
+  "clean_eval_v1_real_identities": 8,
+  "clean_eval_v1_fake_methods": 13,
+  "shortcut_probe_v1_pair_count": 11,
+  "shortcut_probe_v1_identity_count": 8
+}

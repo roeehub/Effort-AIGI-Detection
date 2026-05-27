@@ -1,0 +1,313 @@
+{
+  "fpr_targets": {
+    "tau_strict": 0.05,
+    "tau_moderate": 0.1,
+    "tau_loose": 0.2
+  },
+  "method": "Three deployable taus picked by lowest tau where worst-substrate FPR on REAL DEV is at-or-below the FPR target. Substrate-aware single-tau policy: at deployment we cannot observe substrate, so we pick a single tau that bounds worst-substrate FPR. Naive baseline = lowest tau where global pooled FPR meets target (under-controls per-substrate FPR when score distributions differ across substrates). Per-mode tau is also reported as an oracle upper-bound (NOT deployable).",
+  "selections": {
+    "tau_strict": {
+      "fpr_target_worst_substrate": 0.05,
+      "substrate_aware_single_tau": {
+        "tau": 0.994063628897375,
+        "fpr_dev_worst_substrate": 0.03913738019169329,
+        "fpr_dev_global": 0.011393514460999123,
+        "per_substrate_fpr_dev": {
+          "normal_photo": 0.0008865248226950354,
+          "webcam": 0.03913738019169329,
+          "phone_screen": 0.0014577259475218659,
+          "screen": 0.0,
+          "screen_recording": 0.0
+        },
+        "per_suite_recall": {
+          "viso_dev": 0.0018181818181818182,
+          "deeplive_dev": 0.0,
+          "teams_fake_dev": 0.3705166173083251,
+          "teams_fake_lockbox": 0.1623529411764706
+        },
+        "fpr_lockbox_worst_substrate": 0.009523809523809525,
+        "fpr_lockbox_global": 0.0007052186177715092,
+        "per_substrate_fpr_lockbox": {
+          "normal_photo": 0.0,
+          "webcam": 0.009523809523809525,
+          "phone_screen": 0.0,
+          "screen": 0.0,
+          "screen_recording": NaN
+        }
+      },
+      "naive_global_pooled_single_tau": {
+        "tau": 0.9840584392328651,
+        "fpr_dev_worst_substrate": 0.11661341853035144,
+        "fpr_dev_global": 0.041849255039439086,
+        "per_substrate_fpr_dev": {
+          "normal_photo": 0.005319148936170213,
+          "webcam": 0.11661341853035144,
+          "phone_screen": 0.013119533527696793,
+          "screen": 0.014423076923076924,
+          "screen_recording": 0.021739130434782608
+        },
+        "per_suite_recall": {
+          "viso_dev": 0.04,
+          "deeplive_dev": 0.07522935779816514,
+          "teams_fake_dev": 0.5034550839091807,
+          "teams_fake_lockbox": 0.2847058823529412
+        },
+        "fpr_lockbox_worst_substrate": 0.06666666666666667,
+        "fpr_lockbox_global": 0.005641748942172073,
+        "per_substrate_fpr_lockbox": {
+          "normal_photo": 0.004166666666666667,
+          "webcam": 0.06666666666666667,
+          "phone_screen": 0.0,
+          "screen": 0.0,
+          "screen_recording": NaN
+        }
+      },
+      "recall_lift_substrate_aware_minus_naive_pp": {
+        "viso_dev": -3.8182,
+        "deeplive_dev": -7.5229,
+        "teams_fake_dev": -13.2938,
+        "teams_fake_lockbox": -12.2353
+      },
+      "lockbox_fpr_substrate_aware_pct": 0.0705,
+      "lockbox_fpr_naive_pct": 0.5642,
+      "per_mode_tau_oracle": {
+        "fpr_target_per_substrate": 0.05,
+        "tau_per_substrate_dev_calibrated": {
+          "normal_photo": 0.5276179671287536,
+          "webcam": 0.9936411172151566,
+          "phone_screen": 0.6301641345024109,
+          "screen": 0.9396737396717071,
+          "screen_recording": 0.7244292609393598
+        },
+        "note": "ORACLE policy \u2014 NOT deployable. Requires per-frame substrate at inference. Reported as upper bound for substrate-aware tuning lift.",
+        "lockbox_fpr_under_dev_per_mode_tau": 0.033816425120772944,
+        "lockbox_n_real_covered": 414,
+        "lockbox_n_real_total": 1418,
+        "per_suite_recall_under_dev_per_mode_tau": {
+          "viso_dev": {
+            "recall_on_substrate_known": NaN,
+            "n_frames_substrate_known": 0,
+            "n_frames_total": 550
+          },
+          "deeplive_dev": {
+            "recall_on_substrate_known": 0.1706422018348624,
+            "n_frames_substrate_known": 545,
+            "n_frames_total": 545
+          },
+          "teams_fake_dev": {
+            "recall_on_substrate_known": 0.6247488951386099,
+            "n_frames_substrate_known": 2489,
+            "n_frames_total": 3039
+          },
+          "teams_fake_lockbox": {
+            "recall_on_substrate_known": 0.5835294117647059,
+            "n_frames_substrate_known": 425,
+            "n_frames_total": 425
+          }
+        }
+      }
+    },
+    "tau_moderate": {
+      "fpr_target_worst_substrate": 0.1,
+      "substrate_aware_single_tau": {
+        "tau": 0.9891481137081066,
+        "fpr_dev_worst_substrate": 0.0950479233226837,
+        "fpr_dev_global": 0.03155127081507449,
+        "per_substrate_fpr_dev": {
+          "normal_photo": 0.0026595744680851063,
+          "webcam": 0.0950479233226837,
+          "phone_screen": 0.007288629737609329,
+          "screen": 0.014423076923076924,
+          "screen_recording": 0.0
+        },
+        "per_suite_recall": {
+          "viso_dev": 0.016363636363636365,
+          "deeplive_dev": 0.04036697247706422,
+          "teams_fake_dev": 0.4695623560381704,
+          "teams_fake_lockbox": 0.24941176470588236
+        },
+        "fpr_lockbox_worst_substrate": 0.0380952380952381,
+        "fpr_lockbox_global": 0.003526093088857546,
+        "per_substrate_fpr_lockbox": {
+          "normal_photo": 0.004166666666666667,
+          "webcam": 0.0380952380952381,
+          "phone_screen": 0.0,
+          "screen": 0.0,
+          "screen_recording": NaN
+        }
+      },
+      "naive_global_pooled_single_tau": {
+        "tau": 0.7136363636363636,
+        "fpr_dev_worst_substrate": 0.21645367412140576,
+        "fpr_dev_global": 0.09837861524978089,
+        "per_substrate_fpr_dev": {
+          "normal_photo": 0.03280141843971631,
+          "webcam": 0.21645367412140576,
+          "phone_screen": 0.043731778425655975,
+          "screen": 0.125,
+          "screen_recording": 0.06521739130434782
+        },
+        "per_suite_recall": {
+          "viso_dev": 0.26545454545454544,
+          "deeplive_dev": 0.42018348623853213,
+          "teams_fake_dev": 0.6972688384336952,
+          "teams_fake_lockbox": 0.5341176470588235
+        },
+        "fpr_lockbox_worst_substrate": 1.0,
+        "fpr_lockbox_global": 0.04231311706629055,
+        "per_substrate_fpr_lockbox": {
+          "normal_photo": 0.020833333333333332,
+          "webcam": 0.41904761904761906,
+          "phone_screen": 0.0,
+          "screen": 1.0,
+          "screen_recording": NaN
+        }
+      },
+      "recall_lift_substrate_aware_minus_naive_pp": {
+        "viso_dev": -24.9091,
+        "deeplive_dev": -37.9817,
+        "teams_fake_dev": -22.7706,
+        "teams_fake_lockbox": -28.4706
+      },
+      "lockbox_fpr_substrate_aware_pct": 0.3526,
+      "lockbox_fpr_naive_pct": 4.2313,
+      "per_mode_tau_oracle": {
+        "fpr_target_per_substrate": 0.1,
+        "tau_per_substrate_dev_calibrated": {
+          "normal_photo": 0.10049786642193802,
+          "webcam": 0.9874512434005739,
+          "phone_screen": 0.23709728568792346,
+          "screen": 0.8309157371520999,
+          "screen_recording": 0.03618505597114555
+        },
+        "note": "ORACLE policy \u2014 NOT deployable. Requires per-frame substrate at inference. Reported as upper bound for substrate-aware tuning lift.",
+        "lockbox_fpr_under_dev_per_mode_tau": 0.16908212560386474,
+        "lockbox_n_real_covered": 414,
+        "lockbox_n_real_total": 1418,
+        "per_suite_recall_under_dev_per_mode_tau": {
+          "viso_dev": {
+            "recall_on_substrate_known": NaN,
+            "n_frames_substrate_known": 0,
+            "n_frames_total": 550
+          },
+          "deeplive_dev": {
+            "recall_on_substrate_known": 0.3229357798165138,
+            "n_frames_substrate_known": 545,
+            "n_frames_total": 545
+          },
+          "teams_fake_dev": {
+            "recall_on_substrate_known": 0.7308155885897951,
+            "n_frames_substrate_known": 2489,
+            "n_frames_total": 3039
+          },
+          "teams_fake_lockbox": {
+            "recall_on_substrate_known": 0.7858823529411765,
+            "n_frames_substrate_known": 425,
+            "n_frames_total": 425
+          }
+        }
+      }
+    },
+    "tau_loose": {
+      "fpr_target_worst_substrate": 0.2,
+      "substrate_aware_single_tau": {
+        "tau": 0.8409090909090909,
+        "fpr_dev_worst_substrate": 0.19808306709265175,
+        "fpr_dev_global": 0.08391761612620509,
+        "per_substrate_fpr_dev": {
+          "normal_photo": 0.018617021276595744,
+          "webcam": 0.19808306709265175,
+          "phone_screen": 0.03206997084548105,
+          "screen": 0.10096153846153846,
+          "screen_recording": 0.06521739130434782
+        },
+        "per_suite_recall": {
+          "viso_dev": 0.20909090909090908,
+          "deeplive_dev": 0.3100917431192661,
+          "teams_fake_dev": 0.6495557749259625,
+          "teams_fake_lockbox": 0.4682352941176471
+        },
+        "fpr_lockbox_worst_substrate": 1.0,
+        "fpr_lockbox_global": 0.02679830747531735,
+        "per_substrate_fpr_lockbox": {
+          "normal_photo": 0.0125,
+          "webcam": 0.2857142857142857,
+          "phone_screen": 0.0,
+          "screen": 1.0,
+          "screen_recording": NaN
+        }
+      },
+      "naive_global_pooled_single_tau": {
+        "tau": 0.09545454545454546,
+        "fpr_dev_worst_substrate": 0.33653846153846156,
+        "fpr_dev_global": 0.1971954425942156,
+        "per_substrate_fpr_dev": {
+          "normal_photo": 0.10195035460992907,
+          "webcam": 0.31309904153354634,
+          "phone_screen": 0.14285714285714285,
+          "screen": 0.33653846153846156,
+          "screen_recording": 0.06521739130434782
+        },
+        "per_suite_recall": {
+          "viso_dev": 0.5709090909090909,
+          "deeplive_dev": 0.7834862385321101,
+          "teams_fake_dev": 0.8716683119447186,
+          "teams_fake_lockbox": 0.8752941176470588
+        },
+        "fpr_lockbox_worst_substrate": 1.0,
+        "fpr_lockbox_global": 0.18970380818053598,
+        "per_substrate_fpr_lockbox": {
+          "normal_photo": 0.2708333333333333,
+          "webcam": 0.8476190476190476,
+          "phone_screen": 0.08823529411764706,
+          "screen": 1.0,
+          "screen_recording": NaN
+        }
+      },
+      "recall_lift_substrate_aware_minus_naive_pp": {
+        "viso_dev": -36.1818,
+        "deeplive_dev": -47.3394,
+        "teams_fake_dev": -22.2113,
+        "teams_fake_lockbox": -40.7059
+      },
+      "lockbox_fpr_substrate_aware_pct": 2.6798,
+      "lockbox_fpr_naive_pct": 18.9704,
+      "per_mode_tau_oracle": {
+        "fpr_target_per_substrate": 0.2,
+        "tau_per_substrate_dev_calibrated": {
+          "normal_photo": 0.014171709679067059,
+          "webcam": 0.8351224899291994,
+          "phone_screen": 0.03807124271988859,
+          "screen": 0.3764721214771271,
+          "screen_recording": 0.0100718894973397
+        },
+        "note": "ORACLE policy \u2014 NOT deployable. Requires per-frame substrate at inference. Reported as upper bound for substrate-aware tuning lift.",
+        "lockbox_fpr_under_dev_per_mode_tau": 0.5434782608695652,
+        "lockbox_n_real_covered": 414,
+        "lockbox_n_real_total": 1418,
+        "per_suite_recall_under_dev_per_mode_tau": {
+          "viso_dev": {
+            "recall_on_substrate_known": NaN,
+            "n_frames_substrate_known": 0,
+            "n_frames_total": 550
+          },
+          "deeplive_dev": {
+            "recall_on_substrate_known": 0.6201834862385321,
+            "n_frames_substrate_known": 545,
+            "n_frames_total": 545
+          },
+          "teams_fake_dev": {
+            "recall_on_substrate_known": 0.862193652069104,
+            "n_frames_substrate_known": 2489,
+            "n_frames_total": 3039
+          },
+          "teams_fake_lockbox": {
+            "recall_on_substrate_known": 0.9388235294117647,
+            "n_frames_substrate_known": 425,
+            "n_frames_total": 425
+          }
+        }
+      }
+    }
+  }
+}

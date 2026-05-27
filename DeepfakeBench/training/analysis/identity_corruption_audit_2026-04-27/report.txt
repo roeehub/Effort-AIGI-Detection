@@ -1,0 +1,22 @@
+========================================================================
+Identity-Corruption Audit  (lockbox_tags_2026-04-27.parquet)
+sim_threshold=0.45
+========================================================================
+
+Per-label summary:
+          identity_key  n_frames_embedded  n_clusters  largest_cluster_share  is_multi_identity
+         Cam_Test__s33                334           2               0.997006              False
+Chikara_Takahashi__s22                 42           1               1.000000              False
+     PC_Generator__s15                120           2               0.758333               True
+      bla_bla_chow__s1                 68           1               1.000000              False
+            dor_shkedi                275           1               1.000000              False
+
+Verdict:
+{
+  "n_labels_total": 5,
+  "n_labels_multi_identity": 1,
+  "frames_embedded_total": 839,
+  "frames_in_non_dominant_clusters": 29,
+  "frame_corruption_share": 0.03456495828367104,
+  "sim_threshold": 0.45
+}

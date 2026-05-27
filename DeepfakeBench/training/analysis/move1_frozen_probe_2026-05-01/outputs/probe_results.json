@@ -1,0 +1,93 @@
+{
+  "n_train": 292,
+  "n_eval": 800,
+  "train_label_counts": {
+    "1": 146,
+    "0": 146
+  },
+  "eval_label_counts": {
+    "0": 476,
+    "1": 324
+  },
+  "train_swap_models": {
+    "InStyleSwapper256-C": 31,
+    "GhostFace-v2": 33,
+    "InStyleSwapper256-A": 33,
+    "CSCS": 33,
+    "GhostFace-v1": 31,
+    "InStyleSwapper256-B": 33,
+    "Inswapper128": 32,
+    "SimSwap512": 33,
+    "GhostFace-v3": 33
+  },
+  "bucket_discrimination_auc_mean": 0.916,
+  "bucket_discrimination_auc_std": 0.0192,
+  "identity_only_control_auc_kept32": 0.9851,
+  "identity_only_control_auc_kept33": 0.9872,
+  "eval_within_fake_real_oof_auc_grouped": 0.8859516028633677,
+  "train_within_fake_real_oof_auc_grouped": 0.9680990805029086,
+  "cross_bucket_transfer_auc_train_to_eval": 0.9287400145243282,
+  "per_eval_method_transfer_auc": {},
+  "pooled_vs_teams_real": {
+    "deeplive_enhanced": {
+      "n_fake": 59,
+      "auc": 0.8762640649480131
+    },
+    "teams_capture_cam_test_s32": {
+      "n_fake": 26,
+      "auc": 0.9621848739495797
+    },
+    "teams_capture_cam_test_s33": {
+      "n_fake": 36,
+      "auc": 0.8859126984126984
+    },
+    "teams_capture_cam_test_s35": {
+      "n_fake": 41,
+      "auc": 0.953781512605042
+    },
+    "teams_capture_cam_test_s38": {
+      "n_fake": 10,
+      "auc": 0.953781512605042
+    },
+    "teams_capture_cam_test_s46": {
+      "n_fake": 16,
+      "auc": 0.9489233193277311
+    },
+    "teams_capture_dor_shkedi_s16": {
+      "n_fake": 9,
+      "auc": 0.9712885154061625
+    },
+    "teams_capture_noyn_sharker_s23": {
+      "n_fake": 36,
+      "auc": 0.9593253968253967
+    },
+    "teams_capture_pc_generator_s15": {
+      "n_fake": 11,
+      "auc": 0.9587471352177235
+    },
+    "teams_capture_pc_generator_s3": {
+      "n_fake": 13,
+      "auc": 0.9550743374272785
+    },
+    "teams_capture_pc_generator_s9": {
+      "n_fake": 5,
+      "auc": 0.942436974789916
+    },
+    "teams_capture_test_cam_s53": {
+      "n_fake": 19,
+      "auc": 0.9673816895179125
+    },
+    "teams_capture_test_cam_s73": {
+      "n_fake": 11,
+      "auc": 0.9402215431627196
+    },
+    "teams_capture_test_cam_s76": {
+      "n_fake": 15,
+      "auc": 0.9463585434173669
+    },
+    "teams_flat_xiang_xiang2_feng": {
+      "n_fake": 14,
+      "auc": 0.8412364945978392
+    }
+  }
+}

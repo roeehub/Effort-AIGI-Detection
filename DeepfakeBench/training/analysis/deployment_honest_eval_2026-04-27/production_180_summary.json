@@ -1,0 +1,16 @@
+{
+  "n_total": 180,
+  "n_with_face": 180,
+  "regime_counts": {
+    "OK": 90,
+    "FAIL": 90
+  },
+  "score_by_regime": {
+    "OK_mean": 0.02173846608752178,
+    "FAIL_mean": 0.9058815876642863
+  },
+  "outputs": [
+    "production_180_tags.parquet",
+    "production_180_regime_comparison.csv"
+  ]
+}

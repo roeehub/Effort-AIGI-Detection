@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Viso Eval Bucket — Overview (2026-05-03)</title>
+<style>
+:root { --bg: #0a0f15; --panel: #11181f; --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff; --good: #56d364; --bad: #f85149; --warn: #d29922; --border: #21262d; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; margin: 0; padding: 24px; line-height: 1.55; }
+h1 { font-size: 24px; margin: 0 0 6px; }
+h2 { font-size: 18px; margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+h3 { font-size: 14px; margin: 18px 0 8px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; }
+.lead { color: var(--text2); margin: 0 0 16px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 12px 0; }
+.kv { display: grid; grid-template-columns: 220px 1fr; gap: 6px 16px; font-size: 13px; }
+.kv dt { color: var(--text2); }
+.kv dd { margin: 0; font-family: ui-monospace, SF Mono, Menlo, monospace; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: #161c23; color: var(--text2); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+tr:hover { background: #161c23; }
+.num { text-align: right; font-family: ui-monospace, SF Mono, Menlo, monospace; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.warn { color: var(--warn); }
+.tag { display: inline-block; padding: 2px 8px; background: #161c23; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; margin-right: 4px; }
+.placeholder { color: var(--text2); font-style: italic; padding: 12px; background: #161c23; border-radius: 6px; }
+a { color: var(--accent); }
+.tldr { background: #11214a; border-left: 3px solid var(--accent); padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+.callout-bad { background: #2c1313; border-left: 3px solid var(--bad); padding: 12px 16px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+.callout-good { background: #112a14; border-left: 3px solid var(--good); padding: 12px 16px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+.small { font-size: 12px; color: var(--text2); }
+ul.findings { padding-left: 20px; margin: 6px 0; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Viso Eval Bucket — Overview</h1>
+<p class="lead">
+  <code>visomaster_enhanced_macro_dev</code> · 550 fake frames · the binding ceiling on Teams promotion.
+  <span class="small">Generated 2026-05-03 · auto-built from FACTS §1.3, §6.9, §7 and per-frame CSVs.</span>
+</p>
+
+<div class="tldr">
+  <strong>Why this page exists.</strong> The viso suite has been the single suite no R13 packet can crack
+  (10+ packets, viso recall stuck at 27% at joint dev+lockbox FPR=10%). This page consolidates
+  every viso-relevant artifact in one place: the bucket itself, the recall trajectory through
+  the chain, per-packet verdicts, and CPU-side diagnostics from 2026-05-03 designed to
+  decide whether the next packet should be (a) scratch retry, (b) skin-aware aug, or
+  (c) architectural pivot to L14.
+</div>
+
+<h2>Bucket metadata</h2>
+<div class="panel">
+  <dl class="kv">
+    <dt>Suite name</dt><dd>visomaster_enhanced_macro_dev</dd>
+    <dt>Frames</dt><dd>550 (all label=fake)</dd>
+    <dt>GCS bucket</dt><dd>gs://teams-faces-data-test-2914-fake-4420-real-feb-28/fake/</dd>
+    <dt>File pattern</dt><dd>visomaster_enhanced_raw__frame_*_seq*.png</dd>
+    <dt>Method (single)</dt><dd>visomaster_enhanced_macro</dd>
+    <dt>Family key (single)</dt><dd>visomaster_enhanced_fake</dd>
+    <dt>Identity_key (single)</dt><dd>visomaster_enhanced_raw</dd>
+    <dt>Manifest</dt><dd>arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json</dd>
+    <dt>Substrate origin</dt><dd>GAN-enhanced viso fakes <strong>recaptured through Teams</strong></dd>
+  </dl>
+  <h3>Underlying swap methods (9 in viso source)</h3>
+  <p class="small">CSCS · GhostFace-v1 · GhostFace-v2 · GhostFace-v3 · InStyleSwapper256-A/B/C · Inswapper128 · SimSwap512</p>
+
+  <h3>Training-data analog</h3>
+  <p class="small">
+    The training pool reads <code>gs://live-deepfake-methods-real-and-fake-frames-cropped/samples/visomaster_*</code>
+    — same swap methods, but <strong>without</strong> the Teams transport. The conjunction-match source
+    (<code>visomaster_teams_enhanced</code>) <em>exists in code</em> at <code>data/sources/combined_paired.py:761</code>
+    but has only been enabled in P16 (fw=2.0, no lift) and xan4dfto (fw=8.0, collapse). All other recent packets
+    train on the union of single-axis sources, not the conjunction.
+  </p>
+</div>
+
+<h2>Recall through the R13 chain (the headline failure)</h2>
+<div class="panel">
+  <p class="small">Joint dev+lockbox τ-recalibration. Source: <code>analysis/s1_s2_2026-05-02_planning/probes/outputs/05_chain_joint_summary.csv</code></p>
+  <table>
+    <thead><tr>
+      <th>Checkpoint</th>
+      <th class="num">FPR=2%</th>
+      <th class="num">FPR=5%</th>
+      <th class="num">FPR=10%</th>
+      <th class="num">FPR=20%</th>
+    </tr></thead>
+    <tbody>
+      <tr><td><strong>P8A_REFERENCE_STEP5000</strong> <span class="tag">champion</span></td>
+        <td class="num">0.4%</td><td class="num">5.8%</td><td class="num good"><strong>27.0%</strong></td><td class="num good">57.6%</td></tr>
+      <tr><td>P22_AUG_STEP1000</td>
+        <td class="num">2.4%</td><td class="num">10.5%</td><td class="num">24.9%</td><td class="num">38.7%</td></tr>
+      <tr><td>P22_AUG_STEP4000</td>
+        <td class="num">0.2%</td><td class="num">2.5%</td><td class="num bad">5.5%</td><td class="num">9.5%</td></tr>
+      <tr><td>P22_AUG_STEP8000</td>
+        <td class="num">0.7%</td><td class="num">7.5%</td><td class="num">13.5%</td><td class="num">22.0%</td></tr>
+      <tr><td>S1_REDUX_SHORT_STEP100</td>
+        <td class="num">0.7%</td><td class="num">5.3%</td><td class="num">17.8%</td><td class="num">49.5%</td></tr>
+      <tr><td>S1_REDUX_SHORT_STEP400</td>
+        <td class="num">1.3%</td><td class="num">5.1%</td><td class="num">14.2%</td><td class="num">36.7%</td></tr>
+      <tr><td>S1_REDUX_SHORT_STEP600</td>
+        <td class="num">0.9%</td><td class="num">5.8%</td><td class="num">18.0%</td><td class="num">45.3%</td></tr>
+      <tr><td>S2_EARLIER_BASE_STEP200</td>
+        <td class="num">1.6%</td><td class="num">2.4%</td><td class="num">6.5%</td><td class="num">23.1%</td></tr>
+      <tr><td>S2_EARLIER_BASE_STEP300</td>
+        <td class="num">1.6%</td><td class="num">2.9%</td><td class="num">9.3%</td><td class="num">34.5%</td></tr>
+      <tr><td>S2_EARLIER_BASE_STEP600</td>
+        <td class="num">1.6%</td><td class="num">4.0%</td><td class="num">11.8%</td><td class="num">36.0%</td></tr>
+      <tr><td>S3_VISO_WEIGHT_STEP500</td>
+        <td class="num">1.6%</td><td class="num">6.5%</td><td class="num">13.8%</td><td class="num">31.8%</td></tr>
+      <tr><td>S3_VISO_WEIGHT_STEP700</td>
+        <td class="num">1.6%</td><td class="num">6.4%</td><td class="num">13.8%</td><td class="num">30.7%</td></tr>
+      <tr><td>S3_VISO_WEIGHT_STEP1000</td>
+        <td class="num">1.6%</td><td class="num">6.0%</td><td class="num">13.6%</td><td class="num">30.4%</td></tr>
+    </tbody>
+  </table>
+  <p class="small" style="margin-top: 12px;">
+    <strong>Reading:</strong> P8A_step5000 holds the viso lead at every joint FPR floor.
+    No post-P8A packet has improved viso recall at FPR=10%. Only at FPR=20% does the
+    P8A baseline reach a deployable ≥50% — and even then it's not ≥85%.
+  </p>
+</div>
+
+<h2>Min joint FPR floor required for ≥ 90% recall</h2>
+<div class="panel">
+  <p class="small">From PSERIES_FACTS §6.9.4. <code>NaN</code> = recall never reaches 90% in the [0.5%, 50%] sweep.</p>
+  <table>
+    <thead><tr>
+      <th>Ckpt</th><th class="num">viso</th><th class="num">deeplive</th><th class="num">teams_fake_dev</th><th class="num">teams_fake_lockbox</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>P8A</td><td class="num bad">NaN</td><td class="num">0.335</td><td class="num">0.290</td><td class="num good">0.235</td></tr>
+      <tr><td>P22 step1k</td><td class="num bad">NaN</td><td class="num">0.380</td><td class="num">0.440</td><td class="num bad">NaN</td></tr>
+      <tr><td>P22 step4k</td><td class="num bad">NaN</td><td class="num good">0.105</td><td class="num bad">NaN</td><td class="num bad">NaN</td></tr>
+      <tr><td>P22 step8k</td><td class="num bad">NaN</td><td class="num good"><strong>0.085</strong></td><td class="num">0.375</td><td class="num">0.430</td></tr>
+      <tr><td>S2 step600</td><td class="num bad">NaN</td><td class="num bad">NaN</td><td class="num bad">NaN</td><td class="num good"><strong>0.090</strong></td></tr>
+    </tbody>
+  </table>
+  <p class="small">
+    <strong>Viso is unreachable for every ckpt up to FPR=50%.</strong> Two of the four
+    suites (deeplive, teams_fake_lockbox) ARE reachable at FPR≤10% — just not on a single ckpt.
+  </p>
+</div>
+
+<h2>Per-packet verdicts (viso lens)</h2>
+<div class="panel">
+  <p class="small">Cross-referenced against memory entries and PSERIES_FACTS sections.</p>
+  <table>
+    <thead><tr>
+      <th>Packet</th><th>Lever</th><th class="num">viso@10%</th><th class="num">viso@20%</th><th>Verdict</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>P8A_REF_step5000</td><td>MLP-SVD + visual.proj + ln_post unfrozen</td><td class="num good">27.0%</td><td class="num good">57.6%</td><td><span class="tag">BASELINE</span></td></tr>
+      <tr><td>P14_FT_FROM_P8A</td><td>anchor + pipe-rand + face-jitter (stacked)</td><td class="num">16.7%</td><td class="num">—</td><td class="bad">FAILED — bundle hurt</td></tr>
+      <tr><td>P14_jitter only (mclioexb)</td><td>face_scale_jitter@0.50 single-lever</td><td class="num bad">1.3%</td><td class="num">—</td><td class="bad">FAILED contract</td></tr>
+      <tr><td>P14_DATA_FIX (xan4dfto)</td><td>visomaster_teams_enhanced fw=8.0 + bundle</td><td class="num bad">collapsed</td><td class="num">—</td><td class="bad">CRASHED — value 0.126</td></tr>
+      <tr><td>P15_GRL</td><td>static GRL λ=0.20 quality-domain</td><td class="num bad">no contract run</td><td class="num">—</td><td class="bad">FAILED — value 0.516</td></tr>
+      <tr><td>P16_DATA_AXIS (rmic6wrc)</td><td>visomaster_teams_enhanced fw=2.0 (no bundle)</td><td class="num bad">~0.7%</td><td class="num">—</td><td class="bad">FAILED — τ-tail collapse</td></tr>
+      <tr><td>P17_LAYER3_HEAD</td><td>Trained head on intermediate layer</td><td class="num bad">—</td><td class="num">—</td><td class="bad">FAILED — destroys substrate-invariance</td></tr>
+      <tr><td>P18T_GRL_TREATMENT</td><td>12-class method-conditional GRL</td><td class="num bad">1.8%</td><td class="num">—</td><td class="bad">FAILED — defensive only</td></tr>
+      <tr><td>P22_AUG step1k</td><td>aug curriculum + ArcFace anneal</td><td class="num">24.9%</td><td class="num">38.7%</td><td class="warn">MIXED — deeplive solved, viso unchanged</td></tr>
+      <tr><td>P22_AUG step8k</td><td>same, longer training</td><td class="num bad">13.5%</td><td class="num">22.0%</td><td class="bad">DEGRADED — score variance collapsed 140×</td></tr>
+      <tr><td>S1_REDUX_SHORT step600</td><td>training cap to 1000 steps</td><td class="num">18.0%</td><td class="num">45.3%</td><td class="bad">FAILED — 0/3 falsifiers</td></tr>
+      <tr><td>S2_EARLIER_BASE step600</td><td>FT from P8A_step2500 + curriculum</td><td class="num">11.8%</td><td class="num">36.0%</td><td class="warn">MIXED — viso FAIL but lockbox 91.5% (chain best)</td></tr>
+      <tr><td>S3_VISO_WEIGHT step1000</td><td>S2 + viso fw 4→8</td><td class="num">13.6%</td><td class="num">30.4%</td><td class="bad">FAILED — class_sep peak didn't translate</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>2026-05-03 CPU diagnostics — does the FT chain explain the ceiling?</h2>
+
+<h3>Stream A — P8A trainable parameter audit</h3>
+<div class="panel">
+  <div class="callout-good">
+    <strong>Verdict: PARTIAL</strong> — in_proj-SVD residuals are noise-dominated for
+    L0–L4 (early layers, where camera-signature and image-quality shortcuts live),
+    genuinely trained for L5–L11.
+  </div>
+  <ul class="findings">
+    <li><strong>13 of 36 in_proj-SVD slots (36%) effectively unlearned</strong> — sign-flip frac 0.34–0.66, |S| 2–4 orders below same-layer out_proj</li>
+    <li>Median in_proj contribution L2 = 0.060 vs out_proj 1.36 (<strong>23× smaller</strong>)</li>
+    <li>Total non-zero residual params = 5.31M (1.77M in_proj + 3.54M other)</li>
+    <li>This refines the "B16 capacity ceiling" framing: it's <strong>~2× self-imposed and concentrated in early-layer attention QKV</strong>, not 4× across all layers</li>
+  </ul>
+  <p class="small">Full audit: <a href="/api/static-report-asset/p8a_param_audit_2026-05-03/FINDINGS.md">FINDINGS.md</a> · <a href="/api/static-report-asset/p8a_param_audit_2026-05-03/outputs/svd_layer_audit.csv">svd_layer_audit.csv</a> · <a href="/api/static-report-asset/p8a_param_audit_2026-05-03/outputs/audit_summary.json">audit_summary.json</a></p>
+</div>
+
+<h3>Stream B — CLIP-B16 frozen vs P8A frozen on viso eval</h3>
+<div class="panel">
+  <div class="callout-good">
+    <strong>Verdict: PASSED</strong> — raw CLIP-B16 outperforms P8A by <strong>9–17pp</strong>
+    under classifier-capacity stress. The 5-stage FT chain genuinely diffused the
+    viso-discriminative signal across more orthogonal axes than CLIP carried.
+  </div>
+
+  <h3>C-sweep (regularization stress; smaller C = stronger regularization)</h3>
+  <table>
+    <thead><tr><th>C</th><th class="num">CLIP-B16 raw AUC</th><th class="num">P8A AUC</th><th class="num">Δ (CLIP − P8A)</th></tr></thead>
+    <tbody>
+      <tr><td>1.0</td><td class="num">1.0000</td><td class="num">1.0000</td><td class="num">+0.0000</td></tr>
+      <tr><td>0.1</td><td class="num">1.0000</td><td class="num">0.9999</td><td class="num">+0.0001</td></tr>
+      <tr><td>0.01</td><td class="num">1.0000</td><td class="num">0.9937</td><td class="num">+0.0063</td></tr>
+      <tr><td>0.001</td><td class="num">1.0000</td><td class="num">0.9261</td><td class="num good"><strong>+0.0739</strong></td></tr>
+      <tr><td>0.0001</td><td class="num">0.9988</td><td class="num bad">0.8259</td><td class="num good"><strong>+0.1729</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>N-sweep (training-data starvation)</h3>
+  <table>
+    <thead><tr><th>n_train per fold</th><th class="num">CLIP-B16 raw AUC</th><th class="num">P8A AUC</th><th class="num">Δ</th></tr></thead>
+    <tbody>
+      <tr><td>256</td><td class="num">1.0000</td><td class="num">0.9999</td><td class="num">+0.0001</td></tr>
+      <tr><td>128</td><td class="num">0.9999</td><td class="num">0.9968</td><td class="num">+0.0031</td></tr>
+      <tr><td>64</td><td class="num">0.9999</td><td class="num">0.9880</td><td class="num">+0.0118</td></tr>
+      <tr><td>32</td><td class="num">0.9995</td><td class="num">0.9801</td><td class="num">+0.0194</td></tr>
+      <tr><td>16</td><td class="num">0.9976</td><td class="num bad">0.9117</td><td class="num good"><strong>+0.0859</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Three non-exclusive interpretations</h3>
+  <ol>
+    <li><strong>Effort's orthogonal regularization spread weight across many singular directions.</strong> `lambda_reg=0.01` orthogonality pressure prevents the head from concentrating discriminative weight on a single axis.</li>
+    <li><strong>P8A FT'd toward the teams-domain axis</strong> (its training contract rewarded teams in-domain recall + reals-FPR), which is only weakly correlated with viso fake-ness. Anti-shortcut FT specifically pushed signal AWAY from pixel-quality and identity-cluster axes — but viso fake-ness lives partly on those same axes.</li>
+    <li><strong>5-stage FT ossification.</strong> Each FT stage narrows the activation manifold. By P8A (4 prior stages + 1 current), the representation is highly fitted to teams-domain + camera-signature mitigation, with viso discriminability as collateral damage.</li>
+  </ol>
+
+  <p class="small"><strong>All three interpretations support: revisit "scratch from CLIP" or "very-light FT" as the next packet direction.</strong> P13 from-scratch was rejected on cross-domain regression but ran <em>before</em> the in_proj-SVD fix (Stream A), <em>before</em> the P22 aug curriculum, and <em>without</em> the eval-targeted aug distribution Stream C just identified.</p>
+
+  <p class="small">
+    <strong>Caveat:</strong> viso-vs-viso-real probe was NOT run (no viso-real frames available;
+    fake-vs-teams-real has a trivial bucket gap that both models solve at default C). The
+    C/N sweeps are what break the tie. <a href="/api/static-report-asset/clip_vs_p8a_viso_2026-05-03/FINDINGS.md">Full FINDINGS.md</a>
+    · <a href="/api/static-report-asset/clip_vs_p8a_viso_2026-05-03/outputs/probe_summary.json">probe_summary.json</a>
+    · <a href="/api/static-report-asset/clip_vs_p8a_viso_2026-05-03/outputs/tsne_combined.csv">tsne_combined.csv</a>
+  </p>
+</div>
+
+<h3>Stream C — Skin_frac distribution train-viso vs eval-viso</h3>
+<div class="panel">
+  <div class="callout-bad">
+    <strong>Verdict on the original hypothesis: REFUTED.</strong>
+    skin_frac KS p=6.7e-54 (rejects identity) but |Δmean|=0.041 &lt; 0.05 floor.
+    Eval viso fake mean=0.629 vs training viso fake mean=0.588. The third leg of
+    the image-quality shortcut does <strong>not</strong> have a meaningful train-vs-eval
+    mean mismatch. <strong>A skin-aware aug is dropped from the candidate list.</strong>
+  </div>
+
+  <div class="callout-good" style="margin-top:12px;">
+    <strong>Bigger finding the diagnostic surfaced:</strong> the <strong>laplacian sharpness
+    gap is enormous</strong> on viso intra-suite — and this is a far stronger lever than
+    skin-frac would have been.
+  </div>
+
+  <h3>Distribution table (4 groups × 3 attributes)</h3>
+  <table>
+    <thead><tr><th>Group</th><th class="num">n</th><th class="num">skin_frac μ±σ</th><th class="num">laplacian_var μ±σ</th><th class="num">luma_mean μ±σ</th></tr></thead>
+    <tbody>
+      <tr><td><strong>eval_viso_fake</strong></td><td class="num">550</td><td class="num">0.629±0.060</td><td class="num bad">91.0 ± 42</td><td class="num bad">160 ± 19</td></tr>
+      <tr><td>train_viso_fake</td><td class="num">793</td><td class="num">0.588±0.210</td><td class="num good">482 ± 295</td><td class="num">108 ± 29</td></tr>
+      <tr><td>eval_real</td><td class="num">550</td><td class="num">0.566±0.188</td><td class="num">164 ± 139</td><td class="num">130 ± 26</td></tr>
+      <tr><td>train_viso_real</td><td class="num">391</td><td class="num">0.627±0.199</td><td class="num">147 ± 152</td><td class="num">109 ± 29</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Three larger findings (outrank the original hypothesis)</h3>
+  <ul class="findings">
+    <li><strong>laplacian_var gap: 5.3× training &gt; eval (KS=0.89, p≈10<sup>−274</sup>).</strong>
+        Training viso fakes are vastly sharper than eval viso fakes (mean 482 vs 91).
+        Eval p10 = 46 sits <em>below</em> training p10 = 188. P22's blur-jitter has the right shape
+        but is too weak — the augmentation distribution doesn't reach the eval domain.
+        <strong>A heavier blur curriculum skewed toward eval-suite sharpness has the most
+        direct evidence behind it of any single-lever try.</strong></li>
+    <li><strong>luma_mean gap: +51 (eval brighter than train, KS=0.74, p≈10<sup>−174</sup>).</strong>
+        Eval viso-enhanced frames are systematically brighter than what the model has
+        been trained on. P22's brightness jitter was the right idea; the curriculum
+        needs re-tuning with viso-eval as the explicit target.</li>
+    <li><strong>eval_viso_fake variance is collapsed across all three attributes</strong>
+        (skin_frac σ=0.06 vs train σ=0.21; laplacian σ=42 vs 295; luma σ=19 vs 29).
+        The eval suite is a thin ridge in image-quality joint feature space.
+        Consistent with the documented eval-vs-production crop-tightness gap.</li>
+  </ul>
+
+  <p class="small">
+    <strong>Recommendation seeded by Stream C:</strong> a P-* sister to P22 that shifts
+    the augmentation distribution toward the eval-viso joint
+    (laplacian_var ~50–150, luma_mean ~135–185), single lever, no skin aug.
+    Cost: ~$15-25 GPU. Decision blocker: needs Stream B verdict to confirm
+    the FT-stack hasn't already destroyed the discriminative direction
+    (otherwise more aug won't help).
+  </p>
+
+  <p class="small">
+    Full report: <a href="/api/static-report-asset/skin_frac_viso_gap_2026-05-03/FINDINGS.md">FINDINGS.md</a>
+    · <a href="/api/static-report-asset/skin_frac_viso_gap_2026-05-03/outputs/distributions.png">distributions.png</a>
+    · <a href="/api/static-report-asset/skin_frac_viso_gap_2026-05-03/outputs/group_stats.csv">group_stats.csv</a>
+    · <a href="/api/static-report-asset/skin_frac_viso_gap_2026-05-03/outputs/ks_tests.json">ks_tests.json</a>
+  </p>
+</div>
+
+<h2>Cross-cutting interpretation (caveats)</h2>
+<div class="panel">
+  <p class="small">These items appear in PSERIES_OPINIONS and memory; treat as opinion-not-fact.</p>
+  <ul class="findings">
+    <li><strong>P8A is NOT shortcut-clean</strong> on its training distribution — source-bucket linear probe scores 4.6× chance (FAIL). PLAN.md §3.6.</li>
+    <li><strong>Eval substrate has loose crop tightness</strong> vs production. The 27% ceiling may partly be eval-substrate artifact, not a strict production-FPR floor. memory <code>project_eval_production_crop_tightness_gap</code>.</li>
+    <li><strong>Frame-level AUC reframing</strong>: P8A's frame-level AUC on viso = 0.7527 (vs 0.86 deeplive). The 27% recall is partly a τ-policy-collapse artifact, not a model-failure ceiling. PSERIES_FACTS §1.1.</li>
+    <li><strong>Image-quality shortcut explains 88%</strong> of P8A's score variance via 3 attrs (sharpness, brightness, skin_frac). The aug curriculum (P22) addresses the first two; skin_frac is unaddressed. memory <code>project_image_quality_shortcut</code>.</li>
+  </ul>
+</div>
+
+<h2>Where do we go next? (post-Stream-A, B, C — all complete)</h2>
+<div class="panel">
+  <p>All three streams converge on a story. The 27% viso ceiling has at least three independent contributors:</p>
+  <ul class="findings">
+    <li><strong>Stream A:</strong> P8A's early-layer attention QKV residuals never trained (in_proj-SVD bug). The pixel-level processing where shortcuts live has half its capacity dead.</li>
+    <li><strong>Stream B:</strong> The 5-stage FT chain diffused viso signal across more axes than CLIP carried. P8A loses 9–17pp under classifier stress.</li>
+    <li><strong>Stream C:</strong> Eval viso is 5.3× softer and +51 brighter than training viso. The model never saw the eval distribution during training.</li>
+  </ul>
+  <p>Three independent failure modes, three different fixes. Sequencing matters because the cheapest fix is also the most narrowly targeted, while the broadest fix is the most expensive.</p>
+
+  <h3>Recommended sequence (ordered by evidence-per-dollar)</h3>
+  <ol>
+    <li><strong>Eval-targeted aug curriculum</strong> (P22-sister, ~$15-25).
+        <span class="good">Highest evidence-per-dollar.</span> Shift aug distribution toward
+        eval-viso joint (laplacian ~50-150, luma ~135-185), single lever. Stream C provides
+        direct mechanistic evidence. Risk: if Stream B's FT-diffusion is the binding
+        constraint, no amount of aug will help (the discriminative direction is already
+        diluted in the loaded P8A representation).</li>
+    <li><strong>Scratch from CLIP-B16 + aug curriculum + post-Apr-26 fixes</strong> (~$50).
+        <span class="good">Strongest evidence for breaking the FT cycle.</span> Stream B
+        directly licenses this. Stream A's early-layer dead capacity goes away with fresh
+        init. Stream C's aug evidence applies. The three things P13's scratch attempt was
+        missing: (a) in_proj-SVD gradient fix (post 2026-04-26), (b) P22 aug curriculum,
+        (c) eval-targeted aug distribution. Risk: cross-domain regression that killed P13
+        before. Mitigation: include the post-P22 sampling discipline + test contract
+        scorecard at multiple training lengths.</li>
+    <li><strong>Rank-restoration FT</strong> (~$40, novel).
+        <span class="warn">Cheaper alternative to scratch.</span> Stream B's interpretation
+        (Effort orth-reg spread weight too thinly) suggests reversing it: concentrate
+        signal back onto top-k singular axes via inverse-Effort regularization. Untested
+        in this codebase. Worth a CPU pre-test (run the C-sweep probe on a lightly-FT'd
+        rank-restoration ckpt) before GPU spend.</li>
+    <li><strong>Selective L0-L4 in_proj re-init</strong> (~$30-40).
+        <span class="warn">Tests Stream A directly.</span> Re-init the 13 noise-dominated
+        slots, FT 1-2k steps. Cheaper than full scratch, but doesn't address Stream B
+        (FT diffusion) or Stream C (aug distribution). Useful as a 4th-priority test
+        to decompose the contribution of each finding.</li>
+    <li><strong>L14 swap</strong> (~$60, user budget approved).
+        <span class="warn">Reserve for last.</span> Removes the documented B16 capacity
+        ceiling; closer to original Effort paper. But all three CPU diagnostics suggest
+        B16 has live problems that are independent of architecture (FT diffusion + aug
+        distribution + early-layer dead capacity). Run L14 only if (1)+(2) both fail.</li>
+  </ol>
+
+  <p>
+    <strong>Cost-bound recommendation</strong>: if the user has ~$40-65 of budget,
+    spend it on (1) <strong>eval-targeted aug</strong> first. If recall lifts above 35-40%,
+    the binding constraint was aug distribution and the win can be replicated cheaply.
+    If recall stays at ~25%, the FT-diffusion (Stream B) is binding and the next move
+    is (2) scratch with curriculum, NOT L14.
+  </p>
+  <p>
+    <strong>If the user has ~$80+ available</strong>: run (1) and (2) as a planned pair.
+    Both share infrastructure (yaml + image build). Hold L14 ($60) for the case where
+    both B16 options fail.
+  </p>
+  <p>
+    <strong>If the user wants the biggest swing right now</strong>: skip (1) and run
+    L14 directly. Risk: a cheaper test (1) might have been sufficient, and the L14
+    one-shot is gone. Only justified if the user wants to definitively validate or
+    rule out the architecture-capacity hypothesis.
+  </p>
+  <p class="small">User decides. None of these are launched yet. The viewer + this report
+    + the three FINDINGS.md files are the input data for that decision.</p>
+</div>
+
+<p class="small" style="margin-top: 32px;">
+  <em>For per-frame thumbnails, switch the model dropdown above to "viso_overview" and use the
+  Frame Browser panel. The 550 viso fakes are wired via per_frame_scores.</em>
+</p>
+
+</body>
+</html>

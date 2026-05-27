@@ -1,0 +1,8 @@
+{
+  "n_labels_total": 5,
+  "n_labels_multi_identity": 1,
+  "frames_embedded_total": 839,
+  "frames_in_non_dominant_clusters": 29,
+  "frame_corruption_share": 0.03456495828367104,
+  "sim_threshold": 0.45
+}

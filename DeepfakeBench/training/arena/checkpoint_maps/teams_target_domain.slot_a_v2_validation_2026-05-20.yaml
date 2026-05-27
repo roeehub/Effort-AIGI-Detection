@@ -1,0 +1,41 @@
+# =============================================================================
+# Promotion-contract validation map — Slot A v2 29-suite validation (2026-05-20)
+#
+# Re-runs the canonical 29-suite contract on Slot A v2 step3500 (anchor_aware
+# T5C-base, W&B hp35c51p) — the strongest single deployment-grade candidate
+# surfaced by the auto-mode-scorecard-2026-05-16. That scorecard used the
+# REDUCED 9-suite manifest (54 cells); this map re-uses the 29-suite manifest
+# (174 cells) so the contract metrics are directly comparable to all prior
+# R13 scorecards.
+#
+# AUTO-MODE 2026-05-16 (9-suite) FINDING:
+#   - Slot A v2 step3500 rank-1 under 6 of 8 tiebreaks; rank-2 under v3-fix
+#     policy by 0.07pp lockbox_real_fpr tiebreak gap with P8A.
+#   - lockbox_fake_recall: 0.688 (P8A: 0.387; +30pp gain)
+#   - lockbox_real_fpr:    0.0191 (P8A: 0.0184; +0.07pp gap)
+#   - dor_shkedi over-fires reduced 6x vs Slot β (116 -> 19)
+#
+# THIS RUN TESTS:
+#   - Whether the 9-suite headline holds under the full 29-suite contract.
+#   - Per memory project_t6_t7_t5c_scorecard_2026-05-12, T5C's rank-3 on 29-
+#     suite differed from reduced surfaces — 9-suite CAN hide regressions.
+#
+# CKPT SELECTION (4 ckpts total):
+#   - SLOT_A_ANCHOR_AWARE_STEP3500: terminal, the main candidate
+#   - SLOT_A_ANCHOR_AWARE_STEP1500: mid-trajectory sanity check (rank-5 in
+#                                   auto-mode-scorecard, FPR 0.0049 — lower
+#                                   than step3500 but fails dev_recall floor)
+#   - P8A_REFERENCE_STEP5000:       production anchor (rank-1 on v3-fix)
+#   - T5C_PERIODIC_STEP3500:        Slot A's base; rank-3 on prior 29-suite
+#
+# Suite manifest: target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml
+# Cell count: 4 x 29 = 116 cells.
+# Policy: standing v3-fix (target_real_fpr=0.07, target_stress_fpr=0.10,
+#         target_fake_recall_min=0.30).
+# =============================================================================
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+
+SLOT_A_ANCHOR_AWARE_STEP1500:  "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step1500_auc0.9950_eer0.0165.pth"
+SLOT_A_ANCHOR_AWARE_STEP3500:  "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step3500_auc0.9952_eer0.0123.pth"

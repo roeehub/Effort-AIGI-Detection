@@ -1,0 +1,228 @@
+{
+  "n_frames_total": 190,
+  "checkpoint": "value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+  "production_crop_spec": {
+    "target_rfa": 0.85,
+    "source": "recrop_dataset.py:39",
+    "convention": "square crop centered on face bbox; side = sqrt(face_area/TARGET_RFA); resize to 224x224",
+    "bbox_source_in_csv": "MediaPipe FaceMesh landmark bbox (face_bbox_x/y/w/h)"
+  },
+  "delta_prob_fake_distribution": {
+    "median": 0.002920565428212285,
+    "p25": -0.0012487230123952031,
+    "p75": 0.2535698772408068,
+    "min": -0.8869132772088051,
+    "max": 0.9835038823075593,
+    "mean": 0.13134684951142653,
+    "std": 0.33816059838995227,
+    "abs_median": 0.0840501319617033,
+    "abs_p75": 0.349111108109355,
+    "abs_p90": 0.7223286555614319,
+    "n_frames_delta_gt_0.10": 92,
+    "n_frames_delta_gt_0.30": 56
+  },
+  "per_capture_mode": {
+    "normal_photo": {
+      "n": 50,
+      "n_real": 36,
+      "n_fake": 14,
+      "delta_median": 0.0004890055861324072,
+      "delta_abs_median": 0.018621009308844805,
+      "delta_p25": -8.635222911834717e-05,
+      "delta_p75": 0.22912764362990856,
+      "asis_mean_prob_fake": 0.3296871717926115,
+      "prod_mean_prob_fake": 0.43295935600064694
+    },
+    "phone_screen": {
+      "n": 50,
+      "n_real": 20,
+      "n_fake": 30,
+      "delta_median": 0.0002723087090998888,
+      "delta_abs_median": 0.04536367207765579,
+      "delta_p25": -0.02060982584953308,
+      "delta_p75": 0.0890929913148284,
+      "asis_mean_prob_fake": 0.47023405142128466,
+      "prod_mean_prob_fake": 0.5323555113561451
+    },
+    "screen": {
+      "n": 25,
+      "n_real": 21,
+      "n_fake": 4,
+      "delta_median": 0.03478532237932086,
+      "delta_abs_median": 0.10007087141275406,
+      "delta_p25": 0.0013821949250996113,
+      "delta_p75": 0.29597569443285465,
+      "asis_mean_prob_fake": 0.26381562231108546,
+      "prod_mean_prob_fake": 0.3976349766179919
+    },
+    "screen_recording": {
+      "n": 15,
+      "n_real": 5,
+      "n_fake": 10,
+      "delta_median": 0.1368202567100525,
+      "delta_abs_median": 0.1879187822341919,
+      "delta_p25": -0.0031727447640150785,
+      "delta_p75": 0.6757862884551287,
+      "asis_mean_prob_fake": 0.29024689650783936,
+      "prod_mean_prob_fake": 0.5679266919381917
+    },
+    "webcam": {
+      "n": 50,
+      "n_real": 35,
+      "n_fake": 15,
+      "delta_median": 0.004699826240539551,
+      "delta_abs_median": 0.17145636677742004,
+      "delta_p25": -0.0014857565984129906,
+      "delta_p75": 0.4442000933922827,
+      "asis_mean_prob_fake": 0.5018399605248124,
+      "prod_mean_prob_fake": 0.6853507287427782
+    }
+  },
+  "per_label": {
+    "fake": {
+      "n": 73,
+      "delta_median": -3.898143768310547e-05,
+      "delta_abs_median": 0.02804255485534668,
+      "asis_mean_prob_fake": 0.7655248813815925,
+      "prod_mean_prob_fake": 0.8317942398868196
+    },
+    "real": {
+      "n": 117,
+      "delta_median": 0.017945396713912487,
+      "delta_abs_median": 0.09730134438723326,
+      "asis_mean_prob_fake": 0.17225501582456323,
+      "prod_mean_prob_fake": 0.3442057699808835
+    }
+  },
+  "tau_metrics": {
+    "tau_0.5": {
+      "tau": 0.5,
+      "n_real": 117,
+      "n_fake": 73,
+      "asis_fpr": 0.1623931623931624,
+      "prod_fpr": 0.3076923076923077,
+      "fpr_delta": 0.1452991452991453,
+      "asis_recall": 0.7808219178082192,
+      "prod_recall": 0.8767123287671232,
+      "recall_delta": 0.09589041095890405,
+      "per_mode_fpr": {
+        "normal_photo": {
+          "n_real": 36,
+          "asis_fpr": 0.1111111111111111,
+          "prod_fpr": 0.25
+        },
+        "phone_screen": {
+          "n_real": 20,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.25
+        },
+        "screen": {
+          "n_real": 21,
+          "asis_fpr": 0.09523809523809523,
+          "prod_fpr": 0.19047619047619047
+        },
+        "screen_recording": {
+          "n_real": 5,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.0
+        },
+        "webcam": {
+          "n_real": 35,
+          "asis_fpr": 0.37142857142857144,
+          "prod_fpr": 0.5142857142857142
+        }
+      }
+    },
+    "tau_0.92": {
+      "tau": 0.92,
+      "n_real": 117,
+      "n_fake": 73,
+      "asis_fpr": 0.07692307692307693,
+      "prod_fpr": 0.1794871794871795,
+      "fpr_delta": 0.10256410256410256,
+      "asis_recall": 0.5753424657534246,
+      "prod_recall": 0.6712328767123288,
+      "recall_delta": 0.09589041095890416,
+      "per_mode_fpr": {
+        "normal_photo": {
+          "n_real": 36,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.08333333333333333
+        },
+        "phone_screen": {
+          "n_real": 20,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.1
+        },
+        "screen": {
+          "n_real": 21,
+          "asis_fpr": 0.09523809523809523,
+          "prod_fpr": 0.09523809523809523
+        },
+        "screen_recording": {
+          "n_real": 5,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.0
+        },
+        "webcam": {
+          "n_real": 35,
+          "asis_fpr": 0.2,
+          "prod_fpr": 0.4
+        }
+      }
+    },
+    "tau_0.9741": {
+      "tau": 0.9741,
+      "n_real": 117,
+      "n_fake": 73,
+      "asis_fpr": 0.02564102564102564,
+      "prod_fpr": 0.1282051282051282,
+      "fpr_delta": 0.10256410256410256,
+      "asis_recall": 0.4794520547945205,
+      "prod_recall": 0.589041095890411,
+      "recall_delta": 0.10958904109589046,
+      "per_mode_fpr": {
+        "normal_photo": {
+          "n_real": 36,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.027777777777777776
+        },
+        "phone_screen": {
+          "n_real": 20,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.1
+        },
+        "screen": {
+          "n_real": 21,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.09523809523809523
+        },
+        "screen_recording": {
+          "n_real": 5,
+          "asis_fpr": 0.0,
+          "prod_fpr": 0.0
+        },
+        "webcam": {
+          "n_real": 35,
+          "asis_fpr": 0.08571428571428572,
+          "prod_fpr": 0.2857142857142857
+        }
+      }
+    }
+  },
+  "csv_consistency_check": {
+    "n": 190,
+    "median_abs_diff": 0.11614193062105896,
+    "p95_abs_diff": 0.8795027881812288,
+    "max_abs_diff": 0.9546298056008052,
+    "note": "asis_prob_fake should match csv_prob_fake closely; large diff would indicate model-load drift."
+  },
+  "canonical_pipeline_check": {
+    "comparison": "move1.5 asis arm vs phase2 t=1.0 prob_fake (which matches the legacy join CSV cached prob_fake_p8a to ~5e-5 median)",
+    "n_overlap": 190,
+    "median_abs_diff": 0.0,
+    "p95_abs_diff": 0.0,
+    "max_abs_diff": 8.381903201029606e-09,
+    "verdict": "asis arm is bit-exact-equivalent to the canonical phase2 pipeline; the csv_consistency_check below compares against the parquet prob_fake column which is from a DIFFERENT upstream batch-inference run (not the canonical local-rescore pipeline) and is not the right anchor for this probe."
+  }
+}

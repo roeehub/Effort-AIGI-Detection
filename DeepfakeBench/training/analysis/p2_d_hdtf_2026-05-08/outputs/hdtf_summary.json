@@ -1,0 +1,368 @@
+{
+  "p8a_reference_step5000": {
+    "proper_fake_clean_all_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9455617198335645,
+      "video_level": 0.9299583911234397,
+      "n_frames": 11536,
+      "n_videos": 1442
+    },
+    "_tau_phase_a": 0.9156,
+    "_ckpt": "P8A_REFERENCE_STEP5000",
+    "proper_fake_clean_all_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.9492801047120419,
+      "video_level": 0.9319371727748691,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_fake_teams_all_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.8345740997229917,
+      "video_level": 0.7382271468144044,
+      "n_frames": 11552,
+      "n_videos": 1444
+    },
+    "proper_fake_teams_all_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.8517670157068062,
+      "video_level": 0.7539267015706806,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_real_clean_dev": {
+      "metric": "real_fpr",
+      "frame_level": 0.002598752598752599,
+      "video_level": 0.002772002772002772,
+      "n_frames": 11544,
+      "n_videos": 1443
+    },
+    "proper_real_clean_lockbox": {
+      "metric": "real_fpr",
+      "frame_level": 0.0,
+      "video_level": 0.0,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_real_teams_dev": {
+      "metric": "real_fpr",
+      "frame_level": 0.00787742382271468,
+      "video_level": 0.002077562326869806,
+      "n_frames": 11552,
+      "n_videos": 1444
+    },
+    "proper_real_teams_lockbox": {
+      "metric": "real_fpr",
+      "frame_level": 0.008835078534031414,
+      "video_level": 0.002617801047120419,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_visomaster_clean_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9394083969465649,
+      "video_level": 0.9198473282442748,
+      "n_frames": 2096,
+      "n_videos": 262
+    },
+    "proper_visomaster_clean_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.9421875,
+      "video_level": 0.9125,
+      "n_frames": 640,
+      "n_videos": 80
+    },
+    "proper_visomaster_enhanced_clean_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9469279661016949,
+      "video_level": 0.9322033898305084,
+      "n_frames": 9440,
+      "n_videos": 1180
+    },
+    "proper_visomaster_enhanced_clean_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.9511589403973509,
+      "video_level": 0.9370860927152318,
+      "n_frames": 2416,
+      "n_videos": 302
+    },
+    "proper_visomaster_enhanced_teams_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.8271996615905245,
+      "video_level": 0.7225042301184433,
+      "n_frames": 9456,
+      "n_videos": 1182
+    },
+    "proper_visomaster_enhanced_teams_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.8547185430463576,
+      "video_level": 0.7549668874172185,
+      "n_frames": 2416,
+      "n_videos": 302
+    },
+    "proper_visomaster_teams_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.8678435114503816,
+      "video_level": 0.8091603053435115,
+      "n_frames": 2096,
+      "n_videos": 262
+    },
+    "proper_visomaster_teams_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.840625,
+      "video_level": 0.75,
+      "n_frames": 640,
+      "n_videos": 80
+    },
+    "_macro_real_fpr_frame": 0.0048278137388746735,
+    "_macro_fake_recall_frame": 0.8959377049590231,
+    "_worst_real_fpr_frame": 0.008835078534031414,
+    "_worst_fake_recall_frame": 0.8271996615905245,
+    "_macro_real_fpr_video": 0.0018668415364982494,
+    "_macro_fake_recall_video": 0.8410264704960485
+  },
+  "e2b_top_n_step3200": {
+    "proper_fake_clean_all_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.7419382801664355,
+      "video_level": 0.7226074895977809,
+      "n_frames": 11536,
+      "n_videos": 1442
+    },
+    "_tau_phase_a": 0.7108,
+    "_ckpt": "E2B_TOP_N_STEP3200",
+    "proper_fake_clean_all_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.7634162303664922,
+      "video_level": 0.7513089005235603,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_fake_teams_all_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.12370152354570638,
+      "video_level": 0.09695290858725762,
+      "n_frames": 11552,
+      "n_videos": 1444
+    },
+    "proper_fake_teams_all_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.10732984293193717,
+      "video_level": 0.07853403141361257,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_real_clean_dev": {
+      "metric": "real_fpr",
+      "frame_level": 0.001645876645876646,
+      "video_level": 0.0,
+      "n_frames": 11544,
+      "n_videos": 1443
+    },
+    "proper_real_clean_lockbox": {
+      "metric": "real_fpr",
+      "frame_level": 0.0013089005235602095,
+      "video_level": 0.0,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_real_teams_dev": {
+      "metric": "real_fpr",
+      "frame_level": 0.001471606648199446,
+      "video_level": 0.0006925207756232687,
+      "n_frames": 11552,
+      "n_videos": 1444
+    },
+    "proper_real_teams_lockbox": {
+      "metric": "real_fpr",
+      "frame_level": 0.0013089005235602095,
+      "video_level": 0.0,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_visomaster_clean_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9327290076335878,
+      "video_level": 0.9274809160305344,
+      "n_frames": 2096,
+      "n_videos": 262
+    },
+    "proper_visomaster_clean_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.9171875,
+      "video_level": 0.9125,
+      "n_frames": 640,
+      "n_videos": 80
+    },
+    "proper_visomaster_enhanced_clean_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.6995762711864407,
+      "video_level": 0.6771186440677966,
+      "n_frames": 9440,
+      "n_videos": 1180
+    },
+    "proper_visomaster_enhanced_clean_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.7222682119205298,
+      "video_level": 0.7086092715231788,
+      "n_frames": 2416,
+      "n_videos": 302
+    },
+    "proper_visomaster_enhanced_teams_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.06091370558375635,
+      "video_level": 0.04060913705583756,
+      "n_frames": 9456,
+      "n_videos": 1182
+    },
+    "proper_visomaster_enhanced_teams_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.06415562913907284,
+      "video_level": 0.039735099337748346,
+      "n_frames": 2416,
+      "n_videos": 302
+    },
+    "proper_visomaster_teams_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.40696564885496184,
+      "video_level": 0.3511450381679389,
+      "n_frames": 2096,
+      "n_videos": 262
+    },
+    "proper_visomaster_teams_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.2703125,
+      "video_level": 0.225,
+      "n_frames": 640,
+      "n_videos": 80
+    },
+    "_macro_real_fpr_frame": 0.0014338210852991276,
+    "_macro_fake_recall_frame": 0.4842078626107434,
+    "_worst_real_fpr_frame": 0.001645876645876646,
+    "_worst_fake_recall_frame": 0.06091370558375635,
+    "_macro_real_fpr_video": 0.00017313019390581717,
+    "_macro_fake_recall_video": 0.4609667863587705
+  },
+  "p2_d_fourier_periodic_step3000": {
+    "proper_fake_clean_all_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9568307905686546,
+      "video_level": 0.9680998613037448,
+      "n_frames": 11536,
+      "n_videos": 1442
+    },
+    "_tau_phase_a": 0.46,
+    "_ckpt": "P2_D_FOURIER_PERIODIC_STEP3000",
+    "proper_fake_clean_all_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.955824607329843,
+      "video_level": 0.9659685863874345,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_fake_teams_all_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.11971952908587258,
+      "video_level": 0.09833795013850416,
+      "n_frames": 11552,
+      "n_videos": 1444
+    },
+    "proper_fake_teams_all_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.10831151832460734,
+      "video_level": 0.08638743455497382,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_real_clean_dev": {
+      "metric": "real_fpr",
+      "frame_level": 0.018624393624393623,
+      "video_level": 0.01386001386001386,
+      "n_frames": 11544,
+      "n_videos": 1443
+    },
+    "proper_real_clean_lockbox": {
+      "metric": "real_fpr",
+      "frame_level": 0.02356020942408377,
+      "video_level": 0.02356020942408377,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_real_teams_dev": {
+      "metric": "real_fpr",
+      "frame_level": 0.0007790858725761773,
+      "video_level": 0.0,
+      "n_frames": 11552,
+      "n_videos": 1444
+    },
+    "proper_real_teams_lockbox": {
+      "metric": "real_fpr",
+      "frame_level": 0.000981675392670157,
+      "video_level": 0.0,
+      "n_frames": 3056,
+      "n_videos": 382
+    },
+    "proper_visomaster_clean_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9265267175572519,
+      "video_level": 0.9389312977099237,
+      "n_frames": 2096,
+      "n_videos": 262
+    },
+    "proper_visomaster_clean_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.8703125,
+      "video_level": 0.8875,
+      "n_frames": 640,
+      "n_videos": 80
+    },
+    "proper_visomaster_enhanced_clean_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.9635593220338983,
+      "video_level": 0.9745762711864406,
+      "n_frames": 9440,
+      "n_videos": 1180
+    },
+    "proper_visomaster_enhanced_clean_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.9784768211920529,
+      "video_level": 0.9867549668874173,
+      "n_frames": 2416,
+      "n_videos": 302
+    },
+    "proper_visomaster_enhanced_teams_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.09274534686971235,
+      "video_level": 0.06852791878172589,
+      "n_frames": 9456,
+      "n_videos": 1182
+    },
+    "proper_visomaster_enhanced_teams_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.09105960264900662,
+      "video_level": 0.06622516556291391,
+      "n_frames": 2416,
+      "n_videos": 302
+    },
+    "proper_visomaster_teams_dev": {
+      "metric": "fake_recall",
+      "frame_level": 0.24141221374045801,
+      "video_level": 0.23282442748091603,
+      "n_frames": 2096,
+      "n_videos": 262
+    },
+    "proper_visomaster_teams_lockbox": {
+      "metric": "fake_recall",
+      "frame_level": 0.1734375,
+      "video_level": 0.1625,
+      "n_frames": 640,
+      "n_videos": 80
+    },
+    "_macro_real_fpr_frame": 0.01098634107843093,
+    "_macro_fake_recall_frame": 0.5398513724459465,
+    "_worst_real_fpr_frame": 0.02356020942408377,
+    "_worst_fake_recall_frame": 0.09105960264900662,
+    "_macro_real_fpr_video": 0.009355055821024407,
+    "_macro_fake_recall_video": 0.5363861566661662
+  }
+}

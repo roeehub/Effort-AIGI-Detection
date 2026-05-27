@@ -1,0 +1,213 @@
+{
+  "n_train": 3196,
+  "n_test": 800,
+  "n_classes": 10,
+  "classes": [
+    "deeplive_enhanced",
+    "deeplive_non_enhanced",
+    "dl_bucket_visomaster",
+    "external_fake",
+    "external_real",
+    "proper_visomaster",
+    "proper_visomaster_enhanced",
+    "tv2_deeplive",
+    "tv2_visomaster",
+    "visomaster_enhanced_v2"
+  ],
+  "train_accuracy": 0.46808510638297873,
+  "test_accuracy": 0.46125,
+  "chance_accuracy": 0.1,
+  "confusion_matrix": [
+    [
+      0,
+      0,
+      0,
+      0,
+      4,
+      20,
+      27,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      4,
+      39,
+      8,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      10,
+      14,
+      19,
+      0,
+      0,
+      8
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      15,
+      0,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      55,
+      42,
+      1,
+      0,
+      1,
+      7
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      9,
+      210,
+      15,
+      1,
+      0,
+      5
+    ],
+    [
+      0,
+      0,
+      1,
+      0,
+      0,
+      48,
+      68,
+      0,
+      1,
+      2
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      8,
+      37,
+      5,
+      2,
+      2,
+      8
+    ],
+    [
+      0,
+      0,
+      1,
+      0,
+      15,
+      19,
+      0,
+      0,
+      4,
+      4
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      8,
+      18,
+      3,
+      0,
+      1,
+      30
+    ]
+  ],
+  "per_class": {
+    "deeplive_enhanced": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 51
+    },
+    "deeplive_non_enhanced": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 51
+    },
+    "dl_bucket_visomaster": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 51
+    },
+    "external_fake": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 16
+    },
+    "external_real": {
+      "precision": 0.48672566371681414,
+      "recall": 0.5188679245283019,
+      "f1": 0.5022831050228311,
+      "support": 106
+    },
+    "proper_visomaster": {
+      "precision": 0.45454545454545453,
+      "recall": 0.875,
+      "f1": 0.5982905982905983,
+      "support": 240
+    },
+    "proper_visomaster_enhanced": {
+      "precision": 0.4657534246575342,
+      "recall": 0.5666666666666667,
+      "f1": 0.5112781954887218,
+      "support": 120
+    },
+    "tv2_deeplive": {
+      "precision": 0.6666666666666666,
+      "recall": 0.03225806451612903,
+      "f1": 0.06153846153846154,
+      "support": 62
+    },
+    "tv2_visomaster": {
+      "precision": 0.4444444444444444,
+      "recall": 0.09302325581395349,
+      "f1": 0.15384615384615385,
+      "support": 43
+    },
+    "visomaster_enhanced_v2": {
+      "precision": 0.46153846153846156,
+      "recall": 0.5,
+      "f1": 0.48000000000000004,
+      "support": 60
+    }
+  },
+  "checkpoint_name": "p8a_reference_step5000",
+  "features_uri": "gs://training-job-outputs/probe_battery_2026-04-26/p8a_reference_step5000/features.npz",
+  "label_field": "source_bucket",
+  "threshold": 0.25,
+  "verdict": "FAIL",
+  "realfake_distribution": {
+    "fake": 2186,
+    "real": 1810
+  }
+}

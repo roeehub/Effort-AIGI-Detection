@@ -1,0 +1,2 @@
+R13_RLP5_07_E3_SEEDB: "gs://training-job-outputs/phase2r13_experiments/6jwwb526/value_composite_effort_20260423_step20500_auc0.9908_eer0.0304.pth"
+R12_G_FP32: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"

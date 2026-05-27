@@ -1,0 +1,9 @@
+{
+  "n_chronic6_total": 6,
+  "n_chronic6_covered": 5,
+  "n_chronic6_in_screen_cohort": 5,
+  "frac_chronic6_covered_in_screen_cohort": 1.0,
+  "iou_full_chronic6_vs_screen": 0.29411764705882354,
+  "iou_chronic6_covered_vs_screen": 0.3125,
+  "n_screen_cohort_identities": 16
+}

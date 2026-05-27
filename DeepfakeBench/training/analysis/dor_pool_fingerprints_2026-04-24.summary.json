@@ -1,0 +1,224 @@
+{
+  "pools": {
+    "today_failing": {
+      "n": 30,
+      "mean_lum": {
+        "mean": 147.14450429280598,
+        "std": 6.583270990238216
+      },
+      "highlight_clip_pct": {
+        "mean": 0.0013507954343114322,
+        "std": 0.007398611299473593
+      },
+      "shadow_clip_pct": {
+        "mean": 1.7490171617461996,
+        "std": 2.537099187486952
+      },
+      "dynamic_range": {
+        "mean": 212.83383749189974,
+        "std": 10.263604343654007
+      },
+      "wb_rb_ratio": {
+        "mean": 1.300477918790235,
+        "std": 0.02853305489683915
+      },
+      "specular_hotspots": {
+        "mean": 0.03333333333333333,
+        "std": 0.18257418583505536
+      },
+      "dct_hf_ratio": {
+        "mean": 0.2492769845107151,
+        "std": 0.012880958119046718
+      },
+      "mean_cb": {
+        "mean": 117.07603505452474,
+        "std": 0.44471276066011145
+      },
+      "mean_cr": {
+        "mean": 141.46503651936848,
+        "std": 1.0396975823619115
+      },
+      "bits_per_pixel": {
+        "mean": 13.045699439676143,
+        "std": 0.589681342687155
+      }
+    },
+    "dor_shkedi_lb": {
+      "n": 30,
+      "mean_lum": {
+        "mean": 134.47952372233073,
+        "std": 7.708381948440872
+      },
+      "highlight_clip_pct": {
+        "mean": 0.4424658159374617,
+        "std": 0.6385171206029304
+      },
+      "shadow_clip_pct": {
+        "mean": 4.21480728224152,
+        "std": 4.473228320512064
+      },
+      "dynamic_range": {
+        "mean": 230.3273432213068,
+        "std": 14.598615566662474
+      },
+      "wb_rb_ratio": {
+        "mean": 1.2765422298060656,
+        "std": 0.1498014110541592
+      },
+      "specular_hotspots": {
+        "mean": 1.5,
+        "std": 2.1932498324600886
+      },
+      "dct_hf_ratio": {
+        "mean": 0.3050174676556756,
+        "std": 0.01610106613602693
+      },
+      "mean_cb": {
+        "mean": 117.72744064331054,
+        "std": 4.866216095643451
+      },
+      "mean_cr": {
+        "mean": 137.62887522379557,
+        "std": 5.844027713679461
+      },
+      "bits_per_pixel": {
+        "mean": 12.99600377518286,
+        "std": 0.8757897896788738
+      }
+    },
+    "real_dor_lb": {
+      "n": 30,
+      "mean_lum": {
+        "mean": 133.32432505289714,
+        "std": 10.88926452385471
+      },
+      "highlight_clip_pct": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "shadow_clip_pct": {
+        "mean": 1.5386688681496488,
+        "std": 0.6853106490321185
+      },
+      "dynamic_range": {
+        "mean": 204.98777493079504,
+        "std": 6.1075501143884035
+      },
+      "wb_rb_ratio": {
+        "mean": 1.8597430918490998,
+        "std": 0.24267007578296831
+      },
+      "specular_hotspots": {
+        "mean": 0.0,
+        "std": 0.0
+      },
+      "dct_hf_ratio": {
+        "mean": 0.311409488503568,
+        "std": 0.023722392911091402
+      },
+      "mean_cb": {
+        "mean": 103.8087257385254,
+        "std": 6.040499641658511
+      },
+      "mean_cr": {
+        "mean": 149.6543960571289,
+        "std": 6.29445183216707
+      },
+      "bits_per_pixel": {
+        "mean": 14.21866295903067,
+        "std": 1.347138008027246
+      }
+    }
+  },
+  "decision": {
+    "lighting": {
+      "mean_lum": {
+        "today_failing_mean": 147.14450429280598,
+        "dor_shkedi_lb_mean": 134.47952372233073,
+        "real_dor_lb_mean": 133.32432505289714,
+        "sep_from_clean_in_std": 0.6876211830083266,
+        "separating": false,
+        "same_direction": true
+      },
+      "highlight_clip_pct": {
+        "today_failing_mean": 0.0013507954343114322,
+        "dor_shkedi_lb_mean": 0.4424658159374617,
+        "real_dor_lb_mean": 0.0,
+        "sep_from_clean_in_std": 221908305.68588656,
+        "separating": true,
+        "same_direction": true
+      },
+      "shadow_clip_pct": {
+        "today_failing_mean": 1.7490171617461996,
+        "dor_shkedi_lb_mean": 4.21480728224152,
+        "real_dor_lb_mean": 1.5386688681496488,
+        "sep_from_clean_in_std": 2.1059695391813493,
+        "separating": true,
+        "same_direction": true
+      },
+      "dynamic_range": {
+        "today_failing_mean": 212.83383749189974,
+        "dor_shkedi_lb_mean": 230.3273432213068,
+        "real_dor_lb_mean": 204.98777493079504,
+        "sep_from_clean_in_std": 2.716771064064044,
+        "separating": true,
+        "same_direction": true
+      },
+      "wb_rb_ratio": {
+        "today_failing_mean": 1.300477918790235,
+        "dor_shkedi_lb_mean": 1.2765422298060656,
+        "real_dor_lb_mean": 1.8597430918490998,
+        "sep_from_clean_in_std": 2.3539491358954447,
+        "separating": true,
+        "same_direction": true
+      },
+      "specular_hotspots": {
+        "today_failing_mean": 0.03333333333333333,
+        "dor_shkedi_lb_mean": 1.5,
+        "real_dor_lb_mean": 0.0,
+        "sep_from_clean_in_std": 766666666.6666666,
+        "separating": true,
+        "same_direction": true
+      }
+    },
+    "codec": {
+      "dct_hf_ratio": {
+        "today_failing_mean": 0.2492769845107151,
+        "dor_shkedi_lb_mean": 0.3050174676556756,
+        "real_dor_lb_mean": 0.311409488503568,
+        "sep_from_clean_in_std": 1.4443003749445917,
+        "separating": true,
+        "same_direction": true
+      },
+      "mean_cb": {
+        "today_failing_mean": 117.07603505452474,
+        "dor_shkedi_lb_mean": 117.72744064331054,
+        "real_dor_lb_mean": 103.8087257385254,
+        "sep_from_clean_in_std": 2.2503125427567707,
+        "separating": true,
+        "same_direction": true
+      },
+      "mean_cr": {
+        "today_failing_mean": 141.46503651936848,
+        "dor_shkedi_lb_mean": 137.62887522379557,
+        "real_dor_lb_mean": 149.6543960571289,
+        "sep_from_clean_in_std": 1.6057697244243234,
+        "separating": true,
+        "same_direction": true
+      },
+      "bits_per_pixel": {
+        "today_failing_mean": 13.045699439676143,
+        "dor_shkedi_lb_mean": 12.99600377518286,
+        "real_dor_lb_mean": 14.21866295903067,
+        "sep_from_clean_in_std": 0.8891526655580703,
+        "separating": false,
+        "same_direction": true
+      }
+    }
+  },
+  "verdict": {
+    "lighting_hits": 5,
+    "codec_hits": 3,
+    "recommended_variant": "V3_combined"
+  }
+}

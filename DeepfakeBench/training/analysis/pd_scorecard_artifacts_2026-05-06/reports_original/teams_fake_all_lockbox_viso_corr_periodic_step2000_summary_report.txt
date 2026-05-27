@@ -1,0 +1,32 @@
+Validation Summary Report for: td_teams_fake_all_lockbox_viso_corr_periodic_step2000
+Run Name: TargetDomain teams_fake_all_lockbox VISO_CORR_PERIODIC_STEP2000
+Generated on: 2026-05-06 14:49:39
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 253
+Accuracy: 0.9684
+True Positives (Correctly identified Fake): 245
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 8
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_cam_test_s33 (FAKE) -----
+Total Videos: 191
+Accuracy: 0.9634 (184/191 correct)
+
+----- Method: teams_capture_pc_generator_s15 (FAKE) -----
+Total Videos: 62
+Accuracy: 0.9839 (61/62 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=253, acc=0.9684, tpr=0.9684, fpr=0.0000, fnr=0.0316
+
+Best-group accuracy: unknown_fake = 0.9684
+Worst-group accuracy: unknown_fake = 0.9684
+Best-vs-worst group accuracy gap: 0.0000

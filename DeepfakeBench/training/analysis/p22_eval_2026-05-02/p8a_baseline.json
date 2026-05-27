@@ -1,0 +1,7 @@
+{
+  "viso_pearson_r": -0.30109190842112404,
+  "R2_score_attrs": 0.107,
+  "AUC_orig": 0.843,
+  "AUC_residual": 0.702,
+  "viso_recall_at_2pct_fpr": 0.011
+}

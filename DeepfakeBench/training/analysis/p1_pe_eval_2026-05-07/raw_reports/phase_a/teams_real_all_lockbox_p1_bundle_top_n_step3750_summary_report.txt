@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_all_lockbox_p1_bundle_top_n_step3750
+Run Name: TargetDomain teams_real_all_lockbox P1_BUNDLE_TOP_N_STEP3750
+Generated on: 2026-05-07 11:36:48
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1361
+Accuracy: 0.5467
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 744
+False Positives (Real misclassified as Fake): 617
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 1361
+Accuracy: 0.5467 (744/1361 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=1361, acc=0.5467, tpr=0.0000, fpr=0.4533, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.5467
+Worst-group accuracy: unknown_real = 0.5467
+Best-vs-worst group accuracy gap: 0.0000

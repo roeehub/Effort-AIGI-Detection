@@ -1,0 +1,391 @@
+# ============================================================================
+# R13_T4_MULTI_AXIS_GRL_2026-05-10.yaml
+# Stage A — first GPU realization of the multi-axis-L11-GRL hypothesis
+# (forgery_signal_atlas synthesis 2026-05-10).
+#
+# WHAT THIS PACKET TESTS:
+#   The encoder L11 readout has inv_mean ≈ 0.018-0.031 across 7 trained ckpts
+#   (P8A, E2B, T3 family, MCLIOEXB, P18T, P18C) — within probe noise. The
+#   encoder co-mingles forgery and shortcut signal regardless of training
+#   recipe (data lever, optimizer, head). Pre-test 1 (frozen-feature multi-
+#   axis GRL probe) lifted P8A's inv_mean 4× (0.012 → 0.048) at k=128, λ=2.0
+#   — directional evidence that an explicit invariance objective on encoder
+#   features can move the bottleneck. T3's frozen features did NOT respond
+#   (best at λ=0), so we FT from P8A (not from T3 step1500).
+#
+# THE LEVERS:
+#   1. Init: P8A_REFERENCE_STEP5000 (inherited from R13_T3_SLOT1).
+#   2. Data: T3 SLOT1 keep-list (drop top-25% lap_var Teams REALS) +
+#      visomaster_enhanced + visomaster_teams_enhanced enabled +
+#      family_weight=4.0 on enhanced fake. Inherits T3's data discovery —
+#      T3 step1500 was the first substantive lockbox lift over P8A.
+#   3. NEW MECHANISM: 4-axis adversarial GRL on encoder pooled features
+#      (post-ln_post / post-proj L11 CLS — same tensor the head reads).
+#      Axes: chronic_flag, is_dor, sharpness_laplacian_high (batch median),
+#      color_a_approx_dev_high (batch median). Per-axis 2-class CE through
+#      shared GRL → bottleneck (k=128, matches pre-test-1 winning compression)
+#      → per-axis MLP head. λ linearly ramps 0 → 1.0 over the first 500
+#      steps, flat at 1.0 thereafter.
+#
+# DIFFERS FROM PRIOR ATTEMPTS (loop-avoidance audit):
+#   - P15 (capture-mode GRL @ static λ=0.20, OUTPUT level): single axis,
+#     wrong attachment, no warmup. Did not bite.
+#   - P18 (12-class method GRL, OUTPUT level): single multi-class axis at
+#     output. chronic_6 AUC at L11 GOT WORSE (0.934 vs P8A 0.909).
+#   - MCLIOEXB (face_scale_jitter, AUGMENTATION): face_size_high AUC at L11
+#     stayed at 0.949 = P8A. Aug doesn't move encoder.
+#   - T3 (data lever only): chronic_6 AUC 0.945 (regressed P8A's 0.909).
+#
+# This packet differs structurally:
+#   (a) Multi-axis (chronic + dor + 2 IQ axes), not single.
+#   (b) Encoder-level attachment (pooled features), not output-only.
+#   (c) Compressed bottleneck (k=128) matches pre-test-1 winning condition.
+#   (d) Warmup λ schedule, not static.
+#   (e) Stacked WITH T3's data lever, not replacing it.
+#
+# WHAT WOULD FALSIFY:
+#   - Forgery AUC collapses below 0.95 → λ_max=1.0 too aggressive; pivot
+#     to λ_max=0.5 or longer warmup.
+#   - Shortcut classifier accs DON'T drop toward chance during warmup →
+#     GRL isn't biting at this attachment point; need L6/L9 attachment
+#     (cross-layer) or higher λ.
+#   - Forgery AUC stays high BUT atlas inv_mean stays ≈ 0.03 →
+#     bottleneck route around the GRL'd axes; need broader axis coverage.
+#   - chronic_6 AUC at L11 DROPS toward 0.5 AND F4 viso recall ≥ 70% AND
+#     may6 false-flag ≤ 6/92 → mechanism works; this is the success path
+#     and the new FT base for downstream.
+#
+# CLOSE CRITERION (deployment-grade):
+#   - dor_lockbox_dev real FPR ≤ 5% (at deployment τ tied to dev)
+#   - F4_viso_dev recall ≥ 70% (vs P8A 27% / T3 step1500 17%)
+#   - may6 false-flag ≤ 6/92 (vs E2B 53/92 / step1500 6/92 / step2500 71/92)
+#   - atlas inv_mean at L11 ≥ 0.05 (vs ceiling 0.031)
+#
+# COST: ~$60-80 Vertex (us-east1 or us-west4, A100×1, ~5000 steps, FT regime).
+# CONFIDENCE: 35-45% any single ckpt promotes; 60-70% the mechanism produces
+#   measurable encoder change (atlas inv_mean lift) regardless of scorecard
+#   outcome — that change unlocks the next packet design.
+# Seed: 9501
+# Sidecar: analysis/cpu_diagnostics_2026-05-09/slot1_teams_real_keep_list_2026-05-09.csv
+#   (T3 keep-list, inherited unchanged); analysis/cpu_diagnostics_2026-05-10/
+#   for the design rationale (PLAN_2026-05-10.md, SYNTHESIS_FACTS_2026-05-10.md).
+# Smoke test: analysis/cpu_diagnostics_2026-05-10/scripts/smoke_test_multi_axis_grl.py
+# ============================================================================
+
+name: "R13_T5C_T4_BIG_CLASSIFIER_2026-05-11"
+description: "T5-C — T4 multi-axis-L11-GRL recipe with online GRL classifier hidden_dim 256 → 1024. Tests whether a stronger online classifier forces UNIFORM encoder invariance covering chronic_6 (per A3 2026-05-11, T4 step10500 regressed chronic_6 inv_mean −0.0315 vs P8A at L11; A2 showed lockbox L11 features remain linearly separable, so the trained head is the lockbox failure point — bigger classifier should both lift the encoder lift on the uneven axes AND improve head capacity). Single-lever delta vs T4."
+seed: 9501
+
+wandb:
+  tags:
+    - "phase2-round13"
+    - "stage-a"
+    - "t5c-bigger-classifier"
+    - "encoder-invariance"
+    - "ft-from-p8a"
+    - "inherits-t3-slot1-data"
+    - "inherits-t4-grl"
+    - "grl-hidden-dim-1024"
+    - "no-pair-rank"
+    - "no-group-dro"
+    - "no-anchor-aware"
+    - "no-face-scale-jitter"
+    - "no-arcface"
+    - "no-quality-domain-head"
+    - "seed-9501"
+
+data_source: combined_paired
+
+backbone:
+  name: "vit_b_16_laion_datacomp"
+  variant: "ViT-B-16-DataComp-XL"
+  source: "laion"
+  model_name: "ViT-B-16"
+  pretrained: "datacomp_xl_s13b_b90k"
+  hidden_size: 512
+  resolution: 224
+  apply_svd_to_in_proj: true
+  unfreeze_final_proj: true
+  unfreeze_final_ln: true
+  apply_svd_to_mlp: true
+
+learning_rate: 1.0e-4
+weight_decay: 0.05
+optimizer_eps: 1.0e-8
+lambda_reg: 0.01
+rank: 736
+gradient_clip_val: 1.0
+
+nEpochs: 14
+total_training_steps: 5000
+lr_scheduler: "cosine_with_warmup"
+lr_scheduler_warmup_steps: 500
+
+dataloader_strategy: combined_paired
+frames_per_batch: 32
+frames_per_video: 8
+num_workers: 4
+prefetch_factor: 2
+
+load_base_checkpoint: true
+gcs_base_checkpoint: "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+label_smoothing: 0.0
+stability_lambda: 0.0
+
+# ===== Multi-axis encoder-level GRL (NEW for T4) =====
+# See detectors/effort_detector.py::MultiAxisGRLBlock and
+# trainer/trainer.py::_update_multi_axis_grl_lambda for the implementation.
+# Smoke-tested via analysis/cpu_diagnostics_2026-05-10/scripts/
+# smoke_test_multi_axis_grl.py (gradient flows through GRL into encoder;
+# per-axis CE finite; λ=0 still safe).
+multi_axis_grl:
+  enabled: true
+  axes:
+    - chronic_flag
+    - is_dor
+    - sharpness_laplacian_high
+    - color_a_approx_dev_high
+  lambda_max: 1.0
+  lambda_warmup_steps: 500
+  loss_weight: 1.0
+  hidden_dim: 1024
+  bottleneck_dim: 128
+
+# ===== All other levers identical to T3 SLOT1 (data lever inheritance) =====
+
+pair_rank_loss:
+  lambda: 0.0
+
+use_group_dro: false
+
+correlation_penalty:
+  enabled: false
+
+anchor_aware:
+  enabled: false
+
+face_scale_jitter:
+  enabled: false
+
+augmentation:
+  version: "quality_targeted_family"
+  strength: "vcd_targeted"
+  routing:
+    mode: "family_aware"
+    enhanced_strategy_names:
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+  context_variation_enabled: true
+  context_variation_gamma_limit: [80, 120]
+  context_variation_brightness: 0.25
+  context_variation_contrast: 0.25
+  context_variation_shift: 0.05
+  context_variation_scale: 0.15
+  context_variation_rotate: 10
+  context_variation_oneof_p: 0.30
+  context_variation_individual_p: 0.15
+
+  pipeline_randomization:
+    enabled: true
+    p_real: 0.5
+    p_fake: 0.5
+    blur_p: 0.85
+    blur_sigma_range: [2.0, 8.0]
+    brightness_p: 0.7
+    brightness_range: [-30.0, 70.0]
+    jpeg_p: 0.7
+    jpeg_quality: [30, 90]
+    downscale_p: 0.3
+    downscale_range: [0.85, 1.0]
+    chroma_blur_p: 0.3
+    chroma_blur_ksize: 3
+    yuv_roundtrip_p: 0.0
+    gamma_p: 0.3
+    gamma_range: [0.92, 1.08]
+
+combined_paired:
+  identity_balanced_sampling: true
+  split_seed: 9501
+  seed: 9501
+
+  face_area_parquet_path: "analysis/deeplive_face_geometry_2026-05-05/face_area.parquet"
+
+  df40:
+    enabled: true
+    pair_json: "dataset/df40_pairs/df40-pair-matching.json"
+    gcs_bucket: "df40-frames-recropped-rfa85"
+    sampling_mode: "sparse"
+    anchor_indices: [0, 4, 8, 12, 16, 20, 24, 28]
+    methods:
+      - "simswap"
+      - "facedancer"
+      - "blendface"
+      - "e4s"
+      - "inswap"
+      - "mobileswap"
+      - "uniface"
+
+  deeplive:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    use_landmarks: false
+    sampling_mode: "sparse"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    include_strategies:
+      - "edge_cases"
+      - "minimal_processing"
+      - "quality_enhancement"
+      - "edge_cases_enhanced"
+      - "minimal_processing_enhanced"
+    exclude_strategies: []
+    strategy_expectations:
+      mode: "withenhanced"
+      min_counts:
+        edge_cases_enhanced: 400
+        minimal_processing_enhanced: 390
+
+  visomaster:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    frames_bucket: "live-deepfake-methods-real-and-fake-frames"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    swap_models:
+      - "CSCS"
+      - "GhostFace-v1"
+      - "GhostFace-v2"
+      - "GhostFace-v3"
+      - "InStyleSwapper256-A"
+      - "InStyleSwapper256-B"
+      - "InStyleSwapper256-C"
+      - "Inswapper128"
+      - "SimSwap512"
+    tiers: null
+
+  visomaster_enhanced:
+    enabled: true
+    gcs_bucket: "visomaster-enhanced-face-cropped"
+    original_bucket: "live-deepfake-methods-real-and-fake-frames-cropped"
+    exclude_tiers: ["ARTIFACT"]
+
+  visomaster_hints_teams:
+    enabled: false
+
+  visomaster_teams_enhanced:
+    enabled: true
+    resolver_manifest_uri: "gs://training-job-outputs/cache/visomaster/enhanced_visomaster_resolver_2026-04-06.json"
+    enhanced_bucket: "enhanced-visomaster-cropped"
+    companion_domains:
+      - "teams_v2"
+    include_statuses:
+      - "teams_v2_companion"
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    p_original: 0.5
+    sampling_family_key: "visomaster_enhanced_fake"
+
+  teams:
+    enabled: true
+    gcs_bucket: "live-deepfake-methods-real-and-fake-frames-cropped-teams"
+    require_pair_complete: true
+    anchor_indices: [0, 2, 4, 6, 8, 10, 12, 14]
+    # Inherited from T3 SLOT1 (verified in T3 verdict 2026-05-09 to be the
+    # data lever that produces the first lockbox lift over P8A; we hold
+    # this lever fixed and add the multi-axis GRL on top).
+    frame_keep_list_path: "analysis/cpu_diagnostics_2026-05-09/slot1_teams_real_keep_list_2026-05-09.csv"
+
+  external_training_reals:
+    - bucket: "effort-collected-data"
+      prefix: "real/VCD"
+      method: "external_vcd_real"
+      grouping: "per_image"
+      identity_pattern: "real__VCD__(?P<md5>[a-f0-9]{32})_"
+      identity_train_fraction: 0.40
+      identity_split_seed: 9501
+      max_frames_per_identity: 15
+      max_total_samples: 1200
+      deterministic: true
+
+  sampling:
+    strategy: "identity_resample_weighted"
+    family_weights:
+      df40_fake: 0.2
+      visomaster_fake: 4.0
+      visomaster_enhanced_fake: 4.0
+      deeplive_non_enhanced_fake: 2.5
+      deeplive_enhanced_fake: 3.0
+      deeplive_teams_fake: 7.0
+      deeplive_teams_real: 5.0
+      df40_real: 0.5
+      realpool_real: 1.5
+      external_real: 2.0
+
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+  holdout:
+    mode: "identity"
+    max_samples_per_method: 300
+
+  ood_monitoring:
+    enabled: true
+    exclude_training_identities: true
+    external_real_sources:
+      - bucket: "effort-collected-data"
+        prefix: "real/external_youtube_avspeech"
+        method: "external_youtube_avspeech"
+        grouping: "by_folder"
+        max_videos: 200
+        deterministic: true
+      - bucket: "effort-collected-data"
+        prefix: "real/VCD"
+        method: "zoom_vcd_real"
+        grouping: "per_image"
+        max_videos: 1200
+        deterministic: true
+    external_fake_sources:
+      - bucket: "effort-collected-data"
+        prefix: "wma_validation/enhanced_fake"
+        method: "wma_failure_fake"
+        grouping: "per_image"
+        max_videos: 1202
+        deterministic: true
+    expected_counts:
+      external_youtube_avspeech: 200
+      zoom_vcd_real: 1200
+      wma_failure_fake: 1202
+    strict_expected_counts: true
+
+use_arcface_head: false
+arcface_m: 0.15
+arcface_s: 6.0
+s_start: 6.0
+s_end: 6.0
+anneal_steps: 1
+
+evaluate_every_steps: 250
+ood_monitoring_start_step: 250
+ood_monitoring_every_steps: 500
+test_batch_size: 32
+
+early_stopping_enabled: true
+early_stopping_patience: 12
+
+periodic_saves:
+  enabled: true
+  step_list:
+    - 100
+    - 500
+    - 1000
+    - 1500
+    - 2500
+    - 3500
+    - 5000
+
+gcs_assets:
+  clip_backbone:
+    gcs_path: "gs://base-checkpoints/effort-aigi/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    local_path: "./weights/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/"
+    files:
+      - open_clip_config.json
+      - open_clip_pytorch_model.bin

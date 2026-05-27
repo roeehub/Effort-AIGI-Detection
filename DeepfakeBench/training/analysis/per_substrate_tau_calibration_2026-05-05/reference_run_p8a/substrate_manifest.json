@@ -1,0 +1,36 @@
+{
+  "substrate_source": "clip_capture_mode (from lockbox_tagging parquet)",
+  "tags_parquet": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/lockbox_tagging/full_tags_2026-04-27.parquet",
+  "substrates": [
+    "normal_photo",
+    "webcam",
+    "phone_screen",
+    "screen",
+    "screen_recording"
+  ],
+  "substrate_counts_in_parquet": {
+    "normal_photo": 2434,
+    "phone_screen": 2314,
+    "webcam": 2226,
+    "screen": 220,
+    "screen_recording": 140
+  },
+  "substrate_counts_per_score_frame": {
+    "real_dev": {
+      "phone_screen": 1372,
+      "webcam": 1252,
+      "normal_photo": 1128,
+      "unknown": 558,
+      "screen": 208,
+      "screen_recording": 46
+    },
+    "real_lockbox": {
+      "unknown": 1004,
+      "normal_photo": 240,
+      "webcam": 105,
+      "phone_screen": 68,
+      "screen": 1
+    }
+  },
+  "notes": "Frames not present in the tags parquet are bucketed as 'unknown' and appear under fpr_dev_unknown / fpr_lockbox_unknown sweep cols. Treat them as a real-frame substrate; if their FPR is the worst, selected tau is conservative w.r.t. them."
+}

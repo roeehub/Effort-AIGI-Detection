@@ -1,0 +1,15 @@
+{
+  "p8a_fpr": 0.018369,
+  "slot_fpr": 0.019104,
+  "p8a_fps_implied": 25,
+  "slot_fps_implied": 26,
+  "absolute_gap": 0.0007349999999999995,
+  "n_lockbox_videos": 1361,
+  "bootstrap_delta_mean": 0.0007361645848640706,
+  "bootstrap_95ci_lo": 0.0,
+  "bootstrap_95ci_hi": 0.0022042615723732555,
+  "bootstrap_p_slot_higher_fpr": 0.63188,
+  "ci_covers_zero": true,
+  "method_note": "Independent bootstrap on Bernoulli with implied n_FPs; treats lockbox-real videos as iid. NOT paired (Job B does paired per-video).",
+  "n_boot": 100000
+}

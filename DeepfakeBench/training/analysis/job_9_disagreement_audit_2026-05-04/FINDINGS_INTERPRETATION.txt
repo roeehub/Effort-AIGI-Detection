@@ -1,0 +1,147 @@
+Job 9 -- INTERPRETATION (opinion layer)
+=======================================
+
+DISCLAIMER
+----------
+The user has explicitly flagged that prior agents have anchored on P8A
+as "the leader" out of inertia and that this biased downstream analyses.
+Concrete prior-framing examples:
+
+  * Job 6 reads framed E2B/E3 as "alternative challengers" and P8A as
+    "the reference"; Job 7's reframe of the head-retrain audit had to
+    walk back the asymmetric framing when it became clear that P8A was
+    being used as both the calibration anchor and the reference for
+    "is this answer right".
+  * The p22 reframe (memory entry project_p22_cpu_followups_reframe)
+    walked back a previous P22-step8k-as-winner read after CPU
+    diagnostics surfaced a 140x score-variance collapse -- another
+    pattern of inertia-driven framing that had to be corrected.
+
+Therefore the language below treats all three ckpts symmetrically. Any
+"X is doing Y because Z" sentence is an opinion, and both directions
+of every comparison are kept on the table.
+
+--------------------------------------------------------------------
+What patterns the numbers carry, pair by pair
+--------------------------------------------------------------------
+
+P8A vs E2B (the most asymmetric pair on viso fakes)
+
+  Numbers:
+    DIS_A_HIGH_B_LOW = 85,  DIS_A_LOW_B_HIGH = 1.
+    Of P8A's 85 unique-catches, laplacian_var mean = 85.8 (vs 14.6 in
+    AGREE_HIGH and 33.4 in AGREE_LOW). 76% of those 85 are raw subtype.
+    On reals, P8A unique-FPs are 91% low-resolution and 86% chronic
+    PC_Generator__s22/s45/Q/Test_Cam.
+    E2B's 1 unique catch is teams subtype.
+
+  Two competing reads (do not pick without the user):
+
+    Opinion read A (P8A-favourable):
+      "P8A is sensitive to a sharpness-correlated cue that fires on the
+      raw subtype's video stream and on chronic-offender real frames.
+      The cue is real on viso fakes and spurious on those reals --
+      classical sharpness/edge shortcut documented in the image-quality
+      shortcut memory entry. P8A 'works' on viso raw because its
+      shortcut happens to align with raw-subtype's image statistics."
+
+    Opinion read B (E2B-favourable):
+      "E2B's lower viso scores reflect that it is NOT relying on the
+      sharpness cue; the 1 unique catch (a teams-subtype frame) is a
+      hint that E2B has a different signal that is independent of the
+      shortcut axis. The teams-subtype invariance is a genuine
+      property even though the headline recall on viso is lower."
+
+  Both reads are consistent with the data. The decision depends on
+  whether you believe a high-FP-on-low-res-PC_Generator-frames answer
+  is acceptable in deployment.
+
+
+P8A vs E3 (more bidirectional disagreement)
+
+  Numbers:
+    DIS_A_HIGH_B_LOW = 37,  DIS_A_LOW_B_HIGH = 21.
+    P8A's 37 catches are 62% raw, laplacian_var mean = 75.2.
+    E3's 21 catches are 76% raw, laplacian_var mean = 19.2 -- much
+    LOWER sharpness than P8A's catches. So the two ckpts catch
+    different sub-populations even within raw.
+    On dev reals: P8A FPs concentrate on PC_Generator__s22/s45 (83%
+    chronic). E3 FPs concentrate on bla_bla_chow / Roy_D (93% chronic).
+    Different chronic clusters.
+
+  Opinion read:
+    "P8A and E3 each have their own chronic-offender failure mode
+    (PC_Generator family for P8A; bla_bla_chow + Roy_D for E3). They
+    are picking up different shortcut axes, not the same one at
+    different thresholds. An ensemble (e.g. min-rule) would only help
+    if the two axes are statistically uncorrelated on real-side
+    populations -- worth checking, given that current data shows
+    near-zero overlap of FP identities between the two."
+
+
+E2B vs E3 (one-sided viso disagreement)
+
+  Numbers:
+    DIS_A_HIGH_B_LOW = 0,  DIS_A_LOW_B_HIGH = 35.
+    E2B never scores a viso fake high while E3 scores it low; the
+    asymmetry is entirely in the other direction. All 35 E3-only
+    catches are raw subtype with mean laplacian_var = 55.2.
+    On dev reals, the same asymmetry holds: 16 E2B-unique-FP vs
+    126 E3-unique-FP, with E3 FPs 97% chronic on bla_bla_chow family.
+
+  Opinion read:
+    "E2B's score distribution is consistently more conservative than
+    E3's. E3 is detecting a sharpness-related axis on raw viso (that
+    P8A also fires on, see P8A vs E3 above) while E2B is not engaging
+    with that axis at all. E2B's strict thresholds give it both a
+    cleaner real side AND a much smaller fake-side recall. Whether
+    the trade is worth it depends on what specific viso pattern E2B
+    is supposed to be detecting -- likely the teams-subtype, given
+    that E2B is the only ckpt that scored a teams-subtype viso fake
+    high while another ckpt scored it low."
+
+
+Cross-pair pattern that ties them together
+------------------------------------------
+The viso DISAGREE_HIGH_LOW bands (P8A's 85, P8A's 37, E3's 35) are all
+characterised by ELEVATED laplacian_var (sharpness) relative to
+AGREE_LOW and to AGREE_HIGH within each pair. The same axis (sharpness)
+correlates with the chronic-offender FP clusters on dev reals:
+PC_Generator__s22/s45 and Q__s6 are higher-sharpness webcam captures;
+bla_bla_chow / Roy_D are phone_screen / screen captures with sharper
+edges from screen pixel grids.
+
+That is consistent with the existing image-quality shortcut memory
+entry: each of the three ckpts has its own sharpness-shortcut "tail",
+just on slightly different points in the input distribution.
+
+What is genuinely different per ckpt:
+  * P8A's tail aligns most strongly with raw viso fakes AND with
+    PC_Generator/Q/Test_Cam dev reals (mostly webcam, mostly low-res).
+  * E3's tail aligns with a DIFFERENT raw-viso sub-population AND with
+    bla_bla_chow/Roy_D (phone_screen/screen, larger).
+  * E2B has a much smaller tail in either viso direction; its real-side
+    FPs straddle both clusters at low absolute count.
+
+This view is INTERPRETATION, not fact. The fact-side is in
+FINDINGS_FACTS.txt.
+
+
+What this analysis CANNOT decide
+--------------------------------
+1. Whether P8A's shortcut hurts deployment more than E3's, or vice versa.
+   Both shortcuts manifest as chronic-offender FP clusters; deciding
+   between them needs out-of-sample validation on the production fleet,
+   not more analysis of the same dev/lockbox split.
+
+2. Whether the teams-subtype gap (E2B being the only ckpt with any
+   unique teams-subtype catch, n=1) is a meaningful signal or noise.
+   n=1 is too small to call.
+
+3. Which pair is the "best" ensemble candidate. Job 9 reports the
+   disagreement skeleton; ensemble math (e.g. union-of-min-rule recall
+   at fixed FPR) is a separate question and lives in
+   analysis/e2b_ensemble_2026-05-04/ etc.
+
+
+Patterns reported. Interpretation deferred to user / fresh agent.

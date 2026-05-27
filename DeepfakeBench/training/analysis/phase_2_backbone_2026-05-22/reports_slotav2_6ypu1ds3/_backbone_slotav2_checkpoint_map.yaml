@@ -1,0 +1,4 @@
+# Auto-generated checkpoint map for Phase 2 BACKBONE-slotav2
+# Run: 6ypu1ds3
+# Generated: 2026-05-22T23:20:31Z
+BACKBONE_SLOTAV2_6YPU1DS3_STEP3500: "gs://training-job-outputs/best_checkpoints/6ypu1ds3/periodic_effort_20260522_step3500_auc0.9968_eer0.0220.pth"

@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_poor_quality_dev_e2b_top_n_step3200
+Run Name: TargetDomain teams_real_poor_quality_dev E2B_TOP_N_STEP3200
+Generated on: 2026-05-07 09:23:09
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 923
+Accuracy: 0.8613
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 795
+False Positives (Real misclassified as Fake): 128
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 923
+Accuracy: 0.8613 (795/923 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=923, acc=0.8613, tpr=0.0000, fpr=0.1387, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.8613
+Worst-group accuracy: unknown_real = 0.8613
+Best-vs-worst group accuracy gap: 0.0000

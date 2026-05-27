@@ -1,0 +1,42 @@
+{
+  "active_recipe_lanes_audited": 18,
+  "active_recipe_rows": 310340,
+  "all_lanes_total_rows_in_caches": 1410583,
+  "all_lanes_count_in_caches": 60,
+  "production_substrates_audited": 9,
+  "production_total_rows": 972,
+  "production_p10_anchor": {
+    "lap_var": 49.57485008239746,
+    "min_dim": 174.0,
+    "sat_mean": 67.70999298095703,
+    "luma_mean": 131.68300160122058,
+    "edge_mag": 28.38983325958252,
+    "color_b_dev": 10.025132274627685
+  },
+  "production_p05_anchor": {
+    "lap_var": 15.353712224960328,
+    "min_dim": 164.55,
+    "sat_mean": 65.21097908020019,
+    "luma_mean": 128.63478200539774,
+    "edge_mag": 23.825831413269043,
+    "color_b_dev": 8.489063787460328
+  },
+  "iq_axes": [
+    "lap_var",
+    "min_dim",
+    "sat_mean",
+    "luma_mean",
+    "edge_mag",
+    "color_b_dev"
+  ],
+  "method_resolution_asymmetry_flag": true,
+  "method_resolution_asymmetry_note": "Visomaster training samples are 224x224 (resized to model input), production substrates are at native ~219-373 px. lap_var measured at 224x224 is INFLATED relative to native lap_var. Train_visomaster lap_var (median ~120-380 across lanes) appears HIGHER than prod lap_var (median ~30-90), but a fair native-res comparison would likely show training is not nearly as sharp as the inflated numbers suggest. Direct cross-axis comparison should be treated as PROVISIONAL.",
+  "key_finding_train_eval_skin_frac_viso": {
+    "train_viso_fake_lap_var_p50": 421.2,
+    "train_viso_fake_lap_var_p10": 188.1,
+    "eval_viso_fake_lap_var_p50": 78.5,
+    "eval_viso_fake_lap_var_p10": 45.8,
+    "train_eval_p50_ratio": 5.37,
+    "interpretation": "Train-vs-eval p50 ratio of 5.4x on visomaster_fake; even after accounting for resolution (training 224x224 vs eval ~360-380), this is a SIGNIFICANT train>eval asymmetry. But the direction is the OPPOSITE of what the user's cleanup hypothesis assumes: training viso fakes are SHARPER than eval viso fakes, not softer. So 'remove low-quality training samples to match production' would target a TINY tail of training, not a long tail."
+  }
+}

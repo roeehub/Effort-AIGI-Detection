@@ -1,0 +1,127 @@
+# FP-Tail Characterization (P8A / E2B_3200 / E3_6600)
+
+Date: 2026-05-04
+Ckpts: P8A_step5000, E2B_TOP_N_step3200, E3_TOP_N_step6600
+Calibration: tau at FPR=10% on teams_real_all_dev per-ckpt (P8A 0.705, E2B 0.506, E3 0.852)
+Outputs: fp_cohort_per_ckpt.csv, concentration_per_ckpt.csv, shared_fp_tail.csv
+
+## Headline FP counts at calibrated tau
+
+  ckpt  all_dev          all_lockbox    dor_dev      poor_quality_dev   lighting_extreme_dev
+  P8A   457 (10.0%)      61 (4.3%)      12 (24.0%)   71 (5.4%)          156 (9.0%)
+  E2B   457 (10.0%)      88 (6.2%)      12 (24.0%)   156 (12.0%)        270 (15.5%)
+  E3    457 (10.0%)      82 (5.8%)      0 (0.0%)     104 (8.0%)         353 (20.3%)
+
+## Identity concentration (teams_real_all_dev, 24 distinct identities, 457 FP fires per ckpt)
+
+  ckpt  top-1                                        top-2   top-3   top-5
+  P8A   45.1% (PC_Generator__s22)                    56.5%   67.6%   85.6%
+  E2B   33.5% (bla_bla_chow)                         48.1%   60.6%   79.6%
+  E3    36.1% (bla_bla_chow)                         65.6%   88.4%   94.7%
+
+Top-2 of 24 identities (8.3% of identity pool) own 48-66% of FP fires per ckpt.
+Top-5 own 80-95%. Five repeat offenders show up across all three ckpts:
+bla_bla_chow, bla_bla_chow__s2, PC_Generator__s22, PC_Generator__s45, roy_d, Q__s6.
+
+On teams_real_all_lockbox (caveat: parquet covers only 29% of lockbox frames):
+- P8A: webcam captures 88.2% of fires; Chikara_Takahashi__s22 + dor_shkedi + PC_Generator__s15 = 100% of covered fires
+- E2B: dor_shkedi 76.1% + PC_Generator__s15 18.2% = 94%
+- E3: bla_bla_chow__s1 62.2% + PC_Generator__s15 18.3% = 80%
+
+## Capture-mode dominance is ckpt-specific but always concentrated
+
+teams_real_all_dev:
+- P8A: webcam = 22.2% rate, 68.6% of fires (matches "P8A leans on webcam-mode signature")
+- E2B: screen 32.2% + phone_screen 28.3% + webcam 27.5% (more diffuse across 3 modes)
+- E3:  phone_screen 46.8% + screen 33.4% + webcam 16.6% = 96.8% in top-3 modes
+
+teams_real_all_lockbox: webcam dominates P8A (88.2%); phone_screen dominates E3 (63.7%);
+webcam dominates E2B (58.9%). All three: 1-2 modes own >=90% of fires.
+
+## Face-area quartile (per-suite quartiles)
+
+teams_real_all_dev:
+- P8A: Q1 (smallest faces) = 77.5% of fires, 32.8% rate. Strongly concentrated.
+- E2B: Q3 36.4% + Q1 31.4% (bimodal across face-area)
+- E3:  Q3 40.7% + Q1 28.5% (bimodal)
+
+teams_real_poor_quality_dev: Q1 (smallest face) drives 42-55% of fires across all ckpts.
+
+## Source-resolution bucket (min(W,H) < 200 vs >= 200)
+
+teams_real_all_dev:
+- P8A: low_lt200 = 90.1% of fires (rate 18.2% vs 2.0%)  -- single-axis dominant
+- E2B: low_lt200 = 55.2% (closer split)
+- E3:  ~50/50 (no resolution gradient)
+
+teams_real_poor_quality_dev:
+- low_lt200 = 76.5% / 91.4% / 94.8% of fires for P8A/E2B/E3 -- universal driver
+
+## Sharpness quartile (full-image Laplacian; CAVEAT: not face-crop sharpness)
+
+teams_real_all_dev:
+- P8A: Q4 (sharpest reals) 48.9% + Q3 33.8% = 82.7% of fires.
+       Consistent with documented image-quality shortcut: training fakes were sharper
+       than training reals, so the model treats "sharp" as fake-evidence.
+- E2B: Q4 56.6% + Q1 27.7% (bimodal)
+- E3:  Q1 (blurriest) 45.9% + Q4 39.8% (bimodal)
+
+The bimodal pattern (sharpest AND blurriest both fire) is consistent with two distinct
+mistakes: image-quality shortcut on Q4 + covariate shift on Q1.
+
+is_low_quality=True covers 97-100% of fires across ckpts on teams_real_all_dev,
+but base rate is also 88%, so the discriminative power of this single tag is modest.
+
+## Shared FP tail (cross-ckpt) on teams_real_all_dev
+
+  n_ckpts_FP   frames   share
+  0            3,649    80.0%
+  1            554      12.1%
+  2            266      5.8%
+  3            95       2.1%
+
+Total FP fires summed across the 3 ckpts: 1,371
+- 59.6% of fires are on frames flagged by >=2 ckpts
+- 20.8% are on frames flagged by ALL 3
+
+The FP tail is substantially data-shared, not architecture-specific. The shared cluster
+is the same set of repeat-offender identities. ~40% of fires are still ckpt-specific
+(architecture-induced disagreement), but the dominant signal is shared.
+
+## Verdict: CONCENTRATED, not diffuse. HIGH CONFIDENCE.
+
+Top-3 axes (identity, capture_mode, source_resolution) each individually account for
+>=50% of FP fires on at least one suite x ckpt. Combined they cover >80% of the FP
+volume across all suite x ckpt cells where parquet coverage exists.
+
+This passes the "top-3 axes account for >70%" bar for concentrated-and-fixable.
+There is no diffuse high-scoring real cloud requiring calibration-loss intervention.
+
+## Next-packet implication
+
+DO: eval-substrate fix + hard-negative mining
+- Audit the 5-6 chronic offenders (bla_bla_chow, bla_bla_chow__s2, PC_Generator__s22,
+  PC_Generator__s45, roy_d, Q__s6). Either reweight or stratify in eval; oversample
+  in training as hard negatives.
+- Mine reals with min(W,H)<200 and clip_capture_mode in {webcam, phone_screen} as
+  additional training hard negatives.
+
+DO NOT: introduce a new training-objective axis (calibration loss, GRL variant,
+contrastive). The data does not show a wide diffuse cloud needing recalibration -- it
+shows a small identifiable cluster needing data fixes. Project memory
+"data-axis lever pulled twice no lift" remains a constraint, but the signal here is
+eval-substrate concentration, which is upstream of training and orthogonal to
+data-axis lever attempts (which were data-augmentation/feature-weighting attempts,
+not eval-pool stratification or per-identity hard-negative oversampling).
+
+## Caveats
+
+- Lockbox parquet coverage is 29%. Lockbox axis numbers are on the covered subset only.
+- teams_real_dor_dev has 0% parquet coverage (50 frames). Dor results are headline only:
+  P8A 12/50, E2B 12/50, E3 0/50 -- E3 is shortcut-anomaly (regression on P8A's signature
+  dor invariance, consistent with project memory entry on E3 dor regression).
+- sharpness_laplacian is full-image, not face-crop. Q4 (sharpest reals firing) is
+  suggestive of image-quality shortcut, not definitive.
+- Identity extraction uses identity_key from parquet where available, regex-stripped
+  video_id otherwise. Sub-session splits like bla_bla_chow vs bla_bla_chow__s2 may
+  overcount; both are heavy offenders so verdict is robust.

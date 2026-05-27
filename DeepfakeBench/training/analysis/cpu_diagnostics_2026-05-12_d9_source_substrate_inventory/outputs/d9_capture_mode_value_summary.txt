@@ -1,0 +1,30 @@
+=== capture_mode / source_kind value distributions ===
+
+
+[A] teams-v2 train manifests: NO capture_mode field; source_kind absent.
+    Available origin fields: original_trimmed_video_name (YouTube-ID-style 11-char tokens).
+
+[B] eval manifest (real only): source_kind values:
+     flat_upload: 2413
+     session_capture: 2137
+     fallback_single: 64
+     real_identity_passthrough: 50
+
+[B'] eval manifest (real only) source_kind x split:
+     [dev] session_capture: 2023
+     [dev] flat_upload: 1166
+     [dev] fallback_single: 64
+     [dev] real_identity_passthrough: 50
+     [lockbox] flat_upload: 1247
+     [lockbox] session_capture: 114
+
+[C] eval manifest (fake only): source_kind values:
+     session_capture: 1432
+     flat_upload: 1230
+
+[D] proper_data manifest (real only): source_kind values:
+     future_proper_inventory: 3652
+
+[E] proper_data manifest (real only): playback_path values:
+     direct_capture: 1826
+     obs_virtual_cam_to_teams: 1826

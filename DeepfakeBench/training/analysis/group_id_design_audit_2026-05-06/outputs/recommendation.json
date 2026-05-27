@@ -1,0 +1,93 @@
+{
+  "headline_pair": {
+    "f_scheme": "F-B",
+    "r_scheme": "R-D",
+    "rationale": "Fake-side F-B and real-side R-D yields min group size 68 (rule 50), median 381, max-group share 0.184 (rule \u22640.3), avg ckpt failure-rate spread 0.915 (rule \u22650.15), train/eval cosine 0.108. Passes all thresholds: True."
+  },
+  "thresholds": {
+    "min_group_size": 50,
+    "min_failure_spread_pp": 0.15,
+    "max_group_dominance": 0.3
+  },
+  "top_3": {
+    "F-B__R-D": {
+      "rank": 1,
+      "f_scheme": "F-B",
+      "r_scheme": "R-D",
+      "n_groups": 27,
+      "min_group_size": 68,
+      "median_group_size": 381.0,
+      "max_group_share": 0.18357719130315875,
+      "avg_ckpt_spread_pp": 0.915169307114614,
+      "spread_per_ckpt": {
+        "P8A": 0.8930817610062893,
+        "E2B": 0.8860759493670886,
+        "PA_3800": 0.9663502109704641
+      },
+      "max_fail_per_ckpt": {
+        "P8A": 0.8930817610062893,
+        "E2B": 0.8860759493670886,
+        "PA_3800": 0.9746835443037974
+      },
+      "cos_train_eval": 0.10835953785519338,
+      "passes_all_thresholds": true,
+      "composite_score": 0.8775604803906313
+    },
+    "F-A__R-D": {
+      "rank": 2,
+      "f_scheme": "F-A",
+      "r_scheme": "R-D",
+      "n_groups": 23,
+      "min_group_size": 68,
+      "median_group_size": 396.0,
+      "max_group_share": 0.18357719130315875,
+      "avg_ckpt_spread_pp": 0.9122129139143184,
+      "spread_per_ckpt": {
+        "P8A": 0.8930817610062893,
+        "E2B": 0.8772067697662016,
+        "PA_3800": 0.9663502109704641
+      },
+      "max_fail_per_ckpt": {
+        "P8A": 0.8930817610062893,
+        "E2B": 0.8860759493670886,
+        "PA_3800": 0.9746835443037974
+      },
+      "cos_train_eval": 0.1036891938242695,
+      "passes_all_thresholds": true,
+      "composite_score": 0.8722689151748737
+    },
+    "F-C__R-D": {
+      "rank": 3,
+      "f_scheme": "F-C",
+      "r_scheme": "R-D",
+      "n_groups": 29,
+      "min_group_size": 68,
+      "median_group_size": 308.0,
+      "max_group_share": 0.18357719130315875,
+      "avg_ckpt_spread_pp": 0.9157024159810563,
+      "spread_per_ckpt": {
+        "P8A": 0.8930817610062893,
+        "E2B": 0.8860759493670886,
+        "PA_3800": 0.9679495375697907
+      },
+      "max_fail_per_ckpt": {
+        "P8A": 0.8930817610062893,
+        "E2B": 0.8860759493670886,
+        "PA_3800": 0.9746835443037974
+      },
+      "cos_train_eval": 0.07506996233607287,
+      "passes_all_thresholds": true,
+      "composite_score": 0.8614488014975134
+    }
+  },
+  "ckpts_evaluated": [
+    "P8A",
+    "E2B",
+    "PA_3800"
+  ],
+  "key_observations": {
+    "external_vcd_real_skip_rule": "external_vcd_real lane has 0 paired fakes (1200 unpaired reals, ~80 ids). Pair-rank cannot fire. The collate function must skip this lane for the pair-rank loss term but it MUST contribute to the real-side GroupDRO term (it is a real-side group of its own under R-B/R-C/R-D).",
+    "F-E_vs_F-D_tradeoff": "F-E (binary quality_band {hi,lo}) reduces fake-side cardinality and raises min group size vs F-D (ternary). Useful when F-D's smallest groups fall below the 50-frame threshold.",
+    "chronic_flag_payoff": "Adding chronic_flag (R-C, R-D) creates a tiny but high-failure-rate group. This is the lever that gives DRO something to do \u2014 without it, real-side spreads are dominated by the source axis alone."
+  }
+}

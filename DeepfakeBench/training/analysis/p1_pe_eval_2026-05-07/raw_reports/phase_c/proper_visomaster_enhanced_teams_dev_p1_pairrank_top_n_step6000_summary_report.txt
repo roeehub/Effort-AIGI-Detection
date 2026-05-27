@@ -1,0 +1,276 @@
+Validation Summary Report for: td_proper_visomaster_enhanced_teams_dev_p1_pairrank_top_n_step6000
+Run Name: TargetDomain proper_visomaster_enhanced_teams_dev P1_PAIRRANK_TOP_N_STEP6000
+Generated on: 2026-05-07 12:03:35
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1182
+Accuracy: 0.4357
+True Positives (Correctly identified Fake): 515
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 667
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_visomaster_enhanced_teams__cscs_codeformer (FAKE) -----
+Total Videos: 2
+Accuracy: 1.0000 (2/2 correct)
+
+----- Method: proper_visomaster_enhanced_teams__cscs_gfpgan_v1_4 (FAKE) -----
+Total Videos: 8
+Accuracy: 0.8750 (7/8 correct)
+
+----- Method: proper_visomaster_enhanced_teams__cscs_gpen_1024 (FAKE) -----
+Total Videos: 1
+Accuracy: 1.0000 (1/1 correct)
+
+----- Method: proper_visomaster_enhanced_teams__cscs_gpen_2048 (FAKE) -----
+Total Videos: 4
+Accuracy: 0.7500 (3/4 correct)
+
+----- Method: proper_visomaster_enhanced_teams__cscs_gpen_256 (FAKE) -----
+Total Videos: 9
+Accuracy: 1.0000 (9/9 correct)
+
+----- Method: proper_visomaster_enhanced_teams__cscs_gpen_512 (FAKE) -----
+Total Videos: 4
+Accuracy: 0.7500 (3/4 correct)
+
+----- Method: proper_visomaster_enhanced_teams__cscs_restoreformer (FAKE) -----
+Total Videos: 7
+Accuracy: 1.0000 (7/7 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_codeformer (FAKE) -----
+Total Videos: 17
+Accuracy: 0.3529 (6/17 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_gfpgan_v1_4 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.7000 (14/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_gpen_1024 (FAKE) -----
+Total Videos: 24
+Accuracy: 0.2917 (7/24 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_gpen_2048 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.0870 (2/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_gpen_256 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.2174 (5/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_gpen_512 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.1053 (2/19 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v1_restoreformer (FAKE) -----
+Total Videos: 22
+Accuracy: 0.5455 (12/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_codeformer (FAKE) -----
+Total Videos: 18
+Accuracy: 0.5000 (9/18 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_gfpgan_v1_4 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.7619 (16/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_gpen_1024 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.1905 (4/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_gpen_2048 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.2500 (5/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_gpen_256 (FAKE) -----
+Total Videos: 18
+Accuracy: 0.2778 (5/18 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_gpen_512 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.5000 (11/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v2_restoreformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.1500 (3/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_codeformer (FAKE) -----
+Total Videos: 21
+Accuracy: 0.5238 (11/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_gfpgan_v1_4 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.7143 (15/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_gpen_1024 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.2105 (4/19 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_gpen_2048 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.2273 (5/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_gpen_256 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.5909 (13/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_gpen_512 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.3913 (9/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__ghostface_v3_restoreformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.4000 (8/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_codeformer (FAKE) -----
+Total Videos: 18
+Accuracy: 0.6667 (12/18 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_gfpgan_v1_4 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.6364 (14/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_gpen_1024 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.4500 (9/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_gpen_2048 (FAKE) -----
+Total Videos: 18
+Accuracy: 0.4444 (8/18 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_gpen_256 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.5000 (10/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_gpen_512 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.5000 (10/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_a_restoreformer (FAKE) -----
+Total Videos: 22
+Accuracy: 0.3636 (8/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_codeformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.7500 (15/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_gfpgan_v1_4 (FAKE) -----
+Total Videos: 25
+Accuracy: 0.8000 (20/25 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_gpen_1024 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.4211 (8/19 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_gpen_2048 (FAKE) -----
+Total Videos: 14
+Accuracy: 0.2857 (4/14 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_gpen_256 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.4000 (8/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_gpen_512 (FAKE) -----
+Total Videos: 22
+Accuracy: 0.3636 (8/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_b_restoreformer (FAKE) -----
+Total Videos: 21
+Accuracy: 0.4286 (9/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_codeformer (FAKE) -----
+Total Videos: 24
+Accuracy: 0.5417 (13/24 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_gfpgan_v1_4 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.6500 (13/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_gpen_1024 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.3913 (9/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_gpen_2048 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.3913 (9/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_gpen_256 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.5714 (12/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_gpen_512 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.3043 (7/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__instyleswapper256_c_restoreformer (FAKE) -----
+Total Videos: 20
+Accuracy: 0.3000 (6/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_codeformer (FAKE) -----
+Total Videos: 22
+Accuracy: 0.6364 (14/22 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_gfpgan_v1_4 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.4211 (8/19 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_gpen_1024 (FAKE) -----
+Total Videos: 21
+Accuracy: 0.4762 (10/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_gpen_2048 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.3500 (7/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_gpen_256 (FAKE) -----
+Total Videos: 18
+Accuracy: 0.6111 (11/18 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_gpen_512 (FAKE) -----
+Total Videos: 23
+Accuracy: 0.4348 (10/23 correct)
+
+----- Method: proper_visomaster_enhanced_teams__inswapper128_restoreformer (FAKE) -----
+Total Videos: 17
+Accuracy: 0.4118 (7/17 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_codeformer (FAKE) -----
+Total Videos: 21
+Accuracy: 0.2381 (5/21 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_gfpgan_v1_4 (FAKE) -----
+Total Videos: 15
+Accuracy: 0.6000 (9/15 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_gpen_1024 (FAKE) -----
+Total Videos: 20
+Accuracy: 0.0500 (1/20 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_gpen_2048 (FAKE) -----
+Total Videos: 19
+Accuracy: 0.0526 (1/19 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_gpen_256 (FAKE) -----
+Total Videos: 25
+Accuracy: 0.3600 (9/25 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_gpen_512 (FAKE) -----
+Total Videos: 17
+Accuracy: 0.4118 (7/17 correct)
+
+----- Method: proper_visomaster_enhanced_teams__simswap512_restoreformer (FAKE) -----
+Total Videos: 19
+Accuracy: 0.3158 (6/19 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_visomaster_enhanced_teams_fake (family=proper_visomaster_enhanced_teams_fake): n=1182, acc=0.4357, tpr=0.4357, fpr=0.0000, fnr=0.5643
+
+Best-group accuracy: proper_visomaster_enhanced_teams_fake = 0.4357
+Worst-group accuracy: proper_visomaster_enhanced_teams_fake = 0.4357
+Best-vs-worst group accuracy gap: 0.0000

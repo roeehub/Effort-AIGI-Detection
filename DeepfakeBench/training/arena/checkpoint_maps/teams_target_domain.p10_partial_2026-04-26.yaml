@@ -1,0 +1,26 @@
+# Promotion-contract review for Packet-10 / anti-shortcut — partial.
+#
+# Purpose:
+# - Score the 3 P10 runs that finished early (hit early-stopping at ~step 4500-5500)
+#   while the slate's GRL/unfreeze runs are still in progress, so we get a
+#   directional read on H1 (symmetric routing) and H2 (GRL @ λ=0.1) without
+#   waiting for the full slate.
+# - Carry P8A and RLP6_04 for direct comparison.
+#
+# Crowning protocol (lockbox-anchored, NOT trainer's value_composite):
+# - lockbox_real_fpr ≤ RLP6_04 (≤ 0.441%)
+# - lockbox_fake_recall ≥ max(0.80, RLP6_04 − 0.02)  (≤2pt macro slack)
+# - Per-method recall: deeplive_enhanced ≥ 3.4%, visomaster_enhanced_macro ≥ 0.3%
+# - 7% lockbox FPR hard cap
+#
+# Ckpt selection: latest value_composite per run. SYM_GRL, GRL_strong, SYM_on_P8A
+# omitted — still training or hung; will be added in p10_full when ready.
+
+# Packet-10 candidates that finished early-stopping
+P10_SYM_BASELINE_STEP4500: "gs://training-job-outputs/phase2r13_experiments/osji02ho/value_composite_effort_20260426_step4500_auc0.9925_eer0.0236.pth"
+P10_GRL_BASELINE_STEP4500: "gs://training-job-outputs/phase2r13_experiments/ntbx1hh1/value_composite_effort_20260426_step4500_auc0.9925_eer0.0236.pth"
+P10_SYM_LIGHT_STEP5500:    "gs://training-job-outputs/phase2r13_experiments/2wajepid/value_composite_effort_20260426_step5500_auc0.9932_eer0.0203.pth"
+
+# References for direct comparison
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+RLP6_04_BASELINE_STEP23500: "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"

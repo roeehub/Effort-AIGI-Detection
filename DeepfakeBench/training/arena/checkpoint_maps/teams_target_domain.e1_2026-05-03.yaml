@@ -1,0 +1,22 @@
+# Promotion-contract validation map for E1 (run x1q3csh3)
+#
+# Auto-generated 2026-05-03 by arena/build_e_packet_checkpoint_map.py.
+# Includes P8A_REFERENCE_STEP5000 baseline for direct comparison.
+# 
+# Packet context (per yaml R13_E1_*.yaml):
+#   - E1: B16 FT-from-P8A + heavier eval-targeted aug curriculum
+#   - E2: B16 SCRATCH from CLIP + same eval-targeted aug
+#   - E3: L14 SCRATCH from CLIP + same eval-targeted aug
+# Falsifier targets per yaml: viso recall at joint dev+lockbox FPR=10% > 35%
+#
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E1_STEP100:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/periodic_effort_20260503_step100_auc0.9795_eer0.0501.pth"
+E1_STEP300:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/periodic_effort_20260503_step300_auc0.9837_eer0.0382.pth"
+E1_STEP500:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/periodic_effort_20260503_step500_auc0.9866_eer0.0453.pth"
+E1_STEP700:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/periodic_effort_20260503_step700_auc0.9853_eer0.0453.pth"
+E1_STEP900:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/periodic_effort_20260503_step900_auc0.9862_eer0.0453.pth"
+E1_FIRST_BEST_EP1:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/first_best_effort_20260503_ep1_auc0.9795_eer0.0501.pth"
+E1_TOP_N_STEP100:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/top_n_effort_20260503_step100_auc0.9795_eer0.0501.pth"
+E1_TOP_N_STEP300:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/top_n_effort_20260503_step300_auc0.9837_eer0.0382.pth"
+E1_TOP_N_STEP400:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/top_n_effort_20260503_step400_auc0.9865_eer0.0406.pth"
+E1_VALUE_COMPOSITE_STEP100:    "gs://training-job-outputs/best_checkpoints/x1q3csh3/value_composite_effort_20260503_step100_auc0.9795_eer0.0501.pth"

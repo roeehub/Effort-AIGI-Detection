@@ -1,0 +1,89 @@
+{
+  "method": {
+    "tau_calibration": "Used \u03c4 frozen by the contract scorer (arena/score_teams_promotion_contract.py) as recorded in promotion_contract/checkpoint_summary.csv. \u03c4-calibration is the contract's lex-tiered policy with target_real_fpr=0.07, target_stress_fpr=0.10, target_fake_recall_min=0.3 (from promotion_winner.json).",
+    "tau_p8a": 0.915605,
+    "tau_slotav2": 0.787956,
+    "n_resamples": 10000,
+    "rng_seed": 20260520,
+    "pairing": "Per-video paired resampling \u2014 same resampled video index set applied to both ckpts. Real videos only (label==0)."
+  },
+  "analyses": {
+    "A_teams_real_all_lockbox": {
+      "n_videos_real": 1361,
+      "observed": {
+        "fpr_p8a": 0.018368846436443792,
+        "fpr_slotav2": 0.019103600293901544,
+        "delta": 0.0007347538574577518,
+        "n_fp_p8a": 25,
+        "n_fp_slotav2": 26
+      },
+      "bootstrap": {
+        "n_resamples": 10000,
+        "fpr_p8a_ci95": [
+          0.011756061719324026,
+          0.025716385011021307
+        ],
+        "fpr_p8a_mean": 0.01841947097722263,
+        "fpr_slotav2_ci95": [
+          0.012490815576781777,
+          0.02645113886847906
+        ],
+        "fpr_slotav2_mean": 0.019035635562086702,
+        "delta_ci95": [
+          -0.00808229243203527,
+          0.00955180014695077
+        ],
+        "delta_mean": 0.0006161645848640706,
+        "p_delta_gt_0": 0.5193,
+        "p_delta_eq_0": 0.0651,
+        "p_delta_lt_0": 0.4156
+      },
+      "scope": "teams_real_all_lockbox",
+      "scope_note": "The contract's lockbox_real_suite is teams_real_all_lockbox alone. This is the metric used for the contract tiebreak."
+    },
+    "B_three_lockbox_suites_union": {
+      "scope": "set-union of teams_real_all_lockbox + lighting_extreme_lockbox + poor_quality_lockbox",
+      "n_vids_in_union": 1361,
+      "n_vids_in_all_lockbox_only": 1136,
+      "n_vids_in_le_lockbox": 207,
+      "n_vids_in_pq_lockbox": 22,
+      "is_union_identical_to_all_lockbox": true,
+      "note": "Stress suites lighting_extreme_lockbox and poor_quality_lockbox are STRICT SUBSETS of teams_real_all_lockbox. The set-union of the three is therefore == teams_real_all_lockbox. Analysis B is identical to Analysis A."
+    }
+  },
+  "tau_sanity": {
+    "P8A_REFERENCE_STEP5000": {
+      "tau_min_meeting_dev_fpr_budget": 0.9136953,
+      "tau_contract_selected": 0.915605,
+      "dev_n_real": 3253
+    },
+    "SLOT_A_ANCHOR_AWARE_STEP3500": {
+      "tau_min_meeting_dev_fpr_budget": 0.77647996,
+      "tau_contract_selected": 0.787956,
+      "dev_n_real": 3253
+    }
+  },
+  "bars": {
+    "primary_analysis_for_bars": "A_teams_real_all_lockbox",
+    "bar1_load_bearing_ci_covers_zero": {
+      "bar_text": "95% CI on delta covers 0",
+      "delta_ci95": [
+        -0.00808229243203527,
+        0.00955180014695077
+      ],
+      "met": true
+    },
+    "bar2_individual_ci_overlap": {
+      "bar_text": "P8A 95% FPR CI overlaps Slot A v2 95% FPR CI",
+      "fpr_p8a_ci95": [
+        0.011756061719324026,
+        0.025716385011021307
+      ],
+      "fpr_slotav2_ci95": [
+        0.012490815576781777,
+        0.02645113886847906
+      ],
+      "met": true
+    }
+  }
+}

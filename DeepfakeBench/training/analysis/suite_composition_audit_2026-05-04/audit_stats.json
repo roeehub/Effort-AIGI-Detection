@@ -1,0 +1,173 @@
+{
+  "n_files": 45,
+  "n_rows_tagged": 68180,
+  "n_rows_one_ckpt": 13636,
+  "suites": [
+    "deeplive_enhanced_dev",
+    "teams_fake_all_dev",
+    "teams_fake_all_lockbox",
+    "teams_real_all_dev",
+    "teams_real_all_lockbox",
+    "teams_real_dor_dev",
+    "teams_real_lighting_extreme_dev",
+    "teams_real_poor_quality_dev",
+    "visomaster_enhanced_macro_dev"
+  ],
+  "ckpts": [
+    "e2b_top_n_step3200",
+    "e3_top_n_step4800",
+    "e3_top_n_step6600",
+    "e3_top_n_step7200",
+    "p8a_reference_step5000"
+  ],
+  "coverage_pct": {
+    "source_method_known": 100.0,
+    "enhancement_resolved": 82.63,
+    "teams_passthrough_known": 100.0
+  },
+  "teams_fake_all_dev_method_breakdown": [
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "deeplive_enhanced",
+      "n_frames": 545,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_cam_test_s32",
+      "n_frames": 235,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_cam_test_s35",
+      "n_frames": 365,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_cam_test_s38",
+      "n_frames": 85,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_cam_test_s46",
+      "n_frames": 124,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_dor_shkedi_s16",
+      "n_frames": 78,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_noyn_sharker_s23",
+      "n_frames": 324,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_pc_generator_s3",
+      "n_frames": 118,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_pc_generator_s4",
+      "n_frames": 30,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_pc_generator_s9",
+      "n_frames": 46,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_test_cam_s53",
+      "n_frames": 165,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_test_cam_s73",
+      "n_frames": 101,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_capture_test_cam_s76",
+      "n_frames": 138,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "teams_flat_xiang_xiang2_feng",
+      "n_frames": 135,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "label": 1,
+      "method": "visomaster_enhanced_macro",
+      "n_frames": 550,
+      "n_unique_identities": 2
+    }
+  ],
+  "teams_fake_all_lockbox_method_breakdown": [
+    {
+      "suite": "teams_fake_all_lockbox",
+      "label": 1,
+      "method": "teams_capture_cam_test_s33",
+      "n_frames": 334,
+      "n_unique_identities": 1
+    },
+    {
+      "suite": "teams_fake_all_lockbox",
+      "label": 1,
+      "method": "teams_capture_pc_generator_s15",
+      "n_frames": 91,
+      "n_unique_identities": 1
+    }
+  ],
+  "all_suite_total_frames": {
+    "deeplive_enhanced_dev": 545,
+    "teams_fake_all_dev": 3039,
+    "teams_fake_all_lockbox": 425,
+    "teams_real_all_dev": 4564,
+    "teams_real_all_lockbox": 1418,
+    "teams_real_dor_dev": 50,
+    "teams_real_lighting_extreme_dev": 1742,
+    "teams_real_poor_quality_dev": 1303,
+    "visomaster_enhanced_macro_dev": 550
+  },
+  "unique_identities_per_suite": {
+    "deeplive_enhanced_dev": 1,
+    "teams_fake_all_dev": 16,
+    "teams_fake_all_lockbox": 2,
+    "teams_real_all_dev": 24,
+    "teams_real_all_lockbox": 5,
+    "teams_real_dor_dev": 1,
+    "teams_real_lighting_extreme_dev": 20,
+    "teams_real_poor_quality_dev": 18,
+    "visomaster_enhanced_macro_dev": 2
+  }
+}

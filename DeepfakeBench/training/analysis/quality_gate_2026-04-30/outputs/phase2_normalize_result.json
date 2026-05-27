@@ -1,0 +1,29 @@
+{
+  "target_far": 0.45,
+  "splits": {
+    "lockbox": {
+      "n_real": 414,
+      "n_fake": 425,
+      "n_frames_tightened": 332,
+      "frac_tightened": 0.3957,
+      "before_fpr": 0.0459,
+      "before_recall": 0.3294,
+      "after_fpr": 0.0797,
+      "after_recall": 0.3294,
+      "fpr_delta": 0.0338,
+      "recall_delta": 0.0
+    },
+    "dev": {
+      "n_real": 3832,
+      "n_fake": 2444,
+      "n_frames_tightened": 2839,
+      "frac_tightened": 0.4524,
+      "before_fpr": 0.0632,
+      "before_recall": 0.6628,
+      "after_fpr": 0.0759,
+      "after_recall": 0.8032,
+      "fpr_delta": 0.0128,
+      "recall_delta": 0.1403
+    }
+  }
+}

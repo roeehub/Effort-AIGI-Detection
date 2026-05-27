@@ -1,0 +1,331 @@
+{
+  "cache": {
+    "p8a_npz": "analysis/clip_vs_p8a_viso_2026-05-03/outputs/p8a__features.npz",
+    "clip_npz": "analysis/clip_vs_p8a_viso_2026-05-03/outputs/clip_b16_raw__features.npz",
+    "n_total": 1100,
+    "n_viso_fake_cached": 550,
+    "n_teams_real_dev_cached": 550,
+    "n_per_frame_csv_rows": 550,
+    "overlap_basenames": 550,
+    "drop_cached_frames_not_in_per_frame_csv": 0,
+    "n_aligned_viso_fakes_used": 550,
+    "n_caught": 186,
+    "n_uncaught": 364,
+    "subtype_counts": {
+      "raw": 275,
+      "teams": 275
+    }
+  },
+  "probe_is_caught": {
+    "P8A": [
+      {
+        "C": 1.0,
+        "accuracy_mean": 0.9109090909090909,
+        "accuracy_std": 0.010601730717900534,
+        "auc_mean": 0.9690150225928885,
+        "auc_std": 0.011282549001713138,
+        "ap_mean": 0.9527579341738713
+      },
+      {
+        "C": 0.1,
+        "accuracy_mean": 0.9054545454545455,
+        "accuracy_std": 0.00927094457016871,
+        "auc_mean": 0.9627352659075804,
+        "auc_std": 0.018856933942290172,
+        "ap_mean": 0.9463954089332989
+      },
+      {
+        "C": 0.01,
+        "accuracy_mean": 0.8927272727272726,
+        "accuracy_std": 0.0265977069787778,
+        "auc_mean": 0.948194490452962,
+        "auc_std": 0.030763054759266942,
+        "ap_mean": 0.9323123847006125
+      },
+      {
+        "C": 0.001,
+        "accuracy_mean": 0.9,
+        "accuracy_std": 0.0314918328648887,
+        "auc_mean": 0.9360735735735736,
+        "auc_std": 0.03654976216767681,
+        "ap_mean": 0.9217388510982005
+      }
+    ],
+    "CLIP_B16_raw": [
+      {
+        "C": 1.0,
+        "accuracy_mean": 0.8109090909090909,
+        "accuracy_std": 0.03221826390303518,
+        "auc_mean": 0.8700484280242751,
+        "auc_std": 0.028926727900677292,
+        "ap_mean": 0.8048348617187869
+      },
+      {
+        "C": 0.1,
+        "accuracy_mean": 0.8309090909090908,
+        "accuracy_std": 0.02196917449744467,
+        "auc_mean": 0.8820288294783609,
+        "auc_std": 0.022757125834534098,
+        "ap_mean": 0.8253511239378672
+      },
+      {
+        "C": 0.01,
+        "accuracy_mean": 0.8254545454545454,
+        "accuracy_std": 0.01762792675424117,
+        "auc_mean": 0.8826050996923384,
+        "auc_std": 0.021210102297271,
+        "ap_mean": 0.8154039951483811
+      },
+      {
+        "C": 0.001,
+        "accuracy_mean": 0.7781818181818181,
+        "accuracy_std": 0.02609581835346786,
+        "auc_mean": 0.8434550989345511,
+        "auc_std": 0.04415488615273867,
+        "ap_mean": 0.7459175120381006
+      }
+    ],
+    "delta_auc_C1_P8A_minus_CLIP": 0.09896659456861345
+  },
+  "probe_fake_vs_real": {
+    "P8A": [
+      {
+        "C": 1.0,
+        "accuracy_mean": 1.0,
+        "accuracy_std": 0.0,
+        "auc_mean": 1.0,
+        "auc_std": 0.0,
+        "ap_mean": 0.9999999999999998
+      },
+      {
+        "C": 0.1,
+        "accuracy_mean": 0.9918181818181818,
+        "accuracy_std": 0.0053008653589502845,
+        "auc_mean": 0.9998842975206612,
+        "auc_std": 0.00014409583284430983,
+        "ap_mean": 0.9998879338329733
+      },
+      {
+        "C": 0.01,
+        "accuracy_mean": 0.9572727272727273,
+        "accuracy_std": 0.015902596076850833,
+        "auc_mean": 0.9934380165289257,
+        "auc_std": 0.001963118722989502,
+        "ap_mean": 0.9940921682063287
+      },
+      {
+        "C": 0.001,
+        "accuracy_mean": 0.8254545454545454,
+        "accuracy_std": 0.03480761767104846,
+        "auc_mean": 0.9246280991735538,
+        "auc_std": 0.023609011510286947,
+        "ap_mean": 0.9366333122133603
+      }
+    ],
+    "CLIP_B16_raw": [
+      {
+        "C": 1.0,
+        "accuracy_mean": 1.0,
+        "accuracy_std": 0.0,
+        "auc_mean": 1.0,
+        "auc_std": 0.0,
+        "ap_mean": 0.9999999999999998
+      },
+      {
+        "C": 0.1,
+        "accuracy_mean": 1.0,
+        "accuracy_std": 0.0,
+        "auc_mean": 1.0,
+        "auc_std": 0.0,
+        "ap_mean": 0.9999999999999998
+      },
+      {
+        "C": 0.01,
+        "accuracy_mean": 0.9990909090909093,
+        "accuracy_std": 0.0018181818181818076,
+        "auc_mean": 1.0,
+        "auc_std": 0.0,
+        "ap_mean": 0.9999999999999998
+      },
+      {
+        "C": 0.001,
+        "accuracy_mean": 0.9981818181818183,
+        "accuracy_std": 0.002226808857075604,
+        "auc_mean": 0.9999669421487603,
+        "auc_std": 4.0487433764999106e-05,
+        "ap_mean": 0.9999672399672397
+      }
+    ]
+  },
+  "probe_is_caught_subtype_stratified": [
+    {
+      "C": 1.0,
+      "accuracy_mean": 0.9309090909090909,
+      "accuracy_std": 0.0212034614358011,
+      "auc_mean": 0.9733023609163162,
+      "auc_std": 0.01713569454101888,
+      "ap_mean": 0.9666236451402508,
+      "subtype": "raw",
+      "n": 275,
+      "caught_count": 119
+    },
+    {
+      "C": 0.1,
+      "accuracy_mean": 0.9054545454545453,
+      "accuracy_std": 0.026721706284907408,
+      "auc_mean": 0.9703541374474053,
+      "auc_std": 0.014629248166096672,
+      "ap_mean": 0.9626935159754051,
+      "subtype": "raw",
+      "n": 275,
+      "caught_count": 119
+    },
+    {
+      "C": 0.01,
+      "accuracy_mean": 0.8763636363636363,
+      "accuracy_std": 0.0212034614358011,
+      "auc_mean": 0.9617286115007012,
+      "auc_std": 0.010366875331703156,
+      "ap_mean": 0.9561485885416328,
+      "subtype": "raw",
+      "n": 275,
+      "caught_count": 119
+    },
+    {
+      "C": 0.001,
+      "accuracy_mean": 0.8763636363636363,
+      "accuracy_std": 0.01781447085660494,
+      "auc_mean": 0.9552682328190742,
+      "auc_std": 0.008415007254951859,
+      "ap_mean": 0.9503061370585024,
+      "subtype": "raw",
+      "n": 275,
+      "caught_count": 119
+    },
+    {
+      "C": 1.0,
+      "accuracy_mean": 0.9309090909090909,
+      "accuracy_std": 0.033327823236042484,
+      "auc_mean": 0.9714107031180201,
+      "auc_std": 0.02279460033857878,
+      "ap_mean": 0.9242030966824283,
+      "subtype": "teams",
+      "n": 275,
+      "caught_count": 67
+    },
+    {
+      "C": 0.1,
+      "accuracy_mean": 0.9127272727272727,
+      "accuracy_std": 0.038825739098295696,
+      "auc_mean": 0.9587510050924685,
+      "auc_std": 0.03132670299970768,
+      "ap_mean": 0.912495894116424,
+      "subtype": "teams",
+      "n": 275,
+      "caught_count": 67
+    },
+    {
+      "C": 0.01,
+      "accuracy_mean": 0.9127272727272727,
+      "accuracy_std": 0.038825739098295696,
+      "auc_mean": 0.9222281783257393,
+      "auc_std": 0.05463901771672788,
+      "ap_mean": 0.8807188189777542,
+      "subtype": "teams",
+      "n": 275,
+      "caught_count": 67
+    },
+    {
+      "C": 0.001,
+      "accuracy_mean": 0.9199999999999999,
+      "accuracy_std": 0.03372224907452984,
+      "auc_mean": 0.8996515679442509,
+      "auc_std": 0.06253480221694395,
+      "ap_mean": 0.8636560107220461,
+      "subtype": "teams",
+      "n": 275,
+      "caught_count": 67
+    }
+  ],
+  "verdict_load_bearing": {
+    "label": "head_only_lever_live",
+    "auc_pa_C1": 0.9690150225928885,
+    "auc_cb_C1": 0.8700484280242751,
+    "delta": 0.09896659456861345,
+    "auc_pa_C001": 0.948194490452962,
+    "text": "P8A linear probe AUC at C=1.0 is 0.969 > 0.85: caught-vs-uncaught is strongly linearly separable in frozen P8A features. A different head boundary could plausibly catch the uncaught fakes -> head-only retrain lever is LIVE."
+  },
+  "region_purity_summary": {
+    "k": 10,
+    "metric": "fraction of k=10 nearest neighbours sharing the same caught_by label",
+    "feature_space": "P8A 512-d, StandardScaler, Euclidean k-NN",
+    "per_caught_by": [
+      {
+        "caught_by": "E2B_3200",
+        "mean": 0.12307692307692308,
+        "std": 0.11657505560686467,
+        "count": 13
+      },
+      {
+        "caught_by": "E2B_3200+E3_6600",
+        "mean": 0.0,
+        "std": 0.0,
+        "count": 4
+      },
+      {
+        "caught_by": "E2B_3200+E3_6600+P8A",
+        "mean": 0.336,
+        "std": 0.09521904571390469,
+        "count": 25
+      },
+      {
+        "caught_by": "E2B_3200+P8A",
+        "mean": 0.15000000000000002,
+        "std": 0.1,
+        "count": 4
+      },
+      {
+        "caught_by": "E3_6600",
+        "mean": 0.4809523809523809,
+        "std": 0.37632306283172123,
+        "count": 21
+      },
+      {
+        "caught_by": "E3_6600+P8A",
+        "mean": 0.4076923076923077,
+        "std": 0.27117975871820066,
+        "count": 26
+      },
+      {
+        "caught_by": "P8A",
+        "mean": 0.778494623655914,
+        "std": 0.26203611697858664,
+        "count": 93
+      },
+      {
+        "caught_by": "uncaught",
+        "mean": 0.9241758241758241,
+        "std": 0.1625151211210291,
+        "count": 364
+      }
+    ],
+    "binary_is_caught": [
+      {
+        "is_caught": 0,
+        "mean": 0.9241758241758241,
+        "std": 0.1625151211210291,
+        "count": 364
+      },
+      {
+        "is_caught": 1,
+        "mean": 0.8123655913978495,
+        "std": 0.2962975051639907,
+        "count": 186
+      }
+    ],
+    "overall_caught_by_purity_mean": 0.8001818181818182,
+    "overall_binary_purity_mean": 0.8863636363636364,
+    "interpretation_threshold": "purity \u2248 class prior => interleaved (decision-boundary problem); purity >> prior => clustered region (representation supports head-only fix in principle, but would need supervision signal)."
+  },
+  "umap_fallback": "t-SNE (umap-learn not installed)"
+}

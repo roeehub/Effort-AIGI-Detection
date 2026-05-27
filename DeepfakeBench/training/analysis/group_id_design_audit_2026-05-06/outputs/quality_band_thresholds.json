@@ -1,0 +1,23 @@
+{
+  "definition": "ternary {hi-q, lo-q, unknown} taken directly from manifest column 'quality'. The manifest's binning is 'hi-q' for sharp/well-lit faces (approx top-third Laplacian variance) and 'lo-q' for low-resolution / low-contrast / webcam-style faces. 'unknown' covers training-set rows for which no parquet quality score is available.",
+  "provenance": "analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv (column 'quality')",
+  "ternary": [
+    "hi-q",
+    "lo-q",
+    "unknown"
+  ],
+  "binary_collapse_for_F-E": {
+    "hi": [
+      "hi-q"
+    ],
+    "lo": [
+      "lo-q",
+      "unknown"
+    ]
+  },
+  "counts_full": {
+    "hi-q": 716,
+    "lo-q": 5749,
+    "unknown": 8161
+  }
+}

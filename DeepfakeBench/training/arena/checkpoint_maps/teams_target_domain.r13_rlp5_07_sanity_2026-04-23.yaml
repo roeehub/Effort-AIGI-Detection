@@ -1,0 +1,16 @@
+# Real-environment sanity check for R13 packet-5 leader before launching packet-6.
+#
+# Purpose:
+# - Verify slot-07 (`R13_RLP5_07_E3_seedB`, best_value_composite=0.7736 @ step 20500)
+#   produces deployment-relevant numbers on the calibrated promotion contract before
+#   we commit packet-6 to it as the base config.
+# - R12_G_FP32 anchors absolute scale against the prior production baseline.
+#
+# Run via:
+#   ./arena/launch_teams_promotion_contract.sh \
+#     --checkpoint-map arena/checkpoint_maps/teams_target_domain.r13_rlp5_07_sanity_2026-04-23.yaml \
+#     --checkpoints ALL \
+#     --image-uri us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.198
+
+R13_RLP5_07_E3_SEEDB: "gs://training-job-outputs/phase2r13_experiments/6jwwb526/value_composite_effort_20260423_step20500_auc0.9908_eer0.0304.pth"
+R12_G_FP32: "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"

@@ -1,0 +1,193 @@
+{
+  "groups": {
+    "over-covered": {
+      "identities": [
+        {
+          "identity_key": "bla_bla_chow",
+          "n": 311,
+          "n_real": 311,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "PC_Generator__s22",
+          "n": 227,
+          "n_real": 227,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "Xiang_Xiang2_Feng",
+          "n": 436,
+          "n_real": 301,
+          "n_fake": 135,
+          "auc_mean": 1.0,
+          "auc_std": 0.0,
+          "n_folds": 5,
+          "skipped": null,
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "PC_Generator__s8",
+          "n": 101,
+          "n_real": 101,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "dor_shkedi__s16",
+          "n": 109,
+          "n_real": 31,
+          "n_fake": 78,
+          "auc_mean": 1.0,
+          "auc_std": 0.0,
+          "n_folds": 5,
+          "skipped": null,
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "PC_Generator__s3",
+          "n": 118,
+          "n_real": 0,
+          "n_fake": 118,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "Cam_Test__s33",
+          "n": 334,
+          "n_real": 0,
+          "n_fake": 334,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "over-covered"
+        },
+        {
+          "identity_key": "PC_Generator__s4",
+          "n": 39,
+          "n_real": 9,
+          "n_fake": 30,
+          "auc_mean": 1.0,
+          "auc_std": 0.0,
+          "n_folds": 5,
+          "skipped": null,
+          "group": "over-covered"
+        }
+      ],
+      "agg": {
+        "group": "over-covered",
+        "n_identities": 3,
+        "median_clip_auc": 1.0,
+        "mean_clip_auc": 1.0,
+        "min_clip_auc": 1.0,
+        "max_clip_auc": 1.0,
+        "frac_above_0_99": 1.0,
+        "frac_above_0_95": 1.0,
+        "frac_below_0_85": 0.0
+      }
+    },
+    "under-covered": {
+      "identities": [
+        {
+          "identity_key": "Chikara_Takahashi__s22",
+          "n": 42,
+          "n_real": 42,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "under-covered"
+        },
+        {
+          "identity_key": "dor_shkedi",
+          "n": 275,
+          "n_real": 275,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "under-covered"
+        },
+        {
+          "identity_key": "PC_Generator__s15",
+          "n": 120,
+          "n_real": 29,
+          "n_fake": 91,
+          "auc_mean": 1.0,
+          "auc_std": 0.0,
+          "n_folds": 5,
+          "skipped": null,
+          "group": "under-covered"
+        },
+        {
+          "identity_key": "PC_Generator__s14",
+          "n": 103,
+          "n_real": 103,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "under-covered"
+        }
+      ],
+      "agg": {
+        "group": "under-covered",
+        "n_identities": 1,
+        "median_clip_auc": 1.0,
+        "mean_clip_auc": 1.0,
+        "min_clip_auc": 1.0,
+        "max_clip_auc": 1.0,
+        "frac_above_0_99": 1.0,
+        "frac_above_0_95": 1.0,
+        "frac_below_0_85": 0.0
+      }
+    },
+    "reference": {
+      "identities": [
+        {
+          "identity_key": "Test_Cam__s41",
+          "n": 815,
+          "n_real": 815,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "reference"
+        },
+        {
+          "identity_key": "Md_noyn_Sharker__s15",
+          "n": 682,
+          "n_real": 682,
+          "n_fake": 0,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "reference"
+        },
+        {
+          "identity_key": "deeplive_dor",
+          "n": 545,
+          "n_real": 0,
+          "n_fake": 545,
+          "auc_mean": null,
+          "auc_std": null,
+          "skipped": "too_few_per_class",
+          "group": "reference"
+        }
+      ],
+      "agg": null
+    }
+  }
+}

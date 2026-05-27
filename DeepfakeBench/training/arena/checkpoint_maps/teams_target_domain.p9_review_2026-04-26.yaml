@@ -1,0 +1,26 @@
+# Promotion-contract review for Packet-9 finished runs.
+#
+# Purpose:
+# - Score the 4 Packet-9 candidates that finished overnight against the
+#   calibrated promotion contract — lockbox FPR + per-method fake recall.
+# - Carry P8A (current breakthrough) and RLP6_04 (incumbent baseline) for
+#   direct comparison on the same dev/lockbox suites.
+#
+# Crowning protocol (lockbox-anchored, NOT trainer's value_composite):
+# - lockbox_real_fpr ≤ RLP6_04.lockbox_real_fpr (no regression on deployment FPR)
+# - lockbox_fake_recall ≥ max(0.80, RLP6_04 - 0.02) (≤2-point macro slack)
+# - Per-method recall on deeplive_enhanced + visomaster_enhanced_macro within 3pts
+# - 7% lockbox FPR hard cap
+#
+# Ckpt selection: latest value_composite per run (trainer's diagnostic best, NOT
+# the deployment crown). 1 ckpt/run keeps scorecard wall time bounded.
+
+# Packet-9 candidates (4 finished overnight)
+P9_05_STEP9000:           "gs://training-job-outputs/phase2r13_experiments/5oc7zyzw/value_composite_effort_20260425_step9000_auc0.9911_eer0.0135.pth"
+P9_FREEZE_STEP9000:       "gs://training-job-outputs/phase2r13_experiments/ku6fdljz/value_composite_effort_20260425_step9000_auc0.9914_eer0.0203.pth"
+P9_R_STEP3500:            "gs://training-job-outputs/phase2r13_experiments/a5w629y1/value_composite_effort_20260425_step3500_auc0.9916_eer0.0133.pth"
+P9_FORK_DATA_STEP5500:    "gs://training-job-outputs/phase2r13_experiments/6pd7o8iz/value_composite_effort_20260425_step5500_auc0.9892_eer0.0372.pth"
+
+# References for direct comparison
+P8A_REFERENCE_STEP5000:   "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+RLP6_04_BASELINE_STEP23500: "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"

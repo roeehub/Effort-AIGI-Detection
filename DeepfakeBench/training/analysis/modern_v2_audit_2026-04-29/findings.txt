@@ -1,0 +1,83 @@
+==============================================================================
+Plan v4 Track H.1 — modern_v2 filter audit
+==============================================================================
+
+PARQUET SCHEMA NOTE
+------------------------------------------------------------------------------
+Source: analysis/lockbox_tagging/lockbox_tags_2026-04-27.parquet
+  shape: (839, 53)  (lockbox split only — no dev_real present)
+  lockbox real total: 414   lockbox fake total: 425
+Quality columns present: face_area_ratio, face_pixel_area,
+  sharpness_laplacian, is_pose_extreme, is_no_face,
+  is_likely_screen_capture, is_low_quality, clip_capture_mode.
+
+CURRENT (modern_v2) FILTER
+------------------------------------------------------------------------------
+clip_capture_mode not in {webcam, screen}
+AND face_area_ratio >= 0.10
+AND not is_pose_extreme
+AND not is_no_face
+ -> kept: real=281  fake=367  (matches yaml: 281r / 367f)
+
+Brief described an explicit ~96^2 pixel and a sharpness-band gate, but
+the actual current filter uses neither — it gates on face_area_ratio
+(>=0.10) and discrete tags (pose_extreme, no_face, capture_mode).
+The relaxation is therefore designed against the *actual* gates.
+
+RELAXED (modern_v2_relaxed) FILTER — chosen thresholds
+------------------------------------------------------------------------------
+clip_capture_mode not in {webcam, screen}     # capture-mode preserved
+AND (face_area_ratio >= 0.0625                # = 64^2 / 256^2
+     OR face_pixel_area >= 4096)              # = 64^2 hard floor
+AND not is_no_face                            # moot in lockbox (0 hits)
+# is_pose_extreme gate REMOVED (relaxed)
+ -> kept: real=308  fake=390
+    new real frames vs current: 27 (mostly dor_shkedi pose-extreme + low face_area)
+    new fake frames vs current: 23
+
+Rationale for the chosen relaxations:
+  * 0.0625 face_area_ratio corresponds to a 64x64 face in a 256x256 crop,
+    which is the explicit floor the brief asked for. Within the non-
+    webcam/screen real population this only adds 7 frames (pixel-area-only
+    floor adds 0 incremental beyond the ratio), so the geometry relax is
+    very modest — the bulk of new frames come from the pose-extreme gate.
+  * Sharpness band: brief asked for p25-p95 of dev_real. There is no
+    'dev' split in this parquet (only lockbox). The lockbox-real
+    non-webcam/screen sharpness p25=181, p95=763. The current filter has
+    no sharpness gate at all, so 'relaxing' an already-absent gate is a
+    no-op. We document this and proceed; if a future iteration adds a
+    sharpness gate we should re-run this audit.
+  * Pose-extreme gate is the load-bearing relaxation: it currently drops
+    27 dor_shkedi non-webcam/normal_photo frames that look like real
+    Teams captures with off-axis head pose — a typical deployment
+    condition that should NOT be excluded from a lockbox real pool.
+
+COMPARISON TABLE (rounded; CSV at comparison.csv)
+------------------------------------------------------------------------------
+                  candidate  n_real_cur  n_real_relax  tau_cur_5pct  fpr_cur_at_tau_cur5pct  fpr_relax_at_tau_cur5pct  delta_fpr_at_tau_cur5pct_pp  auc_lockbox_fake_vs_real_cur  auc_lockbox_fake_vs_real_relax  auc_visomaster_fake_vs_real_cur  auc_visomaster_fake_vs_real_relax
+     p8a_reference_step5000         281           308       0.39993                  0.0534                    0.0584                         0.51                        0.9026                          0.9046                           0.6530                             0.6500
+         p11_heavy_step1000         281           308       0.90172                  0.0534                    0.0584                         0.51                        0.6057                          0.6210                           0.6328                             0.6269
+p11_heavy_deeplive_step1000         281           308       0.90805                  0.0534                    0.0584                         0.51                        0.4834                          0.5048                           0.5802                             0.5741
+          p11_mild_step1000         281           308       0.83359                  0.0534                    0.0584                         0.51                        0.5963                          0.6114                           0.6280                             0.6217
+ p11_webcam_harden_step1000         281           308       0.52032                  0.0534                    0.0552                         0.18                        0.7343                          0.7458                           0.5543                             0.5517
+
+Headline metric — max |delta FPR| at tau_cur_5pct = 0.51 pp
+                  mean delta FPR at tau_cur_5pct  = +0.44 pp
+
+VERDICT (Plan v4 §6 gate)
+------------------------------------------------------------------------------
+filter_confirmed: max |Delta FPR| < 1.5 pp at matched-tau.
+  -> The Option A AUC-ceiling story stands. The 281-frame substrate
+     is not over-pruning meaningful real-side variation; relaxing
+     the geometry/pose gates does not move FPR materially.
+
+AUC CEILING vs Option A 0.647 (visomaster fake vs real)
+------------------------------------------------------------------------------
+P8A reference (single model):
+  visomaster vs cur:    AUC = 0.653
+  visomaster vs relax:  AUC = 0.65
+P11 ensemble (mean of 4):
+  visomaster vs cur:    AUC = 0.6075
+  visomaster vs relax:  AUC = 0.602
+  (Option A reported 0.647 ceiling; relax-AUC moves indicate whether
+   the ceiling is a real signal or a substrate artifact.)

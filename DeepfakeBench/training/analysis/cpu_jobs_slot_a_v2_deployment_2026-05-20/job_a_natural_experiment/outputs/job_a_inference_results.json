@@ -1,0 +1,116 @@
+{
+  "T5C_STEP3500_CONTROL": {
+    "Roy_D": {
+      "prob_fake": 0.7952109575271606,
+      "cls": [
+        -0.6625769734382629,
+        0.6940499544143677
+      ]
+    },
+    "Guest": {
+      "prob_fake": 0.6275060772895813,
+      "cls": [
+        -0.24429762363433838,
+        0.27723509073257446
+      ]
+    },
+    "_meta": {
+      "delta_guest_minus_roy": -0.16770488023757935,
+      "flips_by_tau": {
+        "tau_0.50": {
+          "roy": "FAKE",
+          "guest": "FAKE",
+          "flipped": false
+        },
+        "tau_0.55": {
+          "roy": "FAKE",
+          "guest": "FAKE",
+          "flipped": false
+        },
+        "tau_0.60": {
+          "roy": "FAKE",
+          "guest": "FAKE",
+          "flipped": false
+        },
+        "tau_0.65": {
+          "roy": "FAKE",
+          "guest": "real",
+          "flipped": true
+        },
+        "tau_0.70": {
+          "roy": "FAKE",
+          "guest": "real",
+          "flipped": true
+        },
+        "tau_0.80": {
+          "roy": "real",
+          "guest": "real",
+          "flipped": false
+        },
+        "tau_0.90": {
+          "roy": "real",
+          "guest": "real",
+          "flipped": false
+        }
+      },
+      "elapsed_seconds": 14.68648910522461
+    }
+  },
+  "SLOT_A_V2_STEP3500": {
+    "Roy_D": {
+      "prob_fake": 0.7667946815490723,
+      "cls": [
+        -0.5850464105606079,
+        0.6052535176277161
+      ]
+    },
+    "Guest": {
+      "prob_fake": 0.5987288355827332,
+      "cls": [
+        -0.18971222639083862,
+        0.21045927703380585
+      ]
+    },
+    "_meta": {
+      "delta_guest_minus_roy": -0.1680658459663391,
+      "flips_by_tau": {
+        "tau_0.50": {
+          "roy": "FAKE",
+          "guest": "FAKE",
+          "flipped": false
+        },
+        "tau_0.55": {
+          "roy": "FAKE",
+          "guest": "FAKE",
+          "flipped": false
+        },
+        "tau_0.60": {
+          "roy": "FAKE",
+          "guest": "real",
+          "flipped": true
+        },
+        "tau_0.65": {
+          "roy": "FAKE",
+          "guest": "real",
+          "flipped": true
+        },
+        "tau_0.70": {
+          "roy": "FAKE",
+          "guest": "real",
+          "flipped": true
+        },
+        "tau_0.80": {
+          "roy": "real",
+          "guest": "real",
+          "flipped": false
+        },
+        "tau_0.90": {
+          "roy": "real",
+          "guest": "real",
+          "flipped": false
+        }
+      },
+      "elapsed_seconds": 8.209717988967896
+    }
+  }
+}

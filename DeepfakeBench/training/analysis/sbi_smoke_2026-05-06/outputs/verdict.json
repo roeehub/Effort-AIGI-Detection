@@ -1,0 +1,11 @@
+{
+  "job": "SBI_SMOKE_2026-05-06",
+  "verdict": "GREEN",
+  "p2_pe_sbi_launch_readiness": "GREEN",
+  "criteria": {
+    "visual_plausibility": "GREEN",
+    "iq_similarity": "GREEN",
+    "score_distribution": "GREEN"
+  },
+  "headline": "GREEN: SBI recipe is plausible foundation for PE_SBI."
+}

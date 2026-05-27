@@ -1,0 +1,144 @@
+{
+  "n_pairs": 275,
+  "n_npz_total": 550,
+  "n_raw_npz": 275,
+  "n_teams_npz": 275,
+  "Q1_paired_cosine_p8a": {
+    "mean": 0.8782037233107532,
+    "std": 0.14755485867606638,
+    "p10": 0.6754576334077653,
+    "p25": 0.8202123508134714,
+    "p50": 0.9416513389806552,
+    "p75": 0.990511697185299,
+    "p90": 0.9979771223895582,
+    "p99": 0.9995908503508492,
+    "n": 275
+  },
+  "Q1_random_within_subtype_cosine_p8a": {
+    "mean": 0.6862899612131491,
+    "std": 0.36145481085431697,
+    "p10": 0.17351519830960083,
+    "p25": 0.531905959612957,
+    "p50": 0.8191855985868051,
+    "p75": 0.9651043686856224,
+    "p90": 0.9940877490317086,
+    "p99": 0.9998505185026669,
+    "n": 400
+  },
+  "Q1_random_within_subtype_cosine_p8a_per_subtype": {
+    "raw": {
+      "mean": 0.6333107287640164,
+      "std": 0.39866539537122636,
+      "p10": 0.01971574035094955,
+      "p25": 0.4277329308659052,
+      "p50": 0.7950173214367758,
+      "p75": 0.9537570191271358,
+      "p90": 0.9835631111530521,
+      "p99": 0.999780934805934,
+      "n": 200
+    },
+    "teams": {
+      "mean": 0.7392691936622819,
+      "std": 0.3110489751970988,
+      "p10": 0.34635218320861627,
+      "p25": 0.6009137776224263,
+      "p50": 0.8575997832848599,
+      "p75": 0.9674471526019459,
+      "p90": 0.9982135831102269,
+      "p99": 0.9998883816651479,
+      "n": 200
+    }
+  },
+  "Q1_random_cross_subtype_cosine_p8a": {
+    "mean": 0.6377461795666686,
+    "std": 0.39649550314248133,
+    "p10": 0.11427025762149279,
+    "p25": 0.43098449749742285,
+    "p50": 0.8068964342332468,
+    "p75": 0.9483407839671504,
+    "p90": 0.9862307130264933,
+    "p99": 0.999328647643652,
+    "n": 200
+  },
+  "Q1_paired_minus_random_within": 0.19191376209760413,
+  "Q1_paired_minus_random_cross": 0.24045754374408468,
+  "Q1_verdict": "MODERATE",
+  "Q2_pearson_r_feat_dist_vs_abs_score_gap": -0.08941922793955638,
+  "Q2_pearson_p_feat_dist_vs_abs_score_gap": 0.1391242358276007,
+  "Q2_pearson_r_feat_dist_vs_signed_score_gap_raw_minus_teams": 0.22800895445025704,
+  "Q2_pearson_p_signed": 0.00013660246907489909,
+  "Q2_verdict": "LOW",
+  "Q3_cohort_n": 3,
+  "Q3_cohort_pct_of_pairs": 1.0909090909090908,
+  "Q3_cohort_mean_raw_score_e2b": 0.5970051487286886,
+  "Q3_cohort_mean_teams_score_e2b": 0.16382358719905218,
+  "Q3_upper_bound_recall_lift_pp_pair_basis": 1.090909090909091,
+  "Q3_realistic_lift_pp_30pct": 0.3272727272727273,
+  "Q3_realistic_lift_pp_60pct": 0.6545454545454547,
+  "Q3_cohort_feature_distance_stats": {
+    "mean": 0.23620896340514508,
+    "std": 0.11398115321703281,
+    "p10": 0.1294931305138463,
+    "p25": 0.1618817533529348,
+    "p50": 0.2158627914180823,
+    "p75": 0.30036308746382395,
+    "p90": 0.35106326509126895,
+    "p99": 0.38148337166773594,
+    "n": 3
+  },
+  "Q3_verdict": "LOW",
+  "overall_verdict": "LOW",
+  "sign_of_effect": {
+    "e2b_mean_raw": 0.08601312867619772,
+    "e2b_mean_teams": 0.17168573145331303,
+    "e2b_wilcoxon_teams_vs_raw_stat": 14869.0,
+    "e2b_wilcoxon_teams_vs_raw_p": 0.0018678143661965906,
+    "e2b_direction_note": "teams > raw (transport HELPS E2B on viso) \u2014 pair loss premise refuted",
+    "p8a_mean_raw": 0.44366892052645035,
+    "p8a_mean_teams": 0.26898987408050085,
+    "p8a_wilcoxon_teams_vs_raw_stat": 5578.0,
+    "p8a_wilcoxon_teams_vs_raw_p": 3.353185098886984e-24,
+    "p8a_direction_note": "raw > teams (transport hurts P8A) \u2014 opposite direction from E2B",
+    "pair_count_raw_caught_teams_missed_e2b_tau05": 3,
+    "pair_count_teams_caught_raw_missed_e2b_tau05": 29,
+    "pair_count_both_caught_e2b_tau05": 7,
+    "pair_count_both_missed_e2b_tau05": 236,
+    "pair_score_correlation_e2b_per_pair": 0.6244050921442368,
+    "pair_score_correlation_p8a_per_pair": 0.7698990919646097,
+    "pair_score_correlation_note": "high r per-pair = model already exhibits implicit pair-coherence without explicit pair loss"
+  },
+  "Q3_threshold_sensitivity_e2b_symmetric": {
+    "tau_0.05": {
+      "n_cohort_raw_caught_teams_missed": 26,
+      "n_opposite_teams_caught_raw_missed": 62,
+      "cohort_mean_raw": 0.10975558611635974,
+      "cohort_mean_teams": 0.01855973752502061,
+      "upper_bound_pp_pair_basis": 9.454545454545455,
+      "net_pp_after_opposite_subtracted": -13.090909090909092
+    },
+    "tau_0.1": {
+      "n_cohort_raw_caught_teams_missed": 17,
+      "n_opposite_teams_caught_raw_missed": 55,
+      "cohort_mean_raw": 0.17663357582162403,
+      "cohort_mean_teams": 0.03821096766520945,
+      "upper_bound_pp_pair_basis": 6.181818181818182,
+      "net_pp_after_opposite_subtracted": -13.818181818181818
+    },
+    "tau_0.2": {
+      "n_cohort_raw_caught_teams_missed": 11,
+      "n_opposite_teams_caught_raw_missed": 47,
+      "cohort_mean_raw": 0.358202569864013,
+      "cohort_mean_teams": 0.10034598774192004,
+      "upper_bound_pp_pair_basis": 4.0,
+      "net_pp_after_opposite_subtracted": -13.090909090909092
+    },
+    "tau_0.5": {
+      "n_cohort_raw_caught_teams_missed": 3,
+      "n_opposite_teams_caught_raw_missed": 29,
+      "cohort_mean_raw": 0.5970051487286886,
+      "cohort_mean_teams": 0.16382358719905218,
+      "upper_bound_pp_pair_basis": 1.0909090909090908,
+      "net_pp_after_opposite_subtracted": -9.454545454545455
+    }
+  }
+}

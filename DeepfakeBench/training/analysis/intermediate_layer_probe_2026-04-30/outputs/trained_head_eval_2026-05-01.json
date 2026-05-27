@@ -1,0 +1,35 @@
+[
+  {
+    "arm": "L3_ARCFACE_melp4mol_step2088",
+    "recipe": "ARCFACE",
+    "ckpt": "melp4mol_step2088.pth",
+    "ckpt_reported_auc": 0.7389629916363356,
+    "head_s": 8.504400253295898,
+    "head_bias": null,
+    "n_dev": 713,
+    "n_lockbox": 87,
+    "within_dev_auc": 0.6462425065412513,
+    "within_dev_rec_at_5fpr": 0.20938628158844766,
+    "lockbox_auc": 0.18670212765957445,
+    "lockbox_rec_at_5fpr": 0.0,
+    "all_auc": 0.5820754227616973
+  },
+  {
+    "arm": "L3_LINEAR_nqvfz44v_step1285",
+    "recipe": "LINEAR",
+    "ckpt": "nqvfz44v_step1285.pth",
+    "ckpt_reported_auc": 0.7276728511547305,
+    "head_s": null,
+    "head_bias": [
+      0.010090728290379047,
+      0.005411028861999512
+    ],
+    "n_dev": 713,
+    "n_lockbox": 87,
+    "within_dev_auc": 0.5945169410128175,
+    "within_dev_rec_at_5fpr": 0.20938628158844766,
+    "lockbox_auc": 0.06595744680851064,
+    "lockbox_rec_at_5fpr": 0.0,
+    "all_auc": 0.5134479717813051
+  }
+]

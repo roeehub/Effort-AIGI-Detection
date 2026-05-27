@@ -1,0 +1,1334 @@
+{
+  "config": {
+    "tau": 0.5,
+    "n_videos_total": 2409,
+    "regressing_methods_focus": [
+      "deeplive_enhanced",
+      "teams_flat_xiang_xiang2_feng",
+      "visomaster_enhanced_macro"
+    ]
+  },
+  "aggregate": {
+    "p8a_total_misses_fake_called_real": 717,
+    "rlp_total_misses_fake_called_real": 388,
+    "regressed_videos_p8a_lost_rlp_won": 329,
+    "shared_misses_both_failed": 388,
+    "videos_p8a_won_rlp_lost": 0,
+    "regression_pct_of_total": 13.66
+  },
+  "by_method": {
+    "deeplive_enhanced": {
+      "n_videos": 545,
+      "p8a_acc": 0.5302752293577981,
+      "rlp_acc": 0.7963302752293578,
+      "regressed_count": 145,
+      "regressed_pct": 26.61,
+      "p8a_score_on_regressed": {
+        "n": 145,
+        "min": 0.023665354,
+        "p10": 0.07614932,
+        "p25": 0.13257848,
+        "median": 0.22996843,
+        "mean": 0.2536355012896552,
+        "p75": 0.37795132,
+        "p90": 0.46057156,
+        "max": 0.4998386
+      },
+      "rlp_score_on_regressed": {
+        "n": 145,
+        "min": 0.51598746,
+        "p10": 0.627097,
+        "p25": 0.7351428,
+        "median": 0.8775525,
+        "mean": 0.8247162611724138,
+        "p75": 0.9340119,
+        "p90": 0.95037675,
+        "max": 0.96999466
+      },
+      "score_gap_on_regressed": {
+        "n": 145,
+        "min": 0.24521210999999998,
+        "p10": 0.44802623999999996,
+        "p25": 0.47879567,
+        "median": 0.56274303,
+        "mean": 0.5710807598827586,
+        "p75": 0.65130651,
+        "p90": 0.71786931,
+        "max": 0.83602164
+      },
+      "p8a_score_buckets_on_regressed": {
+        "lt_0.10": 20,
+        "0.10_to_0.20": 40,
+        "0.20_to_0.30": 31,
+        "0.30_to_0.40": 21,
+        "0.40_to_0.45": 13,
+        "0.45_to_0.50": 20
+      },
+      "pct_tau_recoverable_score_in_0.40_0.50": 22.76,
+      "pct_confidently_real_score_lt_0.20": 41.38
+    },
+    "teams_capture_cam_test_s32": {
+      "n_videos": 139,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_cam_test_s35": {
+      "n_videos": 244,
+      "p8a_acc": 0.9426229508196722,
+      "rlp_acc": 0.9754098360655737,
+      "regressed_count": 8,
+      "regressed_pct": 3.28,
+      "p8a_score_on_regressed": {
+        "n": 8,
+        "min": 0.13190793,
+        "p10": 0.14085616,
+        "p25": 0.17433985,
+        "median": 0.39140707,
+        "mean": 0.3141123475,
+        "p75": 0.39853835,
+        "p90": 0.44530338,
+        "max": 0.4880239
+      },
+      "rlp_score_on_regressed": {
+        "n": 8,
+        "min": 0.5574502,
+        "p10": 0.58387107,
+        "p25": 0.6129257,
+        "median": 0.7298311,
+        "mean": 0.71388841375,
+        "p75": 0.81765044,
+        "p90": 0.8534454,
+        "max": 0.9177281
+      },
+      "score_gap_on_regressed": {
+        "n": 8,
+        "min": 0.16762232,
+        "p10": 0.24679822999999995,
+        "p25": 0.3654215,
+        "median": 0.41911209,
+        "mean": 0.39977606625,
+        "p75": 0.42554227,
+        "p90": 0.5752059600000001,
+        "max": 0.58897494
+      },
+      "p8a_score_buckets_on_regressed": {
+        "lt_0.10": 0,
+        "0.10_to_0.20": 3,
+        "0.20_to_0.30": 0,
+        "0.30_to_0.40": 3,
+        "0.40_to_0.45": 1,
+        "0.45_to_0.50": 1
+      },
+      "pct_tau_recoverable_score_in_0.40_0.50": 25.0,
+      "pct_confidently_real_score_lt_0.20": 37.5
+    },
+    "teams_capture_cam_test_s38": {
+      "n_videos": 51,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_cam_test_s46": {
+      "n_videos": 89,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_dor_shkedi_s16": {
+      "n_videos": 57,
+      "p8a_acc": 0.9824561403508771,
+      "rlp_acc": 0.9824561403508771,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_noyn_sharker_s23": {
+      "n_videos": 204,
+      "p8a_acc": 0.9117647058823529,
+      "rlp_acc": 0.9705882352941176,
+      "regressed_count": 12,
+      "regressed_pct": 5.88,
+      "p8a_score_on_regressed": {
+        "n": 12,
+        "min": 0.124705076,
+        "p10": 0.20672667,
+        "p25": 0.263584,
+        "median": 0.37574762,
+        "mean": 0.334525153,
+        "p75": 0.41072983,
+        "p90": 0.47296658,
+        "max": 0.47296658
+      },
+      "rlp_score_on_regressed": {
+        "n": 12,
+        "min": 0.5160567,
+        "p10": 0.5213912,
+        "p25": 0.5937473,
+        "median": 0.7219322,
+        "mean": 0.7057638366666666,
+        "p75": 0.82422554,
+        "p90": 0.84901905,
+        "max": 0.84901905
+      },
+      "score_gap_on_regressed": {
+        "n": 12,
+        "min": 0.30424342000000004,
+        "p10": 0.30711897000000005,
+        "p25": 0.32213339,
+        "median": 0.34772055999999996,
+        "mean": 0.3712386836666667,
+        "p75": 0.37605246999999997,
+        "p90": 0.46904222399999995,
+        "max": 0.5352165900000001
+      },
+      "p8a_score_buckets_on_regressed": {
+        "lt_0.10": 0,
+        "0.10_to_0.20": 1,
+        "0.20_to_0.30": 4,
+        "0.30_to_0.40": 3,
+        "0.40_to_0.45": 2,
+        "0.45_to_0.50": 2
+      },
+      "pct_tau_recoverable_score_in_0.40_0.50": 33.33,
+      "pct_confidently_real_score_lt_0.20": 8.33
+    },
+    "teams_capture_pc_generator_s3": {
+      "n_videos": 99,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_pc_generator_s4": {
+      "n_videos": 30,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_pc_generator_s9": {
+      "n_videos": 46,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_test_cam_s53": {
+      "n_videos": 90,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_test_cam_s73": {
+      "n_videos": 55,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_capture_test_cam_s76": {
+      "n_videos": 75,
+      "p8a_acc": 1.0,
+      "rlp_acc": 1.0,
+      "regressed_count": 0,
+      "regressed_pct": 0.0,
+      "p8a_score_on_regressed": {},
+      "rlp_score_on_regressed": {},
+      "score_gap_on_regressed": {}
+    },
+    "teams_flat_xiang_xiang2_feng": {
+      "n_videos": 135,
+      "p8a_acc": 0.45185185185185184,
+      "rlp_acc": 0.7851851851851852,
+      "regressed_count": 45,
+      "regressed_pct": 33.33,
+      "p8a_score_on_regressed": {
+        "n": 45,
+        "min": 0.05494593,
+        "p10": 0.09505361,
+        "p25": 0.19583999,
+        "median": 0.28885522,
+        "mean": 0.28762769744444444,
+        "p75": 0.39029902,
+        "p90": 0.4474853,
+        "max": 0.48559946
+      },
+      "rlp_score_on_regressed": {
+        "n": 45,
+        "min": 0.50505024,
+        "p10": 0.5851963,
+        "p25": 0.6696174,
+        "median": 0.8021398,
+        "mean": 0.7736450893333333,
+        "p75": 0.8882975,
+        "p90": 0.9334265,
+        "max": 0.97155577
+      },
+      "score_gap_on_regressed": {
+        "n": 45,
+        "min": 0.23751144000000002,
+        "p10": 0.31113992,
+        "p25": 0.40632390000000007,
+        "median": 0.47402832000000006,
+        "mean": 0.48601739188888887,
+        "p75": 0.59725856,
+        "p90": 0.65677781,
+        "max": 0.828134994
+      },
+      "p8a_score_buckets_on_regressed": {
+        "lt_0.10": 5,
+        "0.10_to_0.20": 7,
+        "0.20_to_0.30": 12,
+        "0.30_to_0.40": 11,
+        "0.40_to_0.45": 6,
+        "0.45_to_0.50": 4
+      },
+      "pct_tau_recoverable_score_in_0.40_0.50": 22.22,
+      "pct_confidently_real_score_lt_0.20": 26.67
+    },
+    "visomaster_enhanced_macro": {
+      "n_videos": 550,
+      "p8a_acc": 0.3563636363636364,
+      "rlp_acc": 0.5727272727272728,
+      "regressed_count": 119,
+      "regressed_pct": 21.64,
+      "p8a_score_on_regressed": {
+        "n": 119,
+        "min": 0.011313221,
+        "p10": 0.024114635,
+        "p25": 0.07598933,
+        "median": 0.17997278,
+        "mean": 0.19869213762184873,
+        "p75": 0.2831567,
+        "p90": 0.41890746,
+        "max": 0.48822075
+      },
+      "rlp_score_on_regressed": {
+        "n": 119,
+        "min": 0.50146866,
+        "p10": 0.56193024,
+        "p25": 0.6074339,
+        "median": 0.79166967,
+        "mean": 0.7694496419327731,
+        "p75": 0.9273454,
+        "p90": 0.9554849,
+        "max": 0.9836728
+      },
+      "score_gap_on_regressed": {
+        "n": 119,
+        "min": 0.12808323000000005,
+        "p10": 0.30522483999999994,
+        "p25": 0.38942069,
+        "median": 0.5856998200000001,
+        "mean": 0.5707575043109244,
+        "p75": 0.7651048300000001,
+        "p90": 0.833918185,
+        "max": 0.9048403589999999
+      },
+      "p8a_score_buckets_on_regressed": {
+        "lt_0.10": 37,
+        "0.10_to_0.20": 26,
+        "0.20_to_0.30": 28,
+        "0.30_to_0.40": 13,
+        "0.40_to_0.45": 6,
+        "0.45_to_0.50": 9
+      },
+      "pct_tau_recoverable_score_in_0.40_0.50": 12.61,
+      "pct_confidently_real_score_lt_0.20": 52.94
+    }
+  },
+  "global_score_distributions": {
+    "p8a_score_on_regressed": {
+      "n": 329,
+      "min": 0.011313221,
+      "p10": 0.058103383,
+      "p25": 0.1249413,
+      "median": 0.22495587,
+      "mean": 0.24283270232522797,
+      "p75": 0.37299666,
+      "p90": 0.45521703,
+      "max": 0.4998386
+    },
+    "rlp_score_on_regressed": {
+      "n": 329,
+      "min": 0.50146866,
+      "p10": 0.57726616,
+      "p25": 0.6606846,
+      "median": 0.8250396,
+      "mean": 0.790707196443769,
+      "p75": 0.92486197,
+      "p90": 0.9504938,
+      "max": 0.9836728
+    },
+    "score_gap_rlp_minus_p8a_on_regressed": {
+      "n": 329,
+      "min": 0.12808323000000005,
+      "p10": 0.33368254,
+      "p25": 0.43725084000000003,
+      "median": 0.5481353999999999,
+      "mean": 0.5478744941185411,
+      "p75": 0.6608339400000001,
+      "p90": 0.778124946,
+      "max": 0.9048403589999999
+    }
+  },
+  "frame_level": {
+    "teams_capture_cam_test_s35": {
+      "n_regressed_videos_frame_analyzed": 8,
+      "flip_rate_distribution": {
+        "n": 8,
+        "min": 0.5,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 0.9375,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_real_rate_distribution": {
+        "n": 8,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_frame_prob_mean_distribution": {
+        "n": 8,
+        "min": 0.0882,
+        "p10": 0.1743,
+        "p25": 0.1943,
+        "median": 0.3914,
+        "mean": 0.3153125,
+        "p75": 0.3985,
+        "p90": 0.4453,
+        "max": 0.488
+      },
+      "p8a_frame_prob_std_distribution_within_video": {
+        "n": 8,
+        "min": NaN,
+        "p10": NaN,
+        "p25": NaN,
+        "median": NaN,
+        "mean": NaN,
+        "p75": NaN,
+        "p90": 0.0994,
+        "max": NaN
+      },
+      "videos_full_flip_pct_frames_flipped_ge_95": 7,
+      "videos_partial_flip_pct_frames_flipped_30_to_95": 1,
+      "videos_small_flip_pct_frames_flipped_lt_30": 0,
+      "interpretation_full_flip_means": "P8A predicts real on essentially every frame -> deep separability loss, not noise-driven",
+      "interpretation_partial_flip_means": "P8A flickers per-frame -> aggregation pulls below 0.5 but signal still partly there; score-margin or temporal smoothing might help"
+    },
+    "teams_capture_noyn_sharker_s23": {
+      "n_regressed_videos_frame_analyzed": 12,
+      "flip_rate_distribution": {
+        "n": 12,
+        "min": 0.333,
+        "p10": 0.5,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 0.90275,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_real_rate_distribution": {
+        "n": 12,
+        "min": 0.5,
+        "p10": 0.667,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 0.9305833333333333,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_frame_prob_mean_distribution": {
+        "n": 12,
+        "min": 0.1247,
+        "p10": 0.2067,
+        "p25": 0.3757,
+        "median": 0.3836,
+        "mean": 0.3606583333333333,
+        "p75": 0.4302,
+        "p90": 0.473,
+        "max": 0.4798
+      },
+      "p8a_frame_prob_std_distribution_within_video": {
+        "n": 12,
+        "min": 0.0,
+        "p10": 0.0313,
+        "p25": 0.0,
+        "median": 0.0366,
+        "mean": NaN,
+        "p75": NaN,
+        "p90": 0.1894,
+        "max": NaN
+      },
+      "videos_full_flip_pct_frames_flipped_ge_95": 10,
+      "videos_partial_flip_pct_frames_flipped_30_to_95": 2,
+      "videos_small_flip_pct_frames_flipped_lt_30": 0,
+      "interpretation_full_flip_means": "P8A predicts real on essentially every frame -> deep separability loss, not noise-driven",
+      "interpretation_partial_flip_means": "P8A flickers per-frame -> aggregation pulls below 0.5 but signal still partly there; score-margin or temporal smoothing might help"
+    },
+    "teams_flat_xiang_xiang2_feng": {
+      "n_regressed_videos_frame_analyzed": 45,
+      "flip_rate_distribution": {
+        "n": 45,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_real_rate_distribution": {
+        "n": 45,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_frame_prob_mean_distribution": {
+        "n": 45,
+        "min": 0.0549,
+        "p10": 0.0951,
+        "p25": 0.1958,
+        "median": 0.2889,
+        "mean": 0.28762666666666664,
+        "p75": 0.3903,
+        "p90": 0.4475,
+        "max": 0.4856
+      },
+      "p8a_frame_prob_std_distribution_within_video": {
+        "n": 45,
+        "min": NaN,
+        "p10": NaN,
+        "p25": NaN,
+        "median": NaN,
+        "mean": NaN,
+        "p75": NaN,
+        "p90": NaN,
+        "max": NaN
+      },
+      "videos_full_flip_pct_frames_flipped_ge_95": 45,
+      "videos_partial_flip_pct_frames_flipped_30_to_95": 0,
+      "videos_small_flip_pct_frames_flipped_lt_30": 0,
+      "interpretation_full_flip_means": "P8A predicts real on essentially every frame -> deep separability loss, not noise-driven",
+      "interpretation_partial_flip_means": "P8A flickers per-frame -> aggregation pulls below 0.5 but signal still partly there; score-margin or temporal smoothing might help"
+    },
+    "deeplive_enhanced": {
+      "n_regressed_videos_frame_analyzed": 145,
+      "flip_rate_distribution": {
+        "n": 145,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_real_rate_distribution": {
+        "n": 145,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_frame_prob_mean_distribution": {
+        "n": 145,
+        "min": 0.0237,
+        "p10": 0.0761,
+        "p25": 0.1326,
+        "median": 0.23,
+        "mean": 0.25363172413793106,
+        "p75": 0.378,
+        "p90": 0.4606,
+        "max": 0.4998
+      },
+      "p8a_frame_prob_std_distribution_within_video": {
+        "n": 145,
+        "min": NaN,
+        "p10": NaN,
+        "p25": NaN,
+        "median": NaN,
+        "mean": NaN,
+        "p75": NaN,
+        "p90": NaN,
+        "max": NaN
+      },
+      "videos_full_flip_pct_frames_flipped_ge_95": 145,
+      "videos_partial_flip_pct_frames_flipped_30_to_95": 0,
+      "videos_small_flip_pct_frames_flipped_lt_30": 0,
+      "interpretation_full_flip_means": "P8A predicts real on essentially every frame -> deep separability loss, not noise-driven",
+      "interpretation_partial_flip_means": "P8A flickers per-frame -> aggregation pulls below 0.5 but signal still partly there; score-margin or temporal smoothing might help"
+    },
+    "visomaster_enhanced_macro": {
+      "n_regressed_videos_frame_analyzed": 119,
+      "flip_rate_distribution": {
+        "n": 119,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_real_rate_distribution": {
+        "n": 119,
+        "min": 1.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "mean": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0
+      },
+      "p8a_frame_prob_mean_distribution": {
+        "n": 119,
+        "min": 0.0113,
+        "p10": 0.0241,
+        "p25": 0.076,
+        "median": 0.18,
+        "mean": 0.19869327731092437,
+        "p75": 0.2832,
+        "p90": 0.4189,
+        "max": 0.4882
+      },
+      "p8a_frame_prob_std_distribution_within_video": {
+        "n": 119,
+        "min": NaN,
+        "p10": NaN,
+        "p25": NaN,
+        "median": NaN,
+        "mean": NaN,
+        "p75": NaN,
+        "p90": NaN,
+        "max": NaN
+      },
+      "videos_full_flip_pct_frames_flipped_ge_95": 119,
+      "videos_partial_flip_pct_frames_flipped_30_to_95": 0,
+      "videos_small_flip_pct_frames_flipped_lt_30": 0,
+      "interpretation_full_flip_means": "P8A predicts real on essentially every frame -> deep separability loss, not noise-driven",
+      "interpretation_partial_flip_means": "P8A flickers per-frame -> aggregation pulls below 0.5 but signal still partly there; score-margin or temporal smoothing might help"
+    }
+  },
+  "video_id_clusters": {
+    "visomaster_enhanced_macro": {
+      "top_subjects_by_regression_count": {
+        "visomaster_enhanced_teams": {
+          "n_total": 275,
+          "n_regressed": 72,
+          "regression_rate_pct": 26.18
+        },
+        "visomaster_enhanced_raw": {
+          "n_total": 275,
+          "n_regressed": 47,
+          "regression_rate_pct": 17.09
+        }
+      },
+      "top_enriched_tokens_in_regressed_video_ids": [
+        {
+          "token": "teams",
+          "n_in_regressed": 72,
+          "n_in_method": 275,
+          "frac_regressed": 0.605,
+          "frac_method": 0.5,
+          "enrichment_ratio": 1.21
+        },
+        {
+          "token": "visomaster",
+          "n_in_regressed": 119,
+          "n_in_method": 550,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        },
+        {
+          "token": "enhanced",
+          "n_in_regressed": 119,
+          "n_in_method": 550,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        },
+        {
+          "token": "raw",
+          "n_in_regressed": 47,
+          "n_in_method": 275,
+          "frac_regressed": 0.395,
+          "frac_method": 0.5,
+          "enrichment_ratio": 0.79
+        }
+      ],
+      "sample_regressed_video_ids": [
+        "visomaster_enhanced_raw__seq21575__fake",
+        "visomaster_enhanced_raw__seq21660__fake",
+        "visomaster_enhanced_raw__seq21696__fake",
+        "visomaster_enhanced_raw__seq21807__fake",
+        "visomaster_enhanced_raw__seq22601__fake",
+        "visomaster_enhanced_raw__seq22636__fake",
+        "visomaster_enhanced_raw__seq22655__fake",
+        "visomaster_enhanced_raw__seq22726__fake",
+        "visomaster_enhanced_raw__seq22728__fake",
+        "visomaster_enhanced_raw__seq22968__fake"
+      ]
+    },
+    "teams_flat_xiang_xiang2_feng": {
+      "top_subjects_by_regression_count": {
+        "Xiang_Xiang2_Feng": {
+          "n_total": 135,
+          "n_regressed": 45,
+          "regression_rate_pct": 33.33
+        }
+      },
+      "top_enriched_tokens_in_regressed_video_ids": [
+        {
+          "token": "xiang",
+          "n_in_regressed": 45,
+          "n_in_method": 135,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        },
+        {
+          "token": "xiang2",
+          "n_in_regressed": 45,
+          "n_in_method": 135,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        },
+        {
+          "token": "feng",
+          "n_in_regressed": 45,
+          "n_in_method": 135,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        }
+      ],
+      "sample_regressed_video_ids": [
+        "Xiang_Xiang2_Feng__seq46045__fake",
+        "Xiang_Xiang2_Feng__seq46051__fake",
+        "Xiang_Xiang2_Feng__seq46103__fake",
+        "Xiang_Xiang2_Feng__seq46139__fake",
+        "Xiang_Xiang2_Feng__seq46152__fake",
+        "Xiang_Xiang2_Feng__seq46158__fake",
+        "Xiang_Xiang2_Feng__seq46171__fake",
+        "Xiang_Xiang2_Feng__seq46226__fake",
+        "Xiang_Xiang2_Feng__seq46873__fake",
+        "Xiang_Xiang2_Feng__seq46886__fake"
+      ]
+    },
+    "deeplive_enhanced": {
+      "top_subjects_by_regression_count": {
+        "dor": {
+          "n_total": 545,
+          "n_regressed": 145,
+          "regression_rate_pct": 26.61
+        }
+      },
+      "top_enriched_tokens_in_regressed_video_ids": [
+        {
+          "token": "deeplive",
+          "n_in_regressed": 145,
+          "n_in_method": 545,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        },
+        {
+          "token": "dor",
+          "n_in_regressed": 145,
+          "n_in_method": 545,
+          "frac_regressed": 1.0,
+          "frac_method": 1.0,
+          "enrichment_ratio": 1.0
+        }
+      ],
+      "sample_regressed_video_ids": [
+        "deeplive_dor__seq10022__fake",
+        "deeplive_dor__seq10056__fake",
+        "deeplive_dor__seq10122__fake",
+        "deeplive_dor__seq10131__fake",
+        "deeplive_dor__seq10142__fake",
+        "deeplive_dor__seq10163__fake",
+        "deeplive_dor__seq10184__fake",
+        "deeplive_dor__seq10195__fake",
+        "deeplive_dor__seq10198__fake",
+        "deeplive_dor__seq10204__fake"
+      ]
+    }
+  },
+  "score_distribution_when_both_correct": {
+    "deeplive_enhanced": {
+      "n_both_correct": 289,
+      "p8a_score_when_correct": {
+        "n": 289,
+        "min": 0.50130296,
+        "p10": 0.59331316,
+        "p25": 0.7465184,
+        "median": 0.8955962,
+        "mean": 0.8414204164705882,
+        "p75": 0.9712246,
+        "p90": 0.9875399,
+        "max": 0.9934823
+      },
+      "rlp_score_when_correct": {
+        "n": 289,
+        "min": 0.7226171,
+        "p10": 0.94461155,
+        "p25": 0.97225046,
+        "median": 0.9832223,
+        "mean": 0.9732013207958478,
+        "p75": 0.9900114,
+        "p90": 0.9920887,
+        "max": 0.9938034
+      }
+    },
+    "teams_capture_cam_test_s32": {
+      "n_both_correct": 139,
+      "p8a_score_when_correct": {
+        "n": 139,
+        "min": 0.96884865,
+        "p10": 0.99248624,
+        "p25": 0.9941418,
+        "median": 0.99446917,
+        "mean": 0.9936117136690648,
+        "p75": 0.9945541,
+        "p90": 0.9945973,
+        "max": 0.99462634
+      },
+      "rlp_score_when_correct": {
+        "n": 139,
+        "min": 0.99028015,
+        "p10": 0.9931457,
+        "p25": 0.9941486,
+        "median": 0.9946433,
+        "mean": 0.9944111734532374,
+        "p75": 0.99496657,
+        "p90": 0.9952315,
+        "max": 0.99566096
+      }
+    },
+    "teams_capture_cam_test_s35": {
+      "n_both_correct": 230,
+      "p8a_score_when_correct": {
+        "n": 230,
+        "min": 0.51150966,
+        "p10": 0.8086035,
+        "p25": 0.9926001,
+        "median": 0.9946215,
+        "mean": 0.9546844174782608,
+        "p75": 0.99462765,
+        "p90": 0.9946299,
+        "max": 0.99463356
+      },
+      "rlp_score_when_correct": {
+        "n": 230,
+        "min": 0.7336048,
+        "p10": 0.9657237,
+        "p25": 0.99445575,
+        "median": 0.99530584,
+        "mean": 0.9839030862173913,
+        "p75": 0.9954829,
+        "p90": 0.99559206,
+        "max": 0.9958364
+      }
+    },
+    "teams_capture_cam_test_s38": {
+      "n_both_correct": 51,
+      "p8a_score_when_correct": {
+        "n": 51,
+        "min": 0.9733573,
+        "p10": 0.98947215,
+        "p25": 0.99389523,
+        "median": 0.994582,
+        "mean": 0.9927443376470588,
+        "p75": 0.9946143,
+        "p90": 0.99461985,
+        "max": 0.9946238
+      },
+      "rlp_score_when_correct": {
+        "n": 51,
+        "min": 0.99210346,
+        "p10": 0.994465,
+        "p25": 0.9949727,
+        "median": 0.995388,
+        "mean": 0.99519179,
+        "p75": 0.99568117,
+        "p90": 0.9957625,
+        "max": 0.99585104
+      }
+    },
+    "teams_capture_cam_test_s46": {
+      "n_both_correct": 89,
+      "p8a_score_when_correct": {
+        "n": 89,
+        "min": 0.76624715,
+        "p10": 0.99455947,
+        "p25": 0.994612,
+        "median": 0.99461806,
+        "mean": 0.9895498804494383,
+        "p75": 0.9946233,
+        "p90": 0.9946271,
+        "max": 0.99463356
+      },
+      "rlp_score_when_correct": {
+        "n": 89,
+        "min": 0.98947877,
+        "p10": 0.99429035,
+        "p25": 0.9949196,
+        "median": 0.99536103,
+        "mean": 0.995045072247191,
+        "p75": 0.99563503,
+        "p90": 0.99580264,
+        "max": 0.99596304
+      }
+    },
+    "teams_capture_dor_shkedi_s16": {
+      "n_both_correct": 56,
+      "p8a_score_when_correct": {
+        "n": 56,
+        "min": 0.6095723,
+        "p10": 0.8952453,
+        "p25": 0.95770794,
+        "median": 0.9864377,
+        "mean": 0.9544517103571428,
+        "p75": 0.9919174,
+        "p90": 0.99331564,
+        "max": 0.9943762
+      },
+      "rlp_score_when_correct": {
+        "n": 56,
+        "min": 0.66073084,
+        "p10": 0.96292126,
+        "p25": 0.98492134,
+        "median": 0.99047416,
+        "mean": 0.9797862085714286,
+        "p75": 0.99239,
+        "p90": 0.9937186,
+        "max": 0.9948738
+      }
+    },
+    "teams_capture_noyn_sharker_s23": {
+      "n_both_correct": 186,
+      "p8a_score_when_correct": {
+        "n": 186,
+        "min": 0.53711396,
+        "p10": 0.7459636,
+        "p25": 0.9173785,
+        "median": 0.9841311,
+        "mean": 0.9282584639784947,
+        "p75": 0.9927965,
+        "p90": 0.99386775,
+        "max": 0.9945781
+      },
+      "rlp_score_when_correct": {
+        "n": 186,
+        "min": 0.5698996,
+        "p10": 0.9104122,
+        "p25": 0.9692652,
+        "median": 0.9876171,
+        "mean": 0.9681317456989247,
+        "p75": 0.992644,
+        "p90": 0.9939869,
+        "max": 0.994922
+      }
+    },
+    "teams_capture_pc_generator_s3": {
+      "n_both_correct": 99,
+      "p8a_score_when_correct": {
+        "n": 99,
+        "min": 0.9418456,
+        "p10": 0.992759,
+        "p25": 0.99443626,
+        "median": 0.994592,
+        "mean": 0.9933251346464647,
+        "p75": 0.99462163,
+        "p90": 0.9946249,
+        "max": 0.99463177
+      },
+      "rlp_score_when_correct": {
+        "n": 99,
+        "min": 0.98419833,
+        "p10": 0.993753,
+        "p25": 0.99493164,
+        "median": 0.9954678,
+        "mean": 0.9950023974747475,
+        "p75": 0.9957799,
+        "p90": 0.99594915,
+        "max": 0.99604094
+      }
+    },
+    "teams_capture_pc_generator_s4": {
+      "n_both_correct": 30,
+      "p8a_score_when_correct": {
+        "n": 30,
+        "min": 0.9720344,
+        "p10": 0.9944306,
+        "p25": 0.9946036,
+        "median": 0.9946209,
+        "mean": 0.9936380253333333,
+        "p75": 0.99462503,
+        "p90": 0.9946287,
+        "max": 0.99463403
+      },
+      "rlp_score_when_correct": {
+        "n": 30,
+        "min": 0.99191296,
+        "p10": 0.99506664,
+        "p25": 0.9953922,
+        "median": 0.99558973,
+        "mean": 0.9954067883333333,
+        "p75": 0.99586844,
+        "p90": 0.9958877,
+        "max": 0.9959227
+      }
+    },
+    "teams_capture_pc_generator_s9": {
+      "n_both_correct": 46,
+      "p8a_score_when_correct": {
+        "n": 46,
+        "min": 0.9908228,
+        "p10": 0.9944272,
+        "p25": 0.9945629,
+        "median": 0.994616,
+        "mean": 0.9944734941304347,
+        "p75": 0.99462247,
+        "p90": 0.9946247,
+        "max": 0.99462694
+      },
+      "rlp_score_when_correct": {
+        "n": 46,
+        "min": 0.99233454,
+        "p10": 0.99508876,
+        "p25": 0.9954372,
+        "median": 0.995665,
+        "mean": 0.9955329195652174,
+        "p75": 0.9958242,
+        "p90": 0.9958936,
+        "max": 0.99597067
+      }
+    },
+    "teams_capture_test_cam_s53": {
+      "n_both_correct": 90,
+      "p8a_score_when_correct": {
+        "n": 90,
+        "min": 0.5728992,
+        "p10": 0.9845272,
+        "p25": 0.9909727,
+        "median": 0.99388385,
+        "mean": 0.9861194976666666,
+        "p75": 0.9945049,
+        "p90": 0.9945793,
+        "max": 0.99461824
+      },
+      "rlp_score_when_correct": {
+        "n": 90,
+        "min": 0.973947,
+        "p10": 0.993135,
+        "p25": 0.9942924,
+        "median": 0.9950225,
+        "mean": 0.9943329417777778,
+        "p75": 0.99540603,
+        "p90": 0.9956192,
+        "max": 0.99571764
+      }
+    },
+    "teams_capture_test_cam_s73": {
+      "n_both_correct": 55,
+      "p8a_score_when_correct": {
+        "n": 55,
+        "min": 0.9946084,
+        "p10": 0.9946207,
+        "p25": 0.9946238,
+        "median": 0.9946262,
+        "mean": 0.99462544,
+        "p75": 0.9946292,
+        "p90": 0.9946315,
+        "max": 0.99463236
+      },
+      "rlp_score_when_correct": {
+        "n": 55,
+        "min": 0.9956371,
+        "p10": 0.99589765,
+        "p25": 0.9959376,
+        "median": 0.9959695,
+        "mean": 0.9959534694545454,
+        "p75": 0.99599004,
+        "p90": 0.99600905,
+        "max": 0.9960838
+      }
+    },
+    "teams_capture_test_cam_s76": {
+      "n_both_correct": 75,
+      "p8a_score_when_correct": {
+        "n": 75,
+        "min": 0.9086294,
+        "p10": 0.9937714,
+        "p25": 0.9944403,
+        "median": 0.9946031,
+        "mean": 0.9932099214666666,
+        "p75": 0.99461746,
+        "p90": 0.99462247,
+        "max": 0.994631
+      },
+      "rlp_score_when_correct": {
+        "n": 75,
+        "min": 0.9425988,
+        "p10": 0.995168,
+        "p25": 0.9954251,
+        "median": 0.9956538,
+        "mean": 0.9949010229333334,
+        "p75": 0.9958054,
+        "p90": 0.9959008,
+        "max": 0.99598444
+      }
+    },
+    "teams_flat_xiang_xiang2_feng": {
+      "n_both_correct": 61,
+      "p8a_score_when_correct": {
+        "n": 61,
+        "min": 0.5188397,
+        "p10": 0.59047043,
+        "p25": 0.6695602,
+        "median": 0.7565561,
+        "mean": 0.7725033640983606,
+        "p75": 0.8868511,
+        "p90": 0.9633688,
+        "max": 0.983453
+      },
+      "rlp_score_when_correct": {
+        "n": 61,
+        "min": 0.7161168,
+        "p10": 0.9147262,
+        "p25": 0.9524858,
+        "median": 0.9722635,
+        "mean": 0.9561176295081967,
+        "p75": 0.9826873,
+        "p90": 0.988596,
+        "max": 0.9928226
+      }
+    },
+    "visomaster_enhanced_macro": {
+      "n_both_correct": 196,
+      "p8a_score_when_correct": {
+        "n": 196,
+        "min": 0.50328845,
+        "p10": 0.58527106,
+        "p25": 0.7130587,
+        "median": 0.87262195,
+        "mean": 0.826633286122449,
+        "p75": 0.95722395,
+        "p90": 0.98555124,
+        "max": 0.99425524
+      },
+      "rlp_score_when_correct": {
+        "n": 196,
+        "min": 0.6053398,
+        "p10": 0.7978721,
+        "p25": 0.87488747,
+        "median": 0.94864124,
+        "mean": 0.9180854430102041,
+        "p75": 0.9834563,
+        "p90": 0.99150145,
+        "max": 0.9952127
+      }
+    }
+  },
+  "frames_per_video_caveat": {
+    "note": "Each video has very few frames (~1.26 mean). Frame-level analysis is effectively video-level.",
+    "min": 1,
+    "max": 3,
+    "mean": 1.262,
+    "median": 1
+  },
+  "visomaster_pool_split_raw_vs_teams": {
+    "visomaster_enhanced_raw": {
+      "n_videos": 275,
+      "p8a_acc": 0.473,
+      "rlp_acc": 0.644,
+      "regressed_count": 47,
+      "regressed_pct_of_pool": 17.09,
+      "p8a_score_quantiles": {
+        "n": 275,
+        "min": 0.0054060356,
+        "p10": 0.0062871613,
+        "p25": 0.01391256,
+        "median": 0.40579456,
+        "mean": 0.4436689204112727,
+        "p75": 0.8748301,
+        "p90": 0.96903986,
+        "max": 0.99425524
+      },
+      "p8a_score_on_regressed": {
+        "n": 47,
+        "min": 0.012139963,
+        "p10": 0.037731625,
+        "p25": 0.083342,
+        "median": 0.16135895,
+        "mean": 0.20594912114893618,
+        "p75": 0.28500393,
+        "p90": 0.42869976,
+        "max": 0.48537007
+      }
+    },
+    "visomaster_enhanced_teams": {
+      "n_videos": 275,
+      "p8a_acc": 0.24,
+      "rlp_acc": 0.502,
+      "regressed_count": 72,
+      "regressed_pct_of_pool": 26.18,
+      "p8a_score_quantiles": {
+        "n": 275,
+        "min": 0.0053750025,
+        "p10": 0.006095017,
+        "p25": 0.011186372,
+        "median": 0.10564618,
+        "mean": 0.2689898741570909,
+        "p75": 0.47965127,
+        "p90": 0.86288923,
+        "max": 0.99325126
+      },
+      "p8a_score_on_regressed": {
+        "n": 72,
+        "min": 0.011313221,
+        "p10": 0.019418232,
+        "p25": 0.06506052,
+        "median": 0.19769846,
+        "mean": 0.19395494004166666,
+        "p75": 0.26983282,
+        "p90": 0.3859886,
+        "max": 0.48822075
+      }
+    }
+  },
+  "seq_id_distribution_regressed_vs_not": {
+    "visomaster_enhanced_macro": {
+      "regressed_seq_id_range": {
+        "n": 119,
+        "min": 5506,
+        "p10": 6237,
+        "p25": 8477,
+        "median": 9413,
+        "mean": 13725.79831932773,
+        "p75": 22636,
+        "p90": 23099,
+        "max": 26028
+      },
+      "non_regressed_seq_id_range": {
+        "n": 431,
+        "min": 5402,
+        "p10": 5776,
+        "p25": 6185,
+        "median": 9496,
+        "mean": 13144.742459396752,
+        "p75": 21891,
+        "p90": 23181,
+        "max": 26194
+      }
+    },
+    "teams_flat_xiang_xiang2_feng": {
+      "regressed_seq_id_range": {
+        "n": 45,
+        "min": 46045,
+        "p10": 46152,
+        "p25": 46918,
+        "median": 47377,
+        "mean": 49937.2,
+        "p75": 50156,
+        "p90": 63641,
+        "max": 63798
+      },
+      "non_regressed_seq_id_range": {
+        "n": 90,
+        "min": 46024,
+        "p10": 46268,
+        "p25": 47019,
+        "median": 47510,
+        "mean": 51234.63333333333,
+        "p75": 50201,
+        "p90": 63577,
+        "max": 63761
+      }
+    },
+    "deeplive_enhanced": {
+      "regressed_seq_id_range": {
+        "n": 145,
+        "min": 538,
+        "p10": 2886,
+        "p25": 5527,
+        "median": 10705,
+        "mean": 10314.11724137931,
+        "p75": 14239,
+        "p90": 15976,
+        "max": 16851
+      },
+      "non_regressed_seq_id_range": {
+        "n": 400,
+        "min": 497,
+        "p10": 4080,
+        "p25": 10326,
+        "median": 12629,
+        "mean": 11373.475,
+        "p75": 14881,
+        "p90": 16041,
+        "max": 16921
+      }
+    }
+  }
+}

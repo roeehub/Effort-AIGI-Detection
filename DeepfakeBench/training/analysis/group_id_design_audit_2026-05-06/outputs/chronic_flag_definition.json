@@ -1,0 +1,17 @@
+{
+  "definition": "binary flag set when base_identity exactly matches one of the chronic-6 subjects from Job 11 (analysis/job_11_identity_audit_2026-05-04/). The Job 11 cohort is at tau@FPR=10% on teams_real_all_dev; an identity is 'chronic' if it appears in the worst-FPR table across at least one ckpt.",
+  "provenance": "memory/project_chronic_offenders_partition_per_ckpt_2026-05-04.md",
+  "identities": [
+    "bla_bla_chow",
+    "bla_bla_chow__s2",
+    "PC_Generator__s22",
+    "PC_Generator__s45",
+    "roy_d",
+    "Q__s6"
+  ],
+  "match_rule": "row.base_identity in chronic_list, OR (case-insensitive substring match of any chronic-6 identity inside base_identity) \u2014 captures suffixed variants like 'PC_Generator__s22__seg_5.0__real'.",
+  "n_real_chronic_in_full": 1297,
+  "n_fake_chronic_in_full": 0,
+  "n_real_chronic_in_paired": 318,
+  "n_fake_chronic_in_paired": 0
+}

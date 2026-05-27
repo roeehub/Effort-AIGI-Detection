@@ -1,0 +1,9 @@
+{
+  "phase": "phase_2_backbone_t5c_relaunch",
+  "status": "blocked_loss_still_zero",
+  "blocked_at_utc": "2026-05-22T23:52:03Z",
+  "smoke_job_id": "747929298597314560",
+  "smoke_run_id": "2g6nlncj",
+  "loss_check": "FIRES_ZERO n=4 nonzero=0 max=0.0000
+ERROR"
+}

@@ -1,0 +1,213 @@
+{
+  "n_train": 3247,
+  "n_test": 812,
+  "n_classes": 10,
+  "classes": [
+    "deeplive_enhanced",
+    "deeplive_non_enhanced",
+    "dl_bucket_visomaster",
+    "external_fake",
+    "external_real",
+    "proper_visomaster",
+    "proper_visomaster_enhanced",
+    "tv2_deeplive",
+    "tv2_visomaster",
+    "visomaster_enhanced_v2"
+  ],
+  "train_accuracy": 0.42777948875885435,
+  "test_accuracy": 0.41625615763546797,
+  "chance_accuracy": 0.1,
+  "confusion_matrix": [
+    [
+      0,
+      0,
+      0,
+      0,
+      2,
+      18,
+      31,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      8,
+      35,
+      7,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      8,
+      28,
+      13,
+      0,
+      0,
+      2
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      20,
+      3,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      51,
+      47,
+      6,
+      0,
+      0,
+      5
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      19,
+      201,
+      18,
+      0,
+      0,
+      2
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      1,
+      57,
+      59,
+      0,
+      0,
+      3
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      6,
+      56,
+      1,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      15,
+      26,
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      3,
+      25,
+      5,
+      0,
+      0,
+      27
+    ]
+  ],
+  "per_class": {
+    "deeplive_enhanced": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 51
+    },
+    "deeplive_non_enhanced": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 51
+    },
+    "dl_bucket_visomaster": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 51
+    },
+    "external_fake": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 24
+    },
+    "external_real": {
+      "precision": 0.45132743362831856,
+      "recall": 0.46788990825688076,
+      "f1": 0.4594594594594595,
+      "support": 109
+    },
+    "proper_visomaster": {
+      "precision": 0.391812865497076,
+      "recall": 0.8375,
+      "f1": 0.5338645418326694,
+      "support": 240
+    },
+    "proper_visomaster_enhanced": {
+      "precision": 0.4097222222222222,
+      "recall": 0.49166666666666664,
+      "f1": 0.446969696969697,
+      "support": 120
+    },
+    "tv2_deeplive": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 64
+    },
+    "tv2_visomaster": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 42
+    },
+    "visomaster_enhanced_v2": {
+      "precision": 0.6428571428571429,
+      "recall": 0.45,
+      "f1": 0.5294117647058824,
+      "support": 60
+    }
+  },
+  "checkpoint_name": "c3_codec_hedge_vc_step2000",
+  "features_uri": "gs://training-job-outputs/probe_battery_2026-04-26/c3_codec_hedge_vc_step2000/features.npz",
+  "label_field": "source_bucket",
+  "threshold": 0.25,
+  "verdict": "FAIL",
+  "realfake_distribution": {
+    "fake": 2229,
+    "real": 1830
+  }
+}

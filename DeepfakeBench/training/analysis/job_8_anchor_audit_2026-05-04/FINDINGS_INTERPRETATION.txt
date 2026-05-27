@@ -1,0 +1,230 @@
+# Job 8 anchor audit — INTERPRETATION (2026-05-04)
+
+## DISCLAIMER — read this first
+
+Past project framings on candidate ckpts have repeatedly been
+demonstrated wrong. Concrete examples cited from
+`docs/relaunch_handoffs/PSERIES_OPINIONS_2026-05-02.md`:
+
+1. "P18 GRL bit the dor shortcut" (2026-05-01 evening) → corrective probe
+   found the original verdict was wrong-axis; β bite was provisional;
+   later D-contract showed the GRL was defensive against P18C regression,
+   not additive over P8A.
+
+2. "P18 GRL is wrong-axis; β probe was provisional, inconclusive"
+   (2026-05-01 evening, the FOLLOW-UP retraction) → also superseded by
+   `project_p18_corrective_probe_2026-05-02.md` then by
+   `project_p18_diagnostics_complete_2026-05-02.md`. Two consecutive
+   verdicts on the same packet, both of which the project later revised.
+
+3. "Model has never been trained on visomaster_enhanced_macro_dev's fake
+   type" (2026-05-02 afternoon) → P16 (fw=2.0) and xan4dfto (fw=8.0)
+   both already enabled `visomaster_teams_enhanced.enabled: true` and
+   neither lifted viso recall above 1.1%. The lever the agent was
+   proposing had been pulled twice and failed both ways.
+
+4. "P22 step8000 is the new FT-base candidate, 3× macro fake recall vs
+   P8A" (2026-05-02 evening) → SUPERSEDED the same evening by 7 CPU
+   diagnostics: P22 step8k score variance had collapsed 140× (degraded,
+   not "wider"), and step1k was the actually-robust ckpt.
+
+The pattern (per `docs/relaunch_handoffs/AGENT_GUIDE_2026-05-02.md`):
+agents anchor on a single lens, declare a "winner," and the
+multi-lens audit later contradicts the framing. **Everything below is
+explicitly tagged OPINION and may be wrong.** The user should treat
+the FACTS document as the authoritative output of this job and use this
+file only as one possible read.
+
+This document does NOT name a winner. It offers per-lens reads — each
+tagged OPINION — that a reader could plausibly disagree with after
+seeing the same numbers.
+
+---
+
+## OPINION (lens 1) — substrate-invariance is not a single-number metric
+
+**OPINION, may be wrong**: the three Lens 1 summary metrics (Δmean,
+Δp50, KS-stat) order the candidates differently. Δmean ranks E2B_3200
+most-invariant; Δp50 ranks E3_6600 most-invariant; KS-stat ranks
+E3_6600 most-invariant; Δp90 ranks E2B_3200 most-invariant.
+
+Reading these together: E3_6600 has near-zero median shift (Δp50 = 2.5e-4
+on reals, 1.5e-4 on fakes) but the largest mean shift (Δmean = 0.066
+on reals). One reading is that E3_6600's score distribution is concentrated
+near both extremes (0 for reals, 1 for fakes) so the median barely moves
+between substrates while the mean — pulled by a thicker tail — does. The
+shape of the distribution (spike-near-0 + heavy tail) makes the median
+metric flatter than any of the others.
+
+P8A's pattern (Δmean 0.038, Δp50 0.009, Δp90 0.42) suggests its real-class
+tail moves significantly between substrates while the bulk does not.
+Whether that's "more substrate-invariant than E3_6600" or "less" depends
+on which moment you weight.
+
+**Caveat — this is the reading that could be wrong**: Job 7 asserted P8A
+is substrate-invariant on the existing head and that a frozen-feature
+retrain destroys that invariance. The Job 7 measurement (per the dispatch
+prompt) was apparently real_dev mean ≈ real_lockbox mean. By that
+measurement E2B_3200 wins (Δmean = 0.016), not P8A. If Job 7's framing
+of P8A's invariance has been over-stated, this audit's Δmean column
+would imply E2B_3200 is the more substrate-stable real-class predictor
+— but only on that one lens, and only on the mean.
+
+---
+
+## OPINION (lens 2) — calibration lift size depends on starting point
+
+**OPINION, may be wrong**: at FPR=2%, E3_6600 shows enormous lifts
+(+0.60 to +0.64) on three of four suites, while at FPR=10% its lifts
+collapse to <+0.16. The mechanism: at FPR=2%, τ_dev_cal ≈ 0.9941 sits
+above E3_6600's fake p50 on three suites — so dev-cal recall is
+mechanically near zero, and any τ relaxation toward lockbox-cal reveals
+a large fraction of fakes that are already-detected representationally.
+
+This means "Lens 2 lift" measures TWO things together:
+1. How much more separable fakes are when you trust lockbox negatives;
+2. How extreme the dev quantile's τ ends up being.
+
+E2B_3200's small lifts at FPR=10% (≤+0.075) likely reflect its lower
+τ_dev_cal (0.51 vs P8A 0.71 vs E3 0.85) — its dev-cal recall is already
+high, so there is less left to recover.
+
+P8A's mid-range lift at FPR=10% on teams_fake_lockbox (+0.214) reproduces
+Job 7's "free 21pp" finding within rounding (0.214 vs reported 0.21).
+
+**The reading that could be wrong**: characterizing lift as "deployment
+recall recoverable via per-substrate τ" assumes the lockbox-calibrated τ
+is a deployable threshold. But lockbox-calibrated τ uses the lockbox itself
+as the calibration set — in production this requires a separate held-out
+real-substrate sample with known capture-mode distribution. If no such
+sample exists at deployment time, the lift is unrealizable.
+
+---
+
+## OPINION (lens 3) — the IQ-shortcut signal is heavily confounded with class imbalance
+
+**OPINION, may be wrong**: P8A's 0.7909 CV accuracy — lift of +5.99pp
+over its majority baseline (0.7309) — is the only one of the three CV
+results that meaningfully exceeds its baseline. E2B_3200's 0.9145 sits
+DOWN −0.18pp from its 0.9164 baseline; E3_6600's 0.8673 sits UP only
++0.55pp from its 0.8618 baseline.
+
+This is consistent with two simultaneous truths:
+(a) E2B_3200 and E3_6600 catch very few viso fakes at FPR=10% (46 / 76
+    of 550); the prediction problem becomes "guess the majority class";
+(b) when n_caught is small, the L1 logreg has fewer minority-class
+    examples to learn from, biasing CV accuracy toward the trivial baseline.
+
+The CV AUC is more informative under imbalance: P8A 0.7474, E2B_3200
+0.8665, E3_6600 0.7651. By that read, **E2B_3200's catch decisions look
+MORE explainable by IQ features alone** than the other two — opposite
+of what the CV-accuracy column suggests. (Job 4's original framing —
+"viso CV acc 0.72-0.76 → IQ shortcut" — used CV accuracy on a single
+ckpt where baseline was less degenerate; extending it to E2B/E3 needs
+the AUC view, not the accuracy view.)
+
+Top-1 features differ across ckpts (saturation_mean / sobel_edge_mean /
+luma_p10), and signs differ. This rules out a clean "all three ckpts use
+the same IQ shortcut feature" reading.
+
+**The reading that could be wrong**: AUC under heavy imbalance is also
+unstable across folds (E2B std 0.050; P8A std 0.034). The "E2B is more
+IQ-explainable" inference relies on a difference of ~0.10 AUC under
+those error bars, which is at most a 2σ effect.
+
+---
+
+## OPINION (lens 4) — gap-AUC-vs-recall is dominated by AUC level, not by ckpt
+
+**OPINION, may be wrong**: the largest gaps cluster on viso (48-60 pp
+across all three ckpts), and gap is reasonably correlated with (1 − AUC):
+when AUC is 0.68-0.75 (viso for all three), gap is ~50 pp; when AUC is
+0.95+ (deeplive for E2B/E3, teams_fake_lockbox for E3), gap is ≤5 pp.
+
+This means Lens 4 mostly tells us which (ckpt × suite) pairs are
+saturated and which are not. It does not cleanly differentiate the three
+ckpts within a suite.
+
+**Suite-specific picture**:
+- viso — all three ckpts have huge gaps (48-60 pp). Operational recall
+  at FPR=10% never exceeds 27% on viso.
+- deeplive — E2B and E3 are saturated (gap < 5 pp); P8A has 44pp gap.
+- teams_fake_lockbox — E3 is saturated (gap 2.2 pp); P8A has 36pp gap.
+- teams_fake_dev — all three are partially saturated (gap 12-21 pp).
+
+A reading: P8A has "the most threshold-tuning headroom" on three of four
+suites; E3 has the least (only viso is unsaturated); E2B is in between.
+**But "headroom" is an asymmetric coin — large gap also means current
+calibration is leaving recall on the table OR that the model's
+probability scale is just poorly calibrated.** This metric does not say
+whether more aggressive τ would actually deliver the implied recall
+without inflating FPR.
+
+---
+
+## OPINION (cross-lens) — the candidates dominate different lenses
+
+**OPINION, may be wrong**: each ckpt is best on a different summary lens:
+
+- E2B_3200: smallest Δmean on real / smallest Δmean on fake / highest
+  IQ-shortcut CV AUC.
+- E3_6600: smallest Δp50 / smallest KS-stat / largest L2 lift at FPR=2%
+  / smallest gap on teams_fake_lockbox / highest L4 AUC on
+  teams_fake_lockbox.
+- P8A: largest L2 lift at FPR=10% on teams_fake_lockbox / largest IQ-shortcut
+  margin over baseline on viso / largest gap on three of four suites
+  (which is "most headroom" or "least calibrated," depending on your
+  read).
+
+Pulling these together: there is no single ckpt that wins ≥3 of 4 lenses
+on any consistent summary metric. The decision matrix in
+`anchor_decision_matrix.csv` rewards different ckpts depending on which
+column the user weights.
+
+**The reading that could be wrong**: framing the audit as "each ckpt
+wins a different lens" is itself an opinion that obscures one possible
+ground truth, namely that no candidate is operationally adequate on
+viso (recall@FPR=10% caps at 27% across all three ckpts; viso ceiling
+unbroken across 13+ R13 packets per project memory). If the binding
+constraint is viso recall, none of the three is a working anchor by
+that constraint, and lens-by-lens comparison among them may not be the
+right framing at all.
+
+---
+
+## OPINION (lens with highest cross-ckpt variance)
+
+**OPINION, may be wrong**: the metric with the largest cross-ckpt range
+relative to its own scale appears to be **L2 lift at FPR=10% on
+teams_fake_lockbox**: P8A +0.214, E2B_3200 +0.075, E3_6600 +0.049 — a
+2.9× to 4.4× ratio. **L2 lift at FPR=2% on deeplive** is also very wide:
+P8A +0.231, E2B_3200 +0.273, E3_6600 +0.637.
+
+Lens 1's KS-stat range (0.317-0.382) is narrower in relative terms.
+Lens 3's CV AUC range (0.747-0.867) is narrower still. Lens 4's AUCs
+range across ckpts within the same suite by 0.07-0.12 AUC points,
+which is moderate.
+
+A reader who weights "the most cross-ckpt-discriminating lens" would
+weight Lens 2. A reader who is suspicious of Lens 2 (because it depends
+on availability of a deployable per-substrate calibration sample) might
+weight Lens 1's KS-stat instead.
+
+---
+
+## What this audit does NOT establish
+
+- Whether any of the three is "deployment-ready."
+- Whether substrate-invariance generalizes to substrates not represented
+  in dev / lockbox.
+- Whether ensemble combinations (P8A + E2B, P8A + E3, etc.) outperform
+  any single ckpt — the pairwise score correlations from cpu_followups
+  Section 4 (e.g. P8A↔E3 fake correlation = 0.41 on viso) suggest
+  ensemble headroom may exist, but no ensemble metric was computed in
+  Job 8.
+- Whether the IQ-shortcut readings would change on deeplive
+  (crop_attributes lacks deeplive coverage; partial-coverage limitation
+  noted in FACTS Section 3).
+
+**Verdict deferred to user / fresh agent. Decision matrix is in
+`anchor_decision_matrix.csv`.**

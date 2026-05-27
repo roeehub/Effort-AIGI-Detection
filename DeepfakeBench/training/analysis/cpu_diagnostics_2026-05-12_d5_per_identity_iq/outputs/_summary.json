@@ -1,0 +1,51 @@
+{
+  "n_identities_total": 65,
+  "n_identities_n_ge_30": 11,
+  "n_identities_n_ge_30_chronic_6": 5,
+  "n_identities_n_ge_30_non_chronic": 6,
+  "per_ckpt_R2": {
+    "P8A": 0.22234495850448843,
+    "T5C_step3500": 0.5977511194728427,
+    "T3_S1_step1500": 0.4902173088328462
+  },
+  "per_ckpt_top_axis": {
+    "P8A": {
+      "axis": "color_a_dev",
+      "beta_standardized": 1.392965845796263
+    },
+    "T5C_step3500": {
+      "axis": "saturation_mean",
+      "beta_standardized": 3.5114859152314053
+    },
+    "T3_S1_step1500": {
+      "axis": "saturation_mean",
+      "beta_standardized": 4.41897555506613
+    }
+  },
+  "per_ckpt_top_residual": {
+    "P8A": {
+      "identity": "real_dor",
+      "observed_mean_score": 0.008353854356290246,
+      "predicted_mean_score": 0.07928577434984219,
+      "residual_logit": -2.324552324889684,
+      "n_frames": 43,
+      "is_chronic_6": 0
+    },
+    "T5C_step3500": {
+      "identity": "Cam_Test",
+      "observed_mean_score": 0.08314871251144826,
+      "predicted_mean_score": 0.2553314352538735,
+      "residual_logit": -1.3299377721118906,
+      "n_frames": 34,
+      "is_chronic_6": 0
+    },
+    "T3_S1_step1500": {
+      "identity": "real_dor",
+      "observed_mean_score": 0.016482259991557044,
+      "predicted_mean_score": 0.13791012456576288,
+      "residual_logit": -2.25609369745857,
+      "n_frames": 43,
+      "is_chronic_6": 0
+    }
+  }
+}

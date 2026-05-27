@@ -1,0 +1,660 @@
+{
+  "identities": [
+    {
+      "identity": "Xiang_Xiang2_Feng",
+      "n_frames": 30,
+      "overall_label": "REAL",
+      "overall_confidence": 0.0089426814733694,
+      "mean_prob_fake": 0.0089426814733694,
+      "std_prob_fake": 0.008482513359756576,
+      "min_prob_fake": 0.0044061667285859585,
+      "max_prob_fake": 0.05199545621871948,
+      "frac_gt_0_9": 0.0,
+      "frac_lt_0_1": 1.0,
+      "per_frame": [
+        {
+          "file": "frame_000001_seq4.png",
+          "pred": "REAL",
+          "prob_fake": 0.006215935107320547
+        },
+        {
+          "file": "frame_000010_seq19.png",
+          "pred": "REAL",
+          "prob_fake": 0.010372130200266838
+        },
+        {
+          "file": "frame_000018_seq33.png",
+          "pred": "REAL",
+          "prob_fake": 0.010277202352881432
+        },
+        {
+          "file": "frame_000027_seq46.png",
+          "pred": "REAL",
+          "prob_fake": 0.005794736556708813
+        },
+        {
+          "file": "frame_000036_seq62.png",
+          "pred": "REAL",
+          "prob_fake": 0.011574143543839455
+        },
+        {
+          "file": "frame_000044_seq76.png",
+          "pred": "REAL",
+          "prob_fake": 0.00937110185623169
+        },
+        {
+          "file": "frame_000053_seq89.png",
+          "pred": "REAL",
+          "prob_fake": 0.005548472516238689
+        },
+        {
+          "file": "frame_000062_seq102.png",
+          "pred": "REAL",
+          "prob_fake": 0.012354047037661076
+        },
+        {
+          "file": "frame_000071_seq117.png",
+          "pred": "REAL",
+          "prob_fake": 0.05199545621871948
+        },
+        {
+          "file": "frame_000079_seq129.png",
+          "pred": "REAL",
+          "prob_fake": 0.006369208451360464
+        },
+        {
+          "file": "frame_000088_seq145.png",
+          "pred": "REAL",
+          "prob_fake": 0.010088414885103703
+        },
+        {
+          "file": "frame_000097_seq157.png",
+          "pred": "REAL",
+          "prob_fake": 0.0044061667285859585
+        },
+        {
+          "file": "frame_000105_seq169.png",
+          "pred": "REAL",
+          "prob_fake": 0.004968450870364904
+        },
+        {
+          "file": "frame_000114_seq184.png",
+          "pred": "REAL",
+          "prob_fake": 0.007869339548051357
+        },
+        {
+          "file": "frame_000123_seq198.png",
+          "pred": "REAL",
+          "prob_fake": 0.006579060573130846
+        },
+        {
+          "file": "frame_000131_seq210.png",
+          "pred": "REAL",
+          "prob_fake": 0.011077179573476315
+        },
+        {
+          "file": "frame_000140_seq225.png",
+          "pred": "REAL",
+          "prob_fake": 0.004818673711270094
+        },
+        {
+          "file": "frame_000149_seq239.png",
+          "pred": "REAL",
+          "prob_fake": 0.008412560448050499
+        },
+        {
+          "file": "frame_000157_seq251.png",
+          "pred": "REAL",
+          "prob_fake": 0.006396824959665537
+        },
+        {
+          "file": "frame_000166_seq267.png",
+          "pred": "REAL",
+          "prob_fake": 0.00526962336152792
+        },
+        {
+          "file": "frame_000175_seq280.png",
+          "pred": "REAL",
+          "prob_fake": 0.0060134208761155605
+        },
+        {
+          "file": "frame_000183_seq292.png",
+          "pred": "REAL",
+          "prob_fake": 0.005917449481785297
+        },
+        {
+          "file": "frame_000192_seq307.png",
+          "pred": "REAL",
+          "prob_fake": 0.012722798623144627
+        },
+        {
+          "file": "frame_000201_seq322.png",
+          "pred": "REAL",
+          "prob_fake": 0.005531273316591978
+        },
+        {
+          "file": "frame_000210_seq338.png",
+          "pred": "REAL",
+          "prob_fake": 0.005097728688269854
+        },
+        {
+          "file": "frame_000218_seq349.png",
+          "pred": "REAL",
+          "prob_fake": 0.00707973912358284
+        },
+        {
+          "file": "frame_000227_seq364.png",
+          "pred": "REAL",
+          "prob_fake": 0.006414768286049366
+        },
+        {
+          "file": "frame_000236_seq378.png",
+          "pred": "REAL",
+          "prob_fake": 0.0065032863058149815
+        },
+        {
+          "file": "frame_000244_seq391.png",
+          "pred": "REAL",
+          "prob_fake": 0.00525010097771883
+        },
+        {
+          "file": "frame_000253_seq407.png",
+          "pred": "REAL",
+          "prob_fake": 0.00799115002155304
+        }
+      ]
+    },
+    {
+      "identity": "Xinhe_XH68_Wang",
+      "n_frames": 30,
+      "overall_label": "REAL",
+      "overall_confidence": 0.029510420669491094,
+      "mean_prob_fake": 0.029510420669491094,
+      "std_prob_fake": 0.09349467844681458,
+      "min_prob_fake": 0.005829165689647198,
+      "max_prob_fake": 0.5208214521408081,
+      "frac_gt_0_9": 0.0,
+      "frac_lt_0_1": 0.9666666666666667,
+      "per_frame": [
+        {
+          "file": "frame_000001_seq4.png",
+          "pred": "REAL",
+          "prob_fake": 0.00980738177895546
+        },
+        {
+          "file": "frame_000009_seq17.png",
+          "pred": "REAL",
+          "prob_fake": 0.06606336683034897
+        },
+        {
+          "file": "frame_000016_seq30.png",
+          "pred": "REAL",
+          "prob_fake": 0.015938250347971916
+        },
+        {
+          "file": "frame_000024_seq42.png",
+          "pred": "REAL",
+          "prob_fake": 0.007347766309976578
+        },
+        {
+          "file": "frame_000032_seq58.png",
+          "pred": "REAL",
+          "prob_fake": 0.010287330485880375
+        },
+        {
+          "file": "frame_000039_seq69.png",
+          "pred": "REAL",
+          "prob_fake": 0.012425308115780354
+        },
+        {
+          "file": "frame_000047_seq83.png",
+          "pred": "REAL",
+          "prob_fake": 0.010235903784632683
+        },
+        {
+          "file": "frame_000055_seq93.png",
+          "pred": "REAL",
+          "prob_fake": 0.00963077787309885
+        },
+        {
+          "file": "frame_000062_seq104.png",
+          "pred": "REAL",
+          "prob_fake": 0.006248385179787874
+        },
+        {
+          "file": "frame_000070_seq119.png",
+          "pred": "REAL",
+          "prob_fake": 0.01204061321914196
+        },
+        {
+          "file": "frame_000078_seq131.png",
+          "pred": "REAL",
+          "prob_fake": 0.012331338599324226
+        },
+        {
+          "file": "frame_000085_seq143.png",
+          "pred": "REAL",
+          "prob_fake": 0.006864525377750397
+        },
+        {
+          "file": "frame_000093_seq154.png",
+          "pred": "REAL",
+          "prob_fake": 0.008554451167583466
+        },
+        {
+          "file": "frame_000101_seq166.png",
+          "pred": "REAL",
+          "prob_fake": 0.005829165689647198
+        },
+        {
+          "file": "frame_000108_seq179.png",
+          "pred": "REAL",
+          "prob_fake": 0.008331322111189365
+        },
+        {
+          "file": "frame_000116_seq191.png",
+          "pred": "REAL",
+          "prob_fake": 0.035474926233291626
+        },
+        {
+          "file": "frame_000123_seq201.png",
+          "pred": "REAL",
+          "prob_fake": 0.0066312458366155624
+        },
+        {
+          "file": "frame_000131_seq213.png",
+          "pred": "REAL",
+          "prob_fake": 0.007234078366309404
+        },
+        {
+          "file": "frame_000139_seq227.png",
+          "pred": "REAL",
+          "prob_fake": 0.006225427147001028
+        },
+        {
+          "file": "frame_000146_seq237.png",
+          "pred": "REAL",
+          "prob_fake": 0.007898880168795586
+        },
+        {
+          "file": "frame_000154_seq250.png",
+          "pred": "FAKE",
+          "prob_fake": 0.5208214521408081
+        },
+        {
+          "file": "frame_000162_seq263.png",
+          "pred": "REAL",
+          "prob_fake": 0.013459567911922932
+        },
+        {
+          "file": "frame_000169_seq274.png",
+          "pred": "REAL",
+          "prob_fake": 0.012769860215485096
+        },
+        {
+          "file": "frame_000177_seq285.png",
+          "pred": "REAL",
+          "prob_fake": 0.008617385290563107
+        },
+        {
+          "file": "frame_000185_seq299.png",
+          "pred": "REAL",
+          "prob_fake": 0.012035099789500237
+        },
+        {
+          "file": "frame_000192_seq311.png",
+          "pred": "REAL",
+          "prob_fake": 0.008199580945074558
+        },
+        {
+          "file": "frame_000200_seq323.png",
+          "pred": "REAL",
+          "prob_fake": 0.012106840498745441
+        },
+        {
+          "file": "frame_000208_seq338.png",
+          "pred": "REAL",
+          "prob_fake": 0.009538194164633751
+        },
+        {
+          "file": "frame_000215_seq348.png",
+          "pred": "REAL",
+          "prob_fake": 0.009291404858231544
+        },
+        {
+          "file": "frame_000223_seq407.png",
+          "pred": "REAL",
+          "prob_fake": 0.013072789646685123
+        }
+      ]
+    },
+    {
+      "identity": "dor_shkedi",
+      "n_frames": 30,
+      "overall_label": "FAKE",
+      "overall_confidence": 0.9238605464498202,
+      "mean_prob_fake": 0.9238605464498202,
+      "std_prob_fake": 0.15815411056905462,
+      "min_prob_fake": 0.23800130188465118,
+      "max_prob_fake": 0.9952282905578613,
+      "frac_gt_0_9": 0.8666666666666667,
+      "frac_lt_0_1": 0.0,
+      "per_frame": [
+        {
+          "file": "frame_000001_seq4.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9706693291664124
+        },
+        {
+          "file": "frame_000010_seq19.png",
+          "pred": "FAKE",
+          "prob_fake": 0.8058885931968689
+        },
+        {
+          "file": "frame_000018_seq33.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9446650743484497
+        },
+        {
+          "file": "frame_000027_seq47.png",
+          "pred": "FAKE",
+          "prob_fake": 0.6536036133766174
+        },
+        {
+          "file": "frame_000035_seq62.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9826704859733582
+        },
+        {
+          "file": "frame_000044_seq78.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9820442199707031
+        },
+        {
+          "file": "frame_000053_seq90.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9602330327033997
+        },
+        {
+          "file": "frame_000061_seq102.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9878228902816772
+        },
+        {
+          "file": "frame_000070_seq119.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9421790242195129
+        },
+        {
+          "file": "frame_000079_seq135.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9946032166481018
+        },
+        {
+          "file": "frame_000087_seq146.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9946057200431824
+        },
+        {
+          "file": "frame_000096_seq159.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9875275492668152
+        },
+        {
+          "file": "frame_000104_seq171.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9938873648643494
+        },
+        {
+          "file": "frame_000113_seq186.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9742178320884705
+        },
+        {
+          "file": "frame_000122_seq200.png",
+          "pred": "FAKE",
+          "prob_fake": 0.974719762802124
+        },
+        {
+          "file": "frame_000130_seq212.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9732705354690552
+        },
+        {
+          "file": "frame_000139_seq227.png",
+          "pred": "FAKE",
+          "prob_fake": 0.921691358089447
+        },
+        {
+          "file": "frame_000148_seq240.png",
+          "pred": "REAL",
+          "prob_fake": 0.23800130188465118
+        },
+        {
+          "file": "frame_000156_seq252.png",
+          "pred": "FAKE",
+          "prob_fake": 0.955692708492279
+        },
+        {
+          "file": "frame_000165_seq269.png",
+          "pred": "FAKE",
+          "prob_fake": 0.6315144300460815
+        },
+        {
+          "file": "frame_000173_seq280.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9866430759429932
+        },
+        {
+          "file": "frame_000182_seq294.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9939355254173279
+        },
+        {
+          "file": "frame_000191_seq310.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9734883904457092
+        },
+        {
+          "file": "frame_000199_seq322.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9380393028259277
+        },
+        {
+          "file": "frame_000208_seq338.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9925366640090942
+        },
+        {
+          "file": "frame_000217_seq351.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9946866035461426
+        },
+        {
+          "file": "frame_000225_seq364.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9936867356300354
+        },
+        {
+          "file": "frame_000234_seq378.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9947353005409241
+        },
+        {
+          "file": "frame_000242_seq391.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9952282905578613
+        },
+        {
+          "file": "frame_000251_seq407.png",
+          "pred": "FAKE",
+          "prob_fake": 0.9833284616470337
+        }
+      ]
+    },
+    {
+      "identity": "tester_tester",
+      "n_frames": 30,
+      "overall_label": "REAL",
+      "overall_confidence": 0.008623676979914308,
+      "mean_prob_fake": 0.008623676979914308,
+      "std_prob_fake": 0.005036021821256954,
+      "min_prob_fake": 0.004870324395596981,
+      "max_prob_fake": 0.02184145897626877,
+      "frac_gt_0_9": 0.0,
+      "frac_lt_0_1": 1.0,
+      "per_frame": [
+        {
+          "file": "frame_000001_seq4.png",
+          "pred": "REAL",
+          "prob_fake": 0.02139541693031788
+        },
+        {
+          "file": "frame_000010_seq19.png",
+          "pred": "REAL",
+          "prob_fake": 0.006251518614590168
+        },
+        {
+          "file": "frame_000018_seq33.png",
+          "pred": "REAL",
+          "prob_fake": 0.00526121910661459
+        },
+        {
+          "file": "frame_000027_seq47.png",
+          "pred": "REAL",
+          "prob_fake": 0.004928671754896641
+        },
+        {
+          "file": "frame_000036_seq64.png",
+          "pred": "REAL",
+          "prob_fake": 0.005854313261806965
+        },
+        {
+          "file": "frame_000044_seq78.png",
+          "pred": "REAL",
+          "prob_fake": 0.007290585432201624
+        },
+        {
+          "file": "frame_000053_seq90.png",
+          "pred": "REAL",
+          "prob_fake": 0.005900486372411251
+        },
+        {
+          "file": "frame_000062_seq103.png",
+          "pred": "REAL",
+          "prob_fake": 0.00756337633356452
+        },
+        {
+          "file": "frame_000070_seq117.png",
+          "pred": "REAL",
+          "prob_fake": 0.01453465037047863
+        },
+        {
+          "file": "frame_000079_seq131.png",
+          "pred": "REAL",
+          "prob_fake": 0.0075325933285057545
+        },
+        {
+          "file": "frame_000088_seq146.png",
+          "pred": "REAL",
+          "prob_fake": 0.006193075329065323
+        },
+        {
+          "file": "frame_000096_seq157.png",
+          "pred": "REAL",
+          "prob_fake": 0.007114008069038391
+        },
+        {
+          "file": "frame_000105_seq171.png",
+          "pred": "REAL",
+          "prob_fake": 0.02184145897626877
+        },
+        {
+          "file": "frame_000114_seq186.png",
+          "pred": "REAL",
+          "prob_fake": 0.007489710580557585
+        },
+        {
+          "file": "frame_000122_seq198.png",
+          "pred": "REAL",
+          "prob_fake": 0.007311068940907717
+        },
+        {
+          "file": "frame_000131_seq212.png",
+          "pred": "REAL",
+          "prob_fake": 0.004870324395596981
+        },
+        {
+          "file": "frame_000139_seq225.png",
+          "pred": "REAL",
+          "prob_fake": 0.006112419534474611
+        },
+        {
+          "file": "frame_000148_seq239.png",
+          "pred": "REAL",
+          "prob_fake": 0.017775719985365868
+        },
+        {
+          "file": "frame_000157_seq252.png",
+          "pred": "REAL",
+          "prob_fake": 0.0073274909518659115
+        },
+        {
+          "file": "frame_000165_seq267.png",
+          "pred": "REAL",
+          "prob_fake": 0.006726174149662256
+        },
+        {
+          "file": "frame_000174_seq280.png",
+          "pred": "REAL",
+          "prob_fake": 0.006651753559708595
+        },
+        {
+          "file": "frame_000183_seq294.png",
+          "pred": "REAL",
+          "prob_fake": 0.02013619989156723
+        },
+        {
+          "file": "frame_000191_seq307.png",
+          "pred": "REAL",
+          "prob_fake": 0.00597973819822073
+        },
+        {
+          "file": "frame_000200_seq322.png",
+          "pred": "REAL",
+          "prob_fake": 0.005040770396590233
+        },
+        {
+          "file": "frame_000209_seq338.png",
+          "pred": "REAL",
+          "prob_fake": 0.005530510563403368
+        },
+        {
+          "file": "frame_000217_seq349.png",
+          "pred": "REAL",
+          "prob_fake": 0.005063717719167471
+        },
+        {
+          "file": "frame_000226_seq364.png",
+          "pred": "REAL",
+          "prob_fake": 0.009257008321583271
+        },
+        {
+          "file": "frame_000235_seq378.png",
+          "pred": "REAL",
+          "prob_fake": 0.009415017440915108
+        },
+        {
+          "file": "frame_000243_seq391.png",
+          "pred": "REAL",
+          "prob_fake": 0.005523271393030882
+        },
+        {
+          "file": "frame_000252_seq407.png",
+          "pred": "REAL",
+          "prob_fake": 0.006838039495050907
+        }
+      ]
+    }
+  ]
+}

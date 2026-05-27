@@ -1,0 +1,40 @@
+{
+  "recommendation": "CONDITIONAL",
+  "recommendation_short": "Do NOT pull the data-cleanup lever as a primary single-lever packet. CONDITIONAL on running a small smoke test first. Strong evidence that the load-bearing IQ asymmetry is in the OPPOSITE direction from what 'remove low-quality training' assumes (training is SHARPER than eval/production on the most load-bearing axis), and the data-axis lever has empirically failed twice (P14_DATA_FIX, P16_DATA_AXIS) without lift.",
+  "fraction_filtered_at_recommended_threshold": {
+    "T3_lap_var_below_prod_p10_visomaster_lanes": 0.05832793259883344,
+    "T3_lap_var_below_prod_p05_visomaster_lanes": 0.002592352559948153,
+    "T3_lap_var_below_prod_p10_df40_lanes": 0.47946362056121183,
+    "T3_lap_var_below_prod_p05_df40_lanes": 0.056953066799106035
+  },
+  "two_strongest_pieces_of_supporting_evidence": [
+    "Job 14 (analysis/job_14_substrate_clean_simulation_2026-05-04/) established that EVAL-side cleaning of low-quality samples lifted P8A viso recall from 27% to 67% with FPR collapsing. If the same gate were structurally relevant during training, removing comparable samples could produce a similar (though smaller, since training has many more samples) effect.",
+    "P22 (project_p22_succeeded_2026-05-02.md) showed that weakening the IQ shortcut at training time (via pipeline randomization aug) produced 3x macro fake recall. The IQ axis IS load-bearing for training. A direct attack on the IQ shortcut by trimming the data tail is at least in the same family of interventions as P22."
+  ],
+  "two_strongest_counter_considerations": [
+    "DIRECTION IS WRONG. Train_viso_fake lap_var p50=421, eval_viso_fake p50=78. Training is SHARPER than eval, not softer. The user's mental model (training has a low-quality long tail that production never sees) is REFUTED on the lane I have direct evidence for. The IQ shortcut is 'training fakes are sharp, eval fakes are soft' -- the fix is the OPPOSITE of trimming low quality training samples.",
+    "DATA AXIS LEVER HAS FAILED TWICE. P14_DATA_FIX (xan4dfto) and P16_DATA_AXIS (rmic6wrc) both pulled data-axis levers without lift. Memory project_data_axis_lever_pulled_twice_no_lift explicitly says 'don't propose another P14_DATA_FIX-style packet without articulating structural difference'. A training-quality-floor packet is in this family unless we can show structural distinction."
+  ],
+  "concrete_recipe_if_yes_or_conditional": {
+    "name": "PE_QUALITY_FLOOR (single-lever smoke test, 2-3 day Vertex)",
+    "lever": "Filter training samples whose pre-resize face crop has min_dim<256 OR sat_std<25 (matching production's lower 10%)",
+    "estimated_fraction_removed": "Cannot estimate from local cache; need GCS scan over ~5,000 sampled training URIs across all 6 lanes to compute native-res IQ. Estimated 5-15% based on visual inspection of a few sample frames from each lane.",
+    "decision_criterion": "Run a single Vertex job from same FT-base (P8A step5000) with identical hparams and only the data filter changed. Promote if and only if (a) viso_macro_recall at FPR=10% rises >=5pp on dev, AND (b) on the v2 lockbox the dor invariance signature (P8A 0/50 dor real_dor) is preserved.",
+    "why_not_first_pick": "If the lap_var direction is what skin_frac_viso_gap suggests (train>>eval on viso fakes), the lever should be moving training fakes to be SOFTER (codec / blur aug) NOT removing soft samples. P22's pipeline_randomization is already this lever and succeeded -- continuing on that line is more promising than reversed-direction filtering.",
+    "alternative_recipe_for_real_pool": "If the cleanup is meant for the REAL pool (which has the long tail per face_size_by_split: real_p10 lap_var ~2.4k px area with median ~24k -- much wider than fake_p10 11.4k), then the true target is real frames with min_dim<200 or skin_frac<0.3 (mostly background). Likely 5-10% of the real pool. Per crop_shortcut_2026-04-27 training_data_face_size_by_method.csv this would be ~430 frames out of 4246 teams_real."
+  },
+  "estimated_lift_if_executed": {
+    "viso_recall_lift_percentage_points": "0 to +5pp (low-confidence)",
+    "lockbox_fpr_lift_percentage_points": "0 to -2pp (low-confidence)",
+    "deeplive_recall_lift_percentage_points": "0 to +3pp (low-confidence)",
+    "explanation": "Lift is bounded ABOVE by P22's already-realized 3x recall (which acted on the same axis from the soft side). A filter that removes samples is strictly a subset of the interventions P22 already made via aug. If P22 is the promotion candidate, additional lift from filtering is marginal."
+  },
+  "caveats_engaged": [
+    "Job 14 was EVAL not TRAINING -- analogy is suggestive not proven.",
+    "IQ shortcut is a model behavior; removing low-IQ training data may NOT change the encoder's predisposition.",
+    "Production quality floor is approximate (n=992 real production frames); treat prod_p10 as a soft anchor.",
+    "Quality-enhancement routing bug (project_quality_enhancement_routing_2026-05-05) is a CORRECTNESS issue (mislabel), separate from this audit's quality-distribution issue.",
+    "Wholesale removal risks overfitting to a clean distribution; pair with disconfirmation probe.",
+    "Per-mode tau is not deployable (feedback_per_mode_tau_not_deployable.md); training filter must use content properties (sharpness, resolution, color stats), not metadata classes -- recipe above respects this."
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "phase": "phase_2_backbone_fulls",
+  "status": "both_terminal",
+  "completed_at_utc": "2026-05-22T17:51:53Z",
+  "slotav2_terminal_state": "NOT_LAUNCHED",
+  "t5c_terminal_state": "NOT_LAUNCHED",
+  "slotav2_job_id": "",
+  "t5c_job_id": ""
+}

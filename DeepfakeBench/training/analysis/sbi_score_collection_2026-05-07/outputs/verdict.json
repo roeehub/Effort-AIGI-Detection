@@ -1,0 +1,15 @@
+{
+  "job": "SBI_SCORE_COLLECTION_2026-05-07",
+  "phase": "0i",
+  "verdict": "GREEN",
+  "verdict_kind": "by_direct_measurement",
+  "compares_to": "SBI_SMOKE_2026-05-06 GREEN-by-headroom",
+  "p2_pe_sbi_launch_readiness": "GREEN",
+  "headline": "GREEN-by-direct-measurement: SBI scores shift toward fake direction on majority of ckpts, with heterogeneous response \u2014 pseudofakes are a usable, method-agnostic training signal.",
+  "criteria": {
+    "n_ckpts_above_real_median": 3,
+    "n_ckpts_bimodal_BC_gt_0p555": 3,
+    "n_ckpts_collapsed": 0,
+    "n_ckpts_intermediate_strict": 3
+  }
+}

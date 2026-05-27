@@ -1,0 +1,56 @@
+{
+  "src": "/Users/roeedar/Downloads/WhatsApp Image 2026-05-19 at 16.14.22.jpeg",
+  "src_shape": [
+    458,
+    1592,
+    3
+  ],
+  "roy_d": {
+    "panel_shape": [
+      458,
+      796,
+      3
+    ],
+    "yolo_bbox_xyxy": [
+      249,
+      165,
+      404,
+      376
+    ],
+    "square_crop_bbox_xyxy": [
+      221,
+      165,
+      431,
+      375
+    ],
+    "face_raw_shape": [
+      210,
+      210,
+      3
+    ]
+  },
+  "guest": {
+    "panel_shape": [
+      458,
+      796,
+      3
+    ],
+    "yolo_bbox_xyxy": [
+      245,
+      168,
+      401,
+      376
+    ],
+    "square_crop_bbox_xyxy": [
+      219,
+      168,
+      427,
+      376
+    ],
+    "face_raw_shape": [
+      208,
+      208,
+      3
+    ]
+  }
+}

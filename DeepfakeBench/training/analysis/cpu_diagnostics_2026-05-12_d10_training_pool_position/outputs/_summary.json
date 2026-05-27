@@ -1,0 +1,189 @@
+{
+  "kliep_balanced_accuracy": 0.9908864954432477,
+  "kliep_coef_norm": 17.43742910325846,
+  "kliep_intercept": -1.2307294726990679,
+  "n_dev_real": 2000,
+  "n_lockbox_real": 414,
+  "n_train_real": 371,
+  "stats": [
+    {
+      "pool": "dev_real",
+      "n": 2000,
+      "mean": -3.16217926181613,
+      "std": 1.3099140260936086,
+      "min": -5.864512804379967,
+      "p5": -5.072236076676456,
+      "p25": -4.229573120908233,
+      "p50": -3.2243699897216365,
+      "p75": -2.243411177908516,
+      "p95": -0.8557234814001016,
+      "max": 1.9768157400532524
+    },
+    {
+      "pool": "lockbox_real",
+      "n": 414,
+      "mean": 3.16942538921585,
+      "std": 1.2405264092264412,
+      "min": -0.561626263599075,
+      "p5": 0.7776877246593018,
+      "p25": 2.334017571114173,
+      "p50": 3.6855378961476157,
+      "p75": 4.147507908167905,
+      "p95": 4.520462917675976,
+      "max": 4.898151072697342
+    },
+    {
+      "pool": "train_real",
+      "n": 371,
+      "mean": -2.4009339561860554,
+      "std": 2.328066265778575,
+      "min": -6.007388798932313,
+      "p5": -5.056031091046689,
+      "p25": -4.137081632820462,
+      "p50": -2.7675315056482055,
+      "p75": -1.5705132138248028,
+      "p95": 3.4923511032559325,
+      "max": 4.730294071836951
+    }
+  ],
+  "overlap_rows": [
+    {
+      "query_pool": "train_real",
+      "ref_pool": "dev_real",
+      "overlap_fraction_in_p5_p95": 0.7762803234501348
+    },
+    {
+      "query_pool": "train_real",
+      "ref_pool": "lockbox_real",
+      "overlap_fraction_in_p5_p95": 0.09973045822102426
+    },
+    {
+      "query_pool": "dev_real",
+      "ref_pool": "lockbox_real",
+      "overlap_fraction_in_p5_p95": 0.001
+    },
+    {
+      "query_pool": "dev_real",
+      "ref_pool": "train_real",
+      "overlap_fraction_in_p5_p95": 0.9475
+    },
+    {
+      "query_pool": "lockbox_real",
+      "ref_pool": "dev_real",
+      "overlap_fraction_in_p5_p95": 0.0
+    },
+    {
+      "query_pool": "lockbox_real",
+      "ref_pool": "train_real",
+      "overlap_fraction_in_p5_p95": 0.4468599033816425
+    }
+  ],
+  "distance_rows": [
+    {
+      "pool_a": "train_real",
+      "pool_b": "dev_real",
+      "wasserstein_1": 0.7686318285074207,
+      "ks_statistic": 0.14254716981132076,
+      "ks_pvalue": 5.160208344489558e-06,
+      "mean_diff": 0.7612453056300748
+    },
+    {
+      "pool_a": "train_real",
+      "pool_b": "lockbox_real",
+      "wasserstein_1": 5.570359345401906,
+      "ks_statistic": 0.8555672747633372,
+      "ks_pvalue": 4.9393570005566575e-148,
+      "mean_diff": -5.570359345401906
+    },
+    {
+      "pool_a": "dev_real",
+      "pool_b": "lockbox_real",
+      "wasserstein_1": 6.33160465103198,
+      "ks_statistic": 0.9842536231884058,
+      "ks_pvalue": 3.5e-323,
+      "mean_diff": -6.331604651031981
+    }
+  ],
+  "iq_angle_rows": [
+    {
+      "vector_a": "KLIEP_w",
+      "vector_b": "IQ_PC1",
+      "n_frames_used_for_iq_pc1": 888,
+      "angle_acute_deg": 89.70629180054688,
+      "angle_raw_deg": 89.70629180054688,
+      "cos_raw": 0.005126152669932988,
+      "kliep_w_norm": 17.43742910325846,
+      "iq_pc1_norm": 1.0000000000000002
+    }
+  ],
+  "per_axis_angles": [
+    {
+      "axis": "lap_var",
+      "n_used": 888,
+      "angle_acute_deg_to_KLIEP_w": 89.74732217303706
+    },
+    {
+      "axis": "min_dim",
+      "n_used": 888,
+      "angle_acute_deg_to_KLIEP_w": 89.824877136471
+    },
+    {
+      "axis": "color_a_dev",
+      "n_used": 888,
+      "angle_acute_deg_to_KLIEP_w": 88.51962744187725
+    },
+    {
+      "axis": "color_b_dev",
+      "n_used": 888,
+      "angle_acute_deg_to_KLIEP_w": 89.64096036433908
+    },
+    {
+      "axis": "saturation_mean",
+      "n_used": 888,
+      "angle_acute_deg_to_KLIEP_w": 89.91735711434055
+    },
+    {
+      "axis": "luma_mean",
+      "n_used": 888,
+      "angle_acute_deg_to_KLIEP_w": 89.98018723817634
+    }
+  ],
+  "decision_boundary_split": [
+    {
+      "pool": "dev_real",
+      "n": 2000,
+      "n_projection_geq_0": 12,
+      "frac_projection_geq_0": 0.006,
+      "n_projection_lt_0": 1988,
+      "frac_projection_lt_0": 0.994
+    },
+    {
+      "pool": "lockbox_real",
+      "n": 414,
+      "n_projection_geq_0": 404,
+      "frac_projection_geq_0": 0.9758454106280193,
+      "n_projection_lt_0": 10,
+      "frac_projection_lt_0": 0.024154589371980676
+    },
+    {
+      "pool": "train_real",
+      "n": 371,
+      "n_projection_geq_0": 47,
+      "frac_projection_geq_0": 0.12668463611859837,
+      "n_projection_lt_0": 324,
+      "frac_projection_lt_0": 0.8733153638814016
+    }
+  ],
+  "bootstrap_summary": {
+    "B": 20,
+    "train_mean_mean": -2.4040732149406097,
+    "train_mean_std": 0.035831866486682504,
+    "dev_mean_mean": -3.164611898781237,
+    "dev_mean_std": 0.04032504370556156,
+    "lockbox_mean_mean": 3.1602237082994704,
+    "lockbox_mean_std": 0.027330035831992176,
+    "boot_accuracy_mean": 0.9925020712510356,
+    "boot_accuracy_std": 0.001245654248280557
+  },
+  "elapsed_sec": 22.907610177993774
+}

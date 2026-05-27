@@ -1,0 +1,284 @@
+{
+  "checkpoint": "P8A_REFERENCE_STEP5000",
+  "features_uri": "gs://training-job-outputs/probe_battery_2026-04-26/p8a_reference_step5000/features.npz",
+  "seed": 737,
+  "method": "frozen-feature linear probe (LogisticRegression, 5-fold stratified CV)",
+  "pools": [
+    {
+      "name": "TRAIN_viso (dl_bucket_visomaster, fake+real same-bucket)",
+      "n_total": 256,
+      "n_fake": 128,
+      "n_real": 128,
+      "p8a_classifier_auc": 0.9581298828125,
+      "p8a_classifier_acc_at_0.5": 0.8671875,
+      "probe_auc_mean": 0.9623550295857989,
+      "probe_auc_std": 0.02405898241076797,
+      "probe_acc_mean": 0.9025641025641026,
+      "probe_fold_aucs": [
+        0.9363905325443788,
+        0.9892307692307692,
+        0.9861538461538462,
+        0.9676923076923076,
+        0.9323076923076924
+      ],
+      "mean_prob_fake_on_fakes": 0.8700442314147949,
+      "mean_prob_fake_on_reals": 0.14204582571983337,
+      "n_splits_used": 5
+    },
+    {
+      "name": "EVAL_viso_clean_teams (proper_visomaster, no enhancers, paired reals)",
+      "n_total": 1200,
+      "n_fake": 600,
+      "n_real": 600,
+      "p8a_classifier_auc": 0.9967861111111112,
+      "p8a_classifier_acc_at_0.5": 0.975,
+      "probe_auc_mean": 0.9969305555555555,
+      "probe_auc_std": 0.002852603316097825,
+      "probe_acc_mean": 0.9758333333333333,
+      "probe_fold_aucs": [
+        0.9915972222222222,
+        0.999375,
+        0.9992361111111111,
+        0.9978472222222222,
+        0.9965972222222222
+      ],
+      "mean_prob_fake_on_fakes": 0.9465590119361877,
+      "mean_prob_fake_on_reals": 0.025016553699970245,
+      "n_splits_used": 5
+    },
+    {
+      "name": "EVAL_viso_enhanced (proper_visomaster_enhanced + paired reals)",
+      "n_total": 1200,
+      "n_fake": 600,
+      "n_real": 600,
+      "p8a_classifier_auc": 0.9984972222222221,
+      "p8a_classifier_acc_at_0.5": 0.9758333333333333,
+      "probe_auc_mean": 0.9984444444444444,
+      "probe_auc_std": 0.001115961634811156,
+      "probe_acc_mean": 0.9808333333333333,
+      "probe_fold_aucs": [
+        0.9974305555555556,
+        0.9996527777777778,
+        0.9973611111111111,
+        0.9978472222222221,
+        0.9999305555555555
+      ],
+      "mean_prob_fake_on_fakes": 0.950107216835022,
+      "mean_prob_fake_on_reals": 0.025016553699970245,
+      "n_splits_used": 5
+    },
+    {
+      "name": "EVAL_viso_enhanced_v2 (visomaster_enhanced_v2 + tv2 reals)",
+      "n_total": 440,
+      "n_fake": 300,
+      "n_real": 140,
+      "p8a_classifier_auc": 0.9679047619047619,
+      "p8a_classifier_acc_at_0.5": 0.8681818181818182,
+      "probe_auc_mean": 0.9709523809523809,
+      "probe_auc_std": 0.008471641368884371,
+      "probe_acc_mean": 0.9181818181818182,
+      "probe_fold_aucs": [
+        0.9625,
+        0.9827380952380952,
+        0.9678571428571429,
+        0.9625,
+        0.9791666666666667
+      ],
+      "mean_prob_fake_on_fakes": 0.8063070178031921,
+      "mean_prob_fake_on_reals": 0.060215167701244354,
+      "n_splits_used": 5
+    },
+    {
+      "name": "EVAL_viso_tv2 (tv2_visomaster Teams-v2 transport, same-bucket reals)",
+      "n_total": 213,
+      "n_fake": 73,
+      "n_real": 140,
+      "p8a_classifier_auc": 0.92279843444227,
+      "p8a_classifier_acc_at_0.5": 0.7934272300469484,
+      "probe_auc_mean": 0.9239795918367347,
+      "probe_auc_std": 0.03111343313891989,
+      "probe_acc_mean": 0.8406423034330011,
+      "probe_fold_aucs": [
+        0.8928571428571428,
+        0.9333333333333333,
+        0.9238095238095237,
+        0.8928571428571428,
+        0.9770408163265306
+      ],
+      "mean_prob_fake_on_fakes": 0.43655672669410706,
+      "mean_prob_fake_on_reals": 0.060215167701244354,
+      "n_splits_used": 5
+    },
+    {
+      "name": "DEPLOY_train_viso_vs_VCD (dl_bucket_visomaster_fake + external_vcd_real)",
+      "n_total": 384,
+      "n_fake": 128,
+      "n_real": 256,
+      "p8a_classifier_auc": 0.972442626953125,
+      "p8a_classifier_acc_at_0.5": 0.9322916666666666,
+      "probe_auc_mean": 0.983291101055807,
+      "probe_auc_std": 0.010485249415709327,
+      "probe_acc_mean": 0.9478127136021872,
+      "probe_fold_aucs": [
+        0.9728506787330315,
+        1.0,
+        0.9909502262443438,
+        0.9746153846153847,
+        0.9780392156862746
+      ],
+      "mean_prob_fake_on_fakes": 0.8700442314147949,
+      "mean_prob_fake_on_reals": 0.0666387677192688,
+      "n_splits_used": 5
+    },
+    {
+      "name": "DEPLOY_eval_viso_clean_teams_vs_VCD (proper_visomaster_fakes + external_vcd_real)",
+      "n_total": 856,
+      "n_fake": 600,
+      "n_real": 256,
+      "p8a_classifier_auc": 0.9910677083333334,
+      "p8a_classifier_acc_at_0.5": 0.9614485981308412,
+      "probe_auc_mean": 0.9951351181498239,
+      "probe_auc_std": 0.002578617948207496,
+      "probe_acc_mean": 0.9684482524139806,
+      "probe_fold_aucs": [
+        0.9905448717948717,
+        0.99640522875817,
+        0.9975490196078431,
+        0.9970588235294118,
+        0.9941176470588236
+      ],
+      "mean_prob_fake_on_fakes": 0.9465590119361877,
+      "mean_prob_fake_on_reals": 0.0666387677192688,
+      "n_splits_used": 5
+    },
+    {
+      "name": "DEPLOY_eval_viso_enhanced_vs_VCD (proper_visomaster_enhanced_fakes + external_vcd_real)",
+      "n_total": 856,
+      "n_fake": 600,
+      "n_real": 256,
+      "p8a_classifier_auc": 0.9945768229166667,
+      "p8a_classifier_acc_at_0.5": 0.9626168224299065,
+      "probe_auc_mean": 0.9948856209150326,
+      "probe_auc_std": 0.0035938798657180315,
+      "probe_acc_mean": 0.9707738338093295,
+      "probe_fold_aucs": [
+        0.9958333333333333,
+        0.9980392156862745,
+        0.9887254901960785,
+        0.9933006535947713,
+        0.9985294117647059
+      ],
+      "mean_prob_fake_on_fakes": 0.950107216835022,
+      "mean_prob_fake_on_reals": 0.0666387677192688,
+      "n_splits_used": 5
+    },
+    {
+      "name": "DEPLOY_eval_viso_v2_vs_VCD (visomaster_enhanced_v2_fake + external_vcd_real)",
+      "n_total": 556,
+      "n_fake": 300,
+      "n_real": 256,
+      "p8a_classifier_auc": 0.9568359375,
+      "p8a_classifier_acc_at_0.5": 0.8866906474820144,
+      "probe_auc_mean": 0.9764127702362997,
+      "probe_auc_std": 0.010320092080547018,
+      "probe_acc_mean": 0.9208655083655085,
+      "probe_fold_aucs": [
+        0.9814102564102564,
+        0.9725490196078431,
+        0.9937908496732026,
+        0.9702614379084966,
+        0.9640522875816994
+      ],
+      "mean_prob_fake_on_fakes": 0.8063070178031921,
+      "mean_prob_fake_on_reals": 0.0666387677192688,
+      "n_splits_used": 5
+    },
+    {
+      "name": "DEPLOY_eval_viso_tv2_vs_VCD (tv2_visomaster_fake + external_vcd_real)",
+      "n_total": 329,
+      "n_fake": 73,
+      "n_real": 256,
+      "p8a_classifier_auc": 0.8805650684931507,
+      "p8a_classifier_acc_at_0.5": 0.851063829787234,
+      "probe_auc_mean": 0.9204072398190044,
+      "probe_auc_std": 0.04748594425430289,
+      "probe_acc_mean": 0.8664335664335665,
+      "probe_fold_aucs": [
+        0.9516339869281045,
+        0.9398692810457516,
+        0.8496732026143792,
+        0.8818681318681318,
+        0.9789915966386554
+      ],
+      "mean_prob_fake_on_fakes": 0.43655672669410706,
+      "mean_prob_fake_on_reals": 0.0666387677192688,
+      "n_splits_used": 5
+    }
+  ],
+  "verdicts": [
+    {
+      "context": "same-substrate-real-pairing",
+      "eval_pool": "EVAL_viso_clean_teams (proper_visomaster, no enhancers, paired reals)",
+      "train_probe_auc": 0.9623550295857989,
+      "eval_probe_auc": 0.9969305555555555,
+      "gap": -0.03457552596975666,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "same-substrate-real-pairing",
+      "eval_pool": "EVAL_viso_enhanced (proper_visomaster_enhanced + paired reals)",
+      "train_probe_auc": 0.9623550295857989,
+      "eval_probe_auc": 0.9984444444444444,
+      "gap": -0.036089414858645474,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "same-substrate-real-pairing",
+      "eval_pool": "EVAL_viso_enhanced_v2 (visomaster_enhanced_v2 + tv2 reals)",
+      "train_probe_auc": 0.9623550295857989,
+      "eval_probe_auc": 0.9709523809523809,
+      "gap": -0.008597351366582018,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "same-substrate-real-pairing",
+      "eval_pool": "EVAL_viso_tv2 (tv2_visomaster Teams-v2 transport, same-bucket reals)",
+      "train_probe_auc": 0.9623550295857989,
+      "eval_probe_auc": 0.9239795918367347,
+      "gap": 0.038375437749064156,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "deployment-real-pool (external_vcd_real)",
+      "eval_pool": "DEPLOY_eval_viso_clean_teams_vs_VCD (proper_visomaster_fakes + external_vcd_real)",
+      "train_probe_auc": 0.983291101055807,
+      "eval_probe_auc": 0.9951351181498239,
+      "gap": -0.011844017094016945,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "deployment-real-pool (external_vcd_real)",
+      "eval_pool": "DEPLOY_eval_viso_enhanced_vs_VCD (proper_visomaster_enhanced_fakes + external_vcd_real)",
+      "train_probe_auc": 0.983291101055807,
+      "eval_probe_auc": 0.9948856209150326,
+      "gap": -0.01159451985922566,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "deployment-real-pool (external_vcd_real)",
+      "eval_pool": "DEPLOY_eval_viso_v2_vs_VCD (visomaster_enhanced_v2_fake + external_vcd_real)",
+      "train_probe_auc": 0.983291101055807,
+      "eval_probe_auc": 0.9764127702362997,
+      "gap": 0.006878330819507283,
+      "verdict": "NO_gap (inconclusive)"
+    },
+    {
+      "context": "deployment-real-pool (external_vcd_real)",
+      "eval_pool": "DEPLOY_eval_viso_tv2_vs_VCD (tv2_visomaster_fake + external_vcd_real)",
+      "train_probe_auc": 0.983291101055807,
+      "eval_probe_auc": 0.9204072398190044,
+      "gap": 0.06288386123680256,
+      "verdict": "MODERATE_gap"
+    }
+  ]
+}

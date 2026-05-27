@@ -1,0 +1,113 @@
+{
+  "date": "2026-05-13",
+  "ckpt_slot1": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/r13_overnight_atlas_2026-05-13/_cache/top_n_effort_20260513_step2000_auc0.9929_eer0.0229.pth",
+  "ckpt_p8a": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/_features_cache_2026-04-30/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+  "cohort_n_real_lockbox": 275,
+  "cohort_n_fake_s16": 78,
+  "cohort_n_fake_deeplive": 545,
+  "valid_extracted": 898,
+  "probes": {
+    "A_lockbox_real_vs_s16_fake__SLOT1": {
+      "auc_mean": 0.9971666666666665,
+      "auc_std": 0.0036676369865620132,
+      "ci_lo": 0.9939518411041184,
+      "ci_hi": 1.0003814922292147,
+      "n_pos": 78,
+      "n_neg": 275,
+      "oof_auc": 0.9969230769230769,
+      "per_fold": [
+        1.0,
+        0.9988636363636364,
+        0.9954545454545454,
+        1.0,
+        0.9915151515151515
+      ],
+      "actual_splits": 5
+    },
+    "A_lockbox_real_vs_s16_fake__P8A": {
+      "auc_mean": 0.9990757575757575,
+      "auc_std": 0.0009558672906416805,
+      "ci_lo": 0.9982379029539349,
+      "ci_hi": 0.9999136121975801,
+      "n_pos": 78,
+      "n_neg": 275,
+      "oof_auc": 0.9985547785547785,
+      "per_fold": [
+        1.0,
+        0.9977272727272727,
+        0.9988636363636364,
+        1.0,
+        0.9987878787878788
+      ],
+      "actual_splits": 5
+    },
+    "B_lockbox_real_vs_anyfake__SLOT1": {
+      "auc_mean": 0.9930604105571847,
+      "auc_std": 0.005392749816831836,
+      "ci_lo": 0.9883334569281592,
+      "ci_hi": 0.9977873641862103,
+      "n_pos": 623,
+      "n_neg": 275,
+      "oof_auc": 0.9924004085801839,
+      "per_fold": [
+        0.993890909090909,
+        0.9848727272727273,
+        0.9965090909090909,
+        0.9988269794721407,
+        0.9912023460410557
+      ],
+      "actual_splits": 5
+    },
+    "B_lockbox_real_vs_anyfake__P8A": {
+      "auc_mean": 0.9941991788856305,
+      "auc_std": 0.005304907647570339,
+      "ci_lo": 0.9895492223128147,
+      "ci_hi": 0.9988491354584462,
+      "n_pos": 623,
+      "n_neg": 275,
+      "oof_auc": 0.9934452064789143,
+      "per_fold": [
+        0.9943272727272727,
+        0.9857454545454546,
+        0.9982545454545454,
+        0.9991202346041056,
+        0.9935483870967742
+      ],
+      "actual_splits": 5
+    },
+    "C_lockbox_real_vs_deeplive_fake__SLOT1": {
+      "auc_mean": 0.9937614678899083,
+      "auc_std": 0.005082237867689768,
+      "ci_lo": 0.9893066899847169,
+      "ci_hi": 0.9982162457950996,
+      "n_pos": 545,
+      "n_neg": 275,
+      "oof_auc": 0.9933344453711426,
+      "per_fold": [
+        0.9968306922435363,
+        0.9874895746455379,
+        0.9976647206005004,
+        0.9978315262718932,
+        0.9889908256880735
+      ],
+      "actual_splits": 5
+    },
+    "C_lockbox_real_vs_deeplive_fake__P8A": {
+      "auc_mean": 0.9945954962468724,
+      "auc_std": 0.004988298432880715,
+      "ci_lo": 0.9902230598867854,
+      "ci_hi": 0.9989679326069594,
+      "n_pos": 545,
+      "n_neg": 275,
+      "oof_auc": 0.9940884070058382,
+      "per_fold": [
+        0.9959966638865722,
+        0.9866555462885739,
+        0.9991659716430359,
+        0.997998331943286,
+        0.9931609674728941
+      ],
+      "actual_splits": 5
+    }
+  }
+}

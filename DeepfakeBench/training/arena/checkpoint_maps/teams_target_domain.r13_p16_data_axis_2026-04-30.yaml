@@ -1,0 +1,36 @@
+# Promotion-contract validation map for R13_P16_DATA_AXIS (rmic6wrc).
+#
+# Run context (2026-04-30):
+# - FT-from-P8A_step5000 + visomaster_teams_enhanced family_weight=2.0.
+# - Anti-shortcut bundle DISABLED (single-lever discipline; jitter, anchor-aware,
+#   pipeline-rand all OFF). The data-axis lever is the visomaster_teams_enhanced
+#   bucket at fw=2.0.
+# - Periodic ckpts saved at steps {500, 1000, 1500, 2000, 2500, 3000, 3500, 4000};
+#   top_n best-AUC ckpts also saved at {1000, 1500, 5500, 6000, 7000}.
+# - In-domain val_holdout trajectory:
+#     - Step 1500 best EER 0.0167, AUC 0.9957, anchor composite +0.0175 (first
+#       positive flip; held-out target-fake recall 100/100/100 on deeplive_teams).
+#     - Step 7000 peak AUC 0.9964, EER 0.0215.
+#     - Mild rolling-overfit past step 7500 (AUC drifts to 0.9940 at step 10500;
+#       deeplive_teams_edge holdout slips 100% → 83%).
+# - Trainer-side metrics are NOT deployment-grade (cf. mclioexb 2026-04-30:
+#   value_composite=0.661 didn't meet contract under default OR relaxed policy).
+#
+# Note: contract-policy fix (target_fake_recall_min) default is 0.70
+# (commit 974e033, 2026-04-29). No flag pass needed for production scorecards.
+# To reproduce a legacy-policy readout, pass --promotion_target_fake_recall_min 0.0.
+
+# === Reference baseline (FT origin) ===
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+
+# === P16 periodic checkpoints (RESOLVED from gs://.../rmic6wrc/) ===
+P16_DATA_AXIS_STEP500:     "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/periodic_effort_20260430_step500_auc0.9916_eer0.0263.pth"
+P16_DATA_AXIS_STEP1500:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/periodic_effort_20260430_step1500_auc0.9957_eer0.0167.pth"
+P16_DATA_AXIS_STEP2500:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/periodic_effort_20260430_step2500_auc0.9951_eer0.0191.pth"
+P16_DATA_AXIS_STEP3000:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/periodic_effort_20260430_step3000_auc0.9950_eer0.0191.pth"
+P16_DATA_AXIS_STEP4000:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/periodic_effort_20260430_step4000_auc0.9944_eer0.0215.pth"
+
+# === P16 top_n best-AUC checkpoints ===
+P16_DATA_AXIS_STEP5500:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/top_n_effort_20260430_step5500_auc0.9960_eer0.0191.pth"
+P16_DATA_AXIS_STEP6000:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/top_n_effort_20260430_step6000_auc0.9962_eer0.0239.pth"
+P16_DATA_AXIS_STEP7000:    "gs://training-job-outputs/phase2r13_experiments/rmic6wrc/top_n_effort_20260430_step7000_auc0.9964_eer0.0215.pth"

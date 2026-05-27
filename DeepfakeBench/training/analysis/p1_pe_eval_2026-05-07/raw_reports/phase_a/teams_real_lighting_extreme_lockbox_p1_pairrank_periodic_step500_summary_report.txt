@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_lighting_extreme_lockbox_p1_pairrank_periodic_step500
+Run Name: TargetDomain teams_real_lighting_extreme_lockbox P1_PAIRRANK_PERIODIC_STEP500
+Generated on: 2026-05-07 12:17:32
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 207
+Accuracy: 0.7488
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 155
+False Positives (Real misclassified as Fake): 52
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 207
+Accuracy: 0.7488 (155/207 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=207, acc=0.7488, tpr=0.0000, fpr=0.2512, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.7488
+Worst-group accuracy: unknown_real = 0.7488
+Best-vs-worst group accuracy gap: 0.0000

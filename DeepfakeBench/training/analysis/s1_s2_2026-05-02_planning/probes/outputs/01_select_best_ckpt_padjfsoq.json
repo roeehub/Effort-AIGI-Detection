@@ -1,0 +1,50 @@
+{
+  "run_id": "padjfsoq",
+  "saves_uri": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/",
+  "peaks": {
+    "class_separation": {
+      "peak_step": 600.0,
+      "peak_value": 3.9072265625,
+      "closest_ckpt_step": 600,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step600_auc0.9867_eer0.0447.pth"
+    },
+    "logit_std": {
+      "peak_step": 0.0,
+      "peak_value": 2.80859375,
+      "closest_ckpt_step": 100,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step100_auc0.9860_eer0.0395.pth"
+    },
+    "val_holdout_auc": {
+      "peak_step": 800.0,
+      "peak_value": 0.9869701280227595,
+      "closest_ckpt_step": 800,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step800_auc0.9870_eer0.0342.pth"
+    },
+    "val_in_dist_auc": {
+      "peak_step": 600.0,
+      "peak_value": 0.9881208755177971,
+      "closest_ckpt_step": 600,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step600_auc0.9867_eer0.0447.pth"
+    }
+  },
+  "top3_by_class_separation": [
+    {
+      "wandb_step": 600,
+      "class_separation": 3.9072265625,
+      "ckpt_step": 600,
+      "ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step600_auc0.9867_eer0.0447.pth"
+    },
+    {
+      "wandb_step": 0,
+      "class_separation": 3.8876953125,
+      "ckpt_step": 100,
+      "ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step100_auc0.9860_eer0.0395.pth"
+    },
+    {
+      "wandb_step": 400,
+      "class_separation": 3.58203125,
+      "ckpt_step": 400,
+      "ckpt_path": "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step400_auc0.9853_eer0.0395.pth"
+    }
+  ]
+}

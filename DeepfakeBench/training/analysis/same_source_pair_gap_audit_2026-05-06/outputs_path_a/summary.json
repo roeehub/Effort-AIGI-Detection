@@ -1,0 +1,290 @@
+{
+  "audit_name": "SAME_SOURCE_PAIR_GAP_AUDIT_PATH_A_2026-05-07",
+  "phase": "0j",
+  "source_npz_p8a": "analysis/path_a_launch_2026-05-07/outputs/p8a_paired_features.npz",
+  "source_npz_e2b": "analysis/path_a_launch_2026-05-07/outputs/e2b_paired_features.npz",
+  "source_pair_gaps_csv": "/tmp/pair_gaps.csv",
+  "miss_threshold": 0.5,
+  "decision_rule": {
+    "green_threshold_p_le_0": 0.25,
+    "amber_threshold_p_le_0": 0.1,
+    "min_green_lanes_for_unconditional_p1": 2
+  },
+  "runbook_lanes": [
+    "df40",
+    "deeplive_v1",
+    "deeplive_v2",
+    "viso_v1",
+    "viso_enhanced",
+    "viso_teams_enhanced"
+  ],
+  "lane_results": {
+    "df40": {
+      "in_runbook_six": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 0,
+          "n_pairs_with_fresh_scores": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "lane not present in pair_gaps.csv"
+        },
+        "E2B": {
+          "n_pairs_in_csv": 0,
+          "n_pairs_with_fresh_scores": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "lane not present in pair_gaps.csv"
+        }
+      }
+    },
+    "deeplive_v1": {
+      "in_runbook_six": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 422,
+          "n_pairs_covered": 422,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 422,
+          "n_missed_fakes": 55,
+          "p_pair_gap_le_0_given_missed": 0.2545454545454545,
+          "verdict": "GREEN",
+          "score_source": "cached",
+          "reason": null
+        },
+        "E2B": {
+          "n_pairs_in_csv": 422,
+          "n_pairs_covered": 422,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 422,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "no missed fakes (fake_score >= 0.5 for all pairs)"
+        }
+      }
+    },
+    "deeplive_v2": {
+      "in_runbook_six": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 425,
+          "n_pairs_covered": 425,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 425,
+          "n_missed_fakes": 13,
+          "p_pair_gap_le_0_given_missed": 0.15384615384615385,
+          "verdict": "AMBER",
+          "score_source": "cached",
+          "reason": null
+        },
+        "E2B": {
+          "n_pairs_in_csv": 425,
+          "n_pairs_covered": 425,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 425,
+          "n_missed_fakes": 29,
+          "p_pair_gap_le_0_given_missed": 0.06896551724137931,
+          "verdict": "RED",
+          "score_source": "cached",
+          "reason": null
+        }
+      }
+    },
+    "viso_v1": {
+      "in_runbook_six": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 0,
+          "n_pairs_with_fresh_scores": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "lane not present in pair_gaps.csv"
+        },
+        "E2B": {
+          "n_pairs_in_csv": 0,
+          "n_pairs_with_fresh_scores": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "lane not present in pair_gaps.csv"
+        }
+      }
+    },
+    "viso_enhanced": {
+      "in_runbook_six": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 2869,
+          "n_pairs_covered": 2869,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 2869,
+          "n_missed_fakes": 543,
+          "p_pair_gap_le_0_given_missed": 0.35543278084714547,
+          "verdict": "GREEN",
+          "score_source": "cached",
+          "reason": null
+        },
+        "E2B": {
+          "n_pairs_in_csv": 2869,
+          "n_pairs_covered": 2869,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 2869,
+          "n_missed_fakes": 2290,
+          "p_pair_gap_le_0_given_missed": 0.04017467248908297,
+          "verdict": "RED",
+          "score_source": "cached",
+          "reason": null
+        }
+      }
+    },
+    "viso_teams_enhanced": {
+      "in_runbook_six": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 0,
+          "n_pairs_with_fresh_scores": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "lane not present in pair_gaps.csv"
+        },
+        "E2B": {
+          "n_pairs_in_csv": 0,
+          "n_pairs_with_fresh_scores": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "lane not present in pair_gaps.csv"
+        }
+      }
+    },
+    "teams_passthrough_dev": {
+      "in_runbook_six": false,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 22688,
+          "n_pairs_covered": 22688,
+          "n_pairs_fresh": 22688,
+          "n_pairs_cached": 0,
+          "n_missed_fakes": 943,
+          "p_pair_gap_le_0_given_missed": 0.09862142099681867,
+          "verdict": "RED",
+          "score_source": "fresh",
+          "reason": null
+        },
+        "E2B": {
+          "n_pairs_in_csv": 22688,
+          "n_pairs_covered": 22688,
+          "n_pairs_fresh": 22688,
+          "n_pairs_cached": 0,
+          "n_missed_fakes": 15696,
+          "p_pair_gap_le_0_given_missed": 0.38812436289500507,
+          "verdict": "GREEN",
+          "score_source": "fresh",
+          "reason": null
+        }
+      }
+    },
+    "teams_passthrough_lockbox": {
+      "in_runbook_six": false,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 2639,
+          "n_pairs_covered": 2639,
+          "n_pairs_fresh": 2639,
+          "n_pairs_cached": 0,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "no missed fakes (fake_score >= 0.5 for all pairs)"
+        },
+        "E2B": {
+          "n_pairs_in_csv": 2639,
+          "n_pairs_covered": 2639,
+          "n_pairs_fresh": 2639,
+          "n_pairs_cached": 0,
+          "n_missed_fakes": 203,
+          "p_pair_gap_le_0_given_missed": 0.9852216748768473,
+          "verdict": "GREEN",
+          "score_source": "fresh",
+          "reason": null
+        }
+      }
+    },
+    "extra": {
+      "in_runbook_six": false,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 8000,
+          "n_pairs_covered": 8000,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 8000,
+          "n_missed_fakes": 525,
+          "p_pair_gap_le_0_given_missed": 0.12380952380952381,
+          "verdict": "AMBER",
+          "score_source": "cached",
+          "reason": null
+        },
+        "E2B": {
+          "n_pairs_in_csv": 8000,
+          "n_pairs_covered": 8000,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 8000,
+          "n_missed_fakes": 250,
+          "p_pair_gap_le_0_given_missed": 0.004,
+          "verdict": "RED",
+          "score_source": "cached",
+          "reason": null
+        }
+      }
+    },
+    "live_fakes_teams_prod": {
+      "in_runbook_six": false,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs_in_csv": 284,
+          "n_pairs_covered": 284,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 284,
+          "n_missed_fakes": 0,
+          "p_pair_gap_le_0_given_missed": null,
+          "verdict": "INSUFFICIENT_DATA",
+          "reason": "no missed fakes (fake_score >= 0.5 for all pairs)"
+        },
+        "E2B": {
+          "n_pairs_in_csv": 284,
+          "n_pairs_covered": 284,
+          "n_pairs_fresh": 0,
+          "n_pairs_cached": 284,
+          "n_missed_fakes": 255,
+          "p_pair_gap_le_0_given_missed": 0.011764705882352941,
+          "verdict": "RED",
+          "score_source": "cached",
+          "reason": null
+        }
+      }
+    }
+  },
+  "runbook_six_summary": {
+    "P8A": {
+      "n_green": 2,
+      "n_amber": 1,
+      "n_red": 0,
+      "n_insufficient": 3
+    },
+    "E2B": {
+      "n_green": 0,
+      "n_amber": 0,
+      "n_red": 2,
+      "n_insufficient": 4
+    }
+  },
+  "p1_recommendation": {
+    "P8A": "LAUNCH_PE_PAIR_RANK_DRO",
+    "E2B": "DEMOTE_P1"
+  }
+}

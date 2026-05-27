@@ -1,0 +1,26 @@
+{
+  "n_total_viso_fakes": 550,
+  "cohort_counts": {
+    "D_missed_all": 364,
+    "C_caught_P8A_only": 93,
+    "B_caught_P8A_E3_not_E2B": 26,
+    "A_caught_all": 25,
+    "Y_caught_E3_only": 21,
+    "X_caught_E2B_only": 13,
+    "Z_caught_P8A_E2B_not_E3": 4,
+    "W_caught_E2B_E3_not_P8A": 4
+  },
+  "p8a_caught_fraction": 0.2690909090909091,
+  "e2b_caught_fraction": 0.08363636363636363,
+  "e3_caught_fraction": 0.13818181818181818,
+  "B_cohort_size": 26,
+  "C_cohort_size": 93,
+  "B_cohort_subtype_split": {
+    "raw": 26
+  },
+  "C_cohort_subtype_split": {
+    "raw": 63,
+    "teams": 30
+  },
+  "interpretation_note": "B_cohort = caught by both CLIP-init-FT (P8A) and L14-scratch (E3), but missed by B16-scratch (E2B). If B is large and has a coherent IQ pattern, that pattern is the lesson a from-scratch B16 needs to learn. C_cohort = caught by P8A alone \u2014 uniquely attributable to the 5-stage FT chain or CLIP-init."
+}

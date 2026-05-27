@@ -1,0 +1,65 @@
+<!doctype html><meta charset='utf-8'><title>teams pool diff</title><style>
+    body { font-family: -apple-system, system-ui, sans-serif; max-width: 1200px;
+           margin: 2em auto; padding: 0 1em; color: #222; }
+    h1 { border-bottom: 2px solid #888; padding-bottom: 0.3em; }
+    h2 { margin-top: 2em; border-bottom: 1px solid #ddd; padding-bottom: 0.2em; }
+    table { border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid #ccc; padding: 0.3em 0.6em; text-align: left; }
+    th { background: #f4f4f4; }
+    tr.hi td { background: #fff4e0; font-weight: bold; }
+    .thumbs { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0 1.5em; }
+    .thumbs figure { margin: 0; padding: 0; text-align: center; }
+    .thumbs img { width: 112px; height: 112px; object-fit: cover; border: 1px solid #ddd; }
+    .thumbs figcaption { font-size: 0.7em; color: #555; max-width: 112px; }
+    </style>
+    <h1>Teams pool comparison: teams_ood vs proper_visomaster_teams</h1>
+    <p>Run dir: <code>scratch/teams_pool_diff/2026-04-22T23-47-42</code></p>
+    <p>Frames analyzed — stats: 444, geometry: 444, model: 0.</p>
+
+    <h2>Executive summary</h2>
+    <p>KS distances across cross-pool same-label pairs. Rows highlighted in
+    orange exceed 0.2 (a notable distributional shift).</p>
+    <table class="summary"><thead><tr><th>Pass</th><th>Pair</th><th>Feature</th><th>KS distance</th></tr></thead><tbody>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>brightness</td><td>0.693</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>face_bbox_area_ratio</td><td>0.617</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>brightness</td><td>0.617</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>inter_eye_distance_ratio</td><td>0.570</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>contrast</td><td>0.526</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>bytes_per_pixel</td><td>0.490</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>face_bbox_area_ratio</td><td>0.486</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>resolution_w</td><td>0.467</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>resolution_h</td><td>0.467</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>resolution_w</td><td>0.463</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>resolution_h</td><td>0.463</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>inter_eye_distance_ratio</td><td>0.453</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>sharpness</td><td>0.381</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>contrast</td><td>0.375</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>bytes_per_pixel</td><td>0.375</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>saturation</td><td>0.355</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>colorfulness</td><td>0.300</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>saturation</td><td>0.300</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>yaw_deg</td><td>0.242</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>roll_deg</td><td>0.239</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>yaw_deg</td><td>0.232</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>sharpness</td><td>0.217</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>roll_deg</td><td>0.216</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>colorfulness</td><td>0.211</td></tr>
+<tr><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>pitch_deg</td><td>0.199</td></tr>
+<tr><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>warmth</td><td>0.192</td></tr>
+<tr><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>pitch_deg</td><td>0.189</td></tr>
+<tr><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>warmth</td><td>0.170</td></tr>
+</tbody></table>
+
+    <h2>Image stats</h2>
+    <h3>Image stats — per-group means</h3><table><thead><tr><th>Group</th><th>brightness</th><th>contrast</th><th>sharpness</th><th>colorfulness</th><th>saturation</th><th>resolution_w</th><th>resolution_h</th><th>bytes_per_pixel</th><th>warmth</th></tr></thead><tbody><tr><td>proper_visomaster_teams_fake</td><td>0.417</td><td>0.202</td><td>142.254</td><td>43.620</td><td>0.366</td><td>248.908</td><td>248.908</td><td>1.646</td><td>40.730</td></tr><tr><td>proper_visomaster_teams_real</td><td>0.424</td><td>0.205</td><td>137.944</td><td>41.161</td><td>0.352</td><td>250.467</td><td>250.467</td><td>1.623</td><td>40.284</td></tr><tr><td>teams_ood_fake</td><td>0.546</td><td>0.246</td><td>102.617</td><td>44.948</td><td>0.315</td><td>212.274</td><td>212.274</td><td>1.503</td><td>39.679</td></tr><tr><td>teams_ood_real</td><td>0.529</td><td>0.236</td><td>122.483</td><td>45.916</td><td>0.338</td><td>206.467</td><td>206.533</td><td>1.537</td><td>45.846</td></tr></tbody></table>
+
+    <h2>Face geometry</h2>
+    <h3>Face geometry — per-group means</h3><table><thead><tr><th>Group</th><th>face_bbox_area_ratio</th><th>inter_eye_distance_ratio</th><th>yaw_deg</th><th>pitch_deg</th><th>roll_deg</th></tr></thead><tbody><tr><td>proper_visomaster_teams_fake</td><td>0.526</td><td>0.428</td><td>-1.180</td><td>39.557</td><td>-1.724</td></tr><tr><td>proper_visomaster_teams_real</td><td>0.512</td><td>0.417</td><td>-1.062</td><td>39.969</td><td>-1.594</td></tr><tr><td>teams_ood_fake</td><td>0.471</td><td>0.394</td><td>1.666</td><td>40.184</td><td>-0.733</td></tr><tr><td>teams_ood_real</td><td>0.472</td><td>0.396</td><td>-2.867</td><td>40.340</td><td>-0.766</td></tr></tbody></table>
+
+    <h2>Model section</h2>
+    <p><em>No data for Model fake-probability + embedding dispersion.</em></p>
+    
+
+    <h2>Failures gallery</h2>
+    <p><em>No gallery data — model pass was skipped or empty.</em></p>
+    

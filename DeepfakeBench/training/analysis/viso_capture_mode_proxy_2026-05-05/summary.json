@@ -1,0 +1,39 @@
+{
+  "classifier_cv_accuracy": 0.5215417679164447,
+  "classifier_cv_std": 0.015564837343741781,
+  "classifier_features": [
+    "width",
+    "height",
+    "brightness_v_mean",
+    "saturation_norm"
+  ],
+  "n_training_frames": 7334,
+  "n_viso_predicted": 550,
+  "viso_predicted_mode_distribution": {
+    "normal_photo": 543,
+    "webcam": 7
+  },
+  "viso_recall_per_ckpt": {
+    "P8A": {
+      "global_tau_pct": 26.90909090909091,
+      "per_mode_predicted_tau_pct": 55.81818181818182,
+      "lift_pp": 28.90909090909091
+    },
+    "E2B_3200": {
+      "global_tau_pct": 8.363636363636363,
+      "per_mode_predicted_tau_pct": 23.09090909090909,
+      "lift_pp": 14.727272727272727
+    },
+    "E3_6600": {
+      "global_tau_pct": 13.818181818181818,
+      "per_mode_predicted_tau_pct": 88.72727272727273,
+      "lift_pp": 74.90909090909092
+    }
+  },
+  "caveats": [
+    "Predicted capture_mode is a proxy \u2014 CV accuracy ~XX% on training distribution.",
+    "Sharpness laplacian was NOT used (different definitions in tags vs crop_attrs).",
+    "Predictions may be biased toward modes whose training-set IQ profile matches viso.",
+    "Recall numbers are upper bounds if predictions are perfect; lower if predictions are wrong."
+  ]
+}

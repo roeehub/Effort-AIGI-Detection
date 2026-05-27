@@ -1,0 +1,28 @@
+Validation Summary Report for: td_deeplive_enhanced_dev_viso_corr_periodic_step2000
+Run Name: TargetDomain deeplive_enhanced_dev VISO_CORR_PERIODIC_STEP2000
+Generated on: 2026-05-06 14:12:59
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 545
+Accuracy: 0.9945
+True Positives (Correctly identified Fake): 542
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 3
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: deeplive_enhanced (FAKE) -----
+Total Videos: 545
+Accuracy: 0.9945 (542/545 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+deeplive_enhanced_fake (family=deeplive_enhanced_fake): n=545, acc=0.9945, tpr=0.9945, fpr=0.0000, fnr=0.0055
+
+Best-group accuracy: deeplive_enhanced_fake = 0.9945
+Worst-group accuracy: deeplive_enhanced_fake = 0.9945
+Best-vs-worst group accuracy gap: 0.0000

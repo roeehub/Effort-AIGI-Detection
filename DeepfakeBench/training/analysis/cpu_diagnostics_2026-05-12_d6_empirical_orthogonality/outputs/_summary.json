@@ -1,0 +1,77 @@
+{
+  "B_bootstraps_target": 50,
+  "n_panel": 800,
+  "n_chronic_6": 282,
+  "ckpts_processed": [
+    "CLIP_FROZEN",
+    "E2B",
+    "P8A",
+    "T3_S1_step1500",
+    "T5C_step3500"
+  ],
+  "cells_processed": [
+    [
+      "CLIP_FROZEN",
+      "full"
+    ],
+    [
+      "CLIP_FROZEN",
+      "chronic_6"
+    ],
+    [
+      "CLIP_FROZEN",
+      "non_chronic"
+    ],
+    [
+      "P8A",
+      "full"
+    ],
+    [
+      "P8A",
+      "chronic_6"
+    ],
+    [
+      "P8A",
+      "non_chronic"
+    ],
+    [
+      "E2B",
+      "full"
+    ],
+    [
+      "E2B",
+      "chronic_6"
+    ],
+    [
+      "E2B",
+      "non_chronic"
+    ],
+    [
+      "T5C_step3500",
+      "full"
+    ],
+    [
+      "T5C_step3500",
+      "chronic_6"
+    ],
+    [
+      "T5C_step3500",
+      "non_chronic"
+    ],
+    [
+      "T3_S1_step1500",
+      "full"
+    ],
+    [
+      "T3_S1_step1500",
+      "chronic_6"
+    ],
+    [
+      "T3_S1_step1500",
+      "non_chronic"
+    ]
+  ],
+  "elapsed_seconds": 3736.457853078842,
+  "feature_dim": 768,
+  "random_baseline_angle_deg_d768": 87.93206770646654
+}

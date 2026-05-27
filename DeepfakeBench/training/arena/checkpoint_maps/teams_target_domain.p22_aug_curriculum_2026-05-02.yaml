@@ -1,0 +1,31 @@
+# Promotion-contract validation map for P22_AUG_CURRICULUM (run dot1buye)
+#
+# Run context (2026-05-02 PM):
+# - P22 launched 2026-05-02 14:32 UTC. Single-lever ablation: only
+#   pipeline_randomization (Gaussian luma blur sigma in [0.5, 4.0] p=0.7,
+#   JPEG q in [40, 95] p=0.6, brightness shift in [-40, 40] p=0.5).
+#   No anchor_aware, no GRL, no face_scale_jitter — isolating aug effect.
+# - Targets the image-quality shortcut documented in
+#   `analysis/cpu_decision_2026-05-02_pm_late/FINDINGS_AND_DECISION.md`.
+#
+# Trajectory of training AUC (informative, not authoritative):
+#   step  500  AUC 0.9867   <-- aug curriculum just kicked in
+#   step 1000  AUC 0.9903   <-- peak train AUC
+#   step 2000  AUC 0.9885
+#   step 4000  AUC 0.9746
+#   step 6000  AUC 0.9631
+#   step 7000  AUC 0.9364
+#   step 8000  AUC 0.9406   <-- final, lowest train AUC; if this is more
+#                                robust on dev/lockbox than P8A despite
+#                                lower train AUC, that's the breakthrough.
+#
+# Three P22 checkpoints + P8A reference, evaluated head-to-head:
+#   - P8A_REFERENCE_STEP5000   FT origin every P-* packet inherits from
+#   - P22_STEP1000             peak train AUC; minimal aug exposure
+#   - P22_STEP4000             mid trajectory; partial aug exposure
+#   - P22_STEP8000             final; full aug exposure, lowest train AUC
+
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+P22_AUG_STEP1000:          "gs://training-job-outputs/phase2r13_experiments/dot1buye/periodic_effort_20260502_step1000_auc0.9903_eer0.0282.pth"
+P22_AUG_STEP4000:          "gs://training-job-outputs/phase2r13_experiments/dot1buye/periodic_effort_20260502_step4000_auc0.9746_eer0.0932.pth"
+P22_AUG_STEP8000:          "gs://training-job-outputs/phase2r13_experiments/dot1buye/periodic_effort_20260502_step8000_auc0.9406_eer0.1441.pth"

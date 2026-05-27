@@ -1,0 +1,137 @@
+{
+  "layer_3": {
+    "tau_5pct_lockbox": 0.6692134017222543,
+    "lockbox_AUC": 0.8862063086104006,
+    "lockbox_FPR_at_tau": 0.04830917874396135,
+    "lockbox_recall_at_tau": 0.6588235294117647,
+    "prod_180_per_group": [
+      {
+        "source_group": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.25022831502196746
+      },
+      {
+        "source_group": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.38473009014930076
+      },
+      {
+        "source_group": "dor-real-webcam-false-flag",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.5769511346126339
+      },
+      {
+        "source_group": "dor-real-webcam-false-flag-no-virtual-bg",
+        "n": 30,
+        "fake_rate": 0.06666666666666667,
+        "mean_prob": 0.6017663140046087
+      },
+      {
+        "source_group": "roee-mac-laptop-false-flag-virtual-bg",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.32308176643068653
+      },
+      {
+        "source_group": "roee-real-windows-laptop-correct",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.2511147392752747
+      }
+    ],
+    "prod_180_overall_fake_rate": 0.011111111111111112
+  },
+  "layer_6": {
+    "tau_5pct_lockbox": 0.8771138902179068,
+    "lockbox_AUC": 0.5363512361466325,
+    "lockbox_FPR_at_tau": 0.043478260869565216,
+    "lockbox_recall_at_tau": 0.1976470588235294,
+    "prod_180_per_group": [
+      {
+        "source_group": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.2318486320108961
+      },
+      {
+        "source_group": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.2801592818839095
+      },
+      {
+        "source_group": "dor-real-webcam-false-flag",
+        "n": 30,
+        "fake_rate": 0.03333333333333333,
+        "mean_prob": 0.7524931740986028
+      },
+      {
+        "source_group": "dor-real-webcam-false-flag-no-virtual-bg",
+        "n": 30,
+        "fake_rate": 0.1,
+        "mean_prob": 0.8257716446361698
+      },
+      {
+        "source_group": "roee-mac-laptop-false-flag-virtual-bg",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.40201928806754506
+      },
+      {
+        "source_group": "roee-real-windows-laptop-correct",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.38413146678715837
+      }
+    ],
+    "prod_180_overall_fake_rate": 0.022222222222222223
+  },
+  "layer_11": {
+    "tau_5pct_lockbox": 1.9898267430528556,
+    "lockbox_AUC": 0.5339187269110544,
+    "lockbox_FPR_at_tau": 0.0,
+    "lockbox_recall_at_tau": 0.0,
+    "prod_180_per_group": [
+      {
+        "source_group": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.01595800587326652
+      },
+      {
+        "source_group": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.013197860369278783
+      },
+      {
+        "source_group": "dor-real-webcam-false-flag",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.8093145105516832
+      },
+      {
+        "source_group": "dor-real-webcam-false-flag-no-virtual-bg",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.7786024614839339
+      },
+      {
+        "source_group": "roee-mac-laptop-false-flag-virtual-bg",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.22261991252166227
+      },
+      {
+        "source_group": "roee-real-windows-laptop-correct",
+        "n": 30,
+        "fake_rate": 0.0,
+        "mean_prob": 0.0041049280155812705
+      }
+    ],
+    "prod_180_overall_fake_rate": 0.0
+  }
+}

@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_lighting_extreme_dev_deeplive_corr_top_n_step4800
+Run Name: TargetDomain teams_real_lighting_extreme_dev DEEPLIVE_CORR_TOP_N_STEP4800
+Generated on: 2026-05-06 12:35:46
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1401
+Accuracy: 0.8672
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 1215
+False Positives (Real misclassified as Fake): 186
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 1401
+Accuracy: 0.8672 (1215/1401 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=1401, acc=0.8672, tpr=0.0000, fpr=0.1328, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.8672
+Worst-group accuracy: unknown_real = 0.8672
+Best-vs-worst group accuracy gap: 0.0000

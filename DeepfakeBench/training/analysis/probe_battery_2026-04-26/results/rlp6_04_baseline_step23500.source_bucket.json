@@ -1,0 +1,213 @@
+{
+  "n_train": 3215,
+  "n_test": 804,
+  "n_classes": 10,
+  "classes": [
+    "deeplive_enhanced",
+    "deeplive_non_enhanced",
+    "dl_bucket_visomaster",
+    "external_fake",
+    "external_real",
+    "proper_visomaster",
+    "proper_visomaster_enhanced",
+    "tv2_deeplive",
+    "tv2_visomaster",
+    "visomaster_enhanced_v2"
+  ],
+  "train_accuracy": 0.9965785381026439,
+  "test_accuracy": 0.9701492537313433,
+  "chance_accuracy": 0.1,
+  "confusion_matrix": [
+    [
+      51,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      51,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
+      48,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      20,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      105,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      1,
+      0,
+      1,
+      233,
+      4,
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      2,
+      0,
+      0,
+      7,
+      110,
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      62,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      1,
+      40,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      60
+    ]
+  ],
+  "per_class": {
+    "deeplive_enhanced": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 51
+    },
+    "deeplive_non_enhanced": {
+      "precision": 0.9807692307692307,
+      "recall": 1.0,
+      "f1": 0.9902912621359222,
+      "support": 51
+    },
+    "dl_bucket_visomaster": {
+      "precision": 0.9411764705882353,
+      "recall": 0.9411764705882353,
+      "f1": 0.9411764705882353,
+      "support": 51
+    },
+    "external_fake": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 20
+    },
+    "external_real": {
+      "precision": 0.9813084112149533,
+      "recall": 0.9905660377358491,
+      "f1": 0.9859154929577464,
+      "support": 106
+    },
+    "proper_visomaster": {
+      "precision": 0.966804979253112,
+      "recall": 0.9708333333333333,
+      "f1": 0.9688149688149688,
+      "support": 240
+    },
+    "proper_visomaster_enhanced": {
+      "precision": 0.9401709401709402,
+      "recall": 0.9166666666666666,
+      "f1": 0.9282700421940928,
+      "support": 120
+    },
+    "tv2_deeplive": {
+      "precision": 0.9538461538461539,
+      "recall": 1.0,
+      "f1": 0.9763779527559054,
+      "support": 62
+    },
+    "tv2_visomaster": {
+      "precision": 1.0,
+      "recall": 0.9302325581395349,
+      "f1": 0.963855421686747,
+      "support": 43
+    },
+    "visomaster_enhanced_v2": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 60
+    }
+  },
+  "checkpoint_name": "rlp6_04_baseline_step23500",
+  "features_uri": "gs://training-job-outputs/probe_battery_2026-04-26/rlp6_04_baseline_step23500/features.npz",
+  "label_field": "source_bucket",
+  "threshold": 0.25,
+  "verdict": "FAIL",
+  "realfake_distribution": {
+    "fake": 2211,
+    "real": 1808
+  }
+}

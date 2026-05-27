@@ -1,0 +1,16 @@
+{
+  "n_frames_embedded": 30,
+  "sim_threshold": 0.45,
+  "n_clusters": 3,
+  "cluster_sizes": [
+    17,
+    10,
+    3
+  ],
+  "intra_cluster_sim_mean": 0.859270100036393,
+  "intra_cluster_sim_p10": 0.7783827424049378,
+  "inter_cluster_sim_mean": 0.1862419332967574,
+  "inter_cluster_sim_p90": 0.2934425473213196,
+  "inter_cluster_sim_max": 0.403026819229126,
+  "verdict_multi_identity": true
+}

@@ -1,0 +1,10 @@
+{
+  "n_bands": 16,
+  "n_safe_to_randomize": 4,
+  "n_overlap_high": 0,
+  "max_shortcut_auc": 0.9810916185379028,
+  "max_signal_auc": 0.7378749847412109,
+  "median_shortcut_auc": 0.8454434871673584,
+  "median_signal_auc": 0.6339374780654907,
+  "verdict": "GREEN_BAND_LIMITED_FOURIER_VIABLE"
+}

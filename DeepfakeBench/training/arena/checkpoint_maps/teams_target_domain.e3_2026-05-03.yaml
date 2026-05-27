@@ -1,0 +1,25 @@
+# Promotion-contract validation map for E3 (run jzroefab) — L14 SCRATCH + eval-aug
+#
+# Auto-generated 2026-05-03 by arena/build_e_packet_checkpoint_map.py, manually
+# trimmed to 11 entries (parity with E1/E2b maps; drop dup top_n+periodic ckpts).
+# Includes P8A_REFERENCE_STEP5000 baseline for direct comparison.
+#
+# Packet context: L14 SCRATCH from CLIP + heavier eval-aug curriculum
+# Falsifier target: viso recall at joint dev+lockbox FPR=10% > 35%
+#
+# E3 best metrics (val-AUC chain):
+#   - top_n_step7200 = AUC 0.9976 (best AUC of entire R13 chain)
+#   - top_n_step4800 = EER 0.0047 (best EER tied with step7000)
+#   - top_n_step6600 = AUC 0.9972 EER 0.0093 (joint-best; main candidate)
+#
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E3_STEP1000:               "gs://training-job-outputs/best_checkpoints/jzroefab/periodic_effort_20260503_step1000_auc0.9702_eer0.0561.pth"
+E3_STEP2000:               "gs://training-job-outputs/best_checkpoints/jzroefab/periodic_effort_20260503_step2000_auc0.9884_eer0.0397.pth"
+E3_STEP4000:               "gs://training-job-outputs/best_checkpoints/jzroefab/periodic_effort_20260503_step4000_auc0.9956_eer0.0093.pth"
+E3_TOP_N_STEP4800:         "gs://training-job-outputs/best_checkpoints/jzroefab/top_n_effort_20260503_step4800_auc0.9961_eer0.0047.pth"
+E3_STEP6000:               "gs://training-job-outputs/best_checkpoints/jzroefab/periodic_effort_20260503_step6000_auc0.9966_eer0.0210.pth"
+E3_TOP_N_STEP6600:         "gs://training-job-outputs/best_checkpoints/jzroefab/top_n_effort_20260503_step6600_auc0.9972_eer0.0093.pth"
+E3_STEP7000:               "gs://training-job-outputs/best_checkpoints/jzroefab/periodic_effort_20260503_step7000_auc0.9957_eer0.0047.pth"
+E3_TOP_N_STEP7200:         "gs://training-job-outputs/best_checkpoints/jzroefab/top_n_effort_20260503_step7200_auc0.9976_eer0.0140.pth"
+E3_STEP8000:               "gs://training-job-outputs/best_checkpoints/jzroefab/periodic_effort_20260503_step8000_auc0.9972_eer0.0140.pth"
+E3_VALUE_COMPOSITE_STEP600: "gs://training-job-outputs/best_checkpoints/jzroefab/value_composite_effort_20260503_step600_auc0.9511_eer0.1238.pth"

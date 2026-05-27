@@ -1,0 +1,185 @@
+visomaster_enhanced_macro_dev — subtype-stratified re-analysis
+================================================================
+
+Date: 2026-05-04
+Suite: visomaster_enhanced_macro_dev (n=550 fakes)
+Ckpts: P8A_step5000 (B16 FT), E2B_top_n_step3200 (B16 scratch+CE), E3_top_n_step6600 (L14 scratch+CE)
+tau calibration: quantile of teams_real_all_dev (n=4564 reals) per FPR target
+
+NOTE: hooks blocked .md write; written as .txt per task instruction "if hooks block .md write to FINDINGS.txt and note the override."
+
+------------------------------------------------------------
+SUBTYPE TAGGING
+------------------------------------------------------------
+Rule: substring on filename (basename of frame_path).
+  - "visomaster_enhanced_raw"   in filename -> raw   (n=275)
+  - "visomaster_enhanced_teams" in filename -> teams (n=275)
+  - 0 frames untagged. Counts match Section 6d of FINDINGS_FACTS.md exactly.
+  - crop_attributes.csv reproduces the same 275/275 split independently.
+
+------------------------------------------------------------
+PER-SUBTYPE RECALL, SIDE-BY-SIDE
+------------------------------------------------------------
+FPR = 10% (operational deployment tau):
+
+  ckpt        raw recall          teams recall        Delta (teams - raw)
+  P8A         36.0% (99/275)      17.8% (49/275)      -18.2 pp
+  E2B_3200     3.6% (10/275)      13.1% (36/275)      +9.5 pp
+  E3_6600     19.3% (53/275)       8.4% (23/275)      -10.9 pp
+  UNION       43.3% (119/275)     24.4% (67/275)      -18.9 pp
+
+FPR = 5%:
+
+  ckpt        raw recall          teams recall
+  P8A          8.4% (23/275)       3.3% (9/275)
+  E2B_3200     2.2% (6/275)        7.6% (21/275)
+  E3_6600      9.5% (26/275)       6.2% (17/275)
+  UNION       14.2% (39/275)       9.1% (25/275)
+
+Pattern: P8A and E3 each degrade >=10 pp from raw to teams. E2B partially inverts
+(teams catches more than raw). At FPR=10%, union-of-three uncaught is 156/275 raw
+vs 208/275 teams -- exactly the +19 pp transport gap from FACTS Section 6d.
+
+------------------------------------------------------------
+SCORE-DISTRIBUTION SHIFTS
+------------------------------------------------------------
+P8A median: 0.406 (raw) -> 0.106 (teams); p90: 0.968 -> 0.863. Magnitude lost.
+E3  median: 0.143       ->  0.085;        p90: 0.983 -> 0.775. Magnitude lost.
+E2B median: 0.025       ->  0.025 (FLAT); p90: 0.235 -> 0.609. Right-tail GAINED.
+So P8A/E3 lose magnitude on teams; E2B gains a right-tail mode in teams.
+
+------------------------------------------------------------
+CROSS-CKPT CORRELATIONS (Pearson / Spearman)
+------------------------------------------------------------
+  pair          raw                 teams               pooled (FACTS §4)
+  P8A x E2B     0.408 / 0.745       0.347 / 0.099       0.295 / -
+  P8A x E3      0.414 / 0.571       0.344 / 0.225       0.411 / -
+  E2B x E3      0.485 / 0.665       0.845 / 0.603       0.587 / -
+
+Big finding: within RAW, P8A<->E2B Spearman = 0.745. In TEAMS it COLLAPSES to 0.099.
+The pooled FACTS figure (0.295) was a Simpson-style mix of high within-raw rank-
+correlation and near-zero within-teams rank-correlation. P8A's "unique-catch"
+pooled advantage really lives in the teams subtype where the ckpts decorrelate.
+
+------------------------------------------------------------
+FRAME-COVERAGE VENN AT FPR=10%
+------------------------------------------------------------
+RAW:    P8A-only 63 (22.9%); P8A+E3 26 (9.5%); E3-only 20 (7.3%); all-3 7 (2.5%);
+        P8A+E2B 3; E2B-only 0. Pattern: P8A is dominant.
+TEAMS:  P8A-only 30 (10.9%); all-3 18 (6.5%); E2B-only 13 (4.7%); E2B+E3 4;
+        E3-only 1; P8A+E2B 1; P8A+E3 0. Pattern: P8A's lone advantage shrinks;
+        E2B's lone-catch axis emerges.
+
+------------------------------------------------------------
+Q1 -- Does the transport shift the IQ distribution?  YES, MASSIVELY.
+------------------------------------------------------------
+Top-3 features by |Cohen's d| between raw and teams (sign = raw - teams):
+
+  feature         raw_mean   teams_mean   Cohen's d        p
+  luma_p90         203.3      240.2       -5.23          3e-237
+  luma_mean        143.0      176.8       -3.71          2e-174
+  luma_p10          46.0       68.3       -2.51          3e-110
+
+Plus luma_std (d=-1.68), saturation_mean (d=+1.44),
+laplacian_var (d=+0.80, raw 60.4 -> teams 35.7 -- a 41% sharpness loss),
+sobel_edge (d=+0.54). h/w are identical (cropper-fixed at 379).
+
+Direction: the teams transport pushes frames into a brighter, lower-contrast,
+lower-saturation, BLURRIER image-quality region. This is the same direction as
+the lockbox cam_test_s33 webcam mode (memory: project_image_quality_shortcut.md;
+project_lockbox_fpr_dominated_by_webcam_mode.md). The teams transport has done to
+viso fakes what webcam capture did to lockbox reals: shoved them into the model's
+"hard / blurry / bright / desaturated" domain.
+
+------------------------------------------------------------
+Q2 -- Are caught-vs-uncaught predictors the same in both subtypes?  NO -- they diverge.
+------------------------------------------------------------
+L1 logistic (C=0.5, liblinear, max_iter=1000), 5-fold stratified CV accuracy:
+  raw subtype:    CV acc = 0.724  (vs pooled FACTS §6b 0.705)
+  teams subtype:  CV acc = 0.756  (slightly higher than pooled)
+Both well above the 0.65 honesty floor. Within-subtype, IQ alone substantially
+explains catch behavior in BOTH subtypes -- the model is NOT relying on a
+transport-specific axis hidden from IQ.
+
+Standardized coefficients (rounded; subset; "0" = L1-zeroed):
+
+  feature           raw coef    teams coef    change
+  laplacian_var      +1.00        -0.11       SIGN-FLIP, 9x shrink
+  sobel_edge_mean    -0.34         0.00       L1-zeroed in teams
+  luma_std           -0.29        -0.51       strengthens (teams)
+  skin_frac          +0.63        +0.28       weakens
+  saturation_mean    -0.85        -0.82       stable, both negative
+  luma_p10           -0.77        -0.60       stable direction
+  h, w               +0.21..0.24  +0.29..0.36 grows; size more predictive in teams
+  luma_p90           -0.03        -0.13       barely active either way
+  luma_mean           0.00         0.00       L1-zeroed both
+
+Caught-vs-uncaught Cohen's d on laplacian_var: raw d=+0.80 (sharper -> caught)
+vs teams d=-0.11 (no signal). In raw, ckpts catch the sharper fakes (image-quality
+shortcut: blur reads as "real-looking"). In teams the ENTIRE subtype is below the
+sharpness band where this signal discriminates -- sharpness is no longer load-bearing.
+
+------------------------------------------------------------
+VERDICT (HIGH CONFIDENCE)
+------------------------------------------------------------
+Viso->teams is hard PRIMARILY because the transport pushes image quality into a
+region the model already fails on, regardless of method.
+
+Three converging lines:
+  1. Transport shifts luma/sharpness/saturation by Cohen's d = 0.5..5.2, in the
+     SAME DIRECTION as the previously-documented webcam-mode failure axis.
+  2. Within each subtype, IQ-only L1 logistic predicts catch with 72-76% CV acc
+     -- IQ retains predictive grip in both halves; no hidden transport axis.
+  3. Sharpness lever FLIPS OFF in teams (d=+0.80 -> d=-0.11) -- entire teams
+     subtype dragged below the discrimination band, exactly the pattern when a
+     domain shift saturates a feature out of usable range.
+
+Residual uncertainty: cross-ckpt correlation collapse in teams (P8A<->E2B
+Spearman 0.745 -> 0.099) leaves ~25% of teams uncaught variance unexplained by
+IQ alone. There IS some axis on which architectures disagree about teams frames.
+But that is SECONDARY on top of the primary IQ-compounded story.
+
+  Confidence:   HIGH on the IQ-compounded explanation.
+                MODERATE that there is a small additional transport-specific
+                  component in the residual.
+
+------------------------------------------------------------
+IMPLICATIONS FOR NEXT-PACKET DESIGN
+------------------------------------------------------------
+1. Don't aim a packet at "transport signature." The hard part is image-quality
+   robustness. A packet whose only lever is transport-aware augmentation will
+   probably fail like P14_DATA_FIX did -- binding constraint is tau-tail
+   separation under blur/brightness shift, not data presence.
+
+2. The right lever is sharpness/brightness invariance. P22's pipeline_randomization
+   is the closest existing match: it traded train AUC for 3x dev fake macro recall
+   and dropped Pearson |r| 0.44 -> 0.12 (memory: project_p22_succeeded_2026-05-02
+   and the step1k reframe). A P22-derived packet that EXPLICITLY hits gaussian-blur
+   + brightness-jitter at training time is the natural next move.
+
+3. P8A and E2B catch DIFFERENT teams frames (Spearman 0.099). On this 275-frame
+   teams subset, the union of P8A (49) and E2B (36) substantially overlaps with
+   the union-of-three (67). E3 contributes very little marginal teams catch.
+   A P8A + E2B (B16 scratch+CE) ensemble on teams-style frames is essentially free.
+
+4. Add a viso-teams-specific eval slice. The 19 pp transport gap is large enough
+   that it should be a first-class scorecard slice rather than buried inside
+   visomaster_enhanced_macro_dev. The promotion contract currently aggregates
+   across a 56.7% / 75.6% split that hides which subtype a candidate lifts.
+
+5. Don't reach for arch changes again. L14 (E3) and B16-scratch (E2B) don't help
+   the teams subtype either -- three architecturally distinct ckpts, all failing.
+   The blocker is upstream of architecture.
+
+------------------------------------------------------------
+ARTIFACTS WRITTEN
+------------------------------------------------------------
+  subtype_recall_by_fpr.csv
+  subtype_score_stats.csv
+  subtype_correlations.csv
+  subtype_frame_coverage.csv
+  subtype_iq_distribution.csv
+  subtype_iq_caught_vs_uncaught.csv
+  subtype_logistic_within.csv
+  run_analysis.py        (the driver)
+  FINDINGS.txt           (this file -- .md was hook-blocked)

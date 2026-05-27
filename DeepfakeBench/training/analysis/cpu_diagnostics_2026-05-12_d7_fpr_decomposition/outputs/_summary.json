@@ -1,0 +1,87 @@
+{
+  "n_eval_real_used": 3416,
+  "n_train_real_reference": 371,
+  "k_nn": 10,
+  "tau_5pct_dev_cal": {
+    "P8A": 0.9752188086509702,
+    "T5C_step3500": 0.8464740306138987
+  },
+  "per_ckpt": {
+    "P8A": {
+      "n_obs": 3416,
+      "n_fp": 113,
+      "fp_rate": 0.03307962529274005,
+      "full_pseudo_r2": 0.2797970883247881,
+      "full_auc": 0.8797687272766244,
+      "tau_5pct_dev_cal": 0.9752188086509702,
+      "block_deltas": {
+        "iq": {
+          "delta_pseudo_r2": 0.23591710136099142,
+          "delta_auc": 0.1976240425035969
+        },
+        "substrate": {
+          "delta_pseudo_r2": 0.014614064012971717,
+          "delta_auc": -0.0003456230458231957
+        },
+        "chronic": {
+          "delta_pseudo_r2": 0.013723743482217166,
+          "delta_auc": 0.005795214326477227
+        }
+      }
+    },
+    "T5C_step3500": {
+      "n_obs": 3416,
+      "n_fp": 197,
+      "fp_rate": 0.05766978922716628,
+      "full_pseudo_r2": 0.39233273156775994,
+      "full_auc": 0.890810116961001,
+      "tau_5pct_dev_cal": 0.8464740306138987,
+      "block_deltas": {
+        "iq": {
+          "delta_pseudo_r2": 0.31434640703359684,
+          "delta_auc": 0.19301009393780277
+        },
+        "substrate": {
+          "delta_pseudo_r2": 0.0001101869104794817,
+          "delta_auc": 0.0008499660171286116
+        },
+        "chronic": {
+          "delta_pseudo_r2": 0.06245867232924296,
+          "delta_auc": 0.04232483840395629
+        }
+      }
+    }
+  },
+  "block_correlations": {
+    "substrate_z": {
+      "substrate_z": 1.0,
+      "iq_pc1": 0.004046238559994883,
+      "chronic_indicator": -0.0561629771513336
+    },
+    "iq_pc1": {
+      "substrate_z": 0.004046238559994883,
+      "iq_pc1": 1.0,
+      "chronic_indicator": -0.3661275057642569
+    },
+    "chronic_indicator": {
+      "substrate_z": -0.0561629771513336,
+      "iq_pc1": -0.3661275057642569,
+      "chronic_indicator": 1.0
+    }
+  },
+  "per_suite_n_real": {
+    "teams_real_all_dev": 1576,
+    "teams_real_lighting_extreme_dev": 865,
+    "teams_real_poor_quality_dev": 749,
+    "teams_real_all_lockbox": 176,
+    "teams_real_dor_dev": 50
+  },
+  "per_suite_n_chronic": {
+    "teams_real_all_dev": 865,
+    "teams_real_all_lockbox": 156,
+    "teams_real_dor_dev": 50,
+    "teams_real_lighting_extreme_dev": 661,
+    "teams_real_poor_quality_dev": 323
+  },
+  "elapsed_seconds": 110.33546280860901
+}

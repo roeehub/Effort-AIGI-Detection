@@ -19,3 +19,28 @@ arena/arena_results/
 dataset/HDTF/
 dataset/TalkVid/
 # media folderm such as /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/media/table/val_holdout/method_table_6594_1c5f8ccff35055aad3c7.table.json
+
+# ---- agent / local state ----
+.claude/
+
+# ---- large regenerable analysis data (exceeds GitHub's 100MB file limit) ----
+*.pt
+*.pth
+*.npy
+*.npz
+*.pkl
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+dataset/demo_videos_2026-05-14/
+analysis/manual_canary_2026-05-20/
+analysis/teams_account_validation_2026-05-19/
+analysis/team_identity_deploy_readout_2026-05-23/
+
+# regenerable scorecard data dumps + local caches (never commit)
+promotion_contract.json
+_fingerprint_cache*/
+_frame_cache/
+_prod_cache/

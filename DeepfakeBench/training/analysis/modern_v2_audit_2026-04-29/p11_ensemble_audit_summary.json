@@ -1,0 +1,11 @@
+{
+  "n_real_cur": 281,
+  "n_real_relax": 308,
+  "n_fake_lockbox_cur": 367,
+  "n_fake_lockbox_relax": 390,
+  "n_fake_visomaster": 550,
+  "auc_lockbox_cur": 0.6026,
+  "auc_lockbox_relax": 0.6186,
+  "auc_visomaster_cur": 0.6075,
+  "auc_visomaster_relax": 0.602
+}

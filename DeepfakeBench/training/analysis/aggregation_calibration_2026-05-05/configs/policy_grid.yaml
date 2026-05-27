@@ -1,0 +1,42 @@
+# Policy grid for window-aggregation Pareto sweep (Phase 4).
+# Each strategy expands to a Cartesian product of params. Override rules
+# multiply that further. Total ~2000-3000 candidate policies.
+
+window_size: [16, 32, 48]
+
+strategies:
+  - name: majority_vote
+    params:
+      threshold: [0.3, 0.4, 0.5, 0.6, 0.7]
+      vote_majority: [0.4, 0.5, 0.6, 0.7]
+
+  - name: high_vote_floor
+    params:
+      threshold: [0.4, 0.5, 0.6]
+      vote_majority: [0.7, 0.8]
+
+  - name: trimmed_mean_above_thresh
+    params:
+      threshold: [0.4, 0.5, 0.6]
+      trim_pct: [0.10, 0.20, 0.30]
+
+  - name: median_above_thresh
+    params:
+      threshold: [0.3, 0.4, 0.5, 0.6, 0.7]
+
+  - name: rolling_mean_then_thresh
+    params:
+      smoothing_window: [5, 9, 15]
+      threshold: [0.3, 0.4, 0.5, 0.6, 0.7]
+
+  - name: run_length
+    params:
+      threshold: [0.5, 0.7, 0.9]
+      M: [5, 8, 12, 15]
+
+override_rules:
+  - none
+  - one_frame_above_0.98
+  - two_frames_above_0.98_in_window
+  - three_consec_frames_above_0.95
+  - five_consec_frames_above_0.90

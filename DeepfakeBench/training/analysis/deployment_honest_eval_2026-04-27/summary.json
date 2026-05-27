@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-04-27 18:00 CEST",
+  "parquet": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/lockbox_tagging/full_tags_2026-04-27.parquet",
+  "model_used_for_predictions": "R9A_run1 (top_n_effort_20260228_step6000_auc0.9891_eer0.0457.pth)",
+  "n_rows": 7334,
+  "n_dev": 6495,
+  "n_lockbox": 839,
+  "key_finding_face_size_at_t05_full": {
+    "smallest_q1_fpr": "see B_quartile_face_pixel_area_thr0.5.csv",
+    "largest_q4_fpr": "see B_quartile_face_pixel_area_thr0.5.csv"
+  },
+  "outputs": [
+    "A_threshold_sweep_per_split.csv",
+    "B_quartile_brightness_v_mean_thr0.5.csv",
+    "B_quartile_face_pixel_area_thr0.5.csv",
+    "B_quartile_pitch_deg_thr0.5.csv",
+    "B_quartile_sharpness_laplacian_thr0.5.csv",
+    "B_quartile_yaw_deg_thr0.5.csv",
+    "C_facearea_dev_thr0.5.csv",
+    "C_facearea_lockbox_thr0.5.csv",
+    "D_per_method_recall_by_facearea.csv",
+    "E_deployment_cut_sweep.csv"
+  ]
+}

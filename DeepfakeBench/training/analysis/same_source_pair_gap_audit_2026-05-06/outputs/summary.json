@@ -1,0 +1,303 @@
+{
+  "audit_name": "SAME_SOURCE_PAIR_GAP_AUDIT_2026-05-06",
+  "phase": "0g",
+  "step_1_cache_first_audit": {
+    "checked_caches": [
+      {
+        "path": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/identity_browser_2026-05-05/data/grouped_manifest_v2.csv",
+        "n_rows": 14626
+      },
+      {
+        "path": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/pair_gap_audit_2026-05-06/outputs/pair_gaps.csv",
+        "n_rows": 37327
+      }
+    ],
+    "n_rows_per_lane": {
+      "df40": 0,
+      "deeplive": 0,
+      "visomaster_v1_base": 0,
+      "visomaster_enhanced": 2073,
+      "visomaster_teams_enhanced": 0,
+      "deeplive_teams": 0
+    },
+    "n_pairs_per_lane": {
+      "df40": 0,
+      "deeplive": 0,
+      "visomaster_v1_base": 0,
+      "visomaster_enhanced": 0,
+      "visomaster_teams_enhanced": 0,
+      "deeplive_teams": 0
+    },
+    "n_pairs_total": 0,
+    "lane_coverage": {},
+    "prior_pair_gaps_tight_matches": 9
+  },
+  "step_1_sufficient_for_tight_pair_gap": false,
+  "lane_verdicts_via_proxy": {
+    "df40": {
+      "covered": false,
+      "by_ckpt": {
+        "P8A": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "E2B": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "PA_3800": {
+          "verdict": "INSUFFICIENT_DATA"
+        }
+      }
+    },
+    "deeplive": {
+      "covered": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs": 847,
+          "n_missed": 68,
+          "p_gap_le_0": 0.23529411764705882,
+          "verdict": "AMBER"
+        },
+        "E2B": {
+          "n_pairs": 847,
+          "n_missed": 29,
+          "p_gap_le_0": 0.06896551724137931,
+          "verdict": "RED"
+        },
+        "PA_3800": {
+          "n_pairs": 847,
+          "n_missed": 9,
+          "p_gap_le_0": 0.1111111111111111,
+          "verdict": "AMBER"
+        }
+      }
+    },
+    "visomaster_v1_base": {
+      "covered": false,
+      "by_ckpt": {
+        "P8A": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "E2B": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "PA_3800": {
+          "verdict": "INSUFFICIENT_DATA"
+        }
+      }
+    },
+    "visomaster_enhanced": {
+      "covered": true,
+      "by_ckpt": {
+        "P8A": {
+          "n_pairs": 2869,
+          "n_missed": 765,
+          "p_gap_le_0": 0.28104575163398693,
+          "verdict": "GREEN"
+        },
+        "E2B": {
+          "n_pairs": 2869,
+          "n_missed": 1331,
+          "p_gap_le_0": 0.08564988730277986,
+          "verdict": "RED"
+        },
+        "PA_3800": {
+          "n_pairs": 2869,
+          "n_missed": 2167,
+          "p_gap_le_0": 0.435163820950623,
+          "verdict": "GREEN"
+        }
+      }
+    },
+    "visomaster_teams_enhanced": {
+      "covered": false,
+      "by_ckpt": {
+        "P8A": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "E2B": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "PA_3800": {
+          "verdict": "INSUFFICIENT_DATA"
+        }
+      }
+    },
+    "deeplive_teams": {
+      "covered": false,
+      "by_ckpt": {
+        "P8A": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "E2B": {
+          "verdict": "INSUFFICIENT_DATA"
+        },
+        "PA_3800": {
+          "verdict": "INSUFFICIENT_DATA"
+        }
+      }
+    }
+  },
+  "aggregate_per_ckpt": {
+    "P8A": {
+      "n_green_lanes": 1,
+      "n_amber_lanes": 1,
+      "n_red_lanes": 0,
+      "n_insufficient_lanes": 4,
+      "lane_verdicts": [
+        {
+          "lane": "df40",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "deeplive",
+          "verdict": "AMBER",
+          "n_pairs": 847,
+          "n_missed": 68,
+          "p_gap_le_0": 0.23529411764705882
+        },
+        {
+          "lane": "visomaster_v1_base",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "visomaster_enhanced",
+          "verdict": "GREEN",
+          "n_pairs": 2869,
+          "n_missed": 765,
+          "p_gap_le_0": 0.28104575163398693
+        },
+        {
+          "lane": "visomaster_teams_enhanced",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "deeplive_teams",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        }
+      ]
+    },
+    "E2B": {
+      "n_green_lanes": 0,
+      "n_amber_lanes": 0,
+      "n_red_lanes": 2,
+      "n_insufficient_lanes": 4,
+      "lane_verdicts": [
+        {
+          "lane": "df40",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "deeplive",
+          "verdict": "RED",
+          "n_pairs": 847,
+          "n_missed": 29,
+          "p_gap_le_0": 0.06896551724137931
+        },
+        {
+          "lane": "visomaster_v1_base",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "visomaster_enhanced",
+          "verdict": "RED",
+          "n_pairs": 2869,
+          "n_missed": 1331,
+          "p_gap_le_0": 0.08564988730277986
+        },
+        {
+          "lane": "visomaster_teams_enhanced",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "deeplive_teams",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        }
+      ]
+    },
+    "PA_3800": {
+      "n_green_lanes": 1,
+      "n_amber_lanes": 1,
+      "n_red_lanes": 0,
+      "n_insufficient_lanes": 4,
+      "lane_verdicts": [
+        {
+          "lane": "df40",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "deeplive",
+          "verdict": "AMBER",
+          "n_pairs": 847,
+          "n_missed": 9,
+          "p_gap_le_0": 0.1111111111111111
+        },
+        {
+          "lane": "visomaster_v1_base",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "visomaster_enhanced",
+          "verdict": "GREEN",
+          "n_pairs": 2869,
+          "n_missed": 2167,
+          "p_gap_le_0": 0.435163820950623
+        },
+        {
+          "lane": "visomaster_teams_enhanced",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        },
+        {
+          "lane": "deeplive_teams",
+          "verdict": "INSUFFICIENT_DATA",
+          "n_pairs": null,
+          "n_missed": null,
+          "p_gap_le_0": null
+        }
+      ]
+    }
+  },
+  "p1_recommendation_per_ckpt": {
+    "P8A": "LANE_RESTRICTED_LAUNCH",
+    "E2B": "DEMOTE_P1",
+    "PA_3800": "LANE_RESTRICTED_LAUNCH"
+  },
+  "decision_rule": {
+    "green_threshold": 0.25,
+    "amber_threshold": 0.1,
+    "min_green_lanes_for_launch": 2
+  },
+  "proxy_csv_path": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/same_source_pair_gap_audit_2026-05-06/outputs/same_source_pairs.csv"
+}

@@ -1,0 +1,33 @@
+{
+  "substrate_source": "clip_capture_mode (from lockbox_tagging parquet)",
+  "tags_parquet": "analysis/iq_substrate_tau_2026-05-21/iq_k4_parquet/synthetic_tags.parquet",
+  "substrates": [
+    "iqA0",
+    "iqA1",
+    "iqA2",
+    "iqA3"
+  ],
+  "substrate_counts_in_parquet": {
+    "iqA1": 2644,
+    "iqA2": 2315,
+    "iqA3": 2215,
+    "iqA0": 160
+  },
+  "substrate_counts_per_score_frame": {
+    "real_dev": {
+      "iqA1": 1622,
+      "iqA2": 1292,
+      "iqA3": 1057,
+      "unknown": 558,
+      "iqA0": 35
+    },
+    "real_lockbox": {
+      "unknown": 1004,
+      "iqA3": 263,
+      "iqA2": 63,
+      "iqA1": 51,
+      "iqA0": 37
+    }
+  },
+  "notes": "Frames not present in the tags parquet are bucketed as 'unknown' and appear under fpr_dev_unknown / fpr_lockbox_unknown sweep cols. Treat them as a real-frame substrate; if their FPR is the worst, selected tau is conservative w.r.t. them."
+}

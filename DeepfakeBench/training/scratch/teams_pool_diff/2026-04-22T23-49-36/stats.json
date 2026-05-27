@@ -1,0 +1,7 @@
+{
+  "run_dir": "scratch/teams_pool_diff/2026-04-22T23-49-36",
+  "n_frames_collected": 444,
+  "report_path": "scratch/teams_pool_diff/2026-04-22T23-49-36/report.html",
+  "skipped_passes": [],
+  "checkpoint": "gs://training-job-outputs/phase2r13_experiments/w92amaaa/value_composite_effort_20260422_step2500_auc0.9895_eer0.0116.pth"
+}

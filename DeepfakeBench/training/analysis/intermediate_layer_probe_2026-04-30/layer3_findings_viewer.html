@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P17 Layer-3 Finding Viewer</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #1b1f27;
+      --muted: #5d6678;
+      --line: #d8dde7;
+      --strong: #0f766e;
+      --warn: #b45309;
+      --bad: #b42318;
+      --blue: #2563eb;
+      --green: #059669;
+      --orange: #d97706;
+      --red: #dc2626;
+      --violet: #7c3aed;
+      --slate: #475569;
+      --soft-blue: #dbeafe;
+      --soft-green: #d1fae5;
+      --soft-orange: #ffedd5;
+      --soft-red: #fee2e2;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 12px 32px rgba(15, 23, 42, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .wrap {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 26px 0 22px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 28px;
+      line-height: 1.12;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 820px;
+      font-size: 14px;
+    }
+
+    .status {
+      flex: 0 0 auto;
+      display: grid;
+      gap: 8px;
+      justify-items: end;
+      text-align: right;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #99f6e4;
+      background: #ccfbf1;
+      color: #134e4a;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    main {
+      padding: 24px 0 40px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .summary {
+      grid-column: span 8;
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .summary h2,
+    .sourcebox h2,
+    .visual h2,
+    .critique h2 {
+      font-size: 15px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .summary p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .verdicts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .verdict {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 112px;
+    }
+
+    .verdict strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .verdict span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .sourcebox {
+      grid-column: span 4;
+      padding: 18px;
+    }
+
+    .sourcebox ul,
+    .critique ul {
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+
+    .sourcebox li {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.95em;
+      background: #f1f5f9;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .kpis {
+      grid-column: span 12;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .kpi {
+      padding: 16px;
+      min-height: 134px;
+    }
+
+    .kpi .label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .kpi .value {
+      margin-top: 10px;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .kpi .note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .visual {
+      grid-column: span 12;
+      padding: 18px;
+    }
+
+    .tabbar {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tab {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--ink);
+      border-radius: 7px;
+      padding: 8px 10px;
+      min-height: 36px;
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .tab[aria-selected="true"] {
+      border-color: #93c5fd;
+      background: var(--soft-blue);
+      color: #1e3a8a;
+    }
+
+    .chart-layout {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .chartbox {
+      min-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .side {
+      display: grid;
+      gap: 12px;
+    }
+
+    .callout {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      padding: 12px;
+      background: #ffffff;
+    }
+
+    .callout strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .callout p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .callout.warn {
+      border-color: #fed7aa;
+      background: #fff7ed;
+    }
+
+    .callout.good {
+      border-color: #a7f3d0;
+      background: #ecfdf5;
+    }
+
+    .callout.bad {
+      border-color: #fecaca;
+      background: #fef2f2;
+    }
+
+    .tablewrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      font-size: 12px;
+      background: #ffffff;
+    }
+
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left;
+    }
+
+    th {
+      color: #334155;
+      background: #f8fafc;
+      font-weight: 760;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .critique {
+      grid-column: span 12;
+      padding: 18px;
+    }
+
+    .critique-grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .critique li {
+      position: relative;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .critique li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.55em;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--slate);
+    }
+
+    .critique .good li::before {
+      background: var(--green);
+    }
+
+    .critique .warn li::before {
+      background: var(--orange);
+    }
+
+    .critique .bad li::before {
+      background: var(--red);
+    }
+
+    .fineprint {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 940px) {
+      .topbar,
+      .chart-layout,
+      .critique-grid,
+      .verdicts,
+      .kpis {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        display: grid;
+      }
+
+      .status {
+        justify-items: start;
+        text-align: left;
+      }
+
+      .summary,
+      .sourcebox {
+        grid-column: span 12;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .wrap {
+        width: min(100vw - 20px, 1180px);
+      }
+
+      h1 {
+        font-size: 23px;
+      }
+
+      .kpi .value {
+        font-size: 28px;
+      }
+
+      .tab {
+        flex: 1 1 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap topbar">
+      <div>
+        <h1>P17 Layer-3 Finding Viewer</h1>
+        <p class="subtitle">
+          Visual readout of the intermediate-layer probes for the P8A detector.
+          The main question is whether fake/real signal is still aligned across
+          dev and lockbox at layer 3, while deeper layers learn a substrate-flipped
+          decision direction.
+        </p>
+      </div>
+      <div class="status">
+        <span class="pill">Evidence: strong CPU hypothesis</span>
+        <span>Generated for local review from probe outputs dated 2026-05-01.</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="grid">
+      <div class="panel summary">
+        <h2>Plain-English Reading</h2>
+        <p>
+          The finding is not just "layer 3 has decent AUC." The important pattern
+          is transfer: a classifier trained on dev features keeps working on
+          lockbox at layer 3, then largely stops working at layers 6 and 11.
+          That is exactly what a substrate-confounded representation looks like.
+        </p>
+        <div class="verdicts">
+          <div class="verdict">
+            <strong>Most credible claim</strong>
+            <span>Layer-3 P8A features contain more substrate-stable label signal than the final readout.</span>
+          </div>
+          <div class="verdict">
+            <strong>Overstated claim</strong>
+            <span>The MLP headline is not a pure holdout estimate because lockbox was used for epoch selection in the original script.</span>
+          </div>
+          <div class="verdict">
+            <strong>Next decision</strong>
+            <span>A layer-3 head experiment is justified; verify the new <code>freeze_svd_residuals</code> guard before launch.</span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel sourcebox">
+        <h2>Primary Local Sources</h2>
+        <ul>
+          <li><code>outputs/scaled_layer3_validation.json</code> - 4000 dev + 839 lockbox LR transfer.</li>
+          <li><code>outputs/mlp_layer3_head.json</code> - original 2-hidden-layer MLP headline.</li>
+          <li><code>outputs/prod_honest_layer3.json</code> - 180 real production-honest frames.</li>
+          <li><code>outputs/per_layer_split_probe.csv</code> - small 800-frame split-transfer probe.</li>
+          <li><code>outputs/per_layer_domain_probe.csv</code> - capture-mode decodability by layer.</li>
+        </ul>
+      </aside>
+
+      <div class="kpis">
+        <div class="panel kpi">
+          <div class="label">Scaled LR transfer, layer 3, dev -> lockbox at FPR 5%</div>
+          <div class="value" style="color: var(--green);">65.9%</div>
+          <div class="note">This is the conservative linear readout, not the MLP headline.</div>
+        </div>
+        <div class="panel kpi">
+          <div class="label">MLP sanity, layer 3, dev-validation-selected mean rec@5%</div>
+          <div class="value" style="color: var(--blue);">91.3%</div>
+          <div class="note">5 local seeds, selected by dev validation BCE, not lockbox AUC.</div>
+        </div>
+        <div class="panel kpi">
+          <div class="label">Production-honest worst group fake-rate, P8A -> layer-3 LR</div>
+          <div class="value" style="color: var(--green);">90 -> 0%</div>
+          <div class="note">All 180 production-honest frames are real, so this validates FPR only.</div>
+        </div>
+        <div class="panel kpi">
+          <div class="label">Current P8A baseline, lockbox recall near 5% FPR</div>
+          <div class="value" style="color: var(--orange);">32.9%</div>
+          <div class="note">Reference from the handoff and synthesis document.</div>
+        </div>
+      </div>
+
+      <section class="panel visual">
+        <h2 id="panelTitle">Scaled Transfer</h2>
+        <div class="tabbar" role="tablist" aria-label="Finding panels">
+          <button class="tab" data-panel="transfer" aria-selected="true">Scaled Transfer</button>
+          <button class="tab" data-panel="mlp" aria-selected="false">MLP Head</button>
+          <button class="tab" data-panel="prod" aria-selected="false">Prod Honest</button>
+          <button class="tab" data-panel="domain" aria-selected="false">Domain Drift</button>
+          <button class="tab" data-panel="critiquePanel" aria-selected="false">Critical Lens</button>
+        </div>
+
+        <div class="chart-layout">
+          <div class="chartbox" id="chart"></div>
+          <div class="side" id="side"></div>
+        </div>
+        <div class="tablewrap" id="table"></div>
+      </section>
+
+      <section class="panel critique">
+        <h2>Critical Evaluation</h2>
+        <div class="critique-grid">
+          <div class="callout good">
+            <strong>What is genuinely strong</strong>
+            <ul class="good">
+              <li>The direction is consistent across independent probes: small split transfer, scaled transfer, MLP capacity, and production-honest FPR.</li>
+              <li>The scaled LR result uses 839 lockbox frames, not only the small 87-frame lockbox slice.</li>
+              <li>The layer-11 failure is mechanically plausible: within-split AUC is high while dev -> lockbox transfer collapses.</li>
+            </ul>
+          </div>
+          <div class="callout warn">
+            <strong>What is weaker than the memo says</strong>
+            <ul class="warn">
+              <li>The original MLP script selects the best epoch by lockbox AUC, so the 92.9% rec@5% headline is optimistic.</li>
+              <li>The 180-frame production-honest set is all real; it measures false positives, not fake recall or calibrated deployment utility.</li>
+              <li>The original staged P17 YAML claimed a frozen backbone, but local gradient inspection showed SVD residual gradients in resblocks 0-3.</li>
+              <li>The original P17 schedule used non-trainer keys (<code>total_steps</code>, <code>warmup_steps</code>, <code>save_steps</code>), which would not launch as described.</li>
+              <li><code>visomaster_enhanced_macro_dev</code> has <code>n=0</code> in the per-method JSON, so the scorecard slice is incomplete.</li>
+            </ul>
+          </div>
+          <div class="callout bad">
+            <strong>What must be proven next</strong>
+            <ul class="bad">
+              <li>The trainer/ArcFace layer-3 head must reproduce the offline LR/MLP behavior under the actual training and scorecard path.</li>
+              <li>The P17 config must keep <code>freeze_svd_residuals: true</code> or use a true head-only optimizer before it tests the stated hypothesis.</li>
+              <li>The new head needs an untouched validation target for epoch and threshold selection.</li>
+              <li>The patch should be tightened to reset the captured hook value each forward and fail loudly if the hook does not fire.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="fineprint">
+          Bottom line: this is a high-quality diagnostic and a good experiment direction.
+          It is not yet a deployment finding. Treat the CPU result as a mechanistic
+          hypothesis with unusually strong support, then demand clean holdout promotion.
+        </p>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const DATA = {
+      scaled: [
+        { layer: "L3", auc: 0.8862, rec05: 0.6588, rec02: 0.5718, rec10: 0.7294, withinDev: 0.9739, withinLb: 0.9923 },
+        { layer: "L6", auc: 0.5364, rec05: 0.1976, rec02: 0.1506, rec10: 0.2212, withinDev: 0.9981, withinLb: 0.9999 },
+        { layer: "L11", auc: 0.5339, rec05: 0.0000, rec02: 0.0000, rec10: 0.0188, withinDev: 0.9963, withinLb: 0.9992 }
+      ],
+      smallTransfer: [
+        { layer: "L3", auc: 0.9495, rec05: 0.9149 },
+        { layer: "L6", auc: 0.3872, rec05: 0.1277 },
+        { layer: "L9", auc: 0.4005, rec05: 0.1277 },
+        { layer: "L11", auc: 0.6596, rec05: 0.3404 }
+      ],
+      mlp: [
+        { layer: "L3", oracleAuc: 0.9784, oracleRec05: 0.9294, valBceAuc: 0.9719, valBceRec05: 0.9134, valBceMin: 0.8918, valBceMax: 0.9412, lastAuc: 0.9686, lastRec05: 0.8993 },
+        { layer: "L6", oracleAuc: 0.9323, oracleRec05: 0.7482, valBceAuc: 0.9299, valBceRec05: 0.7313, valBceMin: 0.6659, valBceMax: 0.7953, lastAuc: 0.9313, lastRec05: 0.7294 },
+        { layer: "L11", oracleAuc: 0.8175, oracleRec05: 0.3388, valBceAuc: 0.4370, valBceRec05: 0.0000, valBceMin: 0.0000, valBceMax: 0.0000, lastAuc: 0.4474, lastRec05: 0.0000 }
+      ],
+      prod: [
+        { group: "dor laptop whiteish", n: 30, p8a: 0.00, l3: 0.00, l6: 0.00, l11: 0.00, meanProbL3: 0.250 },
+        { group: "dor laptop yellowish", n: 30, p8a: 0.10, l3: 0.00, l6: 0.00, l11: 0.00, meanProbL3: 0.385 },
+        { group: "dor webcam false flag", n: 30, p8a: 0.80, l3: 0.00, l6: 0.0333, l11: 0.00, meanProbL3: 0.577 },
+        { group: "dor webcam no virtual bg", n: 30, p8a: 0.80, l3: 0.0667, l6: 0.10, l11: 0.00, meanProbL3: 0.602 },
+        { group: "roee mac virtual bg", n: 30, p8a: 0.90, l3: 0.00, l6: 0.00, l11: 0.00, meanProbL3: 0.323 },
+        { group: "roee windows laptop", n: 30, p8a: 0.00, l3: 0.00, l6: 0.00, l11: 0.00, meanProbL3: 0.251 }
+      ],
+      domain: [
+        { layer: "L0", capture: 0.7753, label: 0.7447, cos: 1.0000, transfer: null },
+        { layer: "L3", capture: 0.8120, label: 0.9297, cos: 0.9995, transfer: 0.9495 },
+        { layer: "L6", capture: 0.8812, label: 0.9953, cos: 0.9959, transfer: 0.3872 },
+        { layer: "L9", capture: 0.8929, label: 0.9848, cos: 0.9947, transfer: 0.4005 },
+        { layer: "L11", capture: 0.8894, label: 0.9819, cos: 0.9733, transfer: 0.6596 }
+      ]
+    };
+
+    const panels = {
+      transfer: {
+        title: "Scaled Transfer",
+        source: "analysis/intermediate_layer_probe_2026-04-30/outputs/scaled_layer3_validation.json",
+        render: renderTransfer
+      },
+      mlp: {
+        title: "MLP Head",
+        source: "analysis/intermediate_layer_probe_2026-04-30/outputs/mlp_layer3_head.json plus local 5-seed sanity rerun",
+        render: renderMlp
+      },
+      prod: {
+        title: "Production-Honest Real Frames",
+        source: "analysis/intermediate_layer_probe_2026-04-30/outputs/prod_honest_layer3.json",
+        render: renderProd
+      },
+      domain: {
+        title: "Domain Drift",
+        source: "per_layer_domain_probe.csv, per_layer_split_probe.csv, per_layer_table.csv",
+        render: renderDomain
+      },
+      critiquePanel: {
+        title: "Critical Lens",
+        source: "Synthesis review plus script inspection",
+        render: renderCritiquePanel
+      }
+    };
+
+    const chart = document.getElementById("chart");
+    const side = document.getElementById("side");
+    const table = document.getElementById("table");
+    const panelTitle = document.getElementById("panelTitle");
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+
+    function pct(x, digits = 1) {
+      if (x === null || x === undefined || Number.isNaN(x)) return "n/a";
+      return `${(x * 100).toFixed(digits)}%`;
+    }
+
+    function num(x, digits = 3) {
+      if (x === null || x === undefined || Number.isNaN(x)) return "n/a";
+      return x.toFixed(digits);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function groupedBars(rows, series, options = {}) {
+      const width = 760;
+      const height = options.height || 360;
+      const margin = { top: 22, right: 26, bottom: 62, left: 58 };
+      const plotW = width - margin.left - margin.right;
+      const plotH = height - margin.top - margin.bottom;
+      const yMax = options.yMax || 1;
+      const zeroY = margin.top + plotH;
+      const groupW = plotW / rows.length;
+      const barGap = 7;
+      const barW = Math.max(12, (groupW - 28 - barGap * (series.length - 1)) / series.length);
+      const ticks = [0, 0.25, 0.5, 0.75, 1].filter(t => t <= yMax);
+      let parts = [];
+      parts.push(`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.title || "chart")}">`);
+      parts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#fbfcfe"></rect>`);
+      ticks.forEach(t => {
+        const y = zeroY - (t / yMax) * plotH;
+        parts.push(`<line x1="${margin.left}" x2="${width - margin.right}" y1="${y}" y2="${y}" stroke="#e2e8f0"></line>`);
+        parts.push(`<text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" font-size="11" fill="#64748b">${Math.round(t * 100)}%</text>`);
+      });
+      rows.forEach((row, i) => {
+        const gx = margin.left + i * groupW + 14;
+        series.forEach((s, j) => {
+          const value = Math.max(0, Math.min(yMax, row[s.key] ?? 0));
+          const h = (value / yMax) * plotH;
+          const x = gx + j * (barW + barGap);
+          const y = zeroY - h;
+          parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="${s.color}"></rect>`);
+          if (h > 24) {
+            parts.push(`<text x="${x + barW / 2}" y="${y + 16}" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">${pct(row[s.key], 0)}</text>`);
+          } else {
+            parts.push(`<text x="${x + barW / 2}" y="${Math.max(14, y - 6)}" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">${pct(row[s.key], 0)}</text>`);
+          }
+        });
+        parts.push(`<text x="${gx + (series.length * barW + (series.length - 1) * barGap) / 2}" y="${height - 34}" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">${escapeHtml(row.layer || row.group)}</text>`);
+      });
+      let lx = margin.left;
+      series.forEach(s => {
+        parts.push(`<rect x="${lx}" y="${height - 18}" width="10" height="10" rx="2" fill="${s.color}"></rect>`);
+        parts.push(`<text x="${lx + 15}" y="${height - 9}" font-size="11" fill="#475569">${escapeHtml(s.label)}</text>`);
+        lx += 15 + s.label.length * 6.5 + 18;
+      });
+      parts.push(`</svg>`);
+      return parts.join("");
+    }
+
+    function lineChart(rows, series, options = {}) {
+      const width = 760;
+      const height = 360;
+      const margin = { top: 26, right: 28, bottom: 58, left: 58 };
+      const plotW = width - margin.left - margin.right;
+      const plotH = height - margin.top - margin.bottom;
+      const xStep = plotW / (rows.length - 1);
+      const y = value => margin.top + plotH - value * plotH;
+      const x = i => margin.left + i * xStep;
+      let parts = [];
+      parts.push(`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.title || "line chart")}">`);
+      parts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#fbfcfe"></rect>`);
+      [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+        parts.push(`<line x1="${margin.left}" x2="${width - margin.right}" y1="${y(t)}" y2="${y(t)}" stroke="#e2e8f0"></line>`);
+        parts.push(`<text x="${margin.left - 10}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="#64748b">${Math.round(t * 100)}%</text>`);
+      });
+      rows.forEach((row, i) => {
+        parts.push(`<text x="${x(i)}" y="${height - 34}" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">${escapeHtml(row.layer)}</text>`);
+      });
+      series.forEach(s => {
+        const pts = rows
+          .map((row, i) => row[s.key] === null ? null : `${x(i)},${y(row[s.key])}`)
+          .filter(Boolean);
+        parts.push(`<polyline points="${pts.join(" ")}" fill="none" stroke="${s.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>`);
+        rows.forEach((row, i) => {
+          if (row[s.key] === null) return;
+          parts.push(`<circle cx="${x(i)}" cy="${y(row[s.key])}" r="4.5" fill="${s.color}" stroke="#ffffff" stroke-width="2"></circle>`);
+        });
+      });
+      let lx = margin.left;
+      series.forEach(s => {
+        parts.push(`<rect x="${lx}" y="${height - 18}" width="10" height="10" rx="2" fill="${s.color}"></rect>`);
+        parts.push(`<text x="${lx + 15}" y="${height - 9}" font-size="11" fill="#475569">${escapeHtml(s.label)}</text>`);
+        lx += 15 + s.label.length * 6.5 + 18;
+      });
+      parts.push(`</svg>`);
+      return parts.join("");
+    }
+
+    function tableHtml(headers, rows) {
+      return `<table><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    }
+
+    function setSide(source, blocks) {
+      side.innerHTML = [
+        `<div class="callout"><strong>Source</strong><p><code>${escapeHtml(source)}</code></p></div>`,
+        ...blocks
+      ].join("");
+    }
+
+    function renderTransfer(panel) {
+      chart.innerHTML = groupedBars(DATA.scaled, [
+        { key: "rec05", label: "transfer rec@5% FPR", color: "#059669" },
+        { key: "auc", label: "transfer AUC", color: "#2563eb" }
+      ], { title: "Scaled layer transfer" });
+      setSide(panel.source, [
+        `<div class="callout good"><strong>Main signal</strong><p>Layer 3 is the only tested layer whose dev-trained LR classifier transfers strongly to lockbox at deployment-grade FPR.</p></div>`,
+        `<div class="callout warn"><strong>Moderation</strong><p>The small-sample layer-3 transfer was 91.5% rec@5%. At full lockbox scale it is 65.9%, so the initial result overstated the simple linear head.</p></div>`,
+        `<div class="callout bad"><strong>Failure mode</strong><p>Layers 6 and 11 have high within-split AUC but poor dev -> lockbox transfer, indicating a substrate-specific label direction.</p></div>`
+      ]);
+      table.innerHTML = tableHtml(
+        ["Layer", "n dev", "n lockbox", "within-dev AUC", "within-lockbox AUC", "transfer AUC", "transfer rec@2%", "transfer rec@5%", "transfer rec@10%"],
+        DATA.scaled.map(r => [r.layer, "4000", "839", num(r.withinDev, 4), num(r.withinLb, 4), num(r.auc, 4), pct(r.rec02), pct(r.rec05), pct(r.rec10)])
+      );
+    }
+
+    function renderMlp(panel) {
+      chart.innerHTML = groupedBars(DATA.mlp, [
+        { key: "oracleRec05", label: "original lockbox-selected", color: "#7c3aed" },
+        { key: "valBceRec05", label: "dev-val-selected sanity", color: "#2563eb" },
+        { key: "lastRec05", label: "last epoch", color: "#059669" }
+      ], { title: "MLP rec@5% FPR" });
+      setSide(panel.source, [
+        `<div class="callout good"><strong>Still robust after stricter selection</strong><p>Across 5 seeds, layer 3 averages 91.3% rec@5% when selected by dev validation BCE, close to the original 92.9% headline.</p></div>`,
+        `<div class="callout warn"><strong>Important caveat</strong><p>The original JSON stores the epoch with best lockbox AUC. That leaks the test target into model selection and should not be used as a final estimate.</p></div>`,
+        `<div class="callout bad"><strong>Layer 11 behavior</strong><p>Layer 11 looks decent only under lockbox-oracle epoch selection. Under dev-validation or last-epoch selection it collapses to 0% rec@5%.</p></div>`
+      ]);
+      table.innerHTML = tableHtml(
+        ["Layer", "original best AUC", "original rec@5%", "dev-val BCE AUC mean", "dev-val BCE rec@5% mean", "dev-val rec@5% range", "last epoch rec@5%"],
+        DATA.mlp.map(r => [r.layer, num(r.oracleAuc, 4), pct(r.oracleRec05), num(r.valBceAuc, 4), pct(r.valBceRec05), `${pct(r.valBceMin)} to ${pct(r.valBceMax)}`, pct(r.lastRec05)])
+      );
+    }
+
+    function renderProd(panel) {
+      chart.innerHTML = groupedBars(DATA.prod, [
+        { key: "p8a", label: "P8A baseline fake-rate", color: "#dc2626" },
+        { key: "l3", label: "layer-3 LR fake-rate", color: "#059669" }
+      ], { title: "Production-honest fake rates", height: 410 });
+      setSide(panel.source, [
+        `<div class="callout good"><strong>Deployment-relevant FPR signal</strong><p>The hardest real source group drops from 90% fake-rate to 0% under the layer-3 LR head at the lockbox-calibrated threshold.</p></div>`,
+        `<div class="callout warn"><strong>Scope limit</strong><p>All 180 frames are real. This panel says the layer-3 readout fixes false positives on these substrates, not that it catches production fakes.</p></div>`,
+        `<div class="callout warn"><strong>Degenerate comparison</strong><p>Layer 11 also has 0% prod fake-rate here because its calibrated threshold suppresses almost all positives; its lockbox recall is also 0%.</p></div>`
+      ]);
+      table.innerHTML = tableHtml(
+        ["Source group", "n", "P8A fake-rate", "layer-3 fake-rate", "layer-6 fake-rate", "layer-11 fake-rate", "L3 mean prob"],
+        DATA.prod.map(r => [escapeHtml(r.group), r.n, pct(r.p8a), pct(r.l3), pct(r.l6), pct(r.l11), num(r.meanProbL3, 3)])
+      );
+    }
+
+    function renderDomain(panel) {
+      chart.innerHTML = lineChart(DATA.domain, [
+        { key: "capture", label: "capture-mode AUC", color: "#d97706" },
+        { key: "label", label: "label AUC", color: "#2563eb" },
+        { key: "transfer", label: "small dev->lb transfer AUC", color: "#059669" }
+      ], { title: "Domain and label decodability" });
+      setSide(panel.source, [
+        `<div class="callout warn"><strong>Substrate is visible early</strong><p>Capture-mode AUC is already 77.5% at layer 0. The right claim is not that substrate appears from nowhere, but that the label direction becomes substrate-flipped deeper in the stack.</p></div>`,
+        `<div class="callout good"><strong>Fine-tune did not reshape mid-stack</strong><p>P8A vs mclioexb cosine stays at or above 0.995 through layer 9, so the jitter fine-tune mostly changed the final readout area.</p></div>`,
+        `<div class="callout bad"><strong>Structural signal</strong><p>Layer 6 has the best within-sample label AUC and one of the worst transfer AUC values, which is a classic confounding pattern.</p></div>`
+      ]);
+      table.innerHTML = tableHtml(
+        ["Layer", "capture-mode AUC", "label AUC", "P8A/mclioexb cosine", "small transfer AUC"],
+        DATA.domain.map(r => [r.layer, num(r.capture, 4), num(r.label, 4), num(r.cos, 4), num(r.transfer, 4)])
+      );
+    }
+
+    function renderCritiquePanel(panel) {
+      chart.innerHTML = groupedBars([
+        { layer: "LR scaled L3", strength: 0.80, risk: 0.25 },
+        { layer: "MLP L3", strength: 0.88, risk: 0.42 },
+        { layer: "Prod 180", strength: 0.70, risk: 0.50 },
+        { layer: "P17 config fixed", strength: 0.55, risk: 0.55 }
+      ], [
+        { key: "strength", label: "evidence strength", color: "#059669" },
+        { key: "risk", label: "promotion risk", color: "#dc2626" }
+      ], { title: "Evidence quality summary" });
+      setSide(panel.source, [
+        `<div class="callout good"><strong>My judgment</strong><p>The layer-3 readout is the best next experiment. The evidence is stronger than the earlier augmentation/checkpoint searches.</p></div>`,
+        `<div class="callout warn"><strong>Config bug found</strong><p>The original YAML was not head-only: a local backward pass showed 1,770,240 SVD residual params in resblocks 0-3 with nonzero gradients. The config now needs the freeze guard to stay in place.</p></div>`,
+        `<div class="callout bad"><strong>Promotion standard</strong><p>Do not promote from this HTML or the CPU probes. Promote only after clean scorecard, untouched threshold selection, and production-honest fake and real coverage.</p></div>`
+      ]);
+      table.innerHTML = tableHtml(
+        ["Issue", "Impact", "Recommended fix"],
+        [
+          ["Lockbox epoch selection in MLP", "Optimistic headline", "Select by dev validation or nested split; keep lockbox final-only."],
+          ["Prod-180 is real-only", "FPR-only validation", "Add matched production-honest fake coverage."],
+          ["Original P17 YAML was not frozen", "Layer-3 representation could move during training", "Keep freeze_svd_residuals true and verify trainable params before launch."],
+          ["Original P17 schedule keys were wrong", "Run length and periodic saves could silently use defaults", "Use total_training_steps, lr_scheduler_warmup_steps, and periodic_saves.step_list."],
+          ["Layer-3 hook state", "Possible stale capture if hook path changes", "Reset capture to null at forward start and assert it fired."],
+          ["Scorecard slice n=0", "Incomplete promotion proxy", "Run official v3 scorecard after Vertex training."],
+          ["Offline head vs trainer head", "Implementation gap", "Run P17 frozen layer-3 arm and compare score distributions."]
+        ]
+      );
+    }
+
+    function activate(name) {
+      const panel = panels[name] || panels.transfer;
+      panelTitle.textContent = panel.title;
+      tabs.forEach(tab => tab.setAttribute("aria-selected", String(tab.dataset.panel === name)));
+      panel.render(panel);
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => activate(tab.dataset.panel));
+    });
+
+    activate("transfer");
+  </script>
+</body>
+</html>

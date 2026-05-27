@@ -1,0 +1,31 @@
+{
+  "n_rows": 4246,
+  "dev_count": 3832,
+  "lockbox_count": 414,
+  "stage_A_raw_clip": {
+    "bacc": 0.9961097526449103,
+    "bacc_std": 0.00465560656456524,
+    "auc": 1.0
+  },
+  "stage_B_iq_only": {
+    "bacc": 0.8264277860747935,
+    "bacc_std": 0.014175567170216074,
+    "auc": 0.9149474451426822
+  },
+  "stage_C_clip_resid_vs_iq": {
+    "bacc": 0.9863477370731975,
+    "bacc_std": 0.011030005921386076,
+    "auc": 0.9985613813611884
+  },
+  "stage_D_drop_top20_iq_aligned": {
+    "bacc": 0.9961097526449103,
+    "auc": 1.0
+  },
+  "stage_E_clip_resid_vs_iq_arcface": {
+    "bacc": 0.44586987601971106,
+    "auc": 0.43428913127210567
+  },
+  "n_clip_dims_with_iq_r2_gt_0_10": 512,
+  "iq_r2_mean": 0.4233153068344109,
+  "iq_r2_max": 0.7601860165596008
+}

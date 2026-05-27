@@ -1,0 +1,32 @@
+Validation Summary Report for: td_teams_fake_all_lockbox_e2b_top_n_step3200
+Run Name: TargetDomain teams_fake_all_lockbox E2B_TOP_N_STEP3200
+Generated on: 2026-05-07 11:54:02
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 253
+Accuracy: 0.8261
+True Positives (Correctly identified Fake): 209
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 44
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_cam_test_s33 (FAKE) -----
+Total Videos: 191
+Accuracy: 0.7696 (147/191 correct)
+
+----- Method: teams_capture_pc_generator_s15 (FAKE) -----
+Total Videos: 62
+Accuracy: 1.0000 (62/62 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=253, acc=0.8261, tpr=0.8261, fpr=0.0000, fnr=0.1739
+
+Best-group accuracy: unknown_fake = 0.8261
+Worst-group accuracy: unknown_fake = 0.8261
+Best-vs-worst group accuracy gap: 0.0000

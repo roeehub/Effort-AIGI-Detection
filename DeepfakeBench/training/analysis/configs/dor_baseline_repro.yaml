@@ -1,0 +1,35 @@
+# Repro config for the original 3-pool Dor fingerprint diff.
+# Matches analysis/dor_pool_fingerprint_diff_2026-04-24.py exactly (seed, n, pools).
+# Used as a behavior-preservation smoke test for analysis/fingerprint_diff.py.
+
+output_prefix: dor_baseline_repro_2026-04-24
+seed: 42
+n_per_pool: 30
+separation_sigma: 1.0
+
+pools:
+  today_failing:
+    source: local_dir
+    path: /tmp/dor_session_20260424/dor_shkedi
+    pattern: "frame_*.png"
+  dor_shkedi_lb:
+    source: lockbox_csv_identity
+    csv_path: /tmp/r13_analysis/frames/teams_real_all_lockbox_r13_rlp5_07_e3_seedb_frames_report.csv
+    manifest_path: arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json
+    identity_key: dor_shkedi
+  real_dor_lb:
+    source: lockbox_csv_identity
+    csv_path: /tmp/r13_analysis/frames/teams_real_all_lockbox_r13_rlp5_07_e3_seedb_frames_report.csv
+    manifest_path: arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json
+    identity_key: real_dor
+
+pairs:
+  - name: today_vs_lockbox_clean
+    failing: today_failing
+    clean: real_dor_lb
+  - name: shkedi_lb_vs_lockbox_clean
+    failing: dor_shkedi_lb
+    clean: real_dor_lb
+  - name: today_vs_shkedi_lb
+    failing: today_failing
+    clean: dor_shkedi_lb

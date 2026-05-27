@@ -1,0 +1,81 @@
+{
+  "tau_dev_vs_lockbox": {
+    "P8A": {
+      "normal_photo": {
+        "dev": 0.10049786642193802,
+        "lockbox": 0.33171871900558464
+      },
+      "webcam": {
+        "dev": 0.9874512434005739,
+        "lockbox": 0.9785599112510681
+      },
+      "phone_screen": {
+        "dev": 0.23709728568792346,
+        "lockbox": 0.08167075589299201
+      },
+      "screen": {
+        "dev": 0.8309157371520999,
+        "lockbox": 0.966348111629486
+      },
+      "screen_recording": {
+        "dev": 0.03618505597114555,
+        "lockbox": null
+      }
+    },
+    "E2B_3200": {
+      "normal_photo": {
+        "dev": 0.12298583686351774,
+        "lockbox": 0.5290070593357086
+      },
+      "webcam": {
+        "dev": 0.4192709177732469,
+        "lockbox": 0.9034415841102601
+      },
+      "phone_screen": {
+        "dev": 0.3082486599683766,
+        "lockbox": 0.34082872569561
+      },
+      "screen": {
+        "dev": 0.907919639348984,
+        "lockbox": 0.1266224533319473
+      },
+      "screen_recording": {
+        "dev": 0.0482509136199951,
+        "lockbox": null
+      }
+    },
+    "E3_6600": {
+      "normal_photo": {
+        "dev": 0.00656782034784552,
+        "lockbox": 0.017976871877908633
+      },
+      "webcam": {
+        "dev": 0.5034385859966279,
+        "lockbox": 0.9724042415618898
+      },
+      "phone_screen": {
+        "dev": 0.9135484874248508,
+        "lockbox": 0.9939067006111145
+      },
+      "screen": {
+        "dev": 0.9933644652366638,
+        "lockbox": 0.1437979042530059
+      },
+      "screen_recording": {
+        "dev": 0.006802000105381,
+        "lockbox": null
+      }
+    }
+  },
+  "lockbox_real_fpr_under_dev_per_mode_tau": {
+    "P8A": 16.908212560386474,
+    "E2B_3200": 47.58454106280193,
+    "E3_6600": 62.80193236714976
+  },
+  "lockbox_fake_recall_under_dev_per_mode_tau": {
+    "P8A": 78.58823529411765,
+    "E2B_3200": 92.94117647058823,
+    "E3_6600": 93.17647058823529
+  },
+  "interpretation": "If lockbox FPR under dev-calibrated per-mode tau is close to 10%, the policy generalizes. If much higher, deployment needs lockbox-shaped re-calibration. Compare lockbox-fake recall under dev vs lockbox per-mode tau \u2014 gap is the cost of using dev-calibrated tau."
+}

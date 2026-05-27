@@ -1,0 +1,66 @@
+[
+  {
+    "ckpt": "E2B",
+    "substrate": "may6_falseflag",
+    "single_view_FPR": 0.5760869565217391,
+    "tta_FPR": 0.5652173913043478,
+    "delta_FPR": -0.010869565217391353,
+    "verdict": "TTA_NEUTRAL"
+  },
+  {
+    "ckpt": "E2B",
+    "substrate": "may5_correct",
+    "single_view_FPR": 0.016666666666666666,
+    "tta_FPR": 0.016666666666666666,
+    "delta_FPR": 0.0,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  },
+  {
+    "ckpt": "E2B",
+    "substrate": "dor_morning",
+    "single_view_FPR": 0.02,
+    "tta_FPR": 0.02,
+    "delta_FPR": 0.0,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  },
+  {
+    "ckpt": "E2B",
+    "substrate": "dor_evening",
+    "single_view_FPR": 0.0,
+    "tta_FPR": 0.0,
+    "delta_FPR": 0.0,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  },
+  {
+    "ckpt": "P8A",
+    "substrate": "may6_falseflag",
+    "single_view_FPR": 0.0,
+    "tta_FPR": 0.0,
+    "delta_FPR": 0.0,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  },
+  {
+    "ckpt": "P8A",
+    "substrate": "may5_correct",
+    "single_view_FPR": 0.0,
+    "tta_FPR": 0.016666666666666666,
+    "delta_FPR": 0.016666666666666666,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  },
+  {
+    "ckpt": "P8A",
+    "substrate": "dor_morning",
+    "single_view_FPR": 0.1,
+    "tta_FPR": 0.02,
+    "delta_FPR": -0.08,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  },
+  {
+    "ckpt": "P8A",
+    "substrate": "dor_evening",
+    "single_view_FPR": 0.0,
+    "tta_FPR": 0.0,
+    "delta_FPR": 0.0,
+    "verdict": "TTA_NEUTRAL_INVARIANT"
+  }
+]

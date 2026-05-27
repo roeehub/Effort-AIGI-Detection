@@ -1,0 +1,106 @@
+{
+  "checkpoint": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/_features_cache_2026-04-30/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+  "checkpoint_size_mb": 896.3,
+  "training_step": null,
+  "training_epoch": 3,
+  "training_auc": 0.9926279372155661,
+  "training_eer": 0.02702702702702703,
+  "n_resblocks_inspected": 12,
+  "n_svd_slots_per_block": 6,
+  "total_svd_residual_layers_found": 72,
+  "total_nonzero_residual_layers": 72,
+  "in_proj_svd_layers_total": 36,
+  "in_proj_svd_layers_nonzero": 36,
+  "in_proj_svd_layers_effectively_unlearned": 13,
+  "frac_in_proj_unlearned": 0.3611,
+  "trainable_params_nonzero_total": 5310720,
+  "trainable_params_nonzero_in_proj": 1770624,
+  "trainable_params_nonzero_other": 3540096,
+  "median_contribution_l2_in_proj": 0.06024538353085518,
+  "median_contribution_l2_out_proj": 1.3585802912712097,
+  "in_proj_to_out_proj_contribution_ratio": 0.044344367364908696,
+  "median_S_abs_mean_in_proj": 0.007948112674057484,
+  "median_S_abs_mean_out_proj": 0.11249668896198273,
+  "in_proj_layers_with_sign_flip_frac_gt_25pct": [
+    [
+      0,
+      "svd_q",
+      0.562
+    ],
+    [
+      0,
+      "svd_k",
+      0.438
+    ],
+    [
+      0,
+      "svd_v",
+      0.562
+    ],
+    [
+      1,
+      "svd_q",
+      0.438
+    ],
+    [
+      1,
+      "svd_k",
+      0.469
+    ],
+    [
+      1,
+      "svd_v",
+      0.469
+    ],
+    [
+      2,
+      "svd_q",
+      0.438
+    ],
+    [
+      2,
+      "svd_k",
+      0.656
+    ],
+    [
+      3,
+      "svd_q",
+      0.438
+    ],
+    [
+      3,
+      "svd_k",
+      0.562
+    ],
+    [
+      4,
+      "svd_q",
+      0.625
+    ],
+    [
+      4,
+      "svd_k",
+      0.438
+    ],
+    [
+      5,
+      "svd_v",
+      0.344
+    ]
+  ],
+  "other_layers_with_sign_flip_frac_gt_25pct": [
+    [
+      0,
+      "out_proj",
+      0.375
+    ],
+    [
+      1,
+      "out_proj",
+      0.469
+    ]
+  ],
+  "verdict": "PARTIAL",
+  "verdict_explanation": "13/36 (36%) of in_proj-SVD slots are effectively unlearned. Mixed signal.",
+  "discriminator_method": "A slot is 'effectively unlearned' if its weight-contribution L2 (||U @ diag(S) @ V||_F) is < 1e-6 OR its S_residual sign-flip fraction exceeds 0.25 (a properly-trained SVD residual retains SVD-tail ordering: all-positive S). Verdict aggregates over the 36 in_proj-SVD slots (12 layers x {svd_q, svd_k, svd_v})."
+}

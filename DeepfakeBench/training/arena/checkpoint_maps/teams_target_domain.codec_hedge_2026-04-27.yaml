@@ -1,0 +1,20 @@
+# Phase C.3 follow-up — A.2-style promotion-contract validation of the
+# codec_hedge slate winner.
+#
+# Triplet rationale:
+#   - C3_CODEC_HEDGE_VC_STEP2000  — the C.3 winner (best_value_composite save).
+#   - C3_CODEC_HEDGE_OOD_STEP2500 — same run, later step + best ood_composite save;
+#                                    the codec_hedge anchor peak was at step 3000
+#                                    (vc_held save reason), so this is the closest
+#                                    saved-step proxy for the anchor peak.
+#   - C1_CANONICAL_VC_STEP2000    — fixed-bug re-train of the same recipe minus
+#                                    codec aug; the matched-step baseline that
+#                                    isolates the codec axis.
+#   - P8A_REFERENCE_STEP5000      — the dominator from A.2 v3; if codec_hedge can
+#                                    beat this on lockbox FPR + recall it is a
+#                                    real promotion candidate.
+
+C3_CODEC_HEDGE_VC_STEP2000:   "gs://training-job-outputs/phase2r13_experiments/bm7xxwqo/value_composite_effort_20260426_step2000_auc0.9897_eer0.0372.pth"
+C3_CODEC_HEDGE_OOD_STEP2500:  "gs://training-job-outputs/phase2r13_experiments/bm7xxwqo/ood_composite_effort_20260426_step2500_auc0.9916_eer0.0372.pth"
+C1_CANONICAL_VC_STEP2000:     "gs://training-job-outputs/phase2r13_experiments/6tzvre0k/value_composite_effort_20260426_step2000_auc0.9877_eer0.0473.pth"
+P8A_REFERENCE_STEP5000:       "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"

@@ -1,0 +1,119 @@
+{
+  "dor_shkedi": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "dor_shkedi"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 20,
+      "T5C": 20,
+      "SlotAv2": 20
+    },
+    "coverage_note": ""
+  },
+  "PC_Generator": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "PC_Generator"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 525,
+      "T5C": 525,
+      "SlotAv2": 525
+    },
+    "coverage_note": ""
+  },
+  "Cam_Test": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "Cam_Test"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 98,
+      "T5C": 98,
+      "SlotAv2": 98
+    },
+    "coverage_note": ""
+  },
+  "Test_Cam": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "Test_Cam"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 712,
+      "T5C": 712,
+      "SlotAv2": 712
+    },
+    "coverage_note": ""
+  },
+  "Md_Noyn_Sharker": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "Md_noyn_Sharker"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 409,
+      "T5C": 409,
+      "SlotAv2": 409
+    },
+    "coverage_note": ""
+  },
+  "Chikara_Takahashi": {
+    "primary_suite": "teams_real_all_lockbox",
+    "scope": "lockbox",
+    "filter_root": [
+      "Chikara_Takahashi"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 25,
+      "T5C": 25,
+      "SlotAv2": 25
+    },
+    "coverage_note": "absent from teams_real_all_dev; reported on lockbox only. tau is dev-calibrated."
+  },
+  "Roy_D": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "Roy_D"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 130,
+      "T5C": 130,
+      "SlotAv2": 130
+    },
+    "coverage_note": "Roy_D appears as `Roy_D__seqNNNN__real` in teams_real_all_dev (130 videos) and also in teams_real_lighting_extreme_dev (cross-check). 29-suite 2026-05-20 scorecard does not include a Roy_D-specific suite."
+  },
+  "bla_bla_chow": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "bla_bla_chow"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 467,
+      "T5C": 467,
+      "SlotAv2": 467
+    },
+    "coverage_note": ""
+  },
+  "Q": {
+    "primary_suite": "teams_real_all_dev",
+    "scope": "dev",
+    "filter_root": [
+      "Q"
+    ],
+    "n_videos_per_ckpt": {
+      "P8A": 36,
+      "T5C": 36,
+      "SlotAv2": 36
+    },
+    "coverage_note": ""
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "k": 10,
+  "metric": "fraction of k=10 nearest neighbours sharing the same caught_by label",
+  "feature_space": "P8A 512-d, StandardScaler, Euclidean k-NN",
+  "per_caught_by": [
+    {
+      "caught_by": "E2B_3200",
+      "mean": 0.12307692307692308,
+      "std": 0.11657505560686467,
+      "count": 13
+    },
+    {
+      "caught_by": "E2B_3200+E3_6600",
+      "mean": 0.0,
+      "std": 0.0,
+      "count": 4
+    },
+    {
+      "caught_by": "E2B_3200+E3_6600+P8A",
+      "mean": 0.336,
+      "std": 0.09521904571390469,
+      "count": 25
+    },
+    {
+      "caught_by": "E2B_3200+P8A",
+      "mean": 0.15000000000000002,
+      "std": 0.1,
+      "count": 4
+    },
+    {
+      "caught_by": "E3_6600",
+      "mean": 0.4809523809523809,
+      "std": 0.37632306283172123,
+      "count": 21
+    },
+    {
+      "caught_by": "E3_6600+P8A",
+      "mean": 0.4076923076923077,
+      "std": 0.27117975871820066,
+      "count": 26
+    },
+    {
+      "caught_by": "P8A",
+      "mean": 0.778494623655914,
+      "std": 0.26203611697858664,
+      "count": 93
+    },
+    {
+      "caught_by": "uncaught",
+      "mean": 0.9241758241758241,
+      "std": 0.1625151211210291,
+      "count": 364
+    }
+  ],
+  "binary_is_caught": [
+    {
+      "is_caught": 0,
+      "mean": 0.9241758241758241,
+      "std": 0.1625151211210291,
+      "count": 364
+    },
+    {
+      "is_caught": 1,
+      "mean": 0.8123655913978495,
+      "std": 0.2962975051639907,
+      "count": 186
+    }
+  ],
+  "overall_caught_by_purity_mean": 0.8001818181818182,
+  "overall_binary_purity_mean": 0.8863636363636364,
+  "interpretation_threshold": "purity \u2248 class prior => interleaved (decision-boundary problem); purity >> prior => clustered region (representation supports head-only fix in principle, but would need supervision signal)."
+}

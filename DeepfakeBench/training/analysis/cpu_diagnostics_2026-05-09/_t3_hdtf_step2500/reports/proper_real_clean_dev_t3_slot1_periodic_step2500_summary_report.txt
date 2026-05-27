@@ -1,0 +1,28 @@
+Validation Summary Report for: td_proper_real_clean_dev_t3_slot1_periodic_step2500
+Run Name: TargetDomain proper_real_clean_dev T3_SLOT1_PERIODIC_STEP2500
+Generated on: 2026-05-10 00:48:40
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1443
+Accuracy: 0.8926
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 1288
+False Positives (Real misclassified as Fake): 155
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_real_clean (REAL) -----
+Total Videos: 1443
+Accuracy: 0.8926 (1288/1443 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_real_clean (family=proper_real_clean): n=1443, acc=0.8926, tpr=0.0000, fpr=0.1074, fnr=0.0000
+
+Best-group accuracy: proper_real_clean = 0.8926
+Worst-group accuracy: proper_real_clean = 0.8926
+Best-vs-worst group accuracy gap: 0.0000

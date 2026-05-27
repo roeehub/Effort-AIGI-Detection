@@ -1,0 +1,20 @@
+# Promotion-contract validation map for S3-VISO-WEIGHT (run 1sakmkv4).
+#
+# S3 = S2 + viso family weight bumped 4.0 → 8.0.
+# Selected ckpts per Probe 1 (class_sep peak):
+#   step 500: class_sep 4.97 (peak — best in chain so far)
+#   step 1000: class_sep 4.74 (final)
+#   step 700: class_sep 4.64
+#
+# Plus baselines + best prior contender:
+#   - P8A_REFERENCE_STEP5000 (control)
+#   - P22_AUG_STEP1000 (P22's best non-degraded ckpt)
+#   - S2_EARLIER_BASE_STEP600 (the lockbox champ from yesterday's S2)
+
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+P22_AUG_STEP1000:          "gs://training-job-outputs/phase2r13_experiments/dot1buye/periodic_effort_20260502_step1000_auc0.9903_eer0.0282.pth"
+S2_EARLIER_BASE_STEP600:   "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step600_auc0.9867_eer0.0361.pth"
+
+S3_VISO_WEIGHT_STEP500:    "gs://training-job-outputs/phase2r13_experiments/1sakmkv4/periodic_effort_20260503_step500_auc0.9877_eer0.0358.pth"
+S3_VISO_WEIGHT_STEP1000:   "gs://training-job-outputs/phase2r13_experiments/1sakmkv4/periodic_effort_20260503_step1000_auc0.9888_eer0.0413.pth"
+S3_VISO_WEIGHT_STEP700:    "gs://training-job-outputs/phase2r13_experiments/1sakmkv4/periodic_effort_20260503_step700_auc0.9851_eer0.0386.pth"

@@ -1,0 +1,51 @@
+{
+  "n_risky": 100,
+  "n_clean": 80,
+  "n_tp_fake": 80,
+  "conditions": {
+    "orig": {
+      "auc_all": 0.9553472222222221,
+      "auc_hard": 0.919625,
+      "delta_risky_real_mean": 0.0,
+      "delta_risky_real_median": 0.0,
+      "delta_clean_real_mean": 0.0,
+      "delta_tp_fake_mean": 0.0,
+      "delta_tp_fake_median": 0.0,
+      "risky_below_50_frac": 0.0,
+      "tp_fake_above_50_frac": 1.0
+    },
+    "wb_grayworld": {
+      "auc_all": 0.9283333333333333,
+      "auc_hard": 0.8715,
+      "delta_risky_real_mean": 0.0285157673060894,
+      "delta_risky_real_median": 0.02068573236465454,
+      "delta_clean_real_mean": 0.09733119606971741,
+      "delta_tp_fake_mean": 0.0009004726889543235,
+      "delta_tp_fake_median": 0.003010988235473633,
+      "risky_below_50_frac": 0.0,
+      "tp_fake_above_50_frac": 1.0
+    },
+    "unsharp_05": {
+      "auc_all": 0.95,
+      "auc_hard": 0.91,
+      "delta_risky_real_mean": -0.10065460205078125,
+      "delta_risky_real_median": -0.0888749361038208,
+      "delta_clean_real_mean": -0.014295898377895355,
+      "delta_tp_fake_mean": -0.023327486589550972,
+      "delta_tp_fake_median": -0.00722309947013855,
+      "risky_below_50_frac": 0.06,
+      "tp_fake_above_50_frac": 0.9875
+    },
+    "gamma_norm": {
+      "auc_all": 0.9370138888888888,
+      "auc_hard": 0.886625,
+      "delta_risky_real_mean": 0.0019650545436888933,
+      "delta_risky_real_median": 0.0005155205726623535,
+      "delta_clean_real_mean": 0.02721286378800869,
+      "delta_tp_fake_mean": -2.3956596123753116e-05,
+      "delta_tp_fake_median": 0.0006957054138183594,
+      "risky_below_50_frac": 0.01,
+      "tp_fake_above_50_frac": 1.0
+    }
+  }
+}

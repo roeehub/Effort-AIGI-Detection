@@ -1,0 +1,11 @@
+{
+  "phase": "phase_2_backbone_slotav2_scoring",
+  "status": "scoring_complete",
+  "completed_at_utc": "2026-05-22T23:21:39Z",
+  "run_id": "6ypu1ds3",
+  "arm": "slotav2",
+  "checkpoints_scored": ["BACKBONE_SLOTAV2_6YPU1DS3_STEP3500"],
+  "checkpoint_map": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/phase_2_backbone_2026-05-22/reports_slotav2_6ypu1ds3/_backbone_slotav2_checkpoint_map.yaml",
+  "lex_output_dir": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/phase_2_backbone_2026-05-22/reports_slotav2_6ypu1ds3/contract_lex",
+  "composite_output_dir": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/phase_2_backbone_2026-05-22/reports_slotav2_6ypu1ds3/contract_composite_lambda_1.0"
+}

@@ -1,0 +1,10 @@
+{
+  "phase": "phase_2_head",
+  "status": "all_steps_scoring_complete",
+  "completed_at_utc": "2026-05-22T17:04:54Z",
+  "wandb_run_id": "kwhju7im",
+  "checkpoints_scored": ["HEAD_kwhju7im_STEP250", "HEAD_kwhju7im_STEP500", "HEAD_kwhju7im_STEP1000", "HEAD_kwhju7im_STEP1500", "HEAD_kwhju7im_STEP2500"],
+  "checkpoint_map": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/phase_2_head_2026-05-22/reports/_head_checkpoint_map_all_steps.yaml",
+  "lex_output_dir": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/phase_2_head_2026-05-22/reports/contract_all_steps_lex",
+  "composite_output_dir": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/phase_2_head_2026-05-22/reports/contract_all_steps_composite_lambda_1.0"
+}

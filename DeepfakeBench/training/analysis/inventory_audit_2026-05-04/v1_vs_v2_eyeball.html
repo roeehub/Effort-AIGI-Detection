@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>v1 vs v2 viso eyeball comparison — 2026-05-04</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 24px; background: #fafafa; color: #222; max-width: 1400px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 17px; margin-top: 28px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  .question { background: #fff8d6; padding: 10px 14px; border-left: 4px solid #d4a72c; margin: 12px 0; font-size: 14px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+  .frame { background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px; text-align: center; font-size: 11px; color: #555; min-width: 200px; }
+  .frame img { display: block; max-width: 224px; max-height: 224px; margin: 0 auto 6px; background: #eee; }
+  .frame .label { font-weight: 600; font-size: 12px; color: #222; }
+  .frame .path { font-family: ui-monospace, monospace; word-break: break-all; font-size: 10px; color: #888; margin-top: 4px; }
+  .answer-key { background: #e8f5e9; padding: 10px 14px; border-left: 4px solid #4caf50; margin: 16px 0 24px; font-size: 14px; }
+  .note { font-size: 13px; color: #555; }
+  code { background: #efefef; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>v1 vs v2 visomaster — eyeball check (2026-05-04)</h1>
+
+<p class="note">
+Goal: determine whether <code>visomaster_enhanced_v2</code> is fresh substrate (worth wiring into eval)
+or just a re-encoding / un-enhanced source of the v1 enhanced lane (already in P8A training).
+This decides whether ~2,073 frames of NEW eval data exist for $0.
+</p>
+
+<div class="answer-key">
+<b>What to answer (3 questions, in your reply to me):</b>
+<ol>
+  <li><b>Same source captures?</b> Looking at Row 1 only: do the v2 ghostface_v1 frames (left) appear to come from the same person/scene/lighting as the v1 enhanced ghostface_v1+gfpgan frames (right)? Yes / No / Mixed.</li>
+  <li><b>Image-quality difference?</b> If yes to (1): is the v2 noticeably less sharp / less smoothed / lower fidelity than the v1 enhanced version? Or do they look essentially identical (just different file)?</li>
+  <li><b>Fresh content in v2 swap families v1 doesn't have?</b> Looking at Row 2: do these inswapper-family frames look like a different population of identities / scenes than what's in Rows 1/3?</li>
+</ol>
+</div>
+
+<h2>Row 1 — same swap model name (<code>ghostface_v1</code>) in BOTH v1 and v2</h2>
+<p class="note">If v2 is "v1 enhanced re-encoded", these should be the SAME person/scene with possibly different sharpness. If v2 is fresh, expect different people / scenes.</p>
+
+<div class="row">
+  <div class="frame">
+    <div class="label">v2 ghostface_v1 #1</div>
+    <img src="http://127.0.0.1:8501/api/frame/visomaster-enhanced-face-cropped-v2/fake/ghostface_v1/frame_002939_seq6303.png" alt="v2 g1 frame 1">
+    <div class="path">v2: ghostface_v1 / frame_002939_seq6303.png</div>
+  </div>
+  <div class="frame">
+    <div class="label">v2 ghostface_v1 #2</div>
+    <img src="http://127.0.0.1:8501/api/frame/visomaster-enhanced-face-cropped-v2/fake/ghostface_v1/frame_002940_seq6305.png" alt="v2 g1 frame 2">
+    <div class="path">v2: ghostface_v1 / frame_002940_seq6305.png</div>
+  </div>
+  <div class="frame">
+    <div class="label">v2 ghostface_v1 #3</div>
+    <img src="http://127.0.0.1:8501/api/frame/visomaster-enhanced-face-cropped-v2/fake/ghostface_v1/frame_002944_seq6311.png" alt="v2 g1 frame 3">
+    <div class="path">v2: ghostface_v1 / frame_002944_seq6311.png</div>
+  </div>
+  <div class="frame">
+    <div class="label">v1 enh ghostface_v1+gfpgan #1</div>
+    <img src="http://127.0.0.1:8501/api/frame/hdtf_visomaster_cropped_frames/samples/HDTF20260416_00192/frames/fake/frame_0000.png" alt="v1 g1 gfpgan frame 1">
+    <div class="path">v1: HDTF...00192 / fake / frame_0000 (gfpgan_v1_4)</div>
+  </div>
+  <div class="frame">
+    <div class="label">v1 enh ghostface_v1+gfpgan #2</div>
+    <img src="http://127.0.0.1:8501/api/frame/hdtf_visomaster_cropped_frames/samples/HDTF20260416_00193/frames/fake/frame_0000.png" alt="v1 g1 gfpgan frame 2">
+    <div class="path">v1: HDTF...00193 / fake / frame_0000 (gfpgan_v1_4)</div>
+  </div>
+  <div class="frame">
+    <div class="label">v1 enh ghostface_v1+codeformer</div>
+    <img src="http://127.0.0.1:8501/api/frame/hdtf_visomaster_cropped_frames/samples/HDTF20260416_00208/frames/fake/frame_0000.png" alt="v1 g1 codeformer frame">
+    <div class="path">v1: HDTF...00208 / fake / frame_0000 (codeformer)</div>
+  </div>
+</div>
+
+<h2>Row 2 — v2-only swap families (no v1 counterpart by name)</h2>
+<p class="note">v1 doesn't have <code>inswapper</code> or <code>simswap</code>. If these look like a different identity pool, v2 has independent content beyond just re-encoding v1.</p>
+
+<div class="row">
+  <div class="frame">
+    <div class="label">v2 inswapper128_128res #1</div>
+    <img src="http://127.0.0.1:8501/api/frame/visomaster-enhanced-face-cropped-v2/fake/inswapper128_128res/frame_000001_seq8.png" alt="v2 inswapper 1">
+    <div class="path">v2: inswapper128_128res / frame_000001_seq8.png</div>
+  </div>
+  <div class="frame">
+    <div class="label">v2 inswapper128_128res #2</div>
+    <img src="http://127.0.0.1:8501/api/frame/visomaster-enhanced-face-cropped-v2/fake/inswapper128_128res/frame_000002_seq11.png" alt="v2 inswapper 2">
+    <div class="path">v2: inswapper128_128res / frame_000002_seq11.png</div>
+  </div>
+  <div class="frame">
+    <div class="label">v2 inswapper+gfpgan</div>
+    <img src="http://127.0.0.1:8501/api/frame/visomaster-enhanced-face-cropped-v2/fake/inswapper_128res_gfpgan1.4/frame_004039_seq8231.png" alt="v2 inswapper gfpgan">
+    <div class="path">v2: inswapper_128res_gfpgan1.4 / frame_004039_seq8231.png</div>
+  </div>
+</div>
+
+<h2>Row 3 — v1 real reference (HDTF identities P8A trained on)</h2>
+<p class="note">Sanity reference — what the v1 HDTF identities look like as REAL frames.</p>
+
+<div class="row">
+  <div class="frame">
+    <div class="label">v1 real HDTF 00000</div>
+    <img src="http://127.0.0.1:8501/api/frame/hdtf_visomaster_cropped_frames/samples/HDTF20260416_00000/frames/real/frame_0000.png" alt="v1 real 00000">
+    <div class="path">v1: HDTF...00000 / real / frame_0000</div>
+  </div>
+  <div class="frame">
+    <div class="label">v1 real HDTF 00001</div>
+    <img src="http://127.0.0.1:8501/api/frame/hdtf_visomaster_cropped_frames/samples/HDTF20260416_00001/frames/real/frame_0000.png" alt="v1 real 00001">
+    <div class="path">v1: HDTF...00001 / real / frame_0000</div>
+  </div>
+  <div class="frame">
+    <div class="label">v1 real HDTF 00002</div>
+    <img src="http://127.0.0.1:8501/api/frame/hdtf_visomaster_cropped_frames/samples/HDTF20260416_00002/frames/real/frame_0000.png" alt="v1 real 00002">
+    <div class="path">v1: HDTF...00002 / real / frame_0000</div>
+  </div>
+</div>
+
+<hr>
+<p class="note">
+<b>Decoding the answers I'll act on:</b><br>
+&nbsp;• Q1=Yes + Q2="essentially identical" → v2 collapses to v1 → no fresh substrate → drop v2 from eval expansion plan.<br>
+&nbsp;• Q1=Yes + Q2="v2 is less sharp" → v2 is the un-enhanced source frames whose enhanced versions are in P8A training → v2 is a <i>cross-IQ generalization test</i> against P8A — high information value.<br>
+&nbsp;• Q1=No → v2 is independent captures → fresh $0 substrate → wire it into the scorecard.<br>
+&nbsp;• Q3=Yes → v2 has additional swap families v1 doesn't → even more value.
+</p>
+
+</body>
+</html>

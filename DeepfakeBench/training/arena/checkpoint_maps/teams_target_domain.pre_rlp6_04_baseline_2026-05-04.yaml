@@ -1,0 +1,23 @@
+# Job B — pre-RLP6_04 baseline checkpoint map
+# Generated 2026-05-04. Does NOT yet live under arena/checkpoint_maps/ —
+# user must promote this draft and rebuild image before launch.
+#
+# Question: is the viso recall ceiling FT-trajectory-induced or universal
+# across the FT chain? Compare 3 held-out (pre-proper-viso) ckpts against
+# 1 trained-on anchor (RLP6_04, the first ckpt to see proper viso).
+#
+# All four checkpoint paths verified live on GCS via `gsutil ls` on 2026-05-04.
+#
+# Key naming convention: uppercase per arena/run_target_domain_validation_sequential.py
+# line 690 (it forces .upper() on incoming keys).
+#
+# Provenance (from Job B Phase 1 hand-off, locked spec):
+# - R12g_step14000     : 0xxqwhxg, deep pre-R13 anchor; HELD-OUT on proper viso.
+# - RLP3_05_step2500   : w92amaaa, mid R13, pre-proper-viso; HELD-OUT.
+# - RLP5_07_step20500  : 6jwwb526, one packet before RLP6_04; HELD-OUT.
+# - RLP6_04_step23500  : h2pdu6i5, first ckpt trained on proper viso; TRAINED-ON anchor.
+
+R12G_STEP14000:    "gs://training-job-outputs/phase2r12_experiments/0xxqwhxg/top_n_effort_20260310_step14000_auc0.9930_eer0.0253.pth"
+RLP3_05_STEP2500:  "gs://training-job-outputs/phase2r13_experiments/w92amaaa/value_composite_effort_20260422_step2500_auc0.9895_eer0.0116.pth"
+RLP5_07_STEP20500: "gs://training-job-outputs/phase2r13_experiments/6jwwb526/value_composite_effort_20260423_step20500_auc0.9908_eer0.0304.pth"
+RLP6_04_STEP23500: "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"

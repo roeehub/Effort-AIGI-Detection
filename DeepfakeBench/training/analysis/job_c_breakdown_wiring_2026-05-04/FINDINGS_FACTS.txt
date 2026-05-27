@@ -1,0 +1,188 @@
+JOB C — Breakdown YAML wiring audit. Pure facts. 2026-05-04.
+
+==================================================================
+1. PRODUCTION SCORECARD CONFIG (Step 2)
+==================================================================
+Active production suite manifest (operational launches as of 2026-05-04):
+  arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml
+  - 9 suites
+  - manifest: arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json
+  - Top-level keys: ['suites'] only.
+  - Used in HANDOFF.md, PSERIES_FACTS_2026-05-02.md, MEASUREMENTS_2026-05-02_P18.md,
+    HANDOFF_2026-05-02_P18_DIAGNOSTICS_COMPLETE.md, suite_composition_audit_2026-05-04.
+
+Stale default (still hardcoded but operationally bypassed):
+  arena/target_domain_suites.teams_promotion_contract_2026-04-17.yaml
+  (referenced by launcher default at arena/launch_teams_promotion_contract.sh:27 and
+   arena/run_teams_promotion_contract.sh:32; current launches override via --suite-manifest)
+
+Loader: arena/run_target_domain_validation_sequential.py
+  - _load_suites + _parse_simple_suite_manifest_yaml
+  - Ignores all top-level keys other than 'suites'.
+  - Per-suite keys recognised:
+      name, df40_mode,
+      external_real_manifest, external_real_manifest_split, external_real_manifest_slices,
+      external_real_method, external_real_deterministic, external_real_bucket, external_real_prefix,
+      external_fake_manifest, external_fake_manifest_split, external_fake_manifest_slices,
+      external_fake_method, external_fake_deterministic, external_fake_bucket, external_fake_prefix.
+  - Promotion-contract role assignments come from CLI args, not the yaml itself:
+      --promotion_dev_real_suite, --promotion_dev_real_stress_suites,
+      --promotion_dev_fake_suites, --promotion_lockbox_real_suite,
+      --promotion_lockbox_fake_suite, --promotion_readout_only_suites.
+    Suites not named in any of these become read-only diagnostic rows in the scorecard.
+
+==================================================================
+2. BREAKDOWN YAML — STRUCTURE + RESOLUTION (Step 1)
+==================================================================
+File: arena/target_domain_suites.teams_manifest.breakdown_2026-04-07.yaml
+- Top-level keys: ['fake_splits', 'generated_from_manifest', 'include_fake_all',
+  'include_fake_family_slices', 'include_fake_method_slices', 'real_splits', 'suites']
+- Suite count: 27
+- Manifest referenced by every suite:
+  arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json (OLDER manifest)
+- YAML is well-formed (yaml.safe_load succeeds).
+- Every suite has a non-empty name, a unique name, a slice reference, and a split.
+
+Per-suite resolution against the CURRENT manifest
+(arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json) —
+all 27 slices resolve, all suites are non-empty, all manifest paths on disk:
+
+See `breakdown_yaml_audit.csv` for the full table. Counts of suites by category:
+  - 9 suites already present (by name) in the production yaml
+  - 18 suites that are net-new vs production
+  - Of the new 18: 5 family-level fake sub-suites
+                  (teams_capture_cam_test, _test_cam, _noyn_sharker,
+                   _pc_generator, _dor_shkedi),
+                 13 single-identity-per-session fake sub-suites,
+                  2 lockbox stress-real variants (poor_quality_lockbox,
+                   lighting_extreme_lockbox).
+
+(Task brief said "12 single-identity per-session sub-suites"; the breakdown yaml
+ actually contains 13. The discrepancy is teams_capture_pc_generator_s4_dev.)
+
+==================================================================
+3. SCHEMA COMPATIBILITY (Step 3)
+==================================================================
+Per-suite key set: COMPATIBLE.
+  - Production suites use the subset {name, df40_mode, external_*_manifest,
+    external_*_manifest_split, external_*_manifest_slices, external_*_deterministic}.
+  - Breakdown adds optional external_real_method / external_fake_method on
+    some suites. The runner explicitly handles these (lines 220-223, 855, 869
+    of run_target_domain_validation_sequential.py); no schema migration needed.
+
+Top-level keys: NEW KEYS PRESENT IN BREAKDOWN, IGNORED BY LOADER.
+  Breakdown adds: generated_from_manifest, real_splits, fake_splits,
+                  include_fake_all, include_fake_family_slices,
+                  include_fake_method_slices.
+  These are metadata for the (presumably scripted) generation step that produced
+  the yaml; the runner ignores them. Safe to keep or drop.
+
+Manifest path: REQUIRES MIGRATION.
+  Breakdown points at teams_target_domain_manifest_2026-04-06_frozen.json.
+  Production points at teams_target_domain_manifest_2026-04-23_with_dor.json.
+  Verified: every breakdown slice name appears in summary.slice_counts of the
+  newer manifest, AND in videos[].slices of the newer manifest with non-empty
+  per-suite resolution. Migration is a one-line global string substitution.
+
+==================================================================
+4. WIRING PROPOSAL (Step 4)
+==================================================================
+Recommended path: (a) MERGE THE NEW SUITES INTO PRODUCTION.
+
+Rationale:
+  - Schemas compatible (per-suite key set identical for shared suites; runner
+    accepts breakdown's optional method-hint field; runner ignores breakdown's
+    extra top-level keys).
+  - All 20 new suites resolve cleanly against the current production manifest.
+  - No launcher change required — same yaml path, same loader.
+  - Promotion contract authority is unchanged: new suites are NOT added to
+    --promotion_dev_real_suite / --promotion_dev_fake_suites, so they become
+    read-only diagnostic rows. Promotion decisions remain fixed to the
+    existing 9 suites.
+
+Artifacts produced:
+  - proposed_teams_promotion_contract_with_breakdown.yaml (the merged yaml)
+  - wiring_proposal.diff (unified diff vs current production yaml; +261 lines)
+
+==================================================================
+5. VALIDATION RESULT (Step 5)
+==================================================================
+Script: wiring_validation_script.py
+Run output: _validation_run.log
+
+Result: PASS.
+  - All 9 production suites preserved unchanged (name + per-suite key/value identity).
+  - All 20 new suites resolve to non-empty video sets in the production manifest.
+  - No duplicate suite names (29 unique names across the merged yaml).
+  - All manifest paths on disk; all slice tags present in videos[].slices.
+
+Resolved suite sizes for the new entries (selected):
+  teams_capture_cam_test_dev       523 vid /  809 fr / 4 ids / 4 sess
+  teams_capture_test_cam_dev       220 vid /  404 fr / 3 ids / 3 sess
+  teams_capture_noyn_sharker_dev   204 vid /  324 fr / 1 id  / 1 sess
+  teams_capture_pc_generator_dev   175 vid /  194 fr / 3 ids / 3 sess
+  teams_capture_dor_shkedi_dev      57 vid /   78 fr / 1 id  / 1 sess
+  teams_capture_cam_test_s35_dev   244 vid /  365 fr / 1 id  / 1 sess
+  teams_capture_pc_generator_s4_dev 30 vid /   30 fr / 1 id  / 1 sess  (smallest)
+  teams_real_poor_quality_lockbox   22 vid /   31 fr / 4 ids / 3 sess  (smallest real)
+
+Validator caught one false-positive in v1: it required slice presence in
+summary.slice_counts. The production suite teams_real_dor_dev uses slice
+'dor' which is in videos[].slices but not in summary.slice_counts. Fixed in
+v2 by switching the slice-presence check to videos[].slices.
+
+==================================================================
+6. IDENTITY OVERLAP CHECK (Step 6)
+==================================================================
+File: identity_overlap_check.csv (27 rows).
+
+Job 3 chronic FP-offender list (per task brief):
+  bla_bla_chow, bla_bla_chow__s2, PC_Generator__s22, PC_Generator__s45,
+  roy_d, Q__s6.
+
+Suites containing at least one FP-offender identity:
+  teams_real_all_dev               hits=PC_Generator__s22, PC_Generator__s45,
+                                        Q__s6, bla_bla_chow, bla_bla_chow__s2
+  teams_real_poor_quality_dev      hits=PC_Generator__s45, bla_bla_chow,
+                                        bla_bla_chow__s2
+  teams_real_lighting_extreme_dev  hits=PC_Generator__s22, PC_Generator__s45,
+                                        bla_bla_chow, bla_bla_chow__s2
+
+All three are REAL-side dev pools that are already in the production yaml
+(unchanged). The FP-offender list does not intersect the 18 net-new fake
+sub-suites: those are method-bucketed Cam_Test, Test_Cam, Noyn_sharker,
+PC_Generator__s3/s4/s9, dor_shkedi__s16, Xiang_Xiang2_Feng identities
+(distinct from the FP-offender real identities).
+
+Training-data overlap for the new sub-suites:
+  Per inventory_audit_2026-05-04/identity_overlap_report.csv, no teams_capture
+  identity appears in P8A or proper_data training lanes. Per memory
+  project_lockbox_identity_looseness.md, same-person identities (PC_Generator,
+  dor_shkedi, bla_bla_chow) deliberately appear as BOTH real and fake within
+  the eval substrate (dev and lockbox); this is intentional eval-design,
+  upstream of training. Cross-checked: the 13 single-identity-per-session
+  fake sub-suites carry session-tagged identity_keys (e.g., PC_Generator__s3,
+  Cam_Test__s35) that do not appear in any training-side data config in
+  experiments/.
+
+Result: NO TRAINING LEAKAGE flagged for the 18 net-new sub-suites. The
+overlap that does exist (FP offenders -> real-side dev pools) is in the
+ALREADY-WIRED production suites, not in any newly-added row.
+
+==================================================================
+7. DELIVERABLE SUMMARY
+==================================================================
+Files in analysis/job_c_breakdown_wiring_2026-05-04/:
+  - breakdown_yaml_audit.csv              (Step 1 audit table; 27 rows)
+  - production_scorecard_config_summary.json (Step 2 active config snapshot)
+  - proposed_teams_promotion_contract_with_breakdown.yaml (Step 4 proposed yaml)
+  - wiring_proposal.diff                  (Step 4 unified diff)
+  - wiring_validation_script.py           (Step 5 dry-run validator)
+  - _validation_run.log                   (validator output, status PASS)
+  - identity_overlap_check.csv            (Step 6 FP-offender + training overlap)
+  - FINDINGS_FACTS.txt                    (this file)
+  - FINDINGS_INTERPRETATION.txt           (verdict + recommendation)
+
+Production code modified: NONE.
+Production yamls modified: NONE.
+Diff committed to git: NO.

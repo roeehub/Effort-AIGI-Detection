@@ -1,0 +1,28 @@
+Validation Summary Report for: td_deeplive_enhanced_dev_deeplive_corr_top_n_step1800
+Run Name: TargetDomain deeplive_enhanced_dev DEEPLIVE_CORR_TOP_N_STEP1800
+Generated on: 2026-05-06 14:03:34
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 545
+Accuracy: 0.9651
+True Positives (Correctly identified Fake): 526
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 19
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: deeplive_enhanced (FAKE) -----
+Total Videos: 545
+Accuracy: 0.9651 (526/545 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+deeplive_enhanced_fake (family=deeplive_enhanced_fake): n=545, acc=0.9651, tpr=0.9651, fpr=0.0000, fnr=0.0349
+
+Best-group accuracy: deeplive_enhanced_fake = 0.9651
+Worst-group accuracy: deeplive_enhanced_fake = 0.9651
+Best-vs-worst group accuracy gap: 0.0000

@@ -1,0 +1,29 @@
+======================================================================================
+Xinhe may6/may5 cohort — T5C revisit (2026-05-23)
+======================================================================================
+
+Reproduction check (fresh vs 2026-05-06 cached P8A/E2B):
+[P8A_REFERENCE_STEP5000|may6_falseflag] fresh fpr@0.5=  0.0% mean=0.021  cached fpr@0.5=  0.0% mean=0.021  |Δfpr|=0.0pp  |Δmean|=0.000
+[P8A_REFERENCE_STEP5000|may5_correct] fresh fpr@0.5=  0.0% mean=0.021  cached fpr@0.5=  0.0% mean=0.021  |Δfpr|=0.0pp  |Δmean|=0.000
+[P8A_REFERENCE_STEP5000] per-frame |Δprob|: max=0.0000  mean=0.0000
+[E2B_TOP_N_STEP3200|may6_falseflag] fresh fpr@0.5= 57.6% mean=0.511  cached fpr@0.5= 57.6% mean=0.511  |Δfpr|=0.0pp  |Δmean|=0.000
+[E2B_TOP_N_STEP3200|may5_correct] fresh fpr@0.5=  1.7% mean=0.053  cached fpr@0.5=  1.7% mean=0.053  |Δfpr|=0.0pp  |Δmean|=0.000
+[E2B_TOP_N_STEP3200] per-frame |Δprob|: max=0.0000  mean=0.0000
+
+Per (ckpt × cohort) FPR table:
+
+ckpt                            cohort               n    mean     p95  >0.9  FPR@0.5   modeA   modeB   modeC
+--------------------------------------------------------------------------------------------------------------
+E2B_TOP_N_STEP3200              may5_correct        60   0.053   0.323     0     1.7%    1.7%    0.0%    0.0%
+E2B_TOP_N_STEP3200              may6_falseflag      92   0.511   0.974    16    57.6%   55.4%   31.5%   20.7%
+P8A_REFERENCE_STEP5000          may5_correct        60   0.021   0.098     0     0.0%    0.0%    0.0%    0.0%
+P8A_REFERENCE_STEP5000          may6_falseflag      92   0.021   0.083     0     0.0%    0.0%    0.0%    0.0%
+SLOT_A_V2_CLS_STEP3500          may5_correct        60   0.071   0.105     0     0.0%    0.0%    0.0%    0.0%
+SLOT_A_V2_CLS_STEP3500          may6_falseflag      92   0.153   0.425     0     4.3%    4.3%    1.1%    0.0%
+SLOT_A_V2_FACE_POOL_STEP3500    may5_correct        60   0.443   0.561     0    26.7%   10.0%    0.0%    0.0%
+SLOT_A_V2_FACE_POOL_STEP3500    may6_falseflag      92   0.599   0.712     0    91.3%   85.9%    0.0%    0.0%
+T5C_PERIODIC_STEP3500           may5_correct        60   0.086   0.177     0     0.0%    0.0%    0.0%    0.0%
+T5C_PERIODIC_STEP3500           may6_falseflag      92   0.264   0.714     0    17.4%   16.3%    3.3%    0.0%
+
+Legend: modeA=τ0.535 (lockbox FPR=10% target), modeB=τ0.78 (FPR=2%, contract-compliant),
+        modeC=τ0.87 (FPR=1%, conservative); FPR@0.5 = original 2026-05-06 E2B-claim threshold

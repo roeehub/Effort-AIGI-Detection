@@ -1,0 +1,132 @@
+{
+  "phase": "0h",
+  "source_npz": "analysis/path_a_launch_2026-05-07/outputs/p8a_paired_features.npz",
+  "n_features_ok": 3604,
+  "n_features_total": 5311,
+  "n_pairs_covered": 25327,
+  "n_train_pairs": 21327,
+  "n_test_pairs": 4000,
+  "test_subjects": [
+    "xiang_xiang2_feng"
+  ],
+  "results": {
+    "ce": {
+      "train": {
+        "auc": 0.9966078184665743,
+        "fpr_at_tau_logit_0": 0.06494115440521404,
+        "recall_at_tau_logit_0": 0.9859333239555493,
+        "accuracy_at_tau_logit_0": 0.9604960847751677,
+        "p_fake_gt_real_on_pairs": 0.9927322173770338,
+        "pair_gap_mean": 10.127570152282715,
+        "pair_gap_median": 11.205869674682617,
+        "pair_gap_p_le_0": 0.007267782622966193,
+        "n_pairs": 21327
+      },
+      "test": {
+        "auc": 0.9596399375,
+        "fpr_at_tau_logit_0": 0.004,
+        "recall_at_tau_logit_0": 0.02825,
+        "accuracy_at_tau_logit_0": 0.512125,
+        "p_fake_gt_real_on_pairs": 0.9575,
+        "pair_gap_mean": 5.3924407958984375,
+        "pair_gap_median": 5.673995494842529,
+        "pair_gap_p_le_0": 0.0425,
+        "n_pairs": 4000
+      }
+    },
+    "ce_pair": {
+      "train": {
+        "auc": 0.9967792564243928,
+        "fpr_at_tau_logit_0": 0.05640737093824729,
+        "recall_at_tau_logit_0": 0.9859333239555493,
+        "accuracy_at_tau_logit_0": 0.9647629765086511,
+        "p_fake_gt_real_on_pairs": 0.9932479954986637,
+        "pair_gap_mean": 10.091513633728027,
+        "pair_gap_median": 11.134217262268066,
+        "pair_gap_p_le_0": 0.006752004501336334,
+        "n_pairs": 21327
+      },
+      "test": {
+        "auc": 0.9585390625,
+        "fpr_at_tau_logit_0": 0.004,
+        "recall_at_tau_logit_0": 0.02825,
+        "accuracy_at_tau_logit_0": 0.512125,
+        "p_fake_gt_real_on_pairs": 0.95625,
+        "pair_gap_mean": 5.320231914520264,
+        "pair_gap_median": 5.580105304718018,
+        "pair_gap_p_le_0": 0.04375,
+        "n_pairs": 4000
+      }
+    },
+    "ce_pair_group": {
+      "train": {
+        "auc": 0.9967792564243928,
+        "fpr_at_tau_logit_0": 0.05640737093824729,
+        "recall_at_tau_logit_0": 0.9859333239555493,
+        "accuracy_at_tau_logit_0": 0.9647629765086511,
+        "p_fake_gt_real_on_pairs": 0.9932479954986637,
+        "pair_gap_mean": 10.091513633728027,
+        "pair_gap_median": 11.134217262268066,
+        "pair_gap_p_le_0": 0.006752004501336334,
+        "n_pairs": 21327
+      },
+      "test": {
+        "auc": 0.9585390625,
+        "fpr_at_tau_logit_0": 0.004,
+        "recall_at_tau_logit_0": 0.02825,
+        "accuracy_at_tau_logit_0": 0.512125,
+        "p_fake_gt_real_on_pairs": 0.95625,
+        "pair_gap_mean": 5.320231914520264,
+        "pair_gap_median": 5.580105304718018,
+        "pair_gap_p_le_0": 0.04375,
+        "n_pairs": 4000
+      }
+    }
+  },
+  "lift_table": {
+    "head_a_ce_test": {
+      "auc": 0.9596399375,
+      "fpr_at_tau_logit_0": 0.004,
+      "recall_at_tau_logit_0": 0.02825,
+      "accuracy_at_tau_logit_0": 0.512125,
+      "p_fake_gt_real_on_pairs": 0.9575,
+      "pair_gap_mean": 5.3924407958984375,
+      "pair_gap_median": 5.673995494842529,
+      "pair_gap_p_le_0": 0.0425,
+      "n_pairs": 4000
+    },
+    "head_b_ce_pair_test": {
+      "auc": 0.9585390625,
+      "fpr_at_tau_logit_0": 0.004,
+      "recall_at_tau_logit_0": 0.02825,
+      "accuracy_at_tau_logit_0": 0.512125,
+      "p_fake_gt_real_on_pairs": 0.95625,
+      "pair_gap_mean": 5.320231914520264,
+      "pair_gap_median": 5.580105304718018,
+      "pair_gap_p_le_0": 0.04375,
+      "n_pairs": 4000
+    },
+    "head_c_ce_pair_group_test": {
+      "auc": 0.9585390625,
+      "fpr_at_tau_logit_0": 0.004,
+      "recall_at_tau_logit_0": 0.02825,
+      "accuracy_at_tau_logit_0": 0.512125,
+      "p_fake_gt_real_on_pairs": 0.95625,
+      "pair_gap_mean": 5.320231914520264,
+      "pair_gap_median": 5.580105304718018,
+      "pair_gap_p_le_0": 0.04375,
+      "n_pairs": 4000
+    },
+    "lift_b_minus_a_pair_gap_pp": -0.12499999999999734,
+    "lift_b_minus_a_accuracy_pp": 0.0,
+    "lift_b_minus_a_auc_pp": -0.11008750000000012,
+    "lift_c_minus_a_pair_gap_pp": -0.12499999999999734,
+    "lift_c_minus_a_accuracy_pp": 0.0,
+    "lift_c_minus_a_auc_pp": -0.11008750000000012
+  },
+  "promotion_gate": {
+    "lift_b_minus_a_pair_gap_pp": -0.12499999999999734,
+    "verdict": "NO_HEAD_SIDE_SIGNAL",
+    "recommendation": "P1 only justified if encoder change is strictly necessary"
+  }
+}

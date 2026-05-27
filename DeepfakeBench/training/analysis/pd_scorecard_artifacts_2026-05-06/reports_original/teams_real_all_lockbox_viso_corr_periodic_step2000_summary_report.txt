@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_all_lockbox_viso_corr_periodic_step2000
+Run Name: TargetDomain teams_real_all_lockbox VISO_CORR_PERIODIC_STEP2000
+Generated on: 2026-05-06 14:38:00
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 1361
+Accuracy: 0.7891
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 1074
+False Positives (Real misclassified as Fake): 287
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 1361
+Accuracy: 0.7891 (1074/1361 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=1361, acc=0.7891, tpr=0.0000, fpr=0.2109, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.7891
+Worst-group accuracy: unknown_real = 0.7891
+Best-vs-worst group accuracy gap: 0.0000

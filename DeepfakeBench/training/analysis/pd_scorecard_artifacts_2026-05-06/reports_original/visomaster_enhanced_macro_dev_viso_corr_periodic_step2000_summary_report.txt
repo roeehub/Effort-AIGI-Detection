@@ -1,0 +1,28 @@
+Validation Summary Report for: td_visomaster_enhanced_macro_dev_viso_corr_periodic_step2000
+Run Name: TargetDomain visomaster_enhanced_macro_dev VISO_CORR_PERIODIC_STEP2000
+Generated on: 2026-05-06 13:58:11
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 550
+Accuracy: 0.2273
+True Positives (Correctly identified Fake): 125
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 425
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: visomaster_enhanced_macro (FAKE) -----
+Total Videos: 550
+Accuracy: 0.2273 (125/550 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+visomaster_enhanced_fake (family=visomaster_enhanced_fake): n=550, acc=0.2273, tpr=0.2273, fpr=0.0000, fnr=0.7727
+
+Best-group accuracy: visomaster_enhanced_fake = 0.2273
+Worst-group accuracy: visomaster_enhanced_fake = 0.2273
+Best-vs-worst group accuracy gap: 0.0000

@@ -1,0 +1,282 @@
+{
+  "created_at_utc": "2026-04-27T18:39:07Z",
+  "input": {
+    "scores_csv": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/crop_shortcut_2026-04-27/p8a_dev_for_calibration.csv",
+    "label_col": "label",
+    "identity_col": "identity",
+    "score_col": "raw_prob"
+  },
+  "data_summary": {
+    "n_rows_total": 6495,
+    "n_identities_total": 28,
+    "n_rows_calibration": 4984,
+    "n_rows_eval": 1511,
+    "n_identities_calibration": 21,
+    "n_identities_eval": 7,
+    "n_real_eval": 717,
+    "n_fake_eval": 794
+  },
+  "settings": {
+    "holdout_fraction": 0.25,
+    "seed": 737,
+    "threshold_min": 0.01,
+    "threshold_max": 0.99,
+    "threshold_step": 0.001,
+    "min_fake_tpr": 0.85,
+    "fallback_lambda": 2.0,
+    "target_fprs": [
+      0.01,
+      0.02,
+      0.05,
+      0.07
+    ]
+  },
+  "best_model": "raw",
+  "model_ranking": [
+    "raw",
+    "isotonic",
+    "platt"
+  ],
+  "model_report": {
+    "raw": {
+      "frame": {
+        "metrics": {
+          "n": 1511,
+          "n_real": 717,
+          "n_fake": 794,
+          "auc": 0.8883133262368743,
+          "brier": 0.1749179425222074,
+          "logloss": 0.643048645269121,
+          "ece": 0.16005033481138323,
+          "eer": 0.1896792189679219,
+          "eer_threshold": 0.20145613
+        },
+        "recommended_threshold": {
+          "threshold": 0.117,
+          "real_fpr": 0.21338912133891214,
+          "fake_tpr": 0.8501259445843828,
+          "balanced_acc": 0.8183684116227354,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 108
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.9944483,
+            "fake_tpr": 0.2531486146095718
+          },
+          "0.02": {
+            "threshold": 0.99429309,
+            "fake_tpr": 0.2695214105793451
+          },
+          "0.05": {
+            "threshold": 0.99348092,
+            "fake_tpr": 0.29345088161209065
+          },
+          "0.07": {
+            "threshold": 0.98530918,
+            "fake_tpr": 0.36272040302267
+          }
+        }
+      },
+      "identity_mean": {
+        "metrics": {
+          "n": 7,
+          "n_real": 4,
+          "n_fake": 3,
+          "auc": 0.8333333333333334,
+          "brier": 0.18456954918840207,
+          "logloss": 0.6436450033711832,
+          "ece": 0.29887063652476586,
+          "eer": 0.25,
+          "eer_threshold": 0.5667019231192661
+        },
+        "recommended_threshold": {
+          "threshold": 0.566,
+          "real_fpr": 0.25,
+          "fake_tpr": 1.0,
+          "balanced_acc": 0.875,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 557
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.9909960488135593,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.02": {
+            "threshold": 0.9909960488135593,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.05": {
+            "threshold": 0.9909960488135593,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.07": {
+            "threshold": 0.9909960488135593,
+            "fake_tpr": 0.3333333333333333
+          }
+        }
+      }
+    },
+    "platt": {
+      "frame": {
+        "metrics": {
+          "n": 1511,
+          "n_real": 717,
+          "n_fake": 794,
+          "auc": 0.8883133262368743,
+          "brier": 0.20409643266625602,
+          "logloss": 0.6432074630844745,
+          "ece": 0.1996358021398778,
+          "eer": 0.1896792189679219,
+          "eer_threshold": 0.12271375538355346
+        },
+        "recommended_threshold": {
+          "threshold": 0.085,
+          "real_fpr": 0.21338912133891214,
+          "fake_tpr": 0.8501259445843828,
+          "balanced_acc": 0.8183684116227354,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 76
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.8984239506606336,
+            "fake_tpr": 0.2531486146095718
+          },
+          "0.02": {
+            "threshold": 0.8968143934172345,
+            "fake_tpr": 0.2695214105793451
+          },
+          "0.05": {
+            "threshold": 0.888722911354256,
+            "fake_tpr": 0.29345088161209065
+          },
+          "0.07": {
+            "threshold": 0.8262609317309834,
+            "fake_tpr": 0.36272040302267
+          }
+        }
+      },
+      "identity_mean": {
+        "metrics": {
+          "n": 7,
+          "n_real": 4,
+          "n_fake": 3,
+          "auc": 0.8333333333333334,
+          "brier": 0.18524396712252703,
+          "logloss": 0.5379537224980171,
+          "ece": 0.32636239123802646,
+          "eer": 0.25,
+          "eer_threshold": 0.3861555191768131
+        },
+        "recommended_threshold": {
+          "threshold": 0.386,
+          "real_fpr": 0.25,
+          "fake_tpr": 1.0,
+          "balanced_acc": 0.875,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 377
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.8830552724824207,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.02": {
+            "threshold": 0.8830552724824207,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.05": {
+            "threshold": 0.8830552724824207,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.07": {
+            "threshold": 0.8830552724824207,
+            "fake_tpr": 0.3333333333333333
+          }
+        }
+      }
+    },
+    "isotonic": {
+      "frame": {
+        "metrics": {
+          "n": 1511,
+          "n_real": 717,
+          "n_fake": 794,
+          "auc": 0.8860052204645019,
+          "brier": 0.18574669261651733,
+          "logloss": 0.581472271286745,
+          "ece": 0.19624697781083003,
+          "eer": 0.1896792189679219,
+          "eer_threshold": 0.20588235294117646
+        },
+        "recommended_threshold": {
+          "threshold": 0.137,
+          "real_fpr": 0.21338912133891214,
+          "fake_tpr": 0.8501259445843828,
+          "balanced_acc": 0.8183684116227354,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 128
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.9565217391304348,
+            "fake_tpr": 0.22544080604534006
+          },
+          "0.02": {
+            "threshold": 0.8857142857142857,
+            "fake_tpr": 0.2682619647355164
+          },
+          "0.05": {
+            "threshold": 0.8235294117647058,
+            "fake_tpr": 0.28967254408060455
+          },
+          "0.07": {
+            "threshold": 0.7514792899408284,
+            "fake_tpr": 0.3261964735516373
+          }
+        }
+      },
+      "identity_mean": {
+        "metrics": {
+          "n": 7,
+          "n_real": 4,
+          "n_fake": 3,
+          "auc": 0.8333333333333334,
+          "brier": 0.16909971488926492,
+          "logloss": 0.4845370176528719,
+          "ece": 0.3122933073372438,
+          "eer": 0.25,
+          "eer_threshold": 0.4034155631082076
+        },
+        "recommended_threshold": {
+          "threshold": 0.403,
+          "real_fpr": 0.25,
+          "fake_tpr": 1.0,
+          "balanced_acc": 0.875,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 394
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.9061314565211015,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.02": {
+            "threshold": 0.9061314565211015,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.05": {
+            "threshold": 0.9061314565211015,
+            "fake_tpr": 0.3333333333333333
+          },
+          "0.07": {
+            "threshold": 0.9061314565211015,
+            "fake_tpr": 0.3333333333333333
+          }
+        }
+      }
+    }
+  }
+}

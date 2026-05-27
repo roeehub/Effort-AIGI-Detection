@@ -1,0 +1,1393 @@
+{
+  "date": "2026-05-13",
+  "ckpts": [
+    "t5c_periodic_step3500",
+    "p8a_reference_step5000",
+    "e2b_top_n_step3200"
+  ],
+  "tau_calibrated": {
+    "p8a_reference_step5000": 0.914263,
+    "e2b_top_n_step3200": 0.695595,
+    "t5c_periodic_step3500": 0.821989
+  },
+  "t5c_pareto": [
+    {
+      "tau": 0.5,
+      "dev_real_fpr": 0.17522287119581925,
+      "dor_dev_fpr": 0.46,
+      "poor_quality_dev_fpr": 0.13976164680390032,
+      "lighting_extreme_dev_fpr": 0.22555317630264096,
+      "lockbox_real_fpr": 0.44305657604702425,
+      "poor_quality_lockbox_fpr": 0.22727272727272727,
+      "teams_fake_dev_recall": 0.9207139892071399,
+      "viso_enh_dev_recall": 0.7272727272727273,
+      "deeplive_enh_dev_recall": 0.9889908256880734,
+      "dev_macro_recall": 0.8789925140559802,
+      "lockbox_fake_recall": 0.9367588932806324
+    },
+    {
+      "tau": 0.6,
+      "dev_real_fpr": 0.14325238241623117,
+      "dor_dev_fpr": 0.32,
+      "poor_quality_dev_fpr": 0.10834236186348863,
+      "lighting_extreme_dev_fpr": 0.1870092790863669,
+      "lockbox_real_fpr": 0.26671565025716387,
+      "poor_quality_lockbox_fpr": 0.13636363636363635,
+      "teams_fake_dev_recall": 0.8804483188044832,
+      "viso_enh_dev_recall": 0.6327272727272727,
+      "deeplive_enh_dev_recall": 0.9706422018348624,
+      "dev_macro_recall": 0.8279392644555394,
+      "lockbox_fake_recall": 0.9090909090909091
+    },
+    {
+      "tau": 0.7,
+      "dev_real_fpr": 0.11220411927451583,
+      "dor_dev_fpr": 0.24,
+      "poor_quality_dev_fpr": 0.08342361863488625,
+      "lighting_extreme_dev_fpr": 0.15560314061384725,
+      "lockbox_real_fpr": 0.1293166789125643,
+      "poor_quality_lockbox_fpr": 0.045454545454545456,
+      "teams_fake_dev_recall": 0.8119551681195517,
+      "viso_enh_dev_recall": 0.5036363636363637,
+      "deeplive_enh_dev_recall": 0.9137614678899083,
+      "dev_macro_recall": 0.7431176665486078,
+      "lockbox_fake_recall": 0.8458498023715415
+    },
+    {
+      "tau": 0.75,
+      "dev_real_fpr": 0.09683369197663695,
+      "dor_dev_fpr": 0.18,
+      "poor_quality_dev_fpr": 0.06933911159263272,
+      "lighting_extreme_dev_fpr": 0.1349036402569593,
+      "lockbox_real_fpr": 0.08008817046289493,
+      "poor_quality_lockbox_fpr": 0.045454545454545456,
+      "teams_fake_dev_recall": 0.7521793275217933,
+      "viso_enh_dev_recall": 0.37272727272727274,
+      "deeplive_enh_dev_recall": 0.8477064220183487,
+      "dev_macro_recall": 0.6575376740891382,
+      "lockbox_fake_recall": 0.7984189723320159
+    },
+    {
+      "tau": 0.8,
+      "dev_real_fpr": 0.07869658776513987,
+      "dor_dev_fpr": 0.14,
+      "poor_quality_dev_fpr": 0.050920910075839654,
+      "lighting_extreme_dev_fpr": 0.11634546752319772,
+      "lockbox_real_fpr": 0.04775900073475386,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.6774595267745953,
+      "viso_enh_dev_recall": 0.25636363636363635,
+      "deeplive_enh_dev_recall": 0.726605504587156,
+      "dev_macro_recall": 0.5534762225751292,
+      "lockbox_fake_recall": 0.7154150197628458
+    },
+    {
+      "tau": 0.821989,
+      "dev_real_fpr": 0.06978173993237012,
+      "dor_dev_fpr": 0.1,
+      "poor_quality_dev_fpr": 0.04333694474539545,
+      "lighting_extreme_dev_fpr": 0.10563882940756603,
+      "lockbox_real_fpr": 0.03085966201322557,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.6334578663345787,
+      "viso_enh_dev_recall": 0.1781818181818182,
+      "deeplive_enh_dev_recall": 0.6660550458715596,
+      "dev_macro_recall": 0.4925649101293188,
+      "lockbox_fake_recall": 0.6719367588932806
+    },
+    {
+      "tau": 0.83,
+      "dev_real_fpr": 0.06609283738087919,
+      "dor_dev_fpr": 0.06,
+      "poor_quality_dev_fpr": 0.04008667388949079,
+      "lighting_extreme_dev_fpr": 0.10135617416131334,
+      "lockbox_real_fpr": 0.027920646583394562,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.6131174761311747,
+      "viso_enh_dev_recall": 0.13818181818181818,
+      "deeplive_enh_dev_recall": 0.6275229357798165,
+      "dev_macro_recall": 0.45960741003093647,
+      "lockbox_fake_recall": 0.6600790513833992
+    },
+    {
+      "tau": 0.85,
+      "dev_real_fpr": 0.05932984936981248,
+      "dor_dev_fpr": 0.06,
+      "poor_quality_dev_fpr": 0.03791982665222102,
+      "lighting_extreme_dev_fpr": 0.09421841541755889,
+      "lockbox_real_fpr": 0.02204261572373255,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.5703611457036114,
+      "viso_enh_dev_recall": 0.09818181818181818,
+      "deeplive_enh_dev_recall": 0.5266055045871559,
+      "dev_macro_recall": 0.3983828228241952,
+      "lockbox_fake_recall": 0.6047430830039525
+    },
+    {
+      "tau": 0.87,
+      "dev_real_fpr": 0.048570550261297266,
+      "dor_dev_fpr": 0.06,
+      "poor_quality_dev_fpr": 0.027085590465872156,
+      "lighting_extreme_dev_fpr": 0.0835117773019272,
+      "lockbox_real_fpr": 0.011021307861866276,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.5072644250726442,
+      "viso_enh_dev_recall": 0.04363636363636364,
+      "deeplive_enh_dev_recall": 0.381651376146789,
+      "dev_macro_recall": 0.31085072161859895,
+      "lockbox_fake_recall": 0.5335968379446641
+    },
+    {
+      "tau": 0.9,
+      "dev_real_fpr": 0.03504457423916385,
+      "dor_dev_fpr": 0.04,
+      "poor_quality_dev_fpr": 0.014084507042253521,
+      "lighting_extreme_dev_fpr": 0.0635260528194147,
+      "lockbox_real_fpr": 0.0029390154298310064,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.42631797426317974,
+      "viso_enh_dev_recall": 0.00909090909090909,
+      "deeplive_enh_dev_recall": 0.22385321100917432,
+      "dev_macro_recall": 0.21975403145442107,
+      "lockbox_fake_recall": 0.3675889328063241
+    },
+    {
+      "tau": 0.92,
+      "dev_real_fpr": 0.01537042729787888,
+      "dor_dev_fpr": 0.02,
+      "poor_quality_dev_fpr": 0.004333694474539545,
+      "lighting_extreme_dev_fpr": 0.03354746609564597,
+      "lockbox_real_fpr": 0.0007347538574577516,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.33042756330427564,
+      "viso_enh_dev_recall": 0.0,
+      "deeplive_enh_dev_recall": 0.06972477064220184,
+      "dev_macro_recall": 0.1333841113154925,
+      "lockbox_fake_recall": 0.14624505928853754
+    },
+    {
+      "tau": 0.94,
+      "dev_real_fpr": 0.0,
+      "dor_dev_fpr": 0.0,
+      "poor_quality_dev_fpr": 0.0,
+      "lighting_extreme_dev_fpr": 0.0,
+      "lockbox_real_fpr": 0.0,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.0676629306766293,
+      "viso_enh_dev_recall": 0.0,
+      "deeplive_enh_dev_recall": 0.0,
+      "dev_macro_recall": 0.022554310225543103,
+      "lockbox_fake_recall": 0.0
+    },
+    {
+      "tau": 0.96,
+      "dev_real_fpr": 0.0,
+      "dor_dev_fpr": 0.0,
+      "poor_quality_dev_fpr": 0.0,
+      "lighting_extreme_dev_fpr": 0.0,
+      "lockbox_real_fpr": 0.0,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.0,
+      "viso_enh_dev_recall": 0.0,
+      "deeplive_enh_dev_recall": 0.0,
+      "dev_macro_recall": 0.0,
+      "lockbox_fake_recall": 0.0
+    }
+  ],
+  "comparison_grid": {
+    "t5c_periodic_step3500": [
+      {
+        "tau": 0.5,
+        "dev_real_fpr": 0.17522287119581925,
+        "dor_dev_fpr": 0.46,
+        "poor_quality_dev_fpr": 0.13976164680390032,
+        "lighting_extreme_dev_fpr": 0.22555317630264096,
+        "lockbox_real_fpr": 0.44305657604702425,
+        "poor_quality_lockbox_fpr": 0.22727272727272727,
+        "teams_fake_dev_recall": 0.9207139892071399,
+        "viso_enh_dev_recall": 0.7272727272727273,
+        "deeplive_enh_dev_recall": 0.9889908256880734,
+        "dev_macro_recall": 0.8789925140559802,
+        "lockbox_fake_recall": 0.9367588932806324
+      },
+      {
+        "tau": 0.6,
+        "dev_real_fpr": 0.14325238241623117,
+        "dor_dev_fpr": 0.32,
+        "poor_quality_dev_fpr": 0.10834236186348863,
+        "lighting_extreme_dev_fpr": 0.1870092790863669,
+        "lockbox_real_fpr": 0.26671565025716387,
+        "poor_quality_lockbox_fpr": 0.13636363636363635,
+        "teams_fake_dev_recall": 0.8804483188044832,
+        "viso_enh_dev_recall": 0.6327272727272727,
+        "deeplive_enh_dev_recall": 0.9706422018348624,
+        "dev_macro_recall": 0.8279392644555394,
+        "lockbox_fake_recall": 0.9090909090909091
+      },
+      {
+        "tau": 0.7,
+        "dev_real_fpr": 0.11220411927451583,
+        "dor_dev_fpr": 0.24,
+        "poor_quality_dev_fpr": 0.08342361863488625,
+        "lighting_extreme_dev_fpr": 0.15560314061384725,
+        "lockbox_real_fpr": 0.1293166789125643,
+        "poor_quality_lockbox_fpr": 0.045454545454545456,
+        "teams_fake_dev_recall": 0.8119551681195517,
+        "viso_enh_dev_recall": 0.5036363636363637,
+        "deeplive_enh_dev_recall": 0.9137614678899083,
+        "dev_macro_recall": 0.7431176665486078,
+        "lockbox_fake_recall": 0.8458498023715415
+      },
+      {
+        "tau": 0.75,
+        "dev_real_fpr": 0.09683369197663695,
+        "dor_dev_fpr": 0.18,
+        "poor_quality_dev_fpr": 0.06933911159263272,
+        "lighting_extreme_dev_fpr": 0.1349036402569593,
+        "lockbox_real_fpr": 0.08008817046289493,
+        "poor_quality_lockbox_fpr": 0.045454545454545456,
+        "teams_fake_dev_recall": 0.7521793275217933,
+        "viso_enh_dev_recall": 0.37272727272727274,
+        "deeplive_enh_dev_recall": 0.8477064220183487,
+        "dev_macro_recall": 0.6575376740891382,
+        "lockbox_fake_recall": 0.7984189723320159
+      },
+      {
+        "tau": 0.8,
+        "dev_real_fpr": 0.07869658776513987,
+        "dor_dev_fpr": 0.14,
+        "poor_quality_dev_fpr": 0.050920910075839654,
+        "lighting_extreme_dev_fpr": 0.11634546752319772,
+        "lockbox_real_fpr": 0.04775900073475386,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6774595267745953,
+        "viso_enh_dev_recall": 0.25636363636363635,
+        "deeplive_enh_dev_recall": 0.726605504587156,
+        "dev_macro_recall": 0.5534762225751292,
+        "lockbox_fake_recall": 0.7154150197628458
+      },
+      {
+        "tau": 0.83,
+        "dev_real_fpr": 0.06609283738087919,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.04008667388949079,
+        "lighting_extreme_dev_fpr": 0.10135617416131334,
+        "lockbox_real_fpr": 0.027920646583394562,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6131174761311747,
+        "viso_enh_dev_recall": 0.13818181818181818,
+        "deeplive_enh_dev_recall": 0.6275229357798165,
+        "dev_macro_recall": 0.45960741003093647,
+        "lockbox_fake_recall": 0.6600790513833992
+      },
+      {
+        "tau": 0.85,
+        "dev_real_fpr": 0.05932984936981248,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.03791982665222102,
+        "lighting_extreme_dev_fpr": 0.09421841541755889,
+        "lockbox_real_fpr": 0.02204261572373255,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.5703611457036114,
+        "viso_enh_dev_recall": 0.09818181818181818,
+        "deeplive_enh_dev_recall": 0.5266055045871559,
+        "dev_macro_recall": 0.3983828228241952,
+        "lockbox_fake_recall": 0.6047430830039525
+      },
+      {
+        "tau": 0.87,
+        "dev_real_fpr": 0.048570550261297266,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.027085590465872156,
+        "lighting_extreme_dev_fpr": 0.0835117773019272,
+        "lockbox_real_fpr": 0.011021307861866276,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.5072644250726442,
+        "viso_enh_dev_recall": 0.04363636363636364,
+        "deeplive_enh_dev_recall": 0.381651376146789,
+        "dev_macro_recall": 0.31085072161859895,
+        "lockbox_fake_recall": 0.5335968379446641
+      },
+      {
+        "tau": 0.9,
+        "dev_real_fpr": 0.03504457423916385,
+        "dor_dev_fpr": 0.04,
+        "poor_quality_dev_fpr": 0.014084507042253521,
+        "lighting_extreme_dev_fpr": 0.0635260528194147,
+        "lockbox_real_fpr": 0.0029390154298310064,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.42631797426317974,
+        "viso_enh_dev_recall": 0.00909090909090909,
+        "deeplive_enh_dev_recall": 0.22385321100917432,
+        "dev_macro_recall": 0.21975403145442107,
+        "lockbox_fake_recall": 0.3675889328063241
+      },
+      {
+        "tau": 0.92,
+        "dev_real_fpr": 0.01537042729787888,
+        "dor_dev_fpr": 0.02,
+        "poor_quality_dev_fpr": 0.004333694474539545,
+        "lighting_extreme_dev_fpr": 0.03354746609564597,
+        "lockbox_real_fpr": 0.0007347538574577516,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.33042756330427564,
+        "viso_enh_dev_recall": 0.0,
+        "deeplive_enh_dev_recall": 0.06972477064220184,
+        "dev_macro_recall": 0.1333841113154925,
+        "lockbox_fake_recall": 0.14624505928853754
+      },
+      {
+        "tau": 0.94,
+        "dev_real_fpr": 0.0,
+        "dor_dev_fpr": 0.0,
+        "poor_quality_dev_fpr": 0.0,
+        "lighting_extreme_dev_fpr": 0.0,
+        "lockbox_real_fpr": 0.0,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.0676629306766293,
+        "viso_enh_dev_recall": 0.0,
+        "deeplive_enh_dev_recall": 0.0,
+        "dev_macro_recall": 0.022554310225543103,
+        "lockbox_fake_recall": 0.0
+      },
+      {
+        "tau": 0.96,
+        "dev_real_fpr": 0.0,
+        "dor_dev_fpr": 0.0,
+        "poor_quality_dev_fpr": 0.0,
+        "lighting_extreme_dev_fpr": 0.0,
+        "lockbox_real_fpr": 0.0,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.0,
+        "viso_enh_dev_recall": 0.0,
+        "deeplive_enh_dev_recall": 0.0,
+        "dev_macro_recall": 0.0,
+        "lockbox_fake_recall": 0.0
+      }
+    ],
+    "p8a_reference_step5000": [
+      {
+        "tau": 0.5,
+        "dev_real_fpr": 0.12111896710728558,
+        "dor_dev_fpr": 0.3,
+        "poor_quality_dev_fpr": 0.08125677139761647,
+        "lighting_extreme_dev_fpr": 0.11134903640256959,
+        "lockbox_real_fpr": 0.06171932402645114,
+        "poor_quality_lockbox_fpr": 0.4090909090909091,
+        "teams_fake_dev_recall": 0.7023661270236613,
+        "viso_enh_dev_recall": 0.3563636363636364,
+        "deeplive_enh_dev_recall": 0.5302752293577981,
+        "dev_macro_recall": 0.529668330915032,
+        "lockbox_fake_recall": 0.6521739130434783
+      },
+      {
+        "tau": 0.6,
+        "dev_real_fpr": 0.11005225945281279,
+        "dor_dev_fpr": 0.3,
+        "poor_quality_dev_fpr": 0.06717226435536294,
+        "lighting_extreme_dev_fpr": 0.10278372591006424,
+        "lockbox_real_fpr": 0.0470242468772961,
+        "poor_quality_lockbox_fpr": 0.4090909090909091,
+        "teams_fake_dev_recall": 0.6712328767123288,
+        "viso_enh_dev_recall": 0.3145454545454546,
+        "deeplive_enh_dev_recall": 0.47339449541284406,
+        "dev_macro_recall": 0.48639094222354246,
+        "lockbox_fake_recall": 0.6047430830039525
+      },
+      {
+        "tau": 0.7,
+        "dev_real_fpr": 0.09898555179834,
+        "dor_dev_fpr": 0.24,
+        "poor_quality_dev_fpr": 0.05742145178764897,
+        "lighting_extreme_dev_fpr": 0.0913633119200571,
+        "lockbox_real_fpr": 0.041146216017634095,
+        "poor_quality_lockbox_fpr": 0.36363636363636365,
+        "teams_fake_dev_recall": 0.6384391863843919,
+        "viso_enh_dev_recall": 0.2690909090909091,
+        "deeplive_enh_dev_recall": 0.42385321100917434,
+        "dev_macro_recall": 0.4437944354948251,
+        "lockbox_fake_recall": 0.541501976284585
+      },
+      {
+        "tau": 0.75,
+        "dev_real_fpr": 0.0934521979711036,
+        "dor_dev_fpr": 0.24,
+        "poor_quality_dev_fpr": 0.05200433369447454,
+        "lighting_extreme_dev_fpr": 0.08708065667380442,
+        "lockbox_real_fpr": 0.03379867744305658,
+        "poor_quality_lockbox_fpr": 0.3181818181818182,
+        "teams_fake_dev_recall": 0.6210045662100456,
+        "viso_enh_dev_recall": 0.25636363636363635,
+        "deeplive_enh_dev_recall": 0.3944954128440367,
+        "dev_macro_recall": 0.4239545384725729,
+        "lockbox_fake_recall": 0.5296442687747036
+      },
+      {
+        "tau": 0.8,
+        "dev_real_fpr": 0.08607439286812173,
+        "dor_dev_fpr": 0.18,
+        "poor_quality_dev_fpr": 0.04333694474539545,
+        "lighting_extreme_dev_fpr": 0.08065667380442541,
+        "lockbox_real_fpr": 0.028655400440852314,
+        "poor_quality_lockbox_fpr": 0.2727272727272727,
+        "teams_fake_dev_recall": 0.597758405977584,
+        "viso_enh_dev_recall": 0.2309090909090909,
+        "deeplive_enh_dev_recall": 0.3467889908256881,
+        "dev_macro_recall": 0.3918188292374543,
+        "lockbox_fake_recall": 0.5019762845849802
+      },
+      {
+        "tau": 0.83,
+        "dev_real_fpr": 0.08330771595450354,
+        "dor_dev_fpr": 0.16,
+        "poor_quality_dev_fpr": 0.0390032502708559,
+        "lighting_extreme_dev_fpr": 0.07922912205567452,
+        "lockbox_real_fpr": 0.02718589272593681,
+        "poor_quality_lockbox_fpr": 0.22727272727272727,
+        "teams_fake_dev_recall": 0.5848899958489,
+        "viso_enh_dev_recall": 0.21454545454545454,
+        "deeplive_enh_dev_recall": 0.3247706422018349,
+        "dev_macro_recall": 0.3747353641987298,
+        "lockbox_fake_recall": 0.466403162055336
+      },
+      {
+        "tau": 0.85,
+        "dev_real_fpr": 0.08084844758684291,
+        "dor_dev_fpr": 0.14,
+        "poor_quality_dev_fpr": 0.03683640303358613,
+        "lighting_extreme_dev_fpr": 0.07780157030692363,
+        "lockbox_real_fpr": 0.024981631153563555,
+        "poor_quality_lockbox_fpr": 0.22727272727272727,
+        "teams_fake_dev_recall": 0.5753424657534246,
+        "viso_enh_dev_recall": 0.2018181818181818,
+        "deeplive_enh_dev_recall": 0.30642201834862387,
+        "dev_macro_recall": 0.3611942219734101,
+        "lockbox_fake_recall": 0.4426877470355731
+      },
+      {
+        "tau": 0.87,
+        "dev_real_fpr": 0.07900399631109745,
+        "dor_dev_fpr": 0.12,
+        "poor_quality_dev_fpr": 0.03466955579631636,
+        "lighting_extreme_dev_fpr": 0.07637401855817273,
+        "lockbox_real_fpr": 0.02351212343864805,
+        "poor_quality_lockbox_fpr": 0.22727272727272727,
+        "teams_fake_dev_recall": 0.5624740556247405,
+        "viso_enh_dev_recall": 0.18545454545454546,
+        "deeplive_enh_dev_recall": 0.28256880733944956,
+        "dev_macro_recall": 0.3434991361395785,
+        "lockbox_fake_recall": 0.43478260869565216
+      },
+      {
+        "tau": 0.9,
+        "dev_real_fpr": 0.07254841684598831,
+        "dor_dev_fpr": 0.12,
+        "poor_quality_dev_fpr": 0.02925243770314193,
+        "lighting_extreme_dev_fpr": 0.07209136331192005,
+        "lockbox_real_fpr": 0.019838354151359296,
+        "poor_quality_lockbox_fpr": 0.22727272727272727,
+        "teams_fake_dev_recall": 0.5359070153590701,
+        "viso_enh_dev_recall": 0.14545454545454545,
+        "deeplive_enh_dev_recall": 0.25137614678899084,
+        "dev_macro_recall": 0.3109125692008688,
+        "lockbox_fake_recall": 0.41106719367588934
+      },
+      {
+        "tau": 0.92,
+        "dev_real_fpr": 0.06824469720258224,
+        "dor_dev_fpr": 0.08,
+        "poor_quality_dev_fpr": 0.024918743228602384,
+        "lighting_extreme_dev_fpr": 0.06709493219129194,
+        "lockbox_real_fpr": 0.01763409257898604,
+        "poor_quality_lockbox_fpr": 0.22727272727272727,
+        "teams_fake_dev_recall": 0.5234537152345371,
+        "viso_enh_dev_recall": 0.13454545454545455,
+        "deeplive_enh_dev_recall": 0.23486238532110093,
+        "dev_macro_recall": 0.29762051836703085,
+        "lockbox_fake_recall": 0.38735177865612647
+      },
+      {
+        "tau": 0.94,
+        "dev_real_fpr": 0.0617891177374731,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.02275189599133261,
+        "lighting_extreme_dev_fpr": 0.05852962169878658,
+        "lockbox_real_fpr": 0.01322556943423953,
+        "poor_quality_lockbox_fpr": 0.13636363636363635,
+        "teams_fake_dev_recall": 0.5089248650892486,
+        "viso_enh_dev_recall": 0.11818181818181818,
+        "deeplive_enh_dev_recall": 0.21284403669724772,
+        "dev_macro_recall": 0.2799835733227715,
+        "lockbox_fake_recall": 0.36363636363636365
+      },
+      {
+        "tau": 0.96,
+        "dev_real_fpr": 0.05348908699661851,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.01733477789815818,
+        "lighting_extreme_dev_fpr": 0.05067808708065667,
+        "lockbox_real_fpr": 0.011021307861866276,
+        "poor_quality_lockbox_fpr": 0.13636363636363635,
+        "teams_fake_dev_recall": 0.48443337484433374,
+        "viso_enh_dev_recall": 0.08727272727272728,
+        "deeplive_enh_dev_recall": 0.1834862385321101,
+        "dev_macro_recall": 0.2517307802163904,
+        "lockbox_fake_recall": 0.32806324110671936
+      }
+    ],
+    "e2b_top_n_step3200": [
+      {
+        "tau": 0.5,
+        "dev_real_fpr": 0.12081155856132801,
+        "dor_dev_fpr": 0.24,
+        "poor_quality_dev_fpr": 0.13867822318526543,
+        "lighting_extreme_dev_fpr": 0.1841541755888651,
+        "lockbox_real_fpr": 0.06465833945628215,
+        "poor_quality_lockbox_fpr": 0.045454545454545456,
+        "teams_fake_dev_recall": 0.7484433374844334,
+        "viso_enh_dev_recall": 0.08363636363636363,
+        "deeplive_enh_dev_recall": 0.944954128440367,
+        "dev_macro_recall": 0.5923446098537214,
+        "lockbox_fake_recall": 0.8260869565217391
+      },
+      {
+        "tau": 0.6,
+        "dev_real_fpr": 0.09837073470642484,
+        "dor_dev_fpr": 0.18,
+        "poor_quality_dev_fpr": 0.11700975081256772,
+        "lighting_extreme_dev_fpr": 0.15203426124197003,
+        "lockbox_real_fpr": 0.04188096987509184,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.7164798671647987,
+        "viso_enh_dev_recall": 0.06727272727272728,
+        "deeplive_enh_dev_recall": 0.8715596330275229,
+        "dev_macro_recall": 0.5517707424883497,
+        "lockbox_fake_recall": 0.7470355731225297
+      },
+      {
+        "tau": 0.7,
+        "dev_real_fpr": 0.06916692284045496,
+        "dor_dev_fpr": 0.14,
+        "poor_quality_dev_fpr": 0.08342361863488625,
+        "lighting_extreme_dev_fpr": 0.10349750178443969,
+        "lockbox_real_fpr": 0.024981631153563555,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6820257368202574,
+        "viso_enh_dev_recall": 0.05272727272727273,
+        "deeplive_enh_dev_recall": 0.8073394495412844,
+        "dev_macro_recall": 0.5140308196962715,
+        "lockbox_fake_recall": 0.6403162055335968
+      },
+      {
+        "tau": 0.75,
+        "dev_real_fpr": 0.05810021518598217,
+        "dor_dev_fpr": 0.12,
+        "poor_quality_dev_fpr": 0.07258938244853738,
+        "lighting_extreme_dev_fpr": 0.08636688079942897,
+        "lockbox_real_fpr": 0.019838354151359296,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6621004566210046,
+        "viso_enh_dev_recall": 0.04909090909090909,
+        "deeplive_enh_dev_recall": 0.7486238532110092,
+        "dev_macro_recall": 0.4866050729743076,
+        "lockbox_fake_recall": 0.5770750988142292
+      },
+      {
+        "tau": 0.8,
+        "dev_real_fpr": 0.04518905625576391,
+        "dor_dev_fpr": 0.12,
+        "poor_quality_dev_fpr": 0.059588299024918745,
+        "lighting_extreme_dev_fpr": 0.06780870806566738,
+        "lockbox_real_fpr": 0.016164584864070537,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6363636363636364,
+        "viso_enh_dev_recall": 0.04727272727272727,
+        "deeplive_enh_dev_recall": 0.6880733944954128,
+        "dev_macro_recall": 0.45723658604392553,
+        "lockbox_fake_recall": 0.5335968379446641
+      },
+      {
+        "tau": 0.83,
+        "dev_real_fpr": 0.03873347679065478,
+        "dor_dev_fpr": 0.08,
+        "poor_quality_dev_fpr": 0.05308775731310943,
+        "lighting_extreme_dev_fpr": 0.057815845824411134,
+        "lockbox_real_fpr": 0.011756061719324026,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6168534661685346,
+        "viso_enh_dev_recall": 0.04727272727272727,
+        "deeplive_enh_dev_recall": 0.6422018348623854,
+        "dev_macro_recall": 0.43544267610121573,
+        "lockbox_fake_recall": 0.4782608695652174
+      },
+      {
+        "tau": 0.85,
+        "dev_real_fpr": 0.03473716569320627,
+        "dor_dev_fpr": 0.08,
+        "poor_quality_dev_fpr": 0.047670639219934995,
+        "lighting_extreme_dev_fpr": 0.05281941470378301,
+        "lockbox_real_fpr": 0.011756061719324026,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.6014943960149439,
+        "viso_enh_dev_recall": 0.045454545454545456,
+        "deeplive_enh_dev_recall": 0.6,
+        "dev_macro_recall": 0.4156496471564964,
+        "lockbox_fake_recall": 0.4268774703557312
+      },
+      {
+        "tau": 0.87,
+        "dev_real_fpr": 0.03166308023363049,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.04550379198266522,
+        "lighting_extreme_dev_fpr": 0.046395431834404,
+        "lockbox_real_fpr": 0.010286554004408524,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.5853051058530511,
+        "viso_enh_dev_recall": 0.045454545454545456,
+        "deeplive_enh_dev_recall": 0.5577981651376147,
+        "dev_macro_recall": 0.3961859388150704,
+        "lockbox_fake_recall": 0.391304347826087
+      },
+      {
+        "tau": 0.9,
+        "dev_real_fpr": 0.02305564094681832,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.03358613217768147,
+        "lighting_extreme_dev_fpr": 0.03354746609564597,
+        "lockbox_real_fpr": 0.00881704628949302,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.5545869655458696,
+        "viso_enh_dev_recall": 0.045454545454545456,
+        "deeplive_enh_dev_recall": 0.48807339449541287,
+        "dev_macro_recall": 0.3627049684986093,
+        "lockbox_fake_recall": 0.36363636363636365
+      },
+      {
+        "tau": 0.92,
+        "dev_real_fpr": 0.019674146941284967,
+        "dor_dev_fpr": 0.06,
+        "poor_quality_dev_fpr": 0.030335861321776816,
+        "lighting_extreme_dev_fpr": 0.027837259100642397,
+        "lockbox_real_fpr": 0.0073475385745775165,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.5288501452885015,
+        "viso_enh_dev_recall": 0.04181818181818182,
+        "deeplive_enh_dev_recall": 0.42018348623853213,
+        "dev_macro_recall": 0.33028393778173853,
+        "lockbox_fake_recall": 0.3201581027667984
+      },
+      {
+        "tau": 0.94,
+        "dev_real_fpr": 0.014755610205963726,
+        "dor_dev_fpr": 0.02,
+        "poor_quality_dev_fpr": 0.024918743228602384,
+        "lighting_extreme_dev_fpr": 0.01998572448251249,
+        "lockbox_real_fpr": 0.00440852314474651,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.4806973848069738,
+        "viso_enh_dev_recall": 0.038181818181818185,
+        "deeplive_enh_dev_recall": 0.26422018348623855,
+        "dev_macro_recall": 0.2610331288250102,
+        "lockbox_fake_recall": 0.2845849802371542
+      },
+      {
+        "tau": 0.96,
+        "dev_real_fpr": 0.007992622194897018,
+        "dor_dev_fpr": 0.02,
+        "poor_quality_dev_fpr": 0.010834236186348862,
+        "lighting_extreme_dev_fpr": 0.011420413990007138,
+        "lockbox_real_fpr": 0.0007347538574577516,
+        "poor_quality_lockbox_fpr": 0.0,
+        "teams_fake_dev_recall": 0.4167704441677044,
+        "viso_enh_dev_recall": 0.034545454545454546,
+        "deeplive_enh_dev_recall": 0.11926605504587157,
+        "dev_macro_recall": 0.1901939845863435,
+        "lockbox_fake_recall": 0.24110671936758893
+      }
+    ]
+  },
+  "at_each_calibrated_tau": {
+    "t5c_periodic_step3500": {
+      "tau": 0.821989,
+      "dev_real_fpr": 0.06978173993237012,
+      "dor_dev_fpr": 0.1,
+      "poor_quality_dev_fpr": 0.04333694474539545,
+      "lighting_extreme_dev_fpr": 0.10563882940756603,
+      "lockbox_real_fpr": 0.03085966201322557,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.6334578663345787,
+      "viso_enh_dev_recall": 0.1781818181818182,
+      "deeplive_enh_dev_recall": 0.6660550458715596,
+      "dev_macro_recall": 0.4925649101293188,
+      "lockbox_fake_recall": 0.6719367588932806
+    },
+    "p8a_reference_step5000": {
+      "tau": 0.914263,
+      "dev_real_fpr": 0.06978173993237012,
+      "dor_dev_fpr": 0.08,
+      "poor_quality_dev_fpr": 0.02600216684723727,
+      "lighting_extreme_dev_fpr": 0.06923625981441828,
+      "lockbox_real_fpr": 0.018368846436443792,
+      "poor_quality_lockbox_fpr": 0.22727272727272727,
+      "teams_fake_dev_recall": 0.5259443752594437,
+      "viso_enh_dev_recall": 0.13636363636363635,
+      "deeplive_enh_dev_recall": 0.23853211009174313,
+      "dev_macro_recall": 0.30028004057160773,
+      "lockbox_fake_recall": 0.38735177865612647
+    },
+    "e2b_top_n_step3200": {
+      "tau": 0.695595,
+      "dev_real_fpr": 0.06978173993237012,
+      "dor_dev_fpr": 0.14,
+      "poor_quality_dev_fpr": 0.08342361863488625,
+      "lighting_extreme_dev_fpr": 0.10492505353319058,
+      "lockbox_real_fpr": 0.024981631153563555,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.6832710668327107,
+      "viso_enh_dev_recall": 0.05272727272727273,
+      "deeplive_enh_dev_recall": 0.8091743119266055,
+      "dev_macro_recall": 0.5150575504955296,
+      "lockbox_fake_recall": 0.6482213438735178
+    }
+  },
+  "recommended_tau": {
+    "tau": 0.8416985,
+    "lb_fpr_ceiling": 0.025,
+    "t5c_periodic_step3500": {
+      "tau": 0.8416985,
+      "dev_real_fpr": 0.062403934829388254,
+      "dor_dev_fpr": 0.06,
+      "poor_quality_dev_fpr": 0.03791982665222102,
+      "lighting_extreme_dev_fpr": 0.09850107066381156,
+      "lockbox_real_fpr": 0.024981631153563555,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.5882108758821087,
+      "viso_enh_dev_recall": 0.10727272727272727,
+      "deeplive_enh_dev_recall": 0.5724770642201835,
+      "dev_macro_recall": 0.42265355579167324,
+      "lockbox_fake_recall": 0.6245059288537549
+    },
+    "p8a_reference_step5000": {
+      "tau": 0.8416985,
+      "dev_real_fpr": 0.08115585613280049,
+      "dor_dev_fpr": 0.14,
+      "poor_quality_dev_fpr": 0.03683640303358613,
+      "lighting_extreme_dev_fpr": 0.07780157030692363,
+      "lockbox_real_fpr": 0.024981631153563555,
+      "poor_quality_lockbox_fpr": 0.22727272727272727,
+      "teams_fake_dev_recall": 0.5786633457866335,
+      "viso_enh_dev_recall": 0.20727272727272728,
+      "deeplive_enh_dev_recall": 0.3100917431192661,
+      "dev_macro_recall": 0.3653426053928756,
+      "lockbox_fake_recall": 0.4624505928853755
+    },
+    "e2b_top_n_step3200": {
+      "tau": 0.8416985,
+      "dev_real_fpr": 0.03596679987703658,
+      "dor_dev_fpr": 0.08,
+      "poor_quality_dev_fpr": 0.04875406283856988,
+      "lighting_extreme_dev_fpr": 0.05424696645253391,
+      "lockbox_real_fpr": 0.011756061719324026,
+      "poor_quality_lockbox_fpr": 0.0,
+      "teams_fake_dev_recall": 0.6060606060606061,
+      "viso_enh_dev_recall": 0.045454545454545456,
+      "deeplive_enh_dev_recall": 0.6055045871559633,
+      "dev_macro_recall": 0.4190065795570383,
+      "lockbox_fake_recall": 0.4426877470355731
+    }
+  },
+  "per_identity_lockbox_t5c_at_rec_tau": [
+    {
+      "identity": "bla_bla_chow",
+      "suite": "teams_real_all_lockbox",
+      "is_chronic_6": true,
+      "n_videos": 61,
+      "n_fp_videos": 8,
+      "fpr": 0.13114754098360656,
+      "exceeds_30pct": false
+    },
+    {
+      "identity": "dor_shkedi",
+      "suite": "teams_real_all_lockbox",
+      "is_chronic_6": true,
+      "n_videos": 1138,
+      "n_fp_videos": 26,
+      "fpr": 0.022847100175746926,
+      "exceeds_30pct": false
+    },
+    {
+      "identity": "Chikara_Takahashi",
+      "suite": "teams_real_all_lockbox",
+      "is_chronic_6": false,
+      "n_videos": 25,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false
+    },
+    {
+      "identity": "PC_Generator",
+      "suite": "teams_real_all_lockbox",
+      "is_chronic_6": true,
+      "n_videos": 28,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false
+    },
+    {
+      "identity": "real_dor",
+      "suite": "teams_real_all_lockbox",
+      "is_chronic_6": false,
+      "n_videos": 109,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false
+    }
+  ],
+  "per_identity_pooled_t5c_at_rec_tau": [
+    {
+      "identity": "Roy_D",
+      "is_chronic_6": true,
+      "n_videos": 246,
+      "n_fp_videos": 214,
+      "fpr": 0.8699186991869918,
+      "exceeds_30pct": true,
+      "per_suite_breakdown": "teams_real_all_dev=110/130; teams_real_poor_quality_dev=3/3; teams_real_lighting_extreme_dev=101/113"
+    },
+    {
+      "identity": "Q",
+      "is_chronic_6": false,
+      "n_videos": 36,
+      "n_fp_videos": 8,
+      "fpr": 0.2222222222222222,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=8/36"
+    },
+    {
+      "identity": "bla_bla_chow",
+      "is_chronic_6": true,
+      "n_videos": 1019,
+      "n_fp_videos": 123,
+      "fpr": 0.12070657507360157,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_lockbox=8/61; teams_real_all_dev=60/467; teams_real_poor_quality_dev=26/95; teams_real_lighting_extreme_dev=29/394; teams_real_poor_quality_lockbox=0/2"
+    },
+    {
+      "identity": "xiang",
+      "is_chronic_6": true,
+      "n_videos": 325,
+      "n_fp_videos": 12,
+      "fpr": 0.036923076923076927,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=6/159; teams_real_poor_quality_dev=3/86; teams_real_lighting_extreme_dev=3/80"
+    },
+    {
+      "identity": "dor_shkedi",
+      "is_chronic_6": true,
+      "n_videos": 1250,
+      "n_fp_videos": 29,
+      "fpr": 0.0232,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_lockbox=26/1138; teams_real_all_dev=0/20; teams_real_poor_quality_dev=0/20; teams_real_lighting_extreme_dev=0/20; teams_real_dor_dev=3/50; teams_real_poor_quality_lockbox=0/2"
+    },
+    {
+      "identity": "PC_Generator",
+      "is_chronic_6": true,
+      "n_videos": 1102,
+      "n_fp_videos": 24,
+      "fpr": 0.021778584392014518,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_lockbox=0/28; teams_real_all_dev=17/525; teams_real_poor_quality_dev=2/241; teams_real_lighting_extreme_dev=5/308"
+    },
+    {
+      "identity": "dor",
+      "is_chronic_6": true,
+      "n_videos": 345,
+      "n_fp_videos": 3,
+      "fpr": 0.008695652173913044,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=2/269; teams_real_poor_quality_dev=1/74; teams_real_lighting_extreme_dev=0/2"
+    },
+    {
+      "identity": "Chikara_Takahashi",
+      "is_chronic_6": false,
+      "n_videos": 40,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_lockbox=0/25; teams_real_poor_quality_lockbox=0/15"
+    },
+    {
+      "identity": "real_dor",
+      "is_chronic_6": false,
+      "n_videos": 112,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_lockbox=0/109; teams_real_poor_quality_lockbox=0/3"
+    },
+    {
+      "identity": "Cam_Test",
+      "is_chronic_6": false,
+      "n_videos": 104,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=0/98; teams_real_poor_quality_dev=0/6"
+    },
+    {
+      "identity": "Md_noyn_Sharker",
+      "is_chronic_6": false,
+      "n_videos": 607,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=0/409; teams_real_lighting_extreme_dev=0/198"
+    },
+    {
+      "identity": "Test_Cam",
+      "is_chronic_6": false,
+      "n_videos": 994,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=0/712; teams_real_poor_quality_dev=0/265; teams_real_lighting_extreme_dev=0/17"
+    },
+    {
+      "identity": "Xiang_Xiang2_Feng",
+      "is_chronic_6": false,
+      "n_videos": 714,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=0/364; teams_real_poor_quality_dev=0/118; teams_real_lighting_extreme_dev=0/232"
+    },
+    {
+      "identity": "ilan",
+      "is_chronic_6": false,
+      "n_videos": 48,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=0/29; teams_real_lighting_extreme_dev=0/19"
+    },
+    {
+      "identity": "orel",
+      "is_chronic_6": false,
+      "n_videos": 68,
+      "n_fp_videos": 0,
+      "fpr": 0.0,
+      "exceeds_30pct": false,
+      "per_suite_breakdown": "teams_real_all_dev=0/35; teams_real_poor_quality_dev=0/15; teams_real_lighting_extreme_dev=0/18"
+    }
+  ],
+  "per_identity_by_suite_t5c_at_rec_tau": {
+    "teams_real_all_lockbox": [
+      {
+        "identity": "bla_bla_chow",
+        "suite": "teams_real_all_lockbox",
+        "is_chronic_6": true,
+        "n_videos": 61,
+        "n_fp_videos": 8,
+        "fpr": 0.13114754098360656,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor_shkedi",
+        "suite": "teams_real_all_lockbox",
+        "is_chronic_6": true,
+        "n_videos": 1138,
+        "n_fp_videos": 26,
+        "fpr": 0.022847100175746926,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Chikara_Takahashi",
+        "suite": "teams_real_all_lockbox",
+        "is_chronic_6": false,
+        "n_videos": 25,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "PC_Generator",
+        "suite": "teams_real_all_lockbox",
+        "is_chronic_6": true,
+        "n_videos": 28,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "real_dor",
+        "suite": "teams_real_all_lockbox",
+        "is_chronic_6": false,
+        "n_videos": 109,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      }
+    ],
+    "teams_real_all_dev": [
+      {
+        "identity": "Roy_D",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": true,
+        "n_videos": 130,
+        "n_fp_videos": 110,
+        "fpr": 0.8461538461538461,
+        "exceeds_30pct": true
+      },
+      {
+        "identity": "Q",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 36,
+        "n_fp_videos": 8,
+        "fpr": 0.2222222222222222,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "bla_bla_chow",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": true,
+        "n_videos": 467,
+        "n_fp_videos": 60,
+        "fpr": 0.1284796573875803,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "xiang",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": true,
+        "n_videos": 159,
+        "n_fp_videos": 6,
+        "fpr": 0.03773584905660377,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "PC_Generator",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": true,
+        "n_videos": 525,
+        "n_fp_videos": 17,
+        "fpr": 0.03238095238095238,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": true,
+        "n_videos": 269,
+        "n_fp_videos": 2,
+        "fpr": 0.007434944237918215,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Cam_Test",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 98,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Md_noyn_Sharker",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 409,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Test_Cam",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 712,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Xiang_Xiang2_Feng",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 364,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor_shkedi",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": true,
+        "n_videos": 20,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "ilan",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 29,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "orel",
+        "suite": "teams_real_all_dev",
+        "is_chronic_6": false,
+        "n_videos": 35,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      }
+    ],
+    "teams_real_poor_quality_dev": [
+      {
+        "identity": "Roy_D",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": true,
+        "n_videos": 3,
+        "n_fp_videos": 3,
+        "fpr": 1.0,
+        "exceeds_30pct": true
+      },
+      {
+        "identity": "bla_bla_chow",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": true,
+        "n_videos": 95,
+        "n_fp_videos": 26,
+        "fpr": 0.2736842105263158,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "xiang",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": true,
+        "n_videos": 86,
+        "n_fp_videos": 3,
+        "fpr": 0.03488372093023256,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": true,
+        "n_videos": 74,
+        "n_fp_videos": 1,
+        "fpr": 0.013513513513513514,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "PC_Generator",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": true,
+        "n_videos": 241,
+        "n_fp_videos": 2,
+        "fpr": 0.008298755186721992,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Cam_Test",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": false,
+        "n_videos": 6,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Test_Cam",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": false,
+        "n_videos": 265,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Xiang_Xiang2_Feng",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": false,
+        "n_videos": 118,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor_shkedi",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": true,
+        "n_videos": 20,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "orel",
+        "suite": "teams_real_poor_quality_dev",
+        "is_chronic_6": false,
+        "n_videos": 15,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      }
+    ],
+    "teams_real_lighting_extreme_dev": [
+      {
+        "identity": "Roy_D",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": true,
+        "n_videos": 113,
+        "n_fp_videos": 101,
+        "fpr": 0.8938053097345132,
+        "exceeds_30pct": true
+      },
+      {
+        "identity": "bla_bla_chow",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": true,
+        "n_videos": 394,
+        "n_fp_videos": 29,
+        "fpr": 0.07360406091370558,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "xiang",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": true,
+        "n_videos": 80,
+        "n_fp_videos": 3,
+        "fpr": 0.0375,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "PC_Generator",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": true,
+        "n_videos": 308,
+        "n_fp_videos": 5,
+        "fpr": 0.016233766233766232,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Md_noyn_Sharker",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": false,
+        "n_videos": 198,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Test_Cam",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": false,
+        "n_videos": 17,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "Xiang_Xiang2_Feng",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": false,
+        "n_videos": 232,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": true,
+        "n_videos": 2,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor_shkedi",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": true,
+        "n_videos": 20,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "ilan",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": false,
+        "n_videos": 19,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "orel",
+        "suite": "teams_real_lighting_extreme_dev",
+        "is_chronic_6": false,
+        "n_videos": 18,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      }
+    ],
+    "teams_real_dor_dev": [
+      {
+        "identity": "dor_shkedi",
+        "suite": "teams_real_dor_dev",
+        "is_chronic_6": true,
+        "n_videos": 50,
+        "n_fp_videos": 3,
+        "fpr": 0.06,
+        "exceeds_30pct": false
+      }
+    ],
+    "teams_real_poor_quality_lockbox": [
+      {
+        "identity": "Chikara_Takahashi",
+        "suite": "teams_real_poor_quality_lockbox",
+        "is_chronic_6": false,
+        "n_videos": 15,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "bla_bla_chow",
+        "suite": "teams_real_poor_quality_lockbox",
+        "is_chronic_6": true,
+        "n_videos": 2,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "dor_shkedi",
+        "suite": "teams_real_poor_quality_lockbox",
+        "is_chronic_6": true,
+        "n_videos": 2,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      },
+      {
+        "identity": "real_dor",
+        "suite": "teams_real_poor_quality_lockbox",
+        "is_chronic_6": false,
+        "n_videos": 3,
+        "n_fp_videos": 0,
+        "fpr": 0.0,
+        "exceeds_30pct": false
+      }
+    ]
+  }
+}

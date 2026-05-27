@@ -1,0 +1,185 @@
+{
+  "buckets_attempted": [
+    "deeplive_enhanced_dev",
+    "teams_fake_all_dev",
+    "teams_fake_all_lockbox",
+    "teams_real_all_dev",
+    "teams_real_all_lockbox",
+    "teams_real_dor_dev",
+    "teams_real_lighting_extreme_dev",
+    "teams_real_poor_quality_dev",
+    "visomaster_enhanced_macro_dev"
+  ],
+  "buckets_processed": [
+    "deeplive_enhanced_dev",
+    "teams_fake_all_dev",
+    "teams_fake_all_lockbox",
+    "teams_real_all_dev",
+    "teams_real_all_lockbox",
+    "teams_real_lighting_extreme_dev",
+    "teams_real_poor_quality_dev"
+  ],
+  "buckets_skipped": {
+    "teams_real_dor_dev": "no parquet match for any frame (n_frames_total=50)",
+    "visomaster_enhanced_macro_dev": "no parquet match for any frame (n_frames_total=550)"
+  },
+  "results": {
+    "deeplive_enhanced_dev": {
+      "n_videos_report": 545,
+      "n_frames_total": 545,
+      "n_frames_matched": 536,
+      "frame_match_pct": 98.34862385321101,
+      "n_videos_after_join": 536,
+      "n_real": 0,
+      "n_fake": 536,
+      "r_real": null,
+      "p_real": null,
+      "verdict_real": "n/a",
+      "r_fake": -0.21386624818699826,
+      "p_fake": 5.800597716969806e-07,
+      "verdict_fake": "weak"
+    },
+    "teams_fake_all_dev": {
+      "n_videos_report": 2409,
+      "n_frames_total": 3039,
+      "n_frames_matched": 2444,
+      "frame_match_pct": 80.42119118130964,
+      "n_videos_after_join": 1825,
+      "n_real": 0,
+      "n_fake": 1825,
+      "r_real": null,
+      "p_real": null,
+      "verdict_real": "n/a",
+      "r_fake": 0.3827900562445024,
+      "p_fake": 9.248527383897227e-65,
+      "verdict_fake": "moderate"
+    },
+    "teams_fake_all_lockbox": {
+      "n_videos_report": 253,
+      "n_frames_total": 425,
+      "n_frames_matched": 425,
+      "frame_match_pct": 100.0,
+      "n_videos_after_join": 253,
+      "n_real": 0,
+      "n_fake": 253,
+      "r_real": null,
+      "p_real": null,
+      "verdict_real": "n/a",
+      "r_fake": -0.5288723260469401,
+      "p_fake": 1.234496509239275e-19,
+      "verdict_fake": "strong"
+    },
+    "teams_real_all_dev": {
+      "n_videos_report": 3253,
+      "n_frames_total": 4564,
+      "n_frames_matched": 3832,
+      "frame_match_pct": 83.96143733567047,
+      "n_videos_after_join": 2610,
+      "n_real": 2610,
+      "n_fake": 0,
+      "r_real": -0.2868689374320726,
+      "p_real": 1.2583834149619034e-50,
+      "verdict_real": "weak",
+      "r_fake": null,
+      "p_fake": null,
+      "verdict_fake": "n/a"
+    },
+    "teams_real_all_lockbox": {
+      "n_videos_report": 1361,
+      "n_frames_total": 1418,
+      "n_frames_matched": 414,
+      "frame_match_pct": 29.196050775740478,
+      "n_videos_after_join": 385,
+      "n_real": 385,
+      "n_fake": 0,
+      "r_real": -0.5645053060771448,
+      "p_real": 8.79897706086727e-34,
+      "verdict_real": "strong",
+      "r_fake": null,
+      "p_fake": null,
+      "verdict_fake": "n/a"
+    },
+    "teams_real_lighting_extreme_dev": {
+      "n_videos_report": 1401,
+      "n_frames_total": 1742,
+      "n_frames_matched": 1518,
+      "frame_match_pct": 87.14121699196326,
+      "n_videos_after_join": 1183,
+      "n_real": 1183,
+      "n_fake": 0,
+      "r_real": -0.23052755260633445,
+      "p_real": 9.831875659644337e-16,
+      "verdict_real": "weak",
+      "r_fake": null,
+      "p_fake": null,
+      "verdict_fake": "n/a"
+    },
+    "teams_real_poor_quality_dev": {
+      "n_videos_report": 923,
+      "n_frames_total": 1303,
+      "n_frames_matched": 1061,
+      "frame_match_pct": 81.42747505755948,
+      "n_videos_after_join": 722,
+      "n_real": 722,
+      "n_fake": 0,
+      "r_real": -0.278877094313528,
+      "p_real": 2.3044325551428518e-14,
+      "verdict_real": "weak",
+      "r_fake": null,
+      "p_fake": null,
+      "verdict_fake": "n/a"
+    }
+  },
+  "pooled_results": {
+    "pooled_dev_fake_real": {
+      "buckets": [
+        "teams_fake_all_dev",
+        "teams_real_all_dev",
+        "deeplive_enhanced_dev"
+      ],
+      "n_total": 4971,
+      "n_real": 2610,
+      "n_fake": 2361,
+      "r_real": -0.2868689374320726,
+      "verdict_real": "weak",
+      "r_fake": 0.3851762882948061,
+      "verdict_fake": "moderate",
+      "r_pooled_all": 0.1290112273735451,
+      "verdict_pooled_all": "weak"
+    },
+    "pooled_lockbox_fake_real": {
+      "buckets": [
+        "teams_fake_all_lockbox",
+        "teams_real_all_lockbox"
+      ],
+      "n_total": 638,
+      "n_real": 385,
+      "n_fake": 253,
+      "r_real": -0.5645053060771448,
+      "verdict_real": "strong",
+      "r_fake": -0.5288723260469401,
+      "verdict_fake": "strong",
+      "r_pooled_all": 0.1877994401245663,
+      "verdict_pooled_all": "weak"
+    }
+  },
+  "saved_pngs": [
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/deeplive_enhanced_dev.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/teams_fake_all_dev.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/teams_fake_all_lockbox.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/teams_real_all_dev.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/teams_real_all_lockbox.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/teams_real_lighting_extreme_dev.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/teams_real_poor_quality_dev.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/pooled_dev_fake_real.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/pooled_lockbox_fake_real.png",
+    "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/face_size_leak_scatter_2026-04-29/grid.png"
+  ],
+  "verdict_thresholds": {
+    "strong": "|r| > 0.5",
+    "moderate": "0.3 <= |r| <= 0.5",
+    "weak": "0.1 <= |r| < 0.3",
+    "none": "|r| < 0.1"
+  },
+  "aggregation": "per-video face_pixel_area = MEAN of frame face_pixel_area"
+}

@@ -1,0 +1,202 @@
+{
+  "ckpts": {
+    "P8A": "analysis/_features_cache_2026-04-30/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+    "SLOT2_GRL": "analysis/_features_cache_2026-04-30/value_composite_effort_20260430_step8500_auc0.9842_eer0.0457.pth",
+    "SLOT3_JITTER": "analysis/_features_cache_2026-04-30/value_composite_effort_20260429_step500_auc0.9797_eer0.0521.pth"
+  },
+  "domains": [
+    0,
+    1,
+    2
+  ],
+  "sample_per_domain": 300,
+  "n_splits": 5,
+  "results": {
+    "P8A": {
+      "classes": [
+        1,
+        2
+      ],
+      "macro_ovr_auc": 0.9999333333333333,
+      "per_class_auc": {
+        "1": 0.9999333333333333,
+        "2": 0.9999333333333332
+      },
+      "confusion_matrix": [
+        [
+          295,
+          5
+        ],
+        [
+          1,
+          299
+        ]
+      ],
+      "fold_metrics": [
+        {
+          "fold": 0,
+          "per_class_auc": {
+            "1": 0.9997222222222222,
+            "2": 0.9997222222222222
+          }
+        },
+        {
+          "fold": 1,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        },
+        {
+          "fold": 2,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        },
+        {
+          "fold": 3,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        },
+        {
+          "fold": 4,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        }
+      ],
+      "n_samples_per_class": {
+        "1": 300,
+        "2": 300
+      }
+    },
+    "SLOT2_GRL": {
+      "classes": [
+        1,
+        2
+      ],
+      "macro_ovr_auc": 0.9993666666666667,
+      "per_class_auc": {
+        "1": 0.9993666666666667,
+        "2": 0.9993666666666667
+      },
+      "confusion_matrix": [
+        [
+          299,
+          1
+        ],
+        [
+          0,
+          300
+        ]
+      ],
+      "fold_metrics": [
+        {
+          "fold": 0,
+          "per_class_auc": {
+            "1": 0.9955555555555555,
+            "2": 0.9955555555555555
+          }
+        },
+        {
+          "fold": 1,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        },
+        {
+          "fold": 2,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        },
+        {
+          "fold": 3,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        },
+        {
+          "fold": 4,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        }
+      ],
+      "n_samples_per_class": {
+        "1": 300,
+        "2": 300
+      }
+    },
+    "SLOT3_JITTER": {
+      "classes": [
+        1,
+        2
+      ],
+      "macro_ovr_auc": 0.9969222222222223,
+      "per_class_auc": {
+        "1": 0.9969222222222223,
+        "2": 0.9969222222222222
+      },
+      "confusion_matrix": [
+        [
+          288,
+          12
+        ],
+        [
+          4,
+          296
+        ]
+      ],
+      "fold_metrics": [
+        {
+          "fold": 0,
+          "per_class_auc": {
+            "1": 0.9966666666666667,
+            "2": 0.9966666666666667
+          }
+        },
+        {
+          "fold": 1,
+          "per_class_auc": {
+            "1": 0.9972222222222222,
+            "2": 0.9972222222222222
+          }
+        },
+        {
+          "fold": 2,
+          "per_class_auc": {
+            "1": 0.9972222222222222,
+            "2": 0.9972222222222221
+          }
+        },
+        {
+          "fold": 3,
+          "per_class_auc": {
+            "1": 0.9972222222222222,
+            "2": 0.9972222222222222
+          }
+        },
+        {
+          "fold": 4,
+          "per_class_auc": {
+            "1": 1.0,
+            "2": 1.0
+          }
+        }
+      ],
+      "n_samples_per_class": {
+        "1": 300,
+        "2": 300
+      }
+    }
+  }
+}

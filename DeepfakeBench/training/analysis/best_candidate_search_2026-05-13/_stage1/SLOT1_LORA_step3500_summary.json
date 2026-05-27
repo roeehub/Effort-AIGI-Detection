@@ -1,0 +1,63 @@
+{
+  "ckpt_name": "SLOT1_LORA_step3500",
+  "real_csv": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/r13_overnight_slot1_shift_analysis_2026-05-13/_frame_cache/teams_real_all_dev_slot1_lora_p8a_periodic_step3500_frames_report.csv",
+  "fake_csvs": {
+    "visomaster_enhanced_macro_dev": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/r13_overnight_slot1_shift_analysis_2026-05-13/_frame_cache/visomaster_enhanced_macro_dev_slot1_lora_p8a_periodic_step3500_frames_report.csv",
+    "deeplive_enhanced_dev": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/r13_overnight_slot1_shift_analysis_2026-05-13/_frame_cache/deeplive_enhanced_dev_slot1_lora_p8a_periodic_step3500_frames_report.csv",
+    "teams_fake_all_dev": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/r13_overnight_slot1_shift_analysis_2026-05-13/_frame_cache/teams_fake_all_dev_slot1_lora_p8a_periodic_step3500_frames_report.csv"
+  },
+  "target_fpr": 0.1,
+  "n_real_frames_F0": 4564,
+  "n_real_frames_F4": 2091,
+  "pct_real_kept_F4": 45.82,
+  "tau_F0_calibrated": 0.4411,
+  "tau_F4_at_FPR_5pct": 0.4393,
+  "tau_F4_at_FPR_10pct": 0.4332,
+  "fpr_F0_pct": 10.01,
+  "fpr_F4_pct": 3.35,
+  "fpr_at_tau_0_5_F0_pct": 0.0,
+  "fpr_at_tau_0_5_F4_pct": 0.0,
+  "per_suite": [
+    {
+      "ckpt": "SLOT1_LORA_step3500",
+      "fake_suite": "visomaster_enhanced_macro_dev",
+      "n_fake_frames": 550,
+      "tau_F0_calibrated_at_target_fpr": 0.4411,
+      "tau_F4_calibrated_at_FPR=10%": 0.4332,
+      "tau_F4_calibrated_at_FPR=5%": 0.4393,
+      "recall_at_tau_F0_pct": 70.18,
+      "recall_at_tau_F4_FPR10_pct": 76.18,
+      "recall_at_tau_F4_FPR5_pct": 71.27,
+      "lift_abs_pp_F0_to_F4_FPR10": 6.0
+    },
+    {
+      "ckpt": "SLOT1_LORA_step3500",
+      "fake_suite": "deeplive_enhanced_dev",
+      "n_fake_frames": 545,
+      "tau_F0_calibrated_at_target_fpr": 0.4411,
+      "tau_F4_calibrated_at_FPR=10%": 0.4332,
+      "tau_F4_calibrated_at_FPR=5%": 0.4393,
+      "recall_at_tau_F0_pct": 15.6,
+      "recall_at_tau_F4_FPR10_pct": 46.24,
+      "recall_at_tau_F4_FPR5_pct": 19.45,
+      "lift_abs_pp_F0_to_F4_FPR10": 30.64
+    },
+    {
+      "ckpt": "SLOT1_LORA_step3500",
+      "fake_suite": "teams_fake_all_dev",
+      "n_fake_frames": 3039,
+      "tau_F0_calibrated_at_target_fpr": 0.4411,
+      "tau_F4_calibrated_at_FPR=10%": 0.4332,
+      "tau_F4_calibrated_at_FPR=5%": 0.4393,
+      "recall_at_tau_F0_pct": 53.93,
+      "recall_at_tau_F4_FPR10_pct": 67.13,
+      "recall_at_tau_F4_FPR5_pct": 56.4,
+      "lift_abs_pp_F0_to_F4_FPR10": 13.2
+    }
+  ],
+  "outputs": {
+    "real_cleaned_csv": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/best_candidate_search_2026-05-13/_stage1/SLOT1_LORA_step3500_real_cleaned.csv",
+    "per_filter_fpr_csv": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/best_candidate_search_2026-05-13/_stage1/SLOT1_LORA_step3500_per_filter_fpr.csv",
+    "per_suite_recall_lift_csv": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/best_candidate_search_2026-05-13/_stage1/SLOT1_LORA_step3500_per_suite_recall_lift.csv"
+  }
+}

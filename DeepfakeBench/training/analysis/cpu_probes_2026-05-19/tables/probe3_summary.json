@@ -1,0 +1,26 @@
+{
+  "royd_total_atlas_frames": 63,
+  "royd_per_pool": {
+    "teams_real_lighting_extreme_dev": 38,
+    "train_teams_real_pool": 14,
+    "teams_real_all_dev": 9,
+    "teams_real_poor_quality_dev": 2
+  },
+  "royd_per_bucket": {
+    "dev_real": 49,
+    "train_real": 14
+  },
+  "royd_median_density_ratio_train_over_lockbox": 0.7805245396024184,
+  "royd_frac_ratio_below_0_10": 0.0,
+  "royd_frac_ratio_below_0_25": 0.015873015873015872,
+  "royd_per_axis_tail_frac_outside_train_q05_q95": {
+    "lap_var": 0.031746031746031744,
+    "luma_mean": 0.0,
+    "color_a_dev": 0.031746031746031744,
+    "color_b_dev": 0.031746031746031744,
+    "saturation_mean": 0.031746031746031744,
+    "min_dim": 0.0,
+    "skin_frac": 0.015873015873015872
+  },
+  "verdict": "mixed / borderline"
+}

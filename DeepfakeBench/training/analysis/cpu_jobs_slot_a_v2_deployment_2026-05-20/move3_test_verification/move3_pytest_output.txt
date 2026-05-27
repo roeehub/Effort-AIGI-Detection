@@ -1,0 +1,26 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.7, pytest-7.4.0, pluggy-1.0.0 -- /Users/roeedar/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training
+configfile: pytest.ini
+plugins: anyio-4.7.0
+collecting ... collected 16 items
+
+tests/test_canary_with_grl_wiring.py::test_forward_with_inference_true_skips_grl_branch PASSED [  6%]
+tests/test_canary_with_grl_wiring.py::test_forward_without_inference_kwarg_hits_grl_and_raises PASSED [ 12%]
+tests/test_canary_with_grl_wiring.py::test_canary_mixin_call_pattern_succeeds_with_inference_true PASSED [ 18%]
+tests/test_lora_adapter.py::test_zero_init_lora_delta_is_exactly_zero PASSED [ 25%]
+tests/test_lora_adapter.py::test_zero_init_forward_output_matches_base_layer_weight PASSED [ 31%]
+tests/test_lora_adapter.py::test_zero_init_full_resblock_forward_parity PASSED [ 37%]
+tests/test_lora_adapter.py::test_only_lora_params_receive_gradients_after_freeze PASSED [ 43%]
+tests/test_lora_adapter.py::test_higher_rank_yields_more_lora_parameters PASSED [ 50%]
+tests/test_lora_adapter.py::test_lora_stacks_on_svd_in_proj_routing PASSED [ 56%]
+tests/test_lora_adapter.py::test_apply_lora_to_openclip_visual_indexes_by_layer PASSED [ 62%]
+tests/test_lora_adapter.py::test_freeze_base_clip_encoder_freezes_everything_but_lora PASSED [ 68%]
+tests/test_lora_adapter.py::test_apply_lora_rejects_out_of_range_layer PASSED [ 75%]
+tests/test_lora_adapter.py::test_apply_lora_rejects_double_install PASSED [ 81%]
+tests/test_lora_ckpt_roundtrip.py::test_lora_save_load_round_trip_zero_unexpected PASSED [ 87%]
+tests/test_lora_ckpt_roundtrip.py::test_lora_skip_install_drops_state_dict_keys_as_unexpected PASSED [ 93%]
+tests/test_lora_ckpt_roundtrip.py::test_save_ckpt_embeds_lora_block_in_model_config PASSED [100%]
+
+============================== 16 passed in 5.05s ==============================

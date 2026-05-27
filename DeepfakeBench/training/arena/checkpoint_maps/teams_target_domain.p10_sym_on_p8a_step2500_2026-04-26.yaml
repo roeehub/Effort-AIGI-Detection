@@ -1,0 +1,16 @@
+# Phase A.2 of april-26-training-master-plan-v2 — promotion-contract
+# scorecard on the P10_SYM_on_P8A step-2500 checkpoint.
+#
+# This is the broken-in_proj baseline that Phase C.1 (re-FT on the fixed
+# image us-docker.pkg.dev/.../effort-detector:1.3.216) will be compared
+# against per master plan §4 Phase D.
+#
+# Diagnostic only — no crowning happens from this scorecard under the
+# (M) methodology path picked in plan §3.
+
+# Phase A.2 candidate
+P10_SYM_ON_P8A_STEP2500: "gs://training-job-outputs/phase2r13_experiments/sbnzyrzq/value_composite_effort_20260426_step2500_auc0.9928_eer0.0304.pth"
+
+# References for direct comparison
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+RLP6_04_BASELINE_STEP23500: "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth"

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Observability Viewer</title>
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --border:#30363d;
+    --fg:#e6edf3; --muted:#8b949e; --accent:#58a6ff;
+    --green:#3fb950; --red:#f85149; --yellow:#d29922;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif}
+  a{color:var(--accent)}
+  header{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;
+         align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  .chip{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:2px 9px;font-size:12px;color:var(--muted)}
+  .chip b{color:var(--fg)}
+  .grow{flex:1}
+  select,input,button{background:var(--bg3);color:var(--fg);border:1px solid var(--border);
+         border-radius:6px;padding:5px 8px;font-size:13px}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .layout{display:flex;height:calc(100vh - 49px)}
+  .sidebar{width:300px;min-width:300px;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg2)}
+  .sidebar .sb-head{padding:10px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2)}
+  .sidebar .sb-head input{width:100%}
+  .ip-row{padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;
+          flex-direction:column;gap:3px}
+  .ip-row:hover{background:var(--bg3)}
+  .ip-row.active{background:var(--bg3);border-left:3px solid var(--accent)}
+  .ip-row.special{color:var(--accent);font-weight:600}
+  .ip-row .ip-name{display:flex;align-items:center;gap:6px;justify-content:space-between}
+  .ip-row .ip-name .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ip-row .ip-sub{font-size:11px;color:var(--muted)}
+  .edit-btn{opacity:.5;font-size:12px;padding:1px 5px;background:transparent;border:none}
+  .ip-row:hover .edit-btn{opacity:1}
+  .main{flex:1;overflow-y:auto;padding:14px}
+  .date-head{font-size:13px;color:var(--muted);margin:14px 2px 6px;border-bottom:1px dashed var(--border);padding-bottom:4px}
+  .date-head:first-child{margin-top:0}
+  .session{background:var(--bg2);border:1px solid var(--border);border-left:4px solid var(--muted);
+           border-radius:8px;margin-bottom:8px;overflow:hidden}
+  .session.fake{border-left-color:var(--red)}
+  .session.warn{border-left-color:var(--yellow)}
+  .session.clean{border-left-color:var(--green)}
+  .session-hd{padding:9px 12px;cursor:pointer;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .session-hd:hover{background:var(--bg3)}
+  .session-hd .who{font-weight:600;min-width:170px}
+  .session-hd .meta{font-size:12px;color:var(--muted)}
+  .req-list{border-top:1px solid var(--border);display:none}
+  .session.open .req-list{display:block}
+  .req{padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;gap:12px;
+       align-items:center;font-size:13px}
+  .req:hover{background:var(--bg3)}
+  .req .t{color:var(--muted);min-width:74px;font-variant-numeric:tabular-nums}
+  .req .counts{color:var(--muted);font-size:12px;margin-left:auto}
+  .badge{border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600}
+  .badge-fake{background:rgba(248,81,73,.15);color:var(--red)}
+  .badge-real{background:rgba(63,185,80,.15);color:var(--green)}
+  .badge-err{background:rgba(210,153,34,.18);color:var(--yellow)}
+  .badge-gate{background:rgba(139,148,158,.18);color:var(--muted)}
+  .loadmore{display:block;width:100%;padding:9px;margin-top:6px;background:var(--bg2)}
+  .empty{color:var(--muted);padding:20px;text-align:center}
+  /* detail modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:50}
+  .overlay.open{display:block}
+  .panel{position:absolute;top:0;right:0;width:min(720px,94vw);height:100%;background:var(--bg);
+          border-left:1px solid var(--border);overflow-y:auto;padding:16px}
+  .panel h2{font-size:15px;margin:0 0 8px}
+  .panel .close{position:absolute;top:12px;right:14px;font-size:18px;background:transparent;border:none;color:var(--muted)}
+  .sec{margin:12px 0;border-top:1px solid var(--border);padding-top:10px}
+  .sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 6px}
+  .kv{display:grid;grid-template-columns:140px 1fr;gap:2px 10px;font-size:13px}
+  .kv .k{color:var(--muted)}
+  pre{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px;overflow:auto;font-size:12px;max-height:200px}
+  .frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .fr{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;position:relative}
+  .fr img{width:100%;height:140px;object-fit:cover;display:block;background:var(--bg3)}
+  .fr .ph{height:140px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;padding:6px}
+  .fr .ov{position:absolute;top:4px;left:4px;display:flex;gap:4px}
+  .fr .cap{font-size:11px;color:var(--muted);padding:4px 6px}
+  /* lightbox */
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:60;
+            flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:92vw;max-height:74vh;object-fit:contain;border:1px solid var(--border)}
+  .lightbox .lb-cap{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;
+                    font-size:12px;max-width:92vw;font-family:ui-monospace,monospace}
+  .spin{color:var(--muted);padding:30px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛰️ Observability Viewer</h1>
+  <span class="chip">date <b id="c-date">—</b></span>
+  <span class="chip">sessions <b id="c-sess">0</b></span>
+  <span class="chip">requests <b id="c-req">0</b></span>
+  <span class="chip">FAKE <b id="c-fake" style="color:var(--red)">0</b></span>
+  <span class="chip">errored <b id="c-err" style="color:var(--yellow)">0</b></span>
+  <span class="grow"></span>
+  <label class="chip">verdict
+    <select id="f-verdict"><option value="">all</option><option>FAKE</option><option>REAL</option><option value="gated">gated</option></select>
+  </label>
+  <label class="chip">status
+    <select id="f-status"><option value="">all</option><option value="ok">ok</option><option value="err">errored</option></select>
+  </label>
+  <span class="chip">cache <b id="c-cache">—</b></span>
+  <button id="btn-cache" title="Clear local thumbnail cache">clear cache</button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sb-head"><input id="ip-search" placeholder="filter users / IPs…" autocomplete="off"/></div>
+    <div id="ip-list"></div>
+  </aside>
+  <main class="main" id="main"><div class="spin">loading…</div></main>
+</div>
+
+<!-- request detail -->
+<div class="overlay" id="overlay">
+  <div class="panel" id="panel">
+    <button class="close" id="panel-close">✕</button>
+    <div id="panel-body"><div class="spin">loading…</div></div>
+  </div>
+</div>
+
+<!-- lightbox -->
+<div class="lightbox" id="lightbox">
+  <img id="lb-img" src="" alt=""/>
+  <div class="lb-cap" id="lb-cap"></div>
+</div>
+
+<script>
+// surface any uncaught error on the page (don't fail silently)
+window.addEventListener('error', e => showFatal((e.error && e.error.stack) || e.message || 'error'));
+window.addEventListener('unhandledrejection', e => showFatal('Unhandled promise rejection: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)));
+function showFatal(msg){ try{ const m=document.getElementById('main'); if(m){ m.innerHTML=''; const p=document.createElement('pre'); p.style.cssText='color:#f85149;white-space:pre-wrap;padding:16px;font:12px ui-monospace,monospace'; p.textContent='⚠ Viewer JS error:\n'+msg; m.appendChild(p);} console.error(msg);}catch(_){} }
+
+const $ = s => document.querySelector(s);
+const api = async (u) => { const r = await fetch(u); if(!r.ok){throw new Error((await r.json().catch(()=>({error:r.statusText}))).error||r.statusText);} return r.json(); };
+
+const state = {
+  dates: [], loadedIdx: -1, labels: {}, view: 'latest',
+  selectedIp: null, directory: [], filters: {verdict:'', status:''},
+  framesOpen: [],   // frames of the currently open request (for lightbox)
+};
+
+const nameFor = ip => { const n = state.labels[ip]?.name; return n ? `${n} (${ip})` : ip; };
+function fmtUtc(u){ const m=/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/.exec(u||''); return m?`${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`:(u||'—'); }
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ── boot ──────────────────────────────────────────────────────────────────
+async function boot(){
+  try{
+    const [d, cfg] = await Promise.all([api('/api/dates'), api('/api/config')]);
+    state.dates = d.dates || [];
+    state.labels = (cfg.config && cfg.config.ip_labels) || {};
+    const lookup = (cfg.config && cfg.config.settings && cfg.config.settings.lookup_days) || 14;
+    refreshSidebar(lookup);
+    if(!state.dates.length){ $('#main').innerHTML='<div class="empty">No data in this bucket yet.</div>'; return; }
+    $('#main').innerHTML='';
+    await loadNextDate();           // most recent date
+  }catch(e){ $('#main').innerHTML=`<div class="empty">Error: ${esc(e.message)}</div>`; }
+}
+
+async function refreshSidebar(days){
+  try{ const d = await api(`/api/ips?days=${days||14}`); state.directory = d.ips || []; }
+  catch(e){ state.directory = []; }
+  renderSidebar();
+}
+
+function renderSidebar(){
+  const q = ($('#ip-search').value||'').toLowerCase().trim();
+  const rows = state.directory.filter(e =>
+    !q || e.ip.toLowerCase().includes(q) || (state.labels[e.ip]?.name||'').toLowerCase().includes(q));
+  let html = `<div class="ip-row special ${state.view==='latest'?'active':''}" data-action="latest">★ Latest (all users)</div>`;
+  for(const e of rows){
+    const label = state.labels[e.ip]?.name;
+    html += `<div class="ip-row ${state.selectedIp===e.ip?'active':''}" data-action="pick" data-ip="${esc(e.ip)}">
+      <div class="ip-name"><span class="nm">${esc(label||e.ip)}</span>
+        <button class="edit-btn" data-action="edit" data-ip="${esc(e.ip)}" title="name this IP">✎</button></div>
+      <div class="ip-sub">${label?esc(e.ip)+' · ':''}${e.n_requests} req · ${e.fake_requests} fake · ${fmtUtc(e.last_seen_utc)}</div>
+    </div>`;
+  }
+  $('#ip-list').innerHTML = html;
+}
+
+// ── main: sessions ───────────────────────────────────────────────────────
+async function loadNextDate(){
+  state.loadedIdx++;
+  const date = state.dates[state.loadedIdx];
+  if(!date) return;
+  let payload;
+  try{ payload = await api(`/api/sessions?date=${date}`); }
+  catch(e){ appendHtml(`<div class="empty">Error loading ${date}: ${esc(e.message)}</div>`); return; }
+  setHeader(payload, date);
+  renderDateGroup(date, payload.sessions);
+  renderLoadMore();
+}
+
+function renderDateGroup(date, sessions){
+  let html = `<div class="date-head">${esc(date)} — ${sessions.length} session(s)</div>`;
+  if(!sessions.length) html += `<div class="empty">no requests</div>`;
+  for(const s of sessions) html += sessionHtml(s);
+  appendHtml(html);
+}
+
+function sessionHtml(s){
+  const cls = s.fake_requests>0 ? 'fake' : (s.n_gated>0 ? 'warn' : 'clean');
+  const dur = (s.duration_ms/60000).toFixed(1);
+  const reqs = s.requests.map(reqHtml).join('');
+  return `<div class="session ${cls}" data-sid="${esc(s.first_request_id)}">
+    <div class="session-hd" data-action="toggle">
+      <span class="who">${esc(nameFor(s.client_ip))}</span>
+      <span class="meta">${s.n_requests} req · ${s.n_frames} frames · ${s.fake_requests} fake · ${dur}m</span>
+      <span class="meta">${fmtUtc(s.start_utc)} → ${fmtUtc(s.end_utc)}</span>
+    </div>
+    <div class="req-list">${reqs}</div></div>`;
+}
+
+function reqHtml(r){
+  const badge = r.pred_label==='FAKE' ? `<span class="badge badge-fake">FAKE</span>`
+              : r.pred_label==='REAL' ? `<span class="badge badge-real">REAL</span>` : '';
+  const stat = r.status!=='ok' ? `<span class="badge badge-err">${esc(r.status)}</span>` : '';
+  const gate = r.n_gated>0 ? `<span class="badge badge-gate">${r.n_gated} gated</span>` : '';
+  const conf = (r.confidence!=null) ? r.confidence.toFixed(3) : '—';
+  return `<div class="req" data-action="open" data-prefix="${esc(r.gcs_prefix)}"
+            data-verdict="${esc(r.pred_label||'')}" data-status="${esc(r.status)}" data-gated="${r.n_gated||0}">
+    <span class="t">${fmtUtc(r.utc)}</span>${badge}${stat}${gate}
+    <span>${conf}</span>
+    <span class="counts">${r.n_frames}f · ${r.n_scored} scored · ${r.n_gated} gated · ${r.n_failed} fail</span></div>`;
+}
+
+function renderLoadMore(){
+  $('#btn-loadmore')?.remove();
+  if(state.view!=='latest') return;
+  if(state.loadedIdx < state.dates.length-1){
+    const b=document.createElement('button'); b.id='btn-loadmore'; b.className='loadmore';
+    b.textContent=`Load older day (${state.dates[state.loadedIdx+1]})`;
+    b.onclick=()=>{ b.disabled=true; loadNextDate(); };
+    $('#main').appendChild(b);
+  }
+}
+
+function appendHtml(h){ const d=document.createElement('div'); d.innerHTML=h; while(d.firstChild) $('#main').appendChild(d.firstChild); }
+function setHeader(p, date){
+  $('#c-date').textContent = state.view==='latest' ? date : `${nameFor(state.selectedIp)}`;
+  $('#c-sess').textContent = p.n_sessions; $('#c-req').textContent = p.n_requests;
+  let fake=0, err=0; for(const s of p.sessions){ fake+=s.fake_requests; err+=s.requests.filter(r=>r.status!=='ok').length; }
+  $('#c-fake').textContent=fake; $('#c-err').textContent=err;
+  api('/api/cache-size').then(c=>$('#c-cache').textContent=c.human).catch(()=>{});
+}
+
+// ── targeted IP view ──────────────────────────────────────────────────────
+async function pickIp(ip){
+  state.view='ip'; state.selectedIp=ip; renderSidebar();
+  $('#main').innerHTML='<div class="spin">loading user history…</div>';
+  try{
+    const lookup=14, p = await api(`/api/ip?ip=${encodeURIComponent(ip)}&days=${lookup}`);
+    $('#main').innerHTML=''; setHeader(p, null);
+    renderDateGroup(`${nameFor(ip)} — last ${lookup} days`, p.sessions);
+  }catch(e){ $('#main').innerHTML=`<div class="empty">Error: ${esc(e.message)}</div>`; }
+}
+async function showLatest(){
+  state.view='latest'; state.selectedIp=null; state.loadedIdx=-1; renderSidebar();
+  $('#main').innerHTML=''; await loadNextDate();
+}
+
+// ── request detail ────────────────────────────────────────────────────────
+async function openRequest(prefix){
+  $('#overlay').classList.add('open'); $('#panel-body').innerHTML='<div class="spin">loading…</div>';
+  let m;
+  try{ m = await api(`/api/request?gcs_prefix=${encodeURIComponent(prefix)}`); }
+  catch(e){ $('#panel-body').innerHTML=`<div class="empty">Error: ${esc(e.message)}</div>`; return; }
+  state.framesOpen = m.frames||[];
+  const c=m.client||{}, mo=m.model||{}, pa=m.params||{}, ag=m.aggregate||{}, ct=m.counts||{};
+  const kv = o => Object.entries(o).map(([k,v])=>`<span class="k">${esc(k)}</span><span>${esc(typeof v==='object'?JSON.stringify(v):v)}</span>`).join('');
+  const frames = (m.frames||[]).map(frameTile).join('');
+  $('#panel-body').innerHTML = `
+    <h2>${ag.pred_label==='FAKE'?'🟥':'🟩'} ${esc(m.endpoint)} · ${esc(m.status)}</h2>
+    <div class="sec"><h3>Summary</h3><div class="kv">
+      ${kv({request_id:m.request_id, received:fmtUtc(m.received_utc), latency_ms:m.latency_ms,
+            verdict:ag.pred_label, confidence:ag.confidence,
+            counts:`${ct.total} total · ${ct.scored} scored · ${ct.gated} gated · ${ct.failed} failed`})}</div></div>
+    <div class="sec"><h3>Client</h3><div class="kv">
+      ${kv({ip:c.client_ip, name:state.labels[c.client_ip]?.name||'—', remote_addr:c.remote_addr,
+            user_agent:c.user_agent, x_client_id:c.x_client_id, xff_chain:(c.xff_chain||[]).join(', ')||'—'})}</div></div>
+    <div class="sec"><h3>Model / Params</h3><div class="kv">
+      ${kv({model_type:mo.model_type, checkpoint:mo.checkpoint_path, device:mo.device,
+            threshold:pa.threshold, gate_profile:pa.gate_profile, yolo_conf:pa.yolo_conf_threshold,
+            recrop:pa.recrop, debug:pa.debug})}</div>
+      <details><summary style="cursor:pointer;color:var(--muted);font-size:12px;margin-top:6px">gate_spec</summary>
+        <pre>${esc(JSON.stringify(pa.gate_spec,null,2))}</pre></details></div>
+    <div class="sec"><h3>Frames (${(m.frames||[]).length})</h3><div class="frames">${frames}</div></div>`;
+}
+
+function frameTile(f, i){
+  const v = f.verdict==='FAKE'?`<span class="badge badge-fake">F</span>`:(f.verdict==='REAL'?`<span class="badge badge-real">R</span>`:'');
+  const g = (f.gate_pass===false)?`<span class="badge badge-gate" title="${esc(f.gate_reason||'gated')}">gate</span>`:'';
+  const p = (f.prob!=null)?f.prob.toFixed(2):'';
+  const body = f.frame_url
+    ? `<img loading="lazy" src="${esc(f.frame_url)}?size=224" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph',textContent:'image error'}))"/>`
+    : `<div class="ph">${f.capture_skipped?'capture skipped':'not stored'}</div>`;
+  return `<div class="fr" data-action="zoom" data-idx="${i}">
+    <div class="ov">${v}${g}</div>${body}
+    <div class="cap">#${f.seq} · ${esc(f.content_type||'')} · ${p}</div></div>`;
+}
+
+function openLightbox(i){
+  const f = state.framesOpen[i]; if(!f) return;
+  if(!f.frame_url){ return; }
+  $('#lb-img').src = f.frame_url + '?full=1';
+  const d = f.dims ? `${f.dims.w}×${f.dims.h}` : '—';
+  $('#lb-cap').textContent =
+    `#${f.seq} ${f.filename||''} · ${f.verdict||'?'} prob=${f.prob} · gate_pass=${f.gate_pass} ${f.gate_reason?('('+f.gate_reason+')'):''} · ${d} · ${f.bytes_human} · sha256=${(f.sha256||'').slice(0,16)}…`;
+  $('#lightbox').classList.add('open');
+}
+
+// ── name editing (persisted to bucket) ─────────────────────────────────────
+async function editName(ip){
+  const cur = state.labels[ip]?.name || '';
+  const name = window.prompt(`Name for ${ip}:`, cur);
+  if(name===null) return;                       // cancelled
+  try{
+    const cfg = await (await fetch('/api/label',{method:'POST',headers:{'Content-Type':'application/json'},
+                   body:JSON.stringify({ip, name})})).json();
+    if(cfg.error) throw new Error(cfg.error);
+    state.labels = cfg.ip_labels || state.labels;
+    renderSidebar();
+    // refresh visible names without full reload
+    document.querySelectorAll('.session .who').forEach(()=>{});
+    if(state.view==='ip'&&state.selectedIp===ip) setHeader({n_sessions:+$('#c-sess').textContent,n_requests:+$('#c-req').textContent,sessions:[]},null);
+  }catch(e){ alert('Could not save name: '+e.message); }
+}
+
+// ── event delegation ───────────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-action]'); if(!t) return;
+  const a = t.dataset.action;
+  if(a==='latest') return showLatest();
+  if(a==='pick') return pickIp(t.dataset.ip);
+  if(a==='edit'){ e.stopPropagation(); return editName(t.dataset.ip); }
+  if(a==='toggle') return t.closest('.session').classList.toggle('open');
+  if(a==='open') return openRequest(t.dataset.prefix);
+  if(a==='zoom') return openLightbox(+t.dataset.idx);
+});
+$('#ip-search').addEventListener('input', renderSidebar);
+$('#panel-close').onclick = ()=> $('#overlay').classList.remove('open');
+$('#overlay').onclick = e => { if(e.target.id==='overlay') $('#overlay').classList.remove('open'); };
+$('#lightbox').onclick = ()=> $('#lightbox').classList.remove('open');
+$('#btn-cache').onclick = async ()=>{ await fetch('/api/cache',{method:'DELETE'}); $('#c-cache').textContent='0 B'; };
+document.addEventListener('keydown', e => { if(e.key==='Escape'){ $('#lightbox').classList.remove('open'); $('#overlay').classList.remove('open'); }});
+
+// client-side verdict/status filtering
+function applyFilters(){
+  const v=$('#f-verdict').value, s=$('#f-status').value;
+  state.filters={verdict:v,status:s};
+  document.querySelectorAll('.req').forEach(r=>{
+    let ok=true;
+    if(v==='FAKE') ok = r.dataset.verdict==='FAKE';
+    else if(v==='REAL') ok = r.dataset.verdict==='REAL';
+    else if(v==='gated') ok = (+r.dataset.gated)>0;
+    if(ok && s==='ok') ok = r.dataset.status==='ok';
+    else if(ok && s==='err') ok = r.dataset.status!=='ok';
+    r.style.display = ok?'':'none';
+  });
+}
+$('#f-verdict').onchange = applyFilters;
+$('#f-status').onchange = applyFilters;
+
+boot();
+</script>
+</body>
+</html>

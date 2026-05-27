@@ -1,0 +1,230 @@
+# Job 8 anchor audit — FACTS only (2026-05-04)
+
+This document records data observations from the 2026-05-04 multi-ckpt anchor
+audit (Job 8) on three architecturally distinct candidate ckpts. Conclusions,
+verdicts, and interpretations are intentionally not included — they belong in
+FINDINGS_INTERPRETATION.txt.
+
+Three candidates treated symmetrically: P8A, E2B_3200, E3_6600.
+No "best" / "leader" / "champion" labels appear in this document.
+
+Source script: run_audit.py (this directory). Random state: 42.
+Source CSVs in this directory; per-frame raw scores re-used from
+analysis/cpu_followups_2026-05-04/raw_reports/.
+
+## Section 0 — Candidate ckpts
+
+| Alias | Architecture | Origin | Path |
+|-------|--------------|--------|------|
+| P8A | CLIP ViT-B/16 | 5-stage FT chain (CLIP → R12g → RLP6_04 → RLP7_02 → P8A) | value_composite_step5000_auc0.9926_eer0.0270.pth |
+| E2B_3200 | CLIP ViT-B/16 | SCRATCH + CrossEntropy + heavy aug | top_n_step3200_auc0.9863_eer0.0310.pth |
+| E3_6600 | CLIP ViT-L/14 | SCRATCH + CrossEntropy + heavy aug | top_n_step6600_auc0.9972_eer0.0093.pth |
+
+Suite frame counts (post-join, per-ckpt identical):
+
+| Suite | n |
+|-------|--:|
+| teams_real_all_dev | 4564 |
+| teams_real_all_lockbox | 1418 |
+| teams_fake_all_dev | 3039 |
+| teams_fake_all_lockbox | 425 |
+| visomaster_enhanced_macro_dev | 550 |
+| deeplive_enhanced_dev | 545 |
+
+---
+
+## Section 1 — Lens 1: substrate-invariance (dev vs lockbox real-class distributions)
+
+Source: substrate_invariance_per_ckpt.csv (script run_audit.py::lens1_substrate_invariance).
+
+### 1A — Real-class score distributions (teams_real_all_dev vs teams_real_all_lockbox)
+
+| ckpt | mean_dev | mean_lockbox | Δmean | p50_dev | p50_lockbox | Δp50 | p90_dev | p90_lockbox | Δp90 | KS stat | KS p-value |
+|------|---------:|-------------:|------:|--------:|------------:|-----:|--------:|------------:|-----:|--------:|-----------:|
+| P8A | 0.13450 | 0.09631 | 0.03818 | 0.00701 | 0.01599 | 0.00898 | 0.70503 | 0.28995 | 0.41509 | 0.33096 | 1.31e-105 |
+| E2B_3200 | 0.12024 | 0.10404 | 0.01619 | 0.00742 | 0.01961 | 0.01219 | 0.50644 | 0.37127 | 0.13518 | 0.38240 | 7.46e-142 |
+| E3_6600 | 0.16142 | 0.09588 | 0.06554 | 0.00632 | 0.00607 | 0.00025 | 0.85196 | 0.39278 | 0.45918 | 0.31655 | 1.78e-96 |
+
+Notes:
+- All three KS tests reject distributional equality at p ≤ 1.3e-96.
+- Δmean rank: E2B_3200 (0.0162) < P8A (0.0382) < E3_6600 (0.0655).
+- Δp50 rank: E3_6600 (0.00025) < P8A (0.00898) < E2B_3200 (0.01219).
+- Δp90 rank: E2B_3200 (0.13518) < P8A (0.41509) < E3_6600 (0.45918).
+- KS-stat rank (smaller = more similar): E3_6600 (0.317) < P8A (0.331) < E2B_3200 (0.382).
+- Δmean and Δp50 disagree on relative ordering.
+
+### 1B — Fake-class score distributions (teams_fake_all_dev vs teams_fake_all_lockbox)
+
+| ckpt | mean_dev | mean_lockbox | Δmean_fake | p50_dev | p50_lockbox | Δp50_fake | KS stat | KS p-value |
+|------|---------:|-------------:|-----------:|--------:|------------:|----------:|--------:|-----------:|
+| P8A | 0.74466 | 0.64796 | 0.09669 | 0.98525 | 0.78820 | 0.19705 | 0.23248 | 3.47e-18 |
+| E2B_3200 | 0.76221 | 0.75045 | 0.01175 | 0.96084 | 0.82728 | 0.13356 | 0.27130 | 1.07e-24 |
+| E3_6600 | 0.84283 | 0.96814 | 0.12530 | 0.99386 | 0.99401 | 0.00015 | 0.30683 | 1.36e-31 |
+
+Notes:
+- Δmean_fake rank: E2B_3200 (0.0118) < P8A (0.0967) < E3_6600 (0.1253).
+- Δp50_fake rank: E3_6600 (0.00015) < E2B_3200 (0.13356) < P8A (0.19705).
+- E3_6600 fake p50 in lockbox (0.99401) is higher than dev p50 (0.99386).
+- E2B_3200 and P8A both show fake-mean dropping from dev to lockbox; E3_6600 shows fake-mean rising.
+
+---
+
+## Section 2 — Lens 2: per-substrate τ-calibration lift
+
+Source: calibration_lift_per_ckpt.csv (script run_audit.py::lens2_calibration_lift).
+
+For each ckpt × fake suite × FPR target ∈ {0.02, 0.05, 0.10, 0.20}:
+- τ_dev_cal = quantile(teams_real_all_dev scores, 1−FPR)
+- τ_lockbox_cal = quantile(teams_real_all_lockbox scores, 1−FPR)
+- recall_dev_cal = mean(fake_scores > τ_dev_cal)
+- recall_lockbox_cal = mean(fake_scores > τ_lockbox_cal)
+- lift = recall_lockbox_cal − recall_dev_cal
+
+### 2A — Lift at FPR=10%, all four fake suites
+
+| ckpt | suite | recall_dev_cal | recall_lockbox_cal | lift |
+|------|-------|---------------:|-------------------:|-----:|
+| P8A | viso | 0.2691 | 0.4182 | +0.1491 |
+| P8A | deeplive | 0.4239 | 0.6312 | +0.2073 |
+| P8A | teams_fake_dev | 0.6989 | 0.8016 | +0.1027 |
+| P8A | teams_fake_lockbox | 0.5412 | 0.7553 | +0.2141 |
+| E2B_3200 | viso | 0.0836 | 0.1109 | +0.0273 |
+| E2B_3200 | deeplive | 0.9394 | 0.9817 | +0.0422 |
+| E2B_3200 | teams_fake_dev | 0.7940 | 0.8200 | +0.0260 |
+| E2B_3200 | teams_fake_lockbox | 0.8306 | 0.9059 | +0.0753 |
+| E3_6600 | viso | 0.1382 | 0.2964 | +0.1582 |
+| E3_6600 | deeplive | 0.9083 | 0.9725 | +0.0642 |
+| E3_6600 | teams_fake_dev | 0.7989 | 0.8595 | +0.0605 |
+| E3_6600 | teams_fake_lockbox | 0.9435 | 0.9929 | +0.0494 |
+
+### 2B — Lift at FPR=2%, all four fake suites
+
+| ckpt | suite | recall_dev_cal | recall_lockbox_cal | lift |
+|------|-------|---------------:|-------------------:|-----:|
+| P8A | viso | 0.0055 | 0.1382 | +0.1327 |
+| P8A | deeplive | 0.0147 | 0.2459 | +0.2312 |
+| P8A | teams_fake_dev | 0.4281 | 0.6084 | +0.1803 |
+| P8A | teams_fake_lockbox | 0.1976 | 0.4188 | +0.2212 |
+| E2B_3200 | viso | 0.0455 | 0.0491 | +0.0036 |
+| E2B_3200 | deeplive | 0.4954 | 0.7688 | +0.2734 |
+| E2B_3200 | teams_fake_dev | 0.6282 | 0.7262 | +0.0981 |
+| E2B_3200 | teams_fake_lockbox | 0.3953 | 0.6094 | +0.2141 |
+| E3_6600 | viso | 0.0400 | 0.0782 | +0.0382 |
+| E3_6600 | deeplive | 0.1339 | 0.7706 | +0.6367 |
+| E3_6600 | teams_fake_dev | 0.1106 | 0.7361 | +0.6255 |
+| E3_6600 | teams_fake_lockbox | 0.2518 | 0.8518 | +0.6000 |
+
+### 2C — Range and direction summary
+
+- All 48 (ckpt × suite × FPR) lift entries are non-negative.
+- Highest single lift: E3_6600 / deeplive / FPR=2% = +0.6367.
+- Lowest non-zero lift: E2B_3200 / viso / FPR=2% = +0.0036.
+- E3_6600 shows the largest lifts at FPR=2% across deeplive / teams_fake_dev / teams_fake_lockbox (all ≥ +0.60).
+- E2B_3200 shows the smallest lifts at FPR=10% across viso / teams_fake_dev (both < +0.03).
+
+τ_lockbox_cal vs τ_dev_cal at FPR=10% (raw score units):
+
+| ckpt | τ_dev_cal | τ_lockbox_cal | τ_dev / τ_lockbox |
+|------|----------:|--------------:|------------------:|
+| P8A | 0.7050 | 0.2899 | 2.43× |
+| E2B_3200 | 0.5064 | 0.3713 | 1.36× |
+| E3_6600 | 0.8520 | 0.3928 | 2.17× |
+
+---
+
+## Section 3 — Lens 3: image-quality shortcut on viso
+
+Source: iq_shortcut_per_ckpt.csv (script run_audit.py::lens3_iq_shortcut).
+
+Method: 5-fold StratifiedKFold L1-logistic regression (C=0.5, solver=liblinear,
+max_iter=1000, n_jobs=1, random_state=42) on standardized 7 IQ features
+(luma_p10, luma_p90, luma_mean, laplacian_var, sobel_edge_mean, saturation_mean,
+skin_frac) predicting per-ckpt is_caught (= score > τ_dev_cal at FPR=10%).
+N=550 viso fakes.
+
+| ckpt | n_caught | majority baseline | CV acc mean ± std | CV AUC mean ± std | top-1 feature (coef) | top-2 feature (coef) | top-3 feature (coef) |
+|------|---------:|------------------:|-------------------|--------------------|----------------------|----------------------|----------------------|
+| P8A | 148 | 0.7309 | 0.7909 ± 0.0230 | 0.7474 ± 0.0340 | saturation_mean (−0.755) | luma_p90 (−0.513) | sobel_edge_mean (+0.481) |
+| E2B_3200 | 46 | 0.9164 | 0.9145 ± 0.0073 | 0.8665 ± 0.0498 | sobel_edge_mean (−1.656) | luma_mean (+1.100) | luma_p10 (−0.701) |
+| E3_6600 | 76 | 0.8618 | 0.8673 ± 0.0073 | 0.7651 ± 0.0379 | luma_p10 (−1.182) | saturation_mean (−0.603) | sobel_edge_mean (−0.448) |
+
+Notes:
+- CV acc relative to majority baseline: P8A +5.99pp, E2B_3200 −0.18pp, E3_6600 +0.55pp.
+- CV AUC: P8A 0.7474, E2B_3200 0.8665, E3_6600 0.7651.
+- All three top-1 features differ in sign across ckpts.
+- E2B_3200 and E3_6600 have heavy class-imbalance (only 46 / 76 caught of 550), which inflates majority baseline.
+
+### Coverage limitation
+
+crop_attributes.csv only covers the 550 viso frames. Extension to
+deeplive_enhanced_dev (545 frames) is NOT feasible with the existing
+attribute table — IQ tags for deeplive frames are not in
+analysis/score_distribution_2026-05-02/outputs/crop_attributes.csv. This is
+explicitly noted; partial Lens 3 coverage (viso only) is accepted.
+
+---
+
+## Section 4 — Lens 4: headroom (AUC vs operational recall at FPR=10%)
+
+Source: headroom_per_ckpt.csv (script run_audit.py::lens4_headroom).
+
+Negatives: teams_real_all_dev. AUC computed with sklearn's roc_auc_score.
+gap_pp = AUC×100 − recall@FPR=10%×100.
+
+| ckpt | suite | AUC | recall@FPR=10% | recall@FPR=50% | gap (pp) |
+|------|-------|----:|--------------:|---------------:|---------:|
+| P8A | viso | 0.7527 | 0.2691 | 0.8582 | 48.37 |
+| P8A | deeplive | 0.8614 | 0.4239 | 0.9982 | 43.76 |
+| P8A | teams_fake_dev | 0.9106 | 0.6989 | 0.9733 | 21.17 |
+| P8A | teams_fake_lockbox | 0.8982 | 0.5412 | 0.9953 | 35.70 |
+| E2B_3200 | viso | 0.6815 | 0.0836 | 0.9000 | 59.79 |
+| E2B_3200 | deeplive | 0.9654 | 0.9394 | 1.0000 | 2.59 |
+| E2B_3200 | teams_fake_dev | 0.9261 | 0.7940 | 0.9819 | 13.21 |
+| E2B_3200 | teams_fake_lockbox | 0.9479 | 0.8306 | 1.0000 | 11.74 |
+| E3_6600 | viso | 0.7404 | 0.1382 | 0.9109 | 60.22 |
+| E3_6600 | deeplive | 0.9547 | 0.9083 | 1.0000 | 4.64 |
+| E3_6600 | teams_fake_dev | 0.9229 | 0.7989 | 0.9839 | 12.40 |
+| E3_6600 | teams_fake_lockbox | 0.9653 | 0.9435 | 1.0000 | 2.18 |
+
+Notes:
+- Largest gaps live on viso (48–60 pp across ckpts).
+- Smallest gap: E3_6600 / teams_fake_lockbox = 2.18 pp.
+- Each ckpt has a different smallest-gap suite: P8A → teams_fake_dev (21.17),
+  E2B_3200 → deeplive (2.59), E3_6600 → teams_fake_lockbox (2.18).
+- recall@FPR=50% reaches ≥0.86 on every (ckpt × suite) cell.
+
+gap is a heuristic — it mixes scales (AUC is rank-based, recall is point-based)
+and a small gap can reflect saturation rather than threshold-tuning headroom. It
+is recorded as a quick read; do not treat it as a calibrated discrimination
+metric.
+
+---
+
+## Section 5 — Decision matrix (one row per ckpt)
+
+Source: anchor_decision_matrix.csv (script run_audit.py::build_decision_matrix).
+
+The matrix is the wide-form summary across all four lenses. Headers are
+deliberately neutral — there is no "winner" column. Each row is one ckpt; each
+column is one lens-summary metric.
+
+| ckpt | L1_real_Δmean | L1_real_Δp50 | L1_real_KS | L2_lift_lockbox_FPR10 | L3_IQ_acc_viso | L3_IQ_AUC_viso | L4_AUC_viso | L4_AUC_deeplive | L4_AUC_lockbox |
+|------|--------------:|-------------:|-----------:|----------------------:|---------------:|---------------:|------------:|----------------:|---------------:|
+| P8A | 0.0382 | 0.0090 | 0.331 | +0.214 | 0.7909 | 0.7474 | 0.7527 | 0.8614 | 0.8982 |
+| E2B_3200 | 0.0162 | 0.0122 | 0.382 | +0.075 | 0.9145 | 0.8665 | 0.6815 | 0.9654 | 0.9479 |
+| E3_6600 | 0.0655 | 0.0002 | 0.317 | +0.049 | 0.8673 | 0.7651 | 0.7404 | 0.9547 | 0.9653 |
+
+The full row × all-columns matrix (with all 24 metrics per ckpt) is in
+anchor_decision_matrix.csv.
+
+---
+
+## Section 6 — File index
+
+- anchor_decision_matrix.csv — wide table, one row per ckpt (Section 5).
+- substrate_invariance_per_ckpt.csv — Lens 1 (Section 1).
+- calibration_lift_per_ckpt.csv — Lens 2 (Section 2), 48 rows = 3 ckpts × 4 suites × 4 FPR targets.
+- iq_shortcut_per_ckpt.csv — Lens 3 (Section 3), 3 rows.
+- headroom_per_ckpt.csv — Lens 4 (Section 4), 12 rows = 3 ckpts × 4 suites.
+- run_audit.py — analysis script (random_state=42, n_jobs=1).
+- FINDINGS_INTERPRETATION.txt — opinions / reads (separate file).

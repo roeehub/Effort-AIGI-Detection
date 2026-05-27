@@ -1,0 +1,193 @@
+{
+  "probe": "head_vs_feature_decomposition",
+  "date": "2026-04-30",
+  "ckpts": {
+    "P8A": {
+      "ckpt_file": "value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+      "run_id": "9lmvb5b4",
+      "recipe": "P8A_REFERENCE_step5000 (FT origin, baseline)"
+    },
+    "MCLIOEXB": {
+      "ckpt_file": "value_composite_effort_20260429_step500_auc0.9797_eer0.0521.pth",
+      "run_id": "mclioexb",
+      "recipe": "P14_FACE_SCALE_JITTER_ISOLATED step 500 (jitter@0.50, FT-from-P8A_step5000)"
+    }
+  },
+  "n_frames": 800,
+  "n_real": 476,
+  "n_fake": 324,
+  "feature_geometry": {
+    "per_frame_cos_F_P8A_vs_F_mclioexb_mean": 0.9568309187889099,
+    "per_frame_cos_F_P8A_vs_F_mclioexb_median": 0.9820753335952759,
+    "per_frame_cos_min": 0.4561276435852051,
+    "per_frame_cos_max": 0.9964273571968079,
+    "frac_below_0_95": 0.2275,
+    "frac_below_0_90": 0.09375,
+    "frac_below_0_80": 0.04125
+  },
+  "head_geometry": {
+    "weight_cos_real_class_P8A_vs_mclioexb": 0.9919546842575073,
+    "weight_cos_fake_class_P8A_vs_mclioexb": 0.9948011040687561,
+    "intra_real_vs_fake_cos_P8A": 0.8560115098953247,
+    "intra_real_vs_fake_cos_mclioexb": 0.8105752468109131,
+    "scale_s_P8A": 9.749250411987305,
+    "scale_s_mclioexb": 6.748499870300293,
+    "scale_ratio_mclioexb_over_P8A": 0.6922070502982051
+  },
+  "metrics_per_variant": {
+    "natural_P8A          (Wp,sp,Fp)": {
+      "auc": 0.9447816163502439,
+      "fpr@0.02": {
+        "recall": 0.4537037037037037,
+        "tau": 0.9936198592185974,
+        "actual_fpr": 0.018907563025210083
+      },
+      "fpr@0.05": {
+        "recall": 0.6759259259259259,
+        "tau": 0.961013913154602,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8024691358024691,
+        "tau": 0.7256574034690857,
+        "actual_fpr": 0.09663865546218488
+      }
+    },
+    "natural_mclioexb     (Wm,sm,Fm)": {
+      "auc": 0.9520113600995954,
+      "fpr@0.02": {
+        "recall": 0.5462962962962963,
+        "tau": 0.9477705359458923,
+        "actual_fpr": 0.01680672268907563
+      },
+      "fpr@0.05": {
+        "recall": 0.6851851851851852,
+        "tau": 0.8134245872497559,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8395061728395061,
+        "tau": 0.4887901544570923,
+        "actual_fpr": 0.09873949579831932
+      }
+    },
+    "Wp_on_Fm             (Wp,sp,Fm)": {
+      "auc": 0.952043780475153,
+      "fpr@0.02": {
+        "recall": 0.5462962962962963,
+        "tau": 0.9736109972000122,
+        "actual_fpr": 0.018907563025210083
+      },
+      "fpr@0.05": {
+        "recall": 0.6851851851851852,
+        "tau": 0.8611953258514404,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8364197530864198,
+        "tau": 0.48689550161361694,
+        "actual_fpr": 0.09873949579831932
+      }
+    },
+    "Wm_on_Fp             (Wm,sm,Fp)": {
+      "auc": 0.9448010685755784,
+      "fpr@0.02": {
+        "recall": 0.4537037037037037,
+        "tau": 0.98208087682724,
+        "actual_fpr": 0.018907563025210083
+      },
+      "fpr@0.05": {
+        "recall": 0.6759259259259259,
+        "tau": 0.9284927845001221,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8024691358024691,
+        "tau": 0.6894630789756775,
+        "actual_fpr": 0.09663865546218488
+      }
+    },
+    "Wp_with_sm_on_Fp     (Wp,sm,Fp)": {
+      "auc": 0.9447816163502438,
+      "fpr@0.02": {
+        "recall": 0.4537037037037037,
+        "tau": 0.9705272912979126,
+        "actual_fpr": 0.018907563025210083
+      },
+      "fpr@0.05": {
+        "recall": 0.6759259259259259,
+        "tau": 0.9018874168395996,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8024691358024691,
+        "tau": 0.6622438430786133,
+        "actual_fpr": 0.09663865546218488
+      }
+    },
+    "Wm_with_sp_on_Fm     (Wm,sp,Fm)": {
+      "auc": 0.9520113600995955,
+      "fpr@0.02": {
+        "recall": 0.5462962962962963,
+        "tau": 0.9850397109985352,
+        "actual_fpr": 0.01680672268907563
+      },
+      "fpr@0.05": {
+        "recall": 0.6851851851851852,
+        "tau": 0.8935126662254333,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8395061728395061,
+        "tau": 0.4838084578514099,
+        "actual_fpr": 0.09873949579831932
+      }
+    },
+    "fresh_LR_on_Fp       (oracle head)": {
+      "auc": 0.9364171594563752,
+      "fpr@0.02": {
+        "recall": 0.1574074074074074,
+        "tau": 0.9008492371151797,
+        "actual_fpr": 0.01680672268907563
+      },
+      "fpr@0.05": {
+        "recall": 0.6728395061728395,
+        "tau": 0.843080936627619,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8117283950617284,
+        "tau": 0.6200597357462659,
+        "actual_fpr": 0.09873949579831932
+      }
+    },
+    "fresh_LR_on_Fm       (oracle head)": {
+      "auc": 0.950772901753294,
+      "fpr@0.02": {
+        "recall": 0.5555555555555556,
+        "tau": 0.9021448867473003,
+        "actual_fpr": 0.018907563025210083
+      },
+      "fpr@0.05": {
+        "recall": 0.6882716049382716,
+        "tau": 0.760015961738426,
+        "actual_fpr": 0.04831932773109244
+      },
+      "fpr@0.10": {
+        "recall": 0.8487654320987654,
+        "tau": 0.4953805182202969,
+        "actual_fpr": 0.09873949579831932
+      }
+    }
+  },
+  "interpretation": [
+    "natural_P8A vs natural_mclioexb at FPR\u22640.02: P8A=0.454 vs mclioexb=0.546 (\u0394=-0.093). The cliff = -0.093.",
+    "On P8A features (F_p), swapping head P8A\u2192mclioexb shifts recall@.02 by +0.000 (HEAD-side contribution).",
+    "With P8A head (W_p), swapping features F_p\u2192F_m shifts recall@.02 by +0.093 (FEATURE-side contribution).",
+    "=> Cliff is mixed/intermediate between head and feature; neither single swap explains it.",
+    "Fresh oracle logistic on F_p: rec@.02=0.157; on F_m: rec@.02=0.556. \u0394_fresh=-0.398.",
+    "    Fresh-LR finds F_m has BETTER separability than F_p \u2014 mclioexb's natural head is mis-calibrated; head-side fix could recover.",
+    "Scale-only swap (W_p, s_m, F_p): rec@.02 shifts by +0.000 relative to natural P8A \u2014 isolates effect of mclioexb's smaller s (6.75 vs P8A's 9.75).",
+    "Features are nearly identical (per-frame cos mean=0.957) \u2014 backbone barely moved during FT."
+  ]
+}

@@ -1,0 +1,621 @@
+[
+  {
+    "suite_name": "teams_real_all_dev",
+    "slice": "teams_real_all",
+    "split": "dev",
+    "label": "real",
+    "method": "teams_real",
+    "n_videos": 3253,
+    "n_frames": 4564,
+    "n_identities": 24,
+    "identities": [
+      "Cam_Test__s32",
+      "Cam_Test__s38",
+      "Md_noyn_Sharker__s15",
+      "PC_Generator__s13",
+      "PC_Generator__s14",
+      "PC_Generator__s22",
+      "PC_Generator__s34",
+      "PC_Generator__s4",
+      "PC_Generator__s45",
+      "PC_Generator__s8",
+      "Q__s6",
+      "Roy_D",
+      "Test_Cam__s41",
+      "Test_Cam__s73",
+      "Test_Cam__s76",
+      "Xiang_Xiang2_Feng",
+      "Xiang_Xiang2_Feng__s23",
+      "bla_bla_chow",
+      "bla_bla_chow__s2",
+      "dor",
+      "dor_shkedi__s16",
+      "ilan",
+      "orel",
+      "xiang"
+    ],
+    "n_sessions": 18,
+    "sessions": [
+      "<no_session>",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s2",
+      "s22",
+      "s23",
+      "s32",
+      "s34",
+      "s38",
+      "s4",
+      "s41",
+      "s45",
+      "s6",
+      "s73",
+      "s76",
+      "s8"
+    ]
+  },
+  {
+    "suite_name": "teams_real_poor_quality_dev",
+    "slice": "teams_real_poor_quality",
+    "split": "dev",
+    "label": "real",
+    "method": "teams_real",
+    "n_videos": 923,
+    "n_frames": 1303,
+    "n_identities": 18,
+    "identities": [
+      "Cam_Test__s32",
+      "PC_Generator__s13",
+      "PC_Generator__s14",
+      "PC_Generator__s34",
+      "PC_Generator__s45",
+      "PC_Generator__s8",
+      "Roy_D",
+      "Test_Cam__s41",
+      "Test_Cam__s73",
+      "Test_Cam__s76",
+      "Xiang_Xiang2_Feng",
+      "Xiang_Xiang2_Feng__s23",
+      "bla_bla_chow",
+      "bla_bla_chow__s2",
+      "dor",
+      "dor_shkedi__s16",
+      "orel",
+      "xiang"
+    ],
+    "n_sessions": 13,
+    "sessions": [
+      "<no_session>",
+      "s13",
+      "s14",
+      "s16",
+      "s2",
+      "s23",
+      "s32",
+      "s34",
+      "s41",
+      "s45",
+      "s73",
+      "s76",
+      "s8"
+    ]
+  },
+  {
+    "suite_name": "teams_real_lighting_extreme_dev",
+    "slice": "teams_real_lighting_extreme",
+    "split": "dev",
+    "label": "real",
+    "method": "teams_real",
+    "n_videos": 1401,
+    "n_frames": 1742,
+    "n_identities": 20,
+    "identities": [
+      "Md_noyn_Sharker__s15",
+      "PC_Generator__s13",
+      "PC_Generator__s14",
+      "PC_Generator__s22",
+      "PC_Generator__s34",
+      "PC_Generator__s4",
+      "PC_Generator__s45",
+      "PC_Generator__s8",
+      "Roy_D",
+      "Test_Cam__s41",
+      "Test_Cam__s76",
+      "Xiang_Xiang2_Feng",
+      "Xiang_Xiang2_Feng__s23",
+      "bla_bla_chow",
+      "bla_bla_chow__s2",
+      "dor",
+      "dor_shkedi__s16",
+      "ilan",
+      "orel",
+      "xiang"
+    ],
+    "n_sessions": 14,
+    "sessions": [
+      "<no_session>",
+      "s13",
+      "s14",
+      "s15",
+      "s16",
+      "s2",
+      "s22",
+      "s23",
+      "s34",
+      "s4",
+      "s41",
+      "s45",
+      "s76",
+      "s8"
+    ]
+  },
+  {
+    "suite_name": "teams_real_all_lockbox",
+    "slice": "teams_real_all",
+    "split": "lockbox",
+    "label": "real",
+    "method": "teams_real",
+    "n_videos": 1361,
+    "n_frames": 1418,
+    "n_identities": 5,
+    "identities": [
+      "Chikara_Takahashi__s22",
+      "PC_Generator__s15",
+      "bla_bla_chow__s1",
+      "dor_shkedi",
+      "real_dor"
+    ],
+    "n_sessions": 4,
+    "sessions": [
+      "<no_session>",
+      "s1",
+      "s15",
+      "s22"
+    ]
+  },
+  {
+    "suite_name": "teams_real_poor_quality_lockbox",
+    "slice": "teams_real_poor_quality",
+    "split": "lockbox",
+    "label": "real",
+    "method": "teams_real",
+    "n_videos": 22,
+    "n_frames": 31,
+    "n_identities": 4,
+    "identities": [
+      "Chikara_Takahashi__s22",
+      "bla_bla_chow__s1",
+      "dor_shkedi",
+      "real_dor"
+    ],
+    "n_sessions": 3,
+    "sessions": [
+      "<no_session>",
+      "s1",
+      "s22"
+    ]
+  },
+  {
+    "suite_name": "teams_real_lighting_extreme_lockbox",
+    "slice": "teams_real_lighting_extreme",
+    "split": "lockbox",
+    "label": "real",
+    "method": "teams_real",
+    "n_videos": 207,
+    "n_frames": 214,
+    "n_identities": 4,
+    "identities": [
+      "PC_Generator__s15",
+      "bla_bla_chow__s1",
+      "dor_shkedi",
+      "real_dor"
+    ],
+    "n_sessions": 3,
+    "sessions": [
+      "<no_session>",
+      "s1",
+      "s15"
+    ]
+  },
+  {
+    "suite_name": "teams_fake_all_dev",
+    "slice": "teams_fake_all",
+    "split": "dev",
+    "label": "fake",
+    "method": null,
+    "n_videos": 2409,
+    "n_frames": 3039,
+    "n_identities": 16,
+    "identities": [
+      "Cam_Test__s32",
+      "Cam_Test__s35",
+      "Cam_Test__s38",
+      "Cam_Test__s46",
+      "Noyn_sharker__s23",
+      "PC_Generator__s3",
+      "PC_Generator__s4",
+      "PC_Generator__s9",
+      "Test_Cam__s53",
+      "Test_Cam__s73",
+      "Test_Cam__s76",
+      "Xiang_Xiang2_Feng",
+      "deeplive_dor",
+      "dor_shkedi__s16",
+      "visomaster_enhanced_raw",
+      "visomaster_enhanced_teams"
+    ],
+    "n_sessions": 13,
+    "sessions": [
+      "<no_session>",
+      "s16",
+      "s23",
+      "s3",
+      "s32",
+      "s35",
+      "s38",
+      "s4",
+      "s46",
+      "s53",
+      "s73",
+      "s76",
+      "s9"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_cam_test_dev",
+    "slice": "teams_capture_cam_test",
+    "split": "dev",
+    "label": "fake",
+    "method": null,
+    "n_videos": 523,
+    "n_frames": 809,
+    "n_identities": 4,
+    "identities": [
+      "Cam_Test__s32",
+      "Cam_Test__s35",
+      "Cam_Test__s38",
+      "Cam_Test__s46"
+    ],
+    "n_sessions": 4,
+    "sessions": [
+      "s32",
+      "s35",
+      "s38",
+      "s46"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_test_cam_dev",
+    "slice": "teams_capture_test_cam",
+    "split": "dev",
+    "label": "fake",
+    "method": null,
+    "n_videos": 220,
+    "n_frames": 404,
+    "n_identities": 3,
+    "identities": [
+      "Test_Cam__s53",
+      "Test_Cam__s73",
+      "Test_Cam__s76"
+    ],
+    "n_sessions": 3,
+    "sessions": [
+      "s53",
+      "s73",
+      "s76"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_noyn_sharker_dev",
+    "slice": "teams_capture_noyn_sharker",
+    "split": "dev",
+    "label": "fake",
+    "method": null,
+    "n_videos": 204,
+    "n_frames": 324,
+    "n_identities": 1,
+    "identities": [
+      "Noyn_sharker__s23"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s23"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_pc_generator_dev",
+    "slice": "teams_capture_pc_generator",
+    "split": "dev",
+    "label": "fake",
+    "method": null,
+    "n_videos": 175,
+    "n_frames": 194,
+    "n_identities": 3,
+    "identities": [
+      "PC_Generator__s3",
+      "PC_Generator__s4",
+      "PC_Generator__s9"
+    ],
+    "n_sessions": 3,
+    "sessions": [
+      "s3",
+      "s4",
+      "s9"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_dor_shkedi_dev",
+    "slice": "teams_capture_dor_shkedi",
+    "split": "dev",
+    "label": "fake",
+    "method": null,
+    "n_videos": 57,
+    "n_frames": 78,
+    "n_identities": 1,
+    "identities": [
+      "dor_shkedi__s16"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s16"
+    ]
+  },
+  {
+    "suite_name": "visomaster_enhanced_macro_dev",
+    "slice": "visomaster_enhanced_macro",
+    "split": "dev",
+    "label": "fake",
+    "method": "visomaster_enhanced_macro",
+    "n_videos": 550,
+    "n_frames": 550,
+    "n_identities": 2,
+    "identities": [
+      "visomaster_enhanced_raw",
+      "visomaster_enhanced_teams"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "<no_session>"
+    ]
+  },
+  {
+    "suite_name": "deeplive_enhanced_dev",
+    "slice": "deeplive_enhanced",
+    "split": "dev",
+    "label": "fake",
+    "method": "deeplive_enhanced",
+    "n_videos": 545,
+    "n_frames": 545,
+    "n_identities": 1,
+    "identities": [
+      "deeplive_dor"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "<no_session>"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_cam_test_s35_dev",
+    "slice": "teams_capture_cam_test_s35",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_cam_test_s35",
+    "n_videos": 244,
+    "n_frames": 365,
+    "n_identities": 1,
+    "identities": [
+      "Cam_Test__s35"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s35"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_noyn_sharker_s23_dev",
+    "slice": "teams_capture_noyn_sharker_s23",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_noyn_sharker_s23",
+    "n_videos": 204,
+    "n_frames": 324,
+    "n_identities": 1,
+    "identities": [
+      "Noyn_sharker__s23"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s23"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_cam_test_s32_dev",
+    "slice": "teams_capture_cam_test_s32",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_cam_test_s32",
+    "n_videos": 139,
+    "n_frames": 235,
+    "n_identities": 1,
+    "identities": [
+      "Cam_Test__s32"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s32"
+    ]
+  },
+  {
+    "suite_name": "teams_flat_xiang_xiang2_feng_dev",
+    "slice": "teams_flat_xiang_xiang2_feng",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_flat_xiang_xiang2_feng",
+    "n_videos": 135,
+    "n_frames": 135,
+    "n_identities": 1,
+    "identities": [
+      "Xiang_Xiang2_Feng"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "<no_session>"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_pc_generator_s3_dev",
+    "slice": "teams_capture_pc_generator_s3",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_pc_generator_s3",
+    "n_videos": 99,
+    "n_frames": 118,
+    "n_identities": 1,
+    "identities": [
+      "PC_Generator__s3"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s3"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_test_cam_s53_dev",
+    "slice": "teams_capture_test_cam_s53",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_test_cam_s53",
+    "n_videos": 90,
+    "n_frames": 165,
+    "n_identities": 1,
+    "identities": [
+      "Test_Cam__s53"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s53"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_cam_test_s46_dev",
+    "slice": "teams_capture_cam_test_s46",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_cam_test_s46",
+    "n_videos": 89,
+    "n_frames": 124,
+    "n_identities": 1,
+    "identities": [
+      "Cam_Test__s46"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s46"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_test_cam_s76_dev",
+    "slice": "teams_capture_test_cam_s76",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_test_cam_s76",
+    "n_videos": 75,
+    "n_frames": 138,
+    "n_identities": 1,
+    "identities": [
+      "Test_Cam__s76"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s76"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_dor_shkedi_s16_dev",
+    "slice": "teams_capture_dor_shkedi_s16",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_dor_shkedi_s16",
+    "n_videos": 57,
+    "n_frames": 78,
+    "n_identities": 1,
+    "identities": [
+      "dor_shkedi__s16"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s16"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_test_cam_s73_dev",
+    "slice": "teams_capture_test_cam_s73",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_test_cam_s73",
+    "n_videos": 55,
+    "n_frames": 101,
+    "n_identities": 1,
+    "identities": [
+      "Test_Cam__s73"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s73"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_cam_test_s38_dev",
+    "slice": "teams_capture_cam_test_s38",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_cam_test_s38",
+    "n_videos": 51,
+    "n_frames": 85,
+    "n_identities": 1,
+    "identities": [
+      "Cam_Test__s38"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s38"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_pc_generator_s9_dev",
+    "slice": "teams_capture_pc_generator_s9",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_pc_generator_s9",
+    "n_videos": 46,
+    "n_frames": 46,
+    "n_identities": 1,
+    "identities": [
+      "PC_Generator__s9"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s9"
+    ]
+  },
+  {
+    "suite_name": "teams_capture_pc_generator_s4_dev",
+    "slice": "teams_capture_pc_generator_s4",
+    "split": "dev",
+    "label": "fake",
+    "method": "teams_capture_pc_generator_s4",
+    "n_videos": 30,
+    "n_frames": 30,
+    "n_identities": 1,
+    "identities": [
+      "PC_Generator__s4"
+    ],
+    "n_sessions": 1,
+    "sessions": [
+      "s4"
+    ]
+  }
+]

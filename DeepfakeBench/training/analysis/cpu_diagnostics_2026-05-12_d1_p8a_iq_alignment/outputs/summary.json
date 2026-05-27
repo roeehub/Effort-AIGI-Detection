@@ -1,0 +1,168 @@
+{
+  "A1_chronic6": {
+    "n": 2436,
+    "r2": 0.34987943399678145,
+    "dominant_axis": "saturation_mean",
+    "dominant_std_coef": 4.265374492167439,
+    "coefs": {
+      "min_dim": -1.147408994974279,
+      "lap_var": 0.23942905807236428,
+      "luma_mean": 0.7946237586066477,
+      "saturation_mean": 4.265374492167439,
+      "color_a_dev": -1.3127072287096582,
+      "color_b_dev": -3.5283126609476136
+    },
+    "ci_low": {
+      "min_dim": -1.2932279367989468,
+      "lap_var": 0.14433941108583256,
+      "luma_mean": 0.638316524066414,
+      "saturation_mean": 3.8567408383735775,
+      "color_a_dev": -1.524660146189937,
+      "color_b_dev": -3.8006095977764813
+    },
+    "ci_high": {
+      "min_dim": -1.0015900531496111,
+      "lap_var": 0.334518705058896,
+      "luma_mean": 0.9509309931468813,
+      "saturation_mean": 4.6740081459613005,
+      "color_a_dev": -1.1007543112293794,
+      "color_b_dev": -3.256015724118746
+    },
+    "pvalues": {
+      "min_dim": 0.0,
+      "lap_var": 8.449699939738764e-07,
+      "luma_mean": 0.0,
+      "saturation_mean": 0.0,
+      "color_a_dev": 0.0,
+      "color_b_dev": 0.0
+    },
+    "intercept": -3.1868590215410717
+  },
+  "A4_healthy": {
+    "n": 1448,
+    "r2": 0.16288084414701776,
+    "dominant_axis": "saturation_mean",
+    "dominant_std_coef": -1.084164364807877,
+    "coefs": {
+      "min_dim": -0.7016663291028533,
+      "lap_var": -0.27821518847742865,
+      "luma_mean": -0.09416283644268046,
+      "saturation_mean": -1.084164364807877,
+      "color_a_dev": 0.661262338844827,
+      "color_b_dev": 0.2368776077812433
+    },
+    "ci_low": {
+      "min_dim": -0.7941994859541535,
+      "lap_var": -0.37411642598691475,
+      "luma_mean": -0.2278406884000836,
+      "saturation_mean": -1.414663011579111,
+      "color_a_dev": 0.47345054075890164,
+      "color_b_dev": 0.0013199927870108652
+    },
+    "ci_high": {
+      "min_dim": -0.6091331722515532,
+      "lap_var": -0.1823139509679426,
+      "luma_mean": 0.03951501551472268,
+      "saturation_mean": -0.7536657180366428,
+      "color_a_dev": 0.8490741369307524,
+      "color_b_dev": 0.4724352227754758
+    },
+    "pvalues": {
+      "min_dim": 0.0,
+      "lap_var": 1.529846360703857e-08,
+      "luma_mean": 0.16725910838776836,
+      "saturation_mean": 1.67823310803783e-10,
+      "color_a_dev": 7.423617276458572e-12,
+      "color_b_dev": 0.04873162350810234
+    },
+    "intercept": -4.355710854909309
+  },
+  "A3_per_identity": [
+    {
+      "identity_pattern": "Roy_D",
+      "n": 103,
+      "r2": 0.5083904472113844,
+      "dominant_axis": "saturation_mean",
+      "dominant_std_coef": -6.147760588246144,
+      "note": ""
+    },
+    {
+      "identity_pattern": "PC_Generator",
+      "n": 863,
+      "r2": 0.7574422641802814,
+      "dominant_axis": "color_b_dev",
+      "dominant_std_coef": -1.73886168777704,
+      "note": ""
+    },
+    {
+      "identity_pattern": "bla_bla_chow",
+      "n": 463,
+      "r2": 0.25002500320964516,
+      "dominant_axis": "color_b_dev",
+      "dominant_std_coef": 5.1155729620209565,
+      "note": ""
+    },
+    {
+      "identity_pattern": "Md_noyn_Sharker",
+      "n": 372,
+      "r2": 0.17478105501732644,
+      "dominant_axis": "saturation_mean",
+      "dominant_std_coef": 1.5666341625223839,
+      "note": ""
+    },
+    {
+      "identity_pattern": "dor_shkedi",
+      "n": 635,
+      "r2": 0.3562499255340835,
+      "dominant_axis": "saturation_mean",
+      "dominant_std_coef": 3.330847357988847,
+      "note": ""
+    },
+    {
+      "identity_pattern": "healthy_dor",
+      "n": 0,
+      "r2": NaN,
+      "dominant_axis": null,
+      "dominant_std_coef": NaN,
+      "note": "n<30, skipped"
+    }
+  ],
+  "A2_univariate_chronic6": [
+    {
+      "axis": "color_b_dev",
+      "n": 2436,
+      "pearson_r": -0.40082895647042094,
+      "r2": 0.1606638523451666
+    },
+    {
+      "axis": "luma_mean",
+      "n": 2436,
+      "pearson_r": -0.3570999613594748,
+      "r2": 0.1275203824029384
+    },
+    {
+      "axis": "min_dim",
+      "n": 2436,
+      "pearson_r": -0.31820218022237073,
+      "r2": 0.1012526274982701
+    },
+    {
+      "axis": "saturation_mean",
+      "n": 2436,
+      "pearson_r": -0.1363811045503665,
+      "r2": 0.018599805678378
+    },
+    {
+      "axis": "lap_var",
+      "n": 2436,
+      "pearson_r": 0.12637326356673687,
+      "r2": 0.015970201744507945
+    },
+    {
+      "axis": "color_a_dev",
+      "n": 2436,
+      "pearson_r": 0.024478499165568112,
+      "r2": 0.0005991969213987188
+    }
+  ]
+}

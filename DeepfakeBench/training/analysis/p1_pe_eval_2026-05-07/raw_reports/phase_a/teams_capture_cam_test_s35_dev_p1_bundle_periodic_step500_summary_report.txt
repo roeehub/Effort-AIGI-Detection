@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_capture_cam_test_s35_dev_p1_bundle_periodic_step500
+Run Name: TargetDomain teams_capture_cam_test_s35_dev P1_BUNDLE_PERIODIC_STEP500
+Generated on: 2026-05-07 13:08:56
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 244
+Accuracy: 1.0000
+True Positives (Correctly identified Fake): 244
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_cam_test_s35 (FAKE) -----
+Total Videos: 244
+Accuracy: 1.0000 (244/244 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=244, acc=1.0000, tpr=1.0000, fpr=0.0000, fnr=0.0000
+
+Best-group accuracy: unknown_fake = 1.0000
+Worst-group accuracy: unknown_fake = 1.0000
+Best-vs-worst group accuracy gap: 0.0000

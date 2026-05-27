@@ -1,0 +1,282 @@
+{
+  "created_at_utc": "2026-04-27T18:41:03Z",
+  "input": {
+    "scores_csv": "/Users/roeedar/Documents/repos/Effort-AIGI-Detection-DtectVision/DeepfakeBench/training/analysis/crop_shortcut_2026-04-27/p8a_dev_filtered_for_calibration.csv",
+    "label_col": "label",
+    "identity_col": "identity",
+    "score_col": "raw_prob"
+  },
+  "data_summary": {
+    "n_rows_total": 5734,
+    "n_identities_total": 26,
+    "n_rows_calibration": 3985,
+    "n_rows_eval": 1749,
+    "n_identities_calibration": 19,
+    "n_identities_eval": 7,
+    "n_real_eval": 851,
+    "n_fake_eval": 898
+  },
+  "settings": {
+    "holdout_fraction": 0.25,
+    "seed": 737,
+    "threshold_min": 0.01,
+    "threshold_max": 0.99,
+    "threshold_step": 0.001,
+    "min_fake_tpr": 0.85,
+    "fallback_lambda": 2.0,
+    "target_fprs": [
+      0.01,
+      0.02,
+      0.05,
+      0.07
+    ]
+  },
+  "best_model": "raw",
+  "model_ranking": [
+    "raw",
+    "platt",
+    "isotonic"
+  ],
+  "model_report": {
+    "raw": {
+      "frame": {
+        "metrics": {
+          "n": 1749,
+          "n_real": 851,
+          "n_fake": 898,
+          "auc": 0.9498166705487322,
+          "brier": 0.14125216930268492,
+          "logloss": 0.4758128370986113,
+          "ece": 0.13970500304745567,
+          "eer": 0.12690951821386603,
+          "eer_threshold": 0.07758179
+        },
+        "recommended_threshold": {
+          "threshold": 0.11,
+          "real_fpr": 0.10575793184488837,
+          "fake_tpr": 0.8507795100222717,
+          "balanced_acc": 0.8725107890886916,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 101
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.94962734,
+            "fake_tpr": 0.43207126948775054
+          },
+          "0.02": {
+            "threshold": 0.79559672,
+            "fake_tpr": 0.5634743875278396
+          },
+          "0.05": {
+            "threshold": 0.47415322,
+            "fake_tpr": 0.7037861915367484
+          },
+          "0.07": {
+            "threshold": 0.35685563,
+            "fake_tpr": 0.7338530066815144
+          }
+        }
+      },
+      "identity_mean": {
+        "metrics": {
+          "n": 7,
+          "n_real": 4,
+          "n_fake": 3,
+          "auc": 1.0,
+          "brier": 0.05695675054689934,
+          "logloss": 0.22275936340401473,
+          "ece": 0.18484122015634402,
+          "eer": 0.0,
+          "eer_threshold": 0.5722297596268657
+        },
+        "recommended_threshold": {
+          "threshold": 0.572,
+          "real_fpr": 0.0,
+          "fake_tpr": 1.0,
+          "balanced_acc": 1.0,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 563
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.5722297596268657,
+            "fake_tpr": 1.0
+          },
+          "0.02": {
+            "threshold": 0.5722297596268657,
+            "fake_tpr": 1.0
+          },
+          "0.05": {
+            "threshold": 0.5722297596268657,
+            "fake_tpr": 1.0
+          },
+          "0.07": {
+            "threshold": 0.5722297596268657,
+            "fake_tpr": 1.0
+          }
+        }
+      }
+    },
+    "platt": {
+      "frame": {
+        "metrics": {
+          "n": 1749,
+          "n_real": 851,
+          "n_fake": 898,
+          "auc": 0.9498166705487322,
+          "brier": 0.18462804877511096,
+          "logloss": 0.715445046055682,
+          "ece": 0.20030008296593368,
+          "eer": 0.12690951821386603,
+          "eer_threshold": 0.018667743534855275
+        },
+        "recommended_threshold": {
+          "threshold": 0.028,
+          "real_fpr": 0.10575793184488837,
+          "fake_tpr": 0.8507795100222717,
+          "balanced_acc": 0.8725107890886916,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 19
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.8712791523301299,
+            "fake_tpr": 0.43207126948775054
+          },
+          "0.02": {
+            "threshold": 0.5498297843705182,
+            "fake_tpr": 0.5634743875278396
+          },
+          "0.05": {
+            "threshold": 0.19982769979790524,
+            "fake_tpr": 0.7037861915367484
+          },
+          "0.07": {
+            "threshold": 0.12848835744322776,
+            "fake_tpr": 0.7338530066815144
+          }
+        }
+      },
+      "identity_mean": {
+        "metrics": {
+          "n": 7,
+          "n_real": 4,
+          "n_fake": 3,
+          "auc": 1.0,
+          "brier": 0.06884279020802682,
+          "logloss": 0.23747850254688505,
+          "ece": 0.18576407398651296,
+          "eer": 0.0,
+          "eer_threshold": 0.4447127536061327
+        },
+        "recommended_threshold": {
+          "threshold": 0.444,
+          "real_fpr": 0.0,
+          "fake_tpr": 1.0,
+          "balanced_acc": 1.0,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 435
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.4447127536061327,
+            "fake_tpr": 1.0
+          },
+          "0.02": {
+            "threshold": 0.4447127536061327,
+            "fake_tpr": 1.0
+          },
+          "0.05": {
+            "threshold": 0.4447127536061327,
+            "fake_tpr": 1.0
+          },
+          "0.07": {
+            "threshold": 0.4447127536061327,
+            "fake_tpr": 1.0
+          }
+        }
+      }
+    },
+    "isotonic": {
+      "frame": {
+        "metrics": {
+          "n": 1749,
+          "n_real": 851,
+          "n_fake": 898,
+          "auc": 0.9442991214318803,
+          "brier": 0.18341453722816672,
+          "logloss": 0.7630504847425048,
+          "ece": 0.20560197582470072,
+          "eer": 0.10810810810810811,
+          "eer_threshold": 0.03333333333333333
+        },
+        "recommended_threshold": {
+          "threshold": 0.033,
+          "real_fpr": 0.10810810810810811,
+          "fake_tpr": 0.8530066815144766,
+          "balanced_acc": 0.8724492867031842,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 24
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.787132613149564,
+            "fake_tpr": 0.4220489977728285
+          },
+          "0.02": {
+            "threshold": 0.56,
+            "fake_tpr": 0.5111358574610245
+          },
+          "0.05": {
+            "threshold": 0.37335306826209336,
+            "fake_tpr": 0.6369710467706013
+          },
+          "0.07": {
+            "threshold": 0.15200209046304894,
+            "fake_tpr": 0.7282850779510023
+          }
+        }
+      },
+      "identity_mean": {
+        "metrics": {
+          "n": 7,
+          "n_real": 4,
+          "n_fake": 3,
+          "auc": 1.0,
+          "brier": 0.07230263452862608,
+          "logloss": 0.24359363444481746,
+          "ece": 0.18789517914150147,
+          "eer": 0.0,
+          "eer_threshold": 0.4240474370053773
+        },
+        "recommended_threshold": {
+          "threshold": 0.424,
+          "real_fpr": 0.0,
+          "fake_tpr": 1.0,
+          "balanced_acc": 1.0,
+          "selection_mode": "constraint_min_fpr",
+          "feasible_count": 415
+        },
+        "thresholds_at_target_fpr": {
+          "0.01": {
+            "threshold": 0.4240474370053773,
+            "fake_tpr": 1.0
+          },
+          "0.02": {
+            "threshold": 0.4240474370053773,
+            "fake_tpr": 1.0
+          },
+          "0.05": {
+            "threshold": 0.4240474370053773,
+            "fake_tpr": 1.0
+          },
+          "0.07": {
+            "threshold": 0.4240474370053773,
+            "fake_tpr": 1.0
+          }
+        }
+      }
+    }
+  }
+}

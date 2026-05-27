@@ -1,0 +1,86 @@
+Validation Summary Report for: td_teams_fake_all_dev_p8a_reference_step5000
+Run Name: TargetDomain teams_fake_all_dev P8A_REFERENCE_STEP5000
+Generated on: 2026-05-07 10:59:08
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 2409
+Accuracy: 0.7024
+True Positives (Correctly identified Fake): 1692
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 717
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: deeplive_enhanced (FAKE) -----
+Total Videos: 545
+Accuracy: 0.5303 (289/545 correct)
+
+----- Method: teams_capture_cam_test_s32 (FAKE) -----
+Total Videos: 139
+Accuracy: 1.0000 (139/139 correct)
+
+----- Method: teams_capture_cam_test_s35 (FAKE) -----
+Total Videos: 244
+Accuracy: 0.9426 (230/244 correct)
+
+----- Method: teams_capture_cam_test_s38 (FAKE) -----
+Total Videos: 51
+Accuracy: 1.0000 (51/51 correct)
+
+----- Method: teams_capture_cam_test_s46 (FAKE) -----
+Total Videos: 89
+Accuracy: 1.0000 (89/89 correct)
+
+----- Method: teams_capture_dor_shkedi_s16 (FAKE) -----
+Total Videos: 57
+Accuracy: 0.9825 (56/57 correct)
+
+----- Method: teams_capture_noyn_sharker_s23 (FAKE) -----
+Total Videos: 204
+Accuracy: 0.9118 (186/204 correct)
+
+----- Method: teams_capture_pc_generator_s3 (FAKE) -----
+Total Videos: 99
+Accuracy: 1.0000 (99/99 correct)
+
+----- Method: teams_capture_pc_generator_s4 (FAKE) -----
+Total Videos: 30
+Accuracy: 1.0000 (30/30 correct)
+
+----- Method: teams_capture_pc_generator_s9 (FAKE) -----
+Total Videos: 46
+Accuracy: 1.0000 (46/46 correct)
+
+----- Method: teams_capture_test_cam_s53 (FAKE) -----
+Total Videos: 90
+Accuracy: 1.0000 (90/90 correct)
+
+----- Method: teams_capture_test_cam_s73 (FAKE) -----
+Total Videos: 55
+Accuracy: 1.0000 (55/55 correct)
+
+----- Method: teams_capture_test_cam_s76 (FAKE) -----
+Total Videos: 75
+Accuracy: 1.0000 (75/75 correct)
+
+----- Method: teams_flat_xiang_xiang2_feng (FAKE) -----
+Total Videos: 135
+Accuracy: 0.4519 (61/135 correct)
+
+----- Method: visomaster_enhanced_macro (FAKE) -----
+Total Videos: 550
+Accuracy: 0.3564 (196/550 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+deeplive_enhanced_fake (family=deeplive_enhanced_fake): n=545, acc=0.5303, tpr=0.5303, fpr=0.0000, fnr=0.4697
+unknown_fake (family=unknown_fake): n=1314, acc=0.9186, tpr=0.9186, fpr=0.0000, fnr=0.0814
+visomaster_enhanced_fake (family=visomaster_enhanced_fake): n=550, acc=0.3564, tpr=0.3564, fpr=0.0000, fnr=0.6436
+
+Best-group accuracy: unknown_fake = 0.9186
+Worst-group accuracy: visomaster_enhanced_fake = 0.3564
+Best-vs-worst group accuracy gap: 0.5622

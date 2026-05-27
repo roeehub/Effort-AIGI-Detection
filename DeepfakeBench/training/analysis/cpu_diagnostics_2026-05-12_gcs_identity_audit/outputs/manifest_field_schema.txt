@@ -1,0 +1,29 @@
+Total manifests inspected: 250
+All keys observed (union):
+  fake_complete
+  frame_count_fake
+  frame_count_real
+  image_format
+  original_anchor_frames
+  original_consecutive_frames
+  original_cropped
+  original_cropped_video_name
+  original_frame_count_fake
+  original_frame_count_real
+  original_has_landmarks
+  original_original_video_name
+  original_pipeline_version
+  original_trimmed_video_name
+  pair_complete
+  pipeline_version
+  real_complete
+  sample_id
+  source
+  strategy
+  teams_fake_duration_s
+  teams_fake_frames_discarded
+  teams_fake_frames_written
+  teams_real_duration_s
+  teams_real_frames_discarded
+  teams_real_frames_written
+  uploaded_at

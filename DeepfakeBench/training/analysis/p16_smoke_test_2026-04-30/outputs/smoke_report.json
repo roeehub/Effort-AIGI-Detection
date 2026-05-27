@@ -1,0 +1,37 @@
+{
+  "smoke": "p16_data_axis",
+  "date": "2026-04-30",
+  "yaml": {
+    "family_weights": {
+      "df40_fake": 0.2,
+      "visomaster_fake": 4.0,
+      "visomaster_enhanced_fake": 2.0,
+      "deeplive_non_enhanced_fake": 2.5,
+      "deeplive_enhanced_fake": 3.0,
+      "deeplive_teams_fake": 7.0,
+      "deeplive_teams_real": 5.0,
+      "df40_real": 0.5,
+      "realpool_real": 1.5,
+      "external_real": 2.0
+    }
+  },
+  "loader": {
+    "n_samples_total": 54,
+    "n_smoke_examined": 16,
+    "n_unified_wrapped": 16,
+    "distinct_swap_models": [
+      "CSCS",
+      "GhostFace-v1"
+    ],
+    "distinct_enhancers_n": 8,
+    "distinct_identities_n": 16,
+    "unified_method_tags_sample": [
+      "visomaster_CSCS",
+      "visomaster_GhostFace-v1"
+    ],
+    "unified_source_tags": [
+      "visomaster_teams_enhanced"
+    ]
+  },
+  "verdict": "PASS"
+}

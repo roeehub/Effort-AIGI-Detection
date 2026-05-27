@@ -1,0 +1,93 @@
+# Resume manifest for the failed PD corr-penalty scorecard
+# (`pd-corr-penalty-scorecard-2026-05-06`, Vertex 8207399447131324416, FAILED 2026-05-06T16:27:59Z due to boot disk exhaustion).
+#
+# Original parent: arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml (29 suites).
+# This resume file contains only the 10 suites that were not fully completed before the failure:
+#   - 1 partial: teams_flat_xiang_xiang2_feng_dev (5 of 8 ckpts done; viso ckpts pending)
+#   - 9 missing: per-capture-mode dev mini-slices (s3, s4, s9, s16, s38, s46, s53, s73, s76)
+#
+# Ckpt subset (passed via --checkpoints, not a new map file):
+#   P8A_REFERENCE_STEP5000, E2B_TOP_N_STEP3200, DEEPLIVE_CORR_TOP_N_STEP1800,
+#   VISO_CORR_TOP_N_STEP600, VISO_CORR_PERIODIC_STEP1000
+# (drops DEEPLIVE_CORR_PERIODIC_STEP2000, DEEPLIVE_CORR_TOP_N_STEP4800, VISO_CORR_PERIODIC_STEP2000)
+
+suites:
+  - name: teams_flat_xiang_xiang2_feng_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_flat_xiang_xiang2_feng"
+    external_fake_method: "teams_flat_xiang_xiang2_feng"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_s3_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator_s3"
+    external_fake_method: "teams_capture_pc_generator_s3"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_s53_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam_s53"
+    external_fake_method: "teams_capture_test_cam_s53"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_s46_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test_s46"
+    external_fake_method: "teams_capture_cam_test_s46"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_s76_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam_s76"
+    external_fake_method: "teams_capture_test_cam_s76"
+    external_fake_deterministic: true
+
+  - name: teams_capture_dor_shkedi_s16_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_dor_shkedi_s16"
+    external_fake_method: "teams_capture_dor_shkedi_s16"
+    external_fake_deterministic: true
+
+  - name: teams_capture_test_cam_s73_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_test_cam_s73"
+    external_fake_method: "teams_capture_test_cam_s73"
+    external_fake_deterministic: true
+
+  - name: teams_capture_cam_test_s38_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_cam_test_s38"
+    external_fake_method: "teams_capture_cam_test_s38"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_s9_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator_s9"
+    external_fake_method: "teams_capture_pc_generator_s9"
+    external_fake_deterministic: true
+
+  - name: teams_capture_pc_generator_s4_dev
+    df40_mode: none
+    external_fake_manifest: "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json"
+    external_fake_manifest_split: "dev"
+    external_fake_manifest_slices: "teams_capture_pc_generator_s4"
+    external_fake_method: "teams_capture_pc_generator_s4"
+    external_fake_deterministic: true

@@ -1,0 +1,9 @@
+{
+  "n_candidates": 5,
+  "n_suites": 8,
+  "modern_v2_real_n": 281,
+  "modern_v2_fake_n": 367,
+  "single_candidate_gate_passing": 0,
+  "ensemble_gate_passing": 0,
+  "weighted_gate_passing": 0
+}

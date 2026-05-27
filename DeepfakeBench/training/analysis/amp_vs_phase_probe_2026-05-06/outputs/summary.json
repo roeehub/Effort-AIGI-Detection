@@ -1,0 +1,25 @@
+{
+  "verdict": "OTHER",
+  "rationale": "AUCs do not match any clean rule (amp=0.946, phase=0.861, pixel=0.671). Manual interpretation required.",
+  "amp_auc": 0.9461382807771941,
+  "phase_auc": 0.8607676629797865,
+  "pixel_auc": 0.6711240051363052,
+  "shuffle_auc": 0.4971612267257801,
+  "n_total": 5000,
+  "n_fake": 2500,
+  "n_real": 2500,
+  "n_groups": 4120,
+  "use_group_kfold": true,
+  "amp_radial_class_top20": {
+    "LF": 3,
+    "MF": 10,
+    "HF": 7
+  },
+  "phase_radial_class_top20": {
+    "LF": 0,
+    "MF": 16,
+    "HF": 4
+  },
+  "n_failed_frames": 0,
+  "wallclock_seconds": 20.279664754867554
+}

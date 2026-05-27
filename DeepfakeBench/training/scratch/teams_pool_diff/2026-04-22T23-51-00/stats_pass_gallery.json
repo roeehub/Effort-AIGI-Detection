@@ -1,0 +1,1246 @@
+{
+  "selected": 155,
+  "rows": [
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_01251",
+      "fake_prob": 0.0016991024604067206,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00429",
+      "fake_prob": 0.00216793455183506,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00429__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00098",
+      "fake_prob": 0.002178814262151718,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00098__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_01251",
+      "fake_prob": 0.00224332045763731,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00098",
+      "fake_prob": 0.0024722774978727102,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00098__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_01251",
+      "fake_prob": 0.00249397661536932,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00492",
+      "fake_prob": 0.0026504313573241234,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00492__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00223",
+      "fake_prob": 0.0028227120637893677,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00223__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00010",
+      "fake_prob": 0.00303781614638865,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00435",
+      "fake_prob": 0.003083989955484867,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00435__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00415",
+      "fake_prob": 0.0031386055052280426,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00415__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00010",
+      "fake_prob": 0.003308300394564867,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00223",
+      "fake_prob": 0.0034779298584908247,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00223__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00240",
+      "fake_prob": 0.003724329639226198,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00240__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00113",
+      "fake_prob": 0.0037618735805153847,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00113__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00010",
+      "fake_prob": 0.0038778583984822035,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00432",
+      "fake_prob": 0.003925411030650139,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00432__frame_0006.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00536",
+      "fake_prob": 0.0039934441447257996,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00536__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00536",
+      "fake_prob": 0.004296667408198118,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00536__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_01219",
+      "fake_prob": 0.004368674475699663,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01219__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00113",
+      "fake_prob": 0.004509508144110441,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00113__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00098",
+      "fake_prob": 0.0045707649551332,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00098__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00736",
+      "fake_prob": 0.004685861524194479,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00736__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00010",
+      "fake_prob": 0.004706631880253553,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_01251",
+      "fake_prob": 0.004734029993414879,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00079",
+      "fake_prob": 0.004943131003528833,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00079__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00435",
+      "fake_prob": 0.0049803294241428375,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00435__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "HDTF20260416_00536",
+      "fake_prob": 0.005021533463150263,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00536__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260418R2X_00113",
+      "fake_prob": 0.005321551114320755,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00113__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "QCLIP20260417R2_00492",
+      "fake_prob": 0.0054486882872879505,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00492__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "uncertain",
+      "video_id": "HDTF20260416_01212",
+      "fake_prob": 0.4368472993373871,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/uncertain/HDTF20260416_01212__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "uncertain",
+      "video_id": "HDTF20260416_00616",
+      "fake_prob": 0.579466700553894,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/uncertain/HDTF20260416_00616__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00005",
+      "fake_prob": 0.9366271495819092,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00005__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00005",
+      "fake_prob": 0.9015440940856934,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00005__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00008",
+      "fake_prob": 0.9547979831695557,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00008__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00008",
+      "fake_prob": 0.962794303894043,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00008__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00008",
+      "fake_prob": 0.9764698147773743,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00008__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00180",
+      "fake_prob": 0.9274064898490906,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00180__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00180",
+      "fake_prob": 0.9903677701950073,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00180__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00593",
+      "fake_prob": 0.9945474863052368,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00593",
+      "fake_prob": 0.9869909882545471,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00593",
+      "fake_prob": 0.9944122433662415,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00593",
+      "fake_prob": 0.9945834279060364,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00938",
+      "fake_prob": 0.9893163442611694,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00938",
+      "fake_prob": 0.9950961470603943,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00938",
+      "fake_prob": 0.958710789680481,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00938",
+      "fake_prob": 0.9927378296852112,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01070",
+      "fake_prob": 0.9996623992919922,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01070",
+      "fake_prob": 0.9997532963752747,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01070",
+      "fake_prob": 0.9996283054351807,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01070",
+      "fake_prob": 0.9996960163116455,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01227",
+      "fake_prob": 0.9690589308738708,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01227__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01227",
+      "fake_prob": 0.9919235110282898,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01227__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260418R2X_00099",
+      "fake_prob": 0.9975186586380005,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_fake/confidently_right/QCLIP20260418R2X_00099__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00008",
+      "fake_prob": 0.08637068420648575,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00008__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00240",
+      "fake_prob": 0.0011053523048758507,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00240__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00240",
+      "fake_prob": 0.0010591126047074795,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00240__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00429",
+      "fake_prob": 0.0019308158662170172,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00429__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00432",
+      "fake_prob": 0.0019914337899535894,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00432__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00435",
+      "fake_prob": 0.0013899559853598475,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00435__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00485",
+      "fake_prob": 0.00043108215322718024,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00485__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00536",
+      "fake_prob": 0.0014013240579515696,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00536__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00593",
+      "fake_prob": 0.0022353532258421183,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00593__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00593",
+      "fake_prob": 0.001487746718339622,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00593__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00616",
+      "fake_prob": 0.0017241711029782891,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00616__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00616",
+      "fake_prob": 0.0024856890086084604,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00616__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00736",
+      "fake_prob": 0.000753980886656791,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00736__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_00938",
+      "fake_prob": 0.0011710074031725526,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00938__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01070",
+      "fake_prob": 0.0007104346295818686,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01070__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01070",
+      "fake_prob": 0.000930755864828825,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01070__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01212",
+      "fake_prob": 0.0016208559973165393,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01212__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01219",
+      "fake_prob": 0.0007949818973429501,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01219__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01227",
+      "fake_prob": 0.0008704358479008079,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01227__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "HDTF20260416_01250",
+      "fake_prob": 0.0012616669991984963,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01250__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00098",
+      "fake_prob": 0.0019190282328054309,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00098__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00098",
+      "fake_prob": 0.0010050232522189617,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00098__frame_0012.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00223",
+      "fake_prob": 0.0012156582670286298,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00223__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00223",
+      "fake_prob": 0.0014320891350507736,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00223__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00260",
+      "fake_prob": 0.0032952323090285063,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00260__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00260",
+      "fake_prob": 0.007067541591823101,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00260__frame_0008.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00466",
+      "fake_prob": 0.0010452141286805272,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00466__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00492",
+      "fake_prob": 0.002650616690516472,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00492__frame_0000.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260417R2_00492",
+      "fake_prob": 0.02919705957174301,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00492__frame_0004.jpg"
+    },
+    {
+      "group": "proper_visomaster_teams_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "QCLIP20260418R2X_00079",
+      "fake_prob": 0.020736010745167732,
+      "thumbnail_rel_path": "thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260418R2X_00079__frame_0008.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_wrong",
+      "video_id": "edge_cases_0016",
+      "fake_prob": 0.04048873856663704,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_wrong/edge_cases_0016__frame_0015.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "uncertain",
+      "video_id": "edge_cases_0016",
+      "fake_prob": 0.5274774432182312,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/uncertain/edge_cases_0016__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0009",
+      "fake_prob": 0.9986720085144043,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_0009__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0009",
+      "fake_prob": 0.99818354845047,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_0009__frame_0015.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0640",
+      "fake_prob": 0.9992536902427673,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_0640__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0951",
+      "fake_prob": 0.9862164258956909,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_0951__frame_0011.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0951",
+      "fake_prob": 0.9948940277099609,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_0951__frame_0016.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1412",
+      "fake_prob": 0.9944202303886414,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_1412__frame_0011.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1412",
+      "fake_prob": 0.9984020590782166,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_1412__frame_0016.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1985",
+      "fake_prob": 0.9986439347267151,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_1985__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1988",
+      "fake_prob": 0.9963089823722839,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_1988__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1988",
+      "fake_prob": 0.9972097277641296,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_1988__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1988",
+      "fake_prob": 0.9992577433586121,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/edge_cases_1988__frame_0014.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0000",
+      "fake_prob": 0.9913612008094788,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0000__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0000",
+      "fake_prob": 0.992723286151886,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0000__frame_0013.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0010",
+      "fake_prob": 0.9993150234222412,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0010__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0112",
+      "fake_prob": 0.9994681477546692,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0112__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0112",
+      "fake_prob": 0.9886986613273621,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0112__frame_0015.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0199",
+      "fake_prob": 0.9979216456413269,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0199__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0199",
+      "fake_prob": 0.9970837235450745,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0199__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0199",
+      "fake_prob": 0.9909347891807556,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0199__frame_0014.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0327",
+      "fake_prob": 0.9996205568313599,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0327__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0606",
+      "fake_prob": 0.9961744546890259,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0606__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0771",
+      "fake_prob": 0.9965567588806152,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0771",
+      "fake_prob": 0.9986087679862976,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0771",
+      "fake_prob": 0.9986847043037415,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0771",
+      "fake_prob": 0.9980607628822327,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0014.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_1400",
+      "fake_prob": 0.9992197751998901,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/minimal_processing_1400__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_0355",
+      "fake_prob": 0.9992389678955078,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/quality_enhancement_0355__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_0408",
+      "fake_prob": 0.9993763566017151,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/quality_enhancement_0408__frame_0016.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_1181",
+      "fake_prob": 0.9994972944259644,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/quality_enhancement_1181__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_fake",
+      "label": "fake",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_InStyleSwapper256-B_12005",
+      "fake_prob": 0.9971938133239746,
+      "thumbnail_rel_path": "thumbnails/teams_ood_fake/confidently_right/visomaster_InStyleSwapper256-B_12005__frame_0014.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "visomaster_GhostFace-v2_04354",
+      "fake_prob": 0.999240517616272,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "visomaster_CSCS_00094",
+      "fake_prob": 0.9840399622917175,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/visomaster_CSCS_00094__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "visomaster_GhostFace-v2_04354",
+      "fake_prob": 0.9749270677566528,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0012.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "visomaster_GhostFace-v2_04354",
+      "fake_prob": 0.9432675242424011,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0008.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "visomaster_GhostFace-v2_04354",
+      "fake_prob": 0.9295153021812439,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "minimal_processing_0000",
+      "fake_prob": 0.9155645966529846,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/minimal_processing_0000__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_wrong",
+      "video_id": "visomaster_CSCS_00094",
+      "fake_prob": 0.9108754396438599,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_wrong/visomaster_CSCS_00094__frame_0012.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "uncertain",
+      "video_id": "visomaster_CSCS_00111",
+      "fake_prob": 0.47126665711402893,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/uncertain/visomaster_CSCS_00111__frame_0015.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "uncertain",
+      "video_id": "visomaster_CSCS_00301",
+      "fake_prob": 0.4015669524669647,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/uncertain/visomaster_CSCS_00301__frame_0008.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0009",
+      "fake_prob": 0.005982417147606611,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_0009__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0009",
+      "fake_prob": 0.012679513543844223,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_0009__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0009",
+      "fake_prob": 0.03861873969435692,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_0009__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0951",
+      "fake_prob": 0.004305192735046148,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_0951__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_0951",
+      "fake_prob": 0.0036048530600965023,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_0951__frame_0014.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1412",
+      "fake_prob": 0.0017006139969453216,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_1412__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1985",
+      "fake_prob": 0.0033558974973857403,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_1985__frame_0004.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "edge_cases_1988",
+      "fake_prob": 0.018043672665953636,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/edge_cases_1988__frame_0011.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0010",
+      "fake_prob": 0.008698167279362679,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_0010__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0010",
+      "fake_prob": 0.038953252136707306,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_0010__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0010",
+      "fake_prob": 0.030062591657042503,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_0010__frame_0015.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0140",
+      "fake_prob": 0.03859338536858559,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_0140__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0771",
+      "fake_prob": 0.0007591480971314013,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_0771__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_0771",
+      "fake_prob": 0.002299813786521554,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_0771__frame_0016.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "minimal_processing_1400",
+      "fake_prob": 0.0330188162624836,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/minimal_processing_1400__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_0355",
+      "fake_prob": 0.048305753618478775,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/quality_enhancement_0355__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_0355",
+      "fake_prob": 0.03903103619813919,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/quality_enhancement_0355__frame_0017.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_0408",
+      "fake_prob": 0.0017761404160410166,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/quality_enhancement_0408__frame_0009.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "quality_enhancement_1181",
+      "fake_prob": 0.007913383655250072,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/quality_enhancement_1181__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_CSCS_00111",
+      "fake_prob": 0.02914772741496563,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00111__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_CSCS_00153",
+      "fake_prob": 0.0124984011054039,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00153__frame_0008.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_CSCS_00295",
+      "fake_prob": 0.025297390297055244,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00295__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_CSCS_00295",
+      "fake_prob": 0.03783786669373512,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00295__frame_0005.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_CSCS_00295",
+      "fake_prob": 0.024594813585281372,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00295__frame_0011.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_GhostFace-v1_02457",
+      "fake_prob": 0.0178754311054945,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v1_02457__frame_0010.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_GhostFace-v1_02457",
+      "fake_prob": 0.009824812412261963,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v1_02457__frame_0015.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_GhostFace-v2_04206",
+      "fake_prob": 0.012652261182665825,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v2_04206__frame_0008.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_GhostFace-v2_04206",
+      "fake_prob": 0.0048099239356815815,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v2_04206__frame_0012.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_GhostFace-v3_06027",
+      "fake_prob": 0.02438712865114212,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v3_06027__frame_0000.jpg"
+    },
+    {
+      "group": "teams_ood_real",
+      "label": "real",
+      "bucket": "confidently_right",
+      "video_id": "visomaster_GhostFace-v3_06027",
+      "fake_prob": 0.040819261223077774,
+      "thumbnail_rel_path": "thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v3_06027__frame_0005.jpg"
+    }
+  ],
+  "per_bucket": 30
+}

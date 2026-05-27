@@ -1,0 +1,68 @@
+{
+  "_doc": "Reconciliation of three different numbers cited about dor cross-session drift attribution to named pixel-domain IQ axes. Job DOR_DRIFT_R2_RECONCILIATION_2026-05-06.",
+  "_data_substrate": {
+    "low_session": "dor_evening / dor_evening (n=200 sampled, n=324 raw)",
+    "high_session": "teams_real_dor_dev / dor_shkedi (n=50)",
+    "all_sessions_n": 819,
+    "union_n": 250,
+    "frame_population": "dor real frames only, 7 sessions in all-sessions fit",
+    "score_columns": ["score_P8A", "score_E2B", "score_PA_3800"],
+    "iq_features_all_sessions": [
+      "sharpness_lap", "luma_mean", "luma_std", "sat_mean", "contrast_l",
+      "edge_mag", "hf_ratio", "color_a_dev", "color_b_dev",
+      "highlight_frac", "shadow_frac", "block_score",
+      "min_dim", "face_area_ratio_imp"
+    ],
+    "iq_features_union": [
+      "sharpness_lap", "luma_mean", "luma_std", "sat_mean", "contrast_l",
+      "edge_mag", "hf_ratio", "color_a_dev", "color_b_dev",
+      "highlight_frac", "shadow_frac", "block_score",
+      "min_dim"
+    ]
+  },
+  "metrics": [
+    {
+      "metric_name": "all_sessions_R2_P8A",
+      "value": 0.1423,
+      "methodology": "Ridge(alpha=1.0) on StandardScaler-fit IQ axes; trained AND scored on all 819 dor real frames spanning 7 sessions (dor_evening, dor_morning, team_sanity_may5, teams_real_all_dev, teams_real_all_lockbox/{dor_shkedi,real_dor}, teams_real_dor_dev). 14 features incl. face_area_ratio_imp. Reported as `r2` in regression_p8a.json line 2.",
+      "what_it_measures": "Within-frame variance in score_P8A explained by named IQ axes across the entire dor-real population (mixed sessions). I.e., 'given a random dor real frame, how much of its score does the IQ feature vector tell you?' Answer: ~14% on P8A, ~34% on E2B, ~25% on PA_3800.",
+      "what_it_does_not_measure": "Cross-session DRIFT attribution. R² is dominated by within-session variance (most rows are from a few large sessions, with sessions sitting at very different score levels); a low R² here is consistent with 'sessions cleanly separate on score but the IQ-axis-to-score relationship varies by session', which is exactly the signature of an axis-mediated cross-session shift. Do NOT cite this number as 'X% of drift'.",
+      "source_file": "analysis/dor_drift_mechanism_2026-05-06/outputs/regression_p8a.json"
+    },
+    {
+      "metric_name": "all_sessions_predicted_over_observed_drift_P8A",
+      "value": 0.2017,
+      "alt_form": "0.0638 / 0.3162",
+      "methodology": "Take the all-sessions ridge from metric 1 (fit on 819 frames, 14 features). Compute observed_drift = mean(score on high session) - mean(score on low session) = 0.331 - 0.015 = 0.316. Compute predicted_drift = sum_i (coef_i_standardized * (mean_high_std_i - mean_low_std_i)) using the all-sessions coefficients. Reported in drift_attribution.csv as `__PREDICTED_DRIFT__` / `__OBSERVED_DRIFT__` for P8A.",
+      "what_it_measures": "Of the observed (low_session_mean, high_session_mean) score gap, how much does the *all-sessions-trained* linear model predict it would close just from the IQ-axis means moving between sessions. Answer: ~20% on P8A, ~21% on E2B, ~14% on PA_3800.",
+      "what_it_does_not_measure": "Cleanly identified contribution of the named axes to the cross-session shift. The all-sessions fit's coefficients are pulled toward the within-session, within-luma-band relationship (which is weak — the model's score is approximately constant across small IQ deltas inside a session), so the regression underweights how strongly the model reacts to *between-session* IQ shifts. This is a classic Simpson's-paradox / fixed-effects-omitted regime. The 20% number understates how much the named axes explain because the model used to project them was trained against a different (within-session) signal.",
+      "source_file": "analysis/dor_drift_mechanism_2026-05-06/outputs/drift_attribution.csv"
+    },
+    {
+      "metric_name": "endpoint_union_predicted_over_observed_drift_P8A",
+      "value": 0.9000,
+      "alt_form": "0.2846 / 0.3162",
+      "methodology": "Re-fit Ridge(alpha=1.0) on StandardScaler-fit IQ axes using ONLY the 250 frames in the (dor_evening + teams_real_dor_dev) union — the two endpoints of the drift being attributed. 13 features (face_area_ratio_imp dropped because dor_evening has no face_area_ratio annotations). Then compute observed_drift and predicted_drift the same way as metric 2. Reported in supplementary_attribution_union.json as `predicted_drift` / `observed_drift` for P8A; cited in processing_signature_shortcut.md (Probe 2) as '90% recovered'.",
+      "what_it_measures": "Of the observed cross-session score gap between dor_evening and teams_real_dor_dev, how much does a linear model TRAINED ON THE TWO ENDPOINT POPULATIONS predict from named IQ axes alone. R²_union = 0.4455 (P8A), 0.4241 (E2B), 0.6208 (PA_3800) — the '0.42-0.62' range. Answer: ~90% (P8A), ~87% (E2B), ~82% (PA_3800).",
+      "what_it_does_not_measure": "Out-of-sample / mechanistic causality. The union fit is calibrated *to* the endpoint difference, so it is structurally sympathetic to recovering it. The high pred/obs ratio is correctly interpreted as: 'the cross-session drift between these two endpoints lives in a low-dimensional named-IQ subspace,' NOT as 'the IQ axes are the cause' (the IQ axes covary with codec / camera / day-of-capture / signal-pipeline confounders that the regression cannot disentangle from a 250-row 2-session fit). It also does not generalize to other dor session pairs without a separate fit.",
+      "source_file": "analysis/dor_drift_mechanism_2026-05-06/outputs/supplementary_attribution_union.json (and run_supplementary.py)"
+    }
+  ],
+  "additional_per_ckpt_values": {
+    "all_sessions_R2": {"P8A": 0.1423, "E2B": 0.3358, "PA_3800": 0.2523},
+    "all_sessions_pred_over_obs": {"P8A": 0.2018, "E2B": 0.2103, "PA_3800": 0.1402},
+    "union_R2": {"P8A": 0.4455, "E2B": 0.4241, "PA_3800": 0.6208},
+    "union_pred_over_obs": {"P8A": 0.9000, "E2B": 0.8689, "PA_3800": 0.8194}
+  },
+  "verdict": {
+    "right_metric_to_cite": "endpoint_union_predicted_over_observed_drift",
+    "right_statement": "On dor real frames, ~90% of the cross-session score drift between dor_evening and teams_real_dor_dev (Δmean P8A = 0.316) is recoverable as a linear projection of named pixel-domain IQ axes (R²_union = 0.45 for P8A, 0.42-0.62 across {P8A, E2B, PA_3800}). The drift lives in a low-dimensional named-IQ subspace; this does not by itself prove causality, but it does mean a Pearson penalty on those named axes has structural traction (top drivers: min_dim ~57%, color_b_dev ~43%, edge_mag ~45% on P8A by univariate Pearson r).",
+    "wrong_to_cite_for_drift": [
+      "all_sessions_R2 (0.142) — measures within-frame score variance, not cross-session drift",
+      "all_sessions_pred_over_obs (0.20) — projects an all-sessions-fit model to the endpoint diff; underweights between-session IQ moves"
+    ],
+    "thread_writeup_correct": true,
+    "plan_treated_as_open": true,
+    "plan_correction_needed": "NEXT_STEPS_PLAN_2026-05-06.md §3.6 / §9.0e flagged this as 'three different numbers, needs reconciliation' — the reconciliation is that the three numbers measure three different things (all-sessions within-frame R², all-sessions-fit endpoint projection, and endpoint-union endpoint fit). The thread's 90% / R²_union 0.42-0.62 cite is supported by the on-disk JSON; the 'discrepancy' was a methodology disambiguation, not a factual error in the thread."
+  }
+}

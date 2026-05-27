@@ -1,0 +1,70 @@
+{
+  "checkpoint_key": "HEAD_kwhju7im_STEP250",
+  "ckpt_path": "analysis/phase_2_head_2026-05-22/_ckpts/top_n_effort_20260522_step250_auc0.9895_eer0.0490.pth",
+  "total_wall_seconds": 1464.3,
+  "suites": [
+    {
+      "suite": "teams_real_all_dev",
+      "frames": 4564,
+      "videos": 3253,
+      "wall_seconds": 385.5,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_real_all_dev_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_poor_quality_dev",
+      "frames": 1303,
+      "videos": 923,
+      "wall_seconds": 144.7,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_real_poor_quality_dev_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_lighting_extreme_dev",
+      "frames": 1742,
+      "videos": 1401,
+      "wall_seconds": 164.7,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_real_lighting_extreme_dev_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "teams_fake_all_dev",
+      "frames": 3039,
+      "videos": 2409,
+      "wall_seconds": 308.7,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_fake_all_dev_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "visomaster_enhanced_macro_dev",
+      "frames": 550,
+      "videos": 550,
+      "wall_seconds": 89.2,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/visomaster_enhanced_macro_dev_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "deeplive_enhanced_dev",
+      "frames": 545,
+      "videos": 545,
+      "wall_seconds": 100.7,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/deeplive_enhanced_dev_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_all_lockbox",
+      "frames": 1418,
+      "videos": 1361,
+      "wall_seconds": 173.0,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_real_all_lockbox_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "teams_fake_all_lockbox",
+      "frames": 425,
+      "videos": 253,
+      "wall_seconds": 72.9,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_fake_all_lockbox_head_kwhju7im_step250_videos_report.csv"
+    },
+    {
+      "suite": "teams_real_dor_dev",
+      "frames": 50,
+      "videos": 50,
+      "wall_seconds": 25.0,
+      "videos_report": "analysis/phase_2_head_2026-05-22/reports/teams_real_dor_dev_head_kwhju7im_step250_videos_report.csv"
+    }
+  ]
+}

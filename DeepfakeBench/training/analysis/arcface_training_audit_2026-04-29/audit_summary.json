@@ -1,0 +1,15 @@
+{
+  "n_buckets_audited": 41,
+  "n_buckets_real": 25,
+  "n_buckets_fake": 16,
+  "avg_centroid_purity_real": 0.7717284631729125,
+  "avg_centroid_purity_fake": 0.8142566382884979,
+  "avg_centroid_purity_overall": 0.7883248241936288,
+  "purity_thresh": 0.85,
+  "silhouette_thresh": 0.2,
+  "n_real_flagged_low_purity": 18,
+  "n_fake_flagged_low_purity": 9,
+  "n_flagged_k2_split": 0,
+  "verdict_real_purity_below_threshold": true,
+  "decision_rule": "Per V6 \u00a73.11: if avg purity (REAL identities) < 0.85 -> label corruption confirmed -> drop contrastive_regularization in P14. Fake purity is naturally lower because deepfake morphs ArcFace embedding by design."
+}

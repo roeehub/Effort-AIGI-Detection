@@ -1,0 +1,36 @@
+Validation Summary Report for: td_teams_capture_test_cam_dev_e2b_top_n_step3200
+Run Name: TargetDomain teams_capture_test_cam_dev E2B_TOP_N_STEP3200
+Generated on: 2026-05-06 15:30:10
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 220
+Accuracy: 1.0000
+True Positives (Correctly identified Fake): 220
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_test_cam_s53 (FAKE) -----
+Total Videos: 90
+Accuracy: 1.0000 (90/90 correct)
+
+----- Method: teams_capture_test_cam_s73 (FAKE) -----
+Total Videos: 55
+Accuracy: 1.0000 (55/55 correct)
+
+----- Method: teams_capture_test_cam_s76 (FAKE) -----
+Total Videos: 75
+Accuracy: 1.0000 (75/75 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=220, acc=1.0000, tpr=1.0000, fpr=0.0000, fnr=0.0000
+
+Best-group accuracy: unknown_fake = 1.0000
+Worst-group accuracy: unknown_fake = 1.0000
+Best-vs-worst group accuracy gap: 0.0000

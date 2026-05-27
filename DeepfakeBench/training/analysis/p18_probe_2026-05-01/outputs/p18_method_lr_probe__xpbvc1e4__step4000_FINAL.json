@@ -1,0 +1,17 @@
+{
+  "label": "xpbvc1e4__step4000_FINAL",
+  "arm": "treatment",
+  "macro_ovr_auc": 0.9953779402465385,
+  "per_bucket_auc": {
+    "2": 0.9999542532994807,
+    "3": 0.9927349673778875,
+    "11": 0.9934446000622472
+  },
+  "bucket_counts": {
+    "11": 476,
+    "3": 265,
+    "2": 59
+  },
+  "p8a_baseline_method_lr_auc": 0.912,
+  "p8a_smoke_gate_baseline": 0.998
+}

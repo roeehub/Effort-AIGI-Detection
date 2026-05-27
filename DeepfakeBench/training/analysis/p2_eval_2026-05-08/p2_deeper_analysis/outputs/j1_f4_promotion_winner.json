@@ -1,0 +1,11 @@
+{
+  "ckpt": "p2_c_pairrank_periodic_step3000",
+  "f4_selected_tau": 0.9708042474097314,
+  "f4_primary_fpr": 0.0006548788474132286,
+  "f4_stress_fpr": 0.0012360939431396785,
+  "f4_fake_macro_recall": 0.3066035926432423,
+  "f4_meets_floor": true,
+  "f4_lockbox_real_fpr": 0.018925056775170326,
+  "f4_lockbox_fake_recall": 0.01647058823529412,
+  "rank": 1
+}

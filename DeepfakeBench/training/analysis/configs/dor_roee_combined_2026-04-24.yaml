@@ -1,0 +1,88 @@
+# Multi-pair fingerprint diff on the 2026-04-24 Dor+Roee combined session.
+#
+# Pool strategy:
+#   - 6 tagged pools from combined_frame_tags.json
+#   - Per-frame scores carried through so we can correlate metrics with score
+#     at frame level (independent of pool-level means). Critical because
+#     scores can flip wildly on visually-similar consecutive frames.
+#
+# Pair strategy (mixing positive pairs + negative controls):
+#   A. dor_webcam_novb_failing  vs  dor_laptop_white_clean
+#        SAME person, SAME "clean lighting", NO virtual bg — only camera differs.
+#        Cleanest camera-isolation.
+#   B. dor_webcam_vb_failing    vs  dor_laptop_white_clean
+#        SAME person, SAME white lighting — camera + virtual bg differ.
+#   C. roee_mac_failing         vs  roee_windows_clean
+#        Cross-subject replicate: different person, different camera → same flag
+#        pattern?  Any metric consistent here + pair A is a cross-identity shortcut.
+#   D. dor_laptop_yellow_clean  vs  dor_laptop_white_clean   (NEGATIVE CONTROL)
+#        SAME camera, only lighting differs; both scored clean. Any metric that
+#        separates in A/B/C but NOT here is a true flag-signal; a metric that
+#        separates here too is confounded with benign lighting variation.
+#   E. dor_webcam_novb_failing  vs  dor_webcam_vb_failing   (NEGATIVE CONTROL)
+#        SAME camera, both failing; virtual-bg only differs. Tells us if the
+#        virtual bg itself perturbs the fingerprint.
+
+output_prefix: dor_roee_combined_2026-04-24
+seed: 42
+n_per_pool: 30
+separation_sigma: 1.0
+cache_dir: analysis/_fingerprint_cache_combined_2026-04-24
+
+pools:
+  dor_laptop_white_clean:
+    source: combined_frame_tags
+    manifest: /tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json
+    tag: dor-real-laptop-correct-no-virtual-bg-whiteish
+    base_gcs_prefix: gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+
+  dor_laptop_yellow_clean:
+    source: combined_frame_tags
+    manifest: /tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json
+    tag: dor-real-laptop-correct-no-virtual-bg-yellowish
+    base_gcs_prefix: gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+
+  dor_webcam_novb_failing:
+    source: combined_frame_tags
+    manifest: /tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json
+    tag: dor-real-webcam-false-flag-no-virtual-bg
+    base_gcs_prefix: gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+
+  dor_webcam_vb_failing:
+    source: combined_frame_tags
+    manifest: /tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json
+    tag: dor-real-webcam-false-flag
+    base_gcs_prefix: gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+
+  roee_mac_failing:
+    source: combined_frame_tags
+    manifest: /tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json
+    tag: roee-mac-laptop-false-flag-virtual-bg
+    base_gcs_prefix: gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+
+  roee_windows_clean:
+    source: combined_frame_tags
+    manifest: /tmp/dor_roee_combined_2026-04-24/combined_frame_tags.json
+    tag: roee-real-windows-laptop-correct
+    base_gcs_prefix: gs://real-teams-dor-roee/session_20260424_combined_tags_121458_121007/
+
+pairs:
+  - name: A_dor_webcam_novb_vs_laptop_white
+    failing: dor_webcam_novb_failing
+    clean: dor_laptop_white_clean
+
+  - name: B_dor_webcam_vb_vs_laptop_white
+    failing: dor_webcam_vb_failing
+    clean: dor_laptop_white_clean
+
+  - name: C_roee_mac_vs_windows
+    failing: roee_mac_failing
+    clean: roee_windows_clean
+
+  - name: D_neg_control_dor_laptop_yellow_vs_white
+    failing: dor_laptop_yellow_clean
+    clean: dor_laptop_white_clean
+
+  - name: E_neg_control_dor_webcam_novb_vs_vb
+    failing: dor_webcam_novb_failing
+    clean: dor_webcam_vb_failing

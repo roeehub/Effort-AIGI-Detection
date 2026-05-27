@@ -1,0 +1,13 @@
+# Default per-suite metadata. CKPT-level config in ckpts.yaml overrides
+# label_class if supplied there. This file is informational; the simulator
+# reads label_class from ckpts.yaml entries.
+
+suites:
+  teams_real_all_dev: {label_class: real}
+  teams_real_all_lockbox: {label_class: real}
+  teams_real_dor_dev: {label_class: real}
+  teams_real_poor_quality_dev: {label_class: real}
+  teams_real_lighting_extreme_dev: {label_class: real}
+  teams_fake_all_dev: {label_class: fake}
+  teams_fake_all_lockbox: {label_class: fake}
+  deeplive_enhanced_dev: {label_class: fake}

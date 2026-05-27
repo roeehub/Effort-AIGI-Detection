@@ -1,0 +1,22 @@
+# Promotion-contract validation map for E2 (run rmat8lwx)
+#
+# Auto-generated 2026-05-03 by arena/build_e_packet_checkpoint_map.py.
+# Includes P8A_REFERENCE_STEP5000 baseline for direct comparison.
+# 
+# Packet context (per yaml R13_E2_*.yaml):
+#   - E1: B16 FT-from-P8A + heavier eval-targeted aug curriculum
+#   - E2: B16 SCRATCH from CLIP + same eval-targeted aug
+#   - E3: L14 SCRATCH from CLIP + same eval-targeted aug
+# Falsifier targets per yaml: viso recall at joint dev+lockbox FPR=10% > 35%
+#
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_STEP3000:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/periodic_effort_20260503_step3000_auc0.9736_eer0.1008.pth"
+E2B_STEP6000:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/periodic_effort_20260503_step6000_auc0.9917_eer0.0233.pth"
+E2B_FIRST_BEST_EP1:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/first_best_effort_20260503_ep1_auc0.6958_eer0.3566.pth"
+E2B_TOP_N_STEP3200:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+E2B_TOP_N_STEP3400:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3400_auc0.9916_eer0.0207.pth"
+E2B_TOP_N_STEP4400:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step4400_auc0.9924_eer0.0258.pth"
+E2B_TOP_N_STEP6400:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step6400_auc0.9933_eer0.0207.pth"
+E2B_TOP_N_STEP6800:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step6800_auc0.9936_eer0.0155.pth"
+E2B_TOP_N_STEP7400:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step7400_auc0.9944_eer0.0155.pth"
+E2B_VALUE_COMPOSITE_STEP200:    "gs://training-job-outputs/best_checkpoints/rmat8lwx/value_composite_effort_20260503_step200_auc0.6958_eer0.3566.pth"

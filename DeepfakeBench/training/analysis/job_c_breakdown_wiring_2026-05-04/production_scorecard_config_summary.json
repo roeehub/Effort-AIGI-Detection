@@ -1,0 +1,42 @@
+{
+  "audit_date": "2026-05-04",
+  "active_production_suite_yamls": [
+    {
+      "path": "arena/target_domain_suites.teams_promotion_contract_2026-04-17.yaml",
+      "role": "hardcoded default in arena/launch_teams_promotion_contract.sh (line 27) and arena/run_teams_promotion_contract.sh (line 32)",
+      "manifest_referenced": "arena/manifests/teams_target_domain_manifest_2026-04-06_frozen.json",
+      "n_suites": 8,
+      "schema_top_level_keys": [
+        "suites"
+      ],
+      "is_actively_used": "stale default; superseded by 2026-04-23_with_dor.yaml in current operational launches"
+    },
+    {
+      "path": "arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml",
+      "role": "current operational suite manifest; passed via --suite-manifest in HANDOFF.md launches and PSERIES_FACTS_2026-05-02 runs",
+      "manifest_referenced": "arena/manifests/teams_target_domain_manifest_2026-04-23_with_dor.json",
+      "n_suites": 9,
+      "extra_suite_vs_2026_04_17": "teams_real_dor_dev",
+      "schema_top_level_keys": [
+        "suites"
+      ],
+      "is_actively_used": "yes; per HANDOFF.md, PSERIES_FACTS_2026-05-02.md, MEASUREMENTS_2026-05-02_P18.md"
+    }
+  ],
+  "loader_implementation": {
+    "module": "arena/run_target_domain_validation_sequential.py",
+    "fn": "_load_suites + _parse_simple_suite_manifest_yaml",
+    "behavior": "ignores all top-level keys other than 'suites'; per-suite extra keys (e.g., external_real_method/external_fake_method) are accepted and used as method-hint fields"
+  },
+  "promotion_contract_role_arguments": [
+    "--promotion_dev_real_suite",
+    "--promotion_dev_real_stress_suites",
+    "--promotion_dev_fake_suites",
+    "--promotion_lockbox_real_suite",
+    "--promotion_lockbox_fake_suite",
+    "--promotion_readout_only_suites"
+  ],
+  "schema_version": "implicit v1 (no version field in any yaml)",
+  "schema_compat_breakdown_vs_production": "compatible: same per-suite key set; runner ignores breakdown's extra top-level keys (generated_from_manifest, real_splits, fake_splits, include_*); runner accepts external_real_method/external_fake_method as optional",
+  "manifest_path_caveat": "breakdown yaml hardcodes manifests/teams_target_domain_manifest_2026-04-06_frozen.json; production has migrated to manifests/teams_target_domain_manifest_2026-04-23_with_dor.json. Migration is required before merging \u2014 every external_*_manifest path must be updated. Slice contents are identical across the two manifests for all 24 named slices; the only difference is +dor identity (verified via summary.slice_counts presence check)."
+}

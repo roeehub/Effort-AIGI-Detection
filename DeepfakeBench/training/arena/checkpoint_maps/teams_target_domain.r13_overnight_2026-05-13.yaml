@@ -1,0 +1,77 @@
+# =============================================================================
+# Promotion-contract validation map — R13 overnight batch (2026-05-13)
+#
+# 4 GPU runs launched 2026-05-13 00:30 UTC; all SUCCEEDED by 07:37 UTC.
+#
+#   Slot 1 (gf6l06rf) — R13_LORA_L10_L11
+#                       LoRA rank=16 alpha=32 on resblocks 10-11, frozen P8A
+#                       base. Tests "is FT-itself the binding constraint?"
+#                       Stage-2 dor-cluster regression hypothesis.
+#   Slot 2 (912kd88q) — R13_LORA_T5C_L10_L11
+#                       Same LoRA recipe as Slot 1 but T5C_step3500 base.
+#                       A/B partner; tests base-dependence of LoRA lever.
+#   Slot 3 (502dcznh) — R13_SLOT3_T5C_PLUS_JITTER030
+#                       T5C_step3500 base + face_scale_jitter @ scale_limit=0.30.
+#                       Tests face-size invariance at lower magnitude than the
+#                       T6/T7 jitter@0.50 that regressed dev_macro <0.30 floor.
+#   Slot 4 (qrpf5dtr) — R13_SLOT4_B16_SCRATCH_FOURIER
+#                       B16-scratch + fourier_band_aug (bands 8-13 randomize,
+#                       5-6 preserve, phase preserved). Structurally non-FT-
+#                       inheriting probe of whether the chronic-6 IQ-direction
+#                       drift (D6: 5-11° vs CLIP-frozen baseline) is FT-induced
+#                       or representation-fundamental.
+#
+# CKPT SELECTION (3 per run, 12 candidates + 3 anchors = 15 ckpts):
+# Pruned via AUC-progression heuristics per
+# project_train_auc_not_valid_promotion_signal (late high-AUC ckpts may
+# have re-saturated the shortcut; mid-training ckpts often outperform AUC
+# peaks at deployment).
+#
+# Slot 1 LoRA-P8A (gf6l06rf, 5000 steps):
+#   step1500       AUC 0.9906 — early operating point
+#   step3500       AUC 0.9917 — mid operating point
+#   top_n_step2000 AUC 0.9929 — peak (cap of top_n)
+#
+# Slot 2 LoRA-T5C (912kd88q, 3500 steps, LoRA fast):
+#   step1500       AUC 0.9941 EER 0.0198 — peak (also top_n)
+#   step2500       AUC 0.9926 EER 0.0377 — diagnostic dip
+#   step3500       AUC 0.9931 EER 0.0179 — final operating
+#
+# Slot 3 T5C+jitter@0.30 (502dcznh, 5000 steps):
+#   step1500       AUC 0.9872 — early
+#   step3500       AUC 0.9900 — operating
+#   top_n_step4500 AUC 0.9923 — peak
+#
+# Slot 4 B16-scratch+Fourier (qrpf5dtr, 10000+ steps):
+#   step5000       AUC 0.9833 — mid-trajectory
+#   step6000       AUC 0.9897 — post-saturation jump
+#   top_n_step10000 AUC 0.9902 — latest peak
+#
+# Anchors:
+#   P8A_REFERENCE_STEP5000     — production anchor (rank-1 on v3-fix).
+#   E2B_TOP_N_STEP3200         — currently deployed.
+#   T5C_PERIODIC_STEP3500      — last week's rank-3 (1.7× P8A lockbox fake recall).
+#
+# Policy: standing v3-fix (recall floor 0.30, real_fpr 0.07, stress_fpr 0.10).
+# Suite manifest: target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml
+# =============================================================================
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:            "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+
+SLOT1_LORA_P8A_PERIODIC_STEP1500:  "gs://training-job-outputs/best_checkpoints/gf6l06rf/periodic_effort_20260513_step1500_auc0.9906_eer0.0229.pth"
+SLOT1_LORA_P8A_PERIODIC_STEP3500:  "gs://training-job-outputs/best_checkpoints/gf6l06rf/periodic_effort_20260513_step3500_auc0.9917_eer0.0229.pth"
+SLOT1_LORA_P8A_TOP_N_STEP2000:     "gs://training-job-outputs/best_checkpoints/gf6l06rf/top_n_effort_20260513_step2000_auc0.9929_eer0.0229.pth"
+
+SLOT2_LORA_T5C_PERIODIC_STEP1500:  "gs://training-job-outputs/best_checkpoints/912kd88q/periodic_effort_20260513_step1500_auc0.9941_eer0.0198.pth"
+SLOT2_LORA_T5C_PERIODIC_STEP2500:  "gs://training-job-outputs/best_checkpoints/912kd88q/periodic_effort_20260513_step2500_auc0.9926_eer0.0377.pth"
+SLOT2_LORA_T5C_PERIODIC_STEP3500:  "gs://training-job-outputs/best_checkpoints/912kd88q/periodic_effort_20260513_step3500_auc0.9931_eer0.0179.pth"
+
+SLOT3_T5C_JITTER030_PERIODIC_STEP1500: "gs://training-job-outputs/best_checkpoints/502dcznh/periodic_effort_20260513_step1500_auc0.9872_eer0.0325.pth"
+SLOT3_T5C_JITTER030_PERIODIC_STEP3500: "gs://training-job-outputs/best_checkpoints/502dcznh/periodic_effort_20260513_step3500_auc0.9900_eer0.0282.pth"
+SLOT3_T5C_JITTER030_TOP_N_STEP4500:    "gs://training-job-outputs/best_checkpoints/502dcznh/top_n_effort_20260513_step4500_auc0.9923_eer0.0304.pth"
+
+SLOT4_B16SC_FOURIER_PERIODIC_STEP5000: "gs://training-job-outputs/best_checkpoints/qrpf5dtr/periodic_effort_20260513_step5000_auc0.9833_eer0.0388.pth"
+SLOT4_B16SC_FOURIER_PERIODIC_STEP6000: "gs://training-job-outputs/best_checkpoints/qrpf5dtr/periodic_effort_20260513_step6000_auc0.9897_eer0.0237.pth"
+SLOT4_B16SC_FOURIER_TOP_N_STEP10000:   "gs://training-job-outputs/best_checkpoints/qrpf5dtr/top_n_effort_20260513_step10000_auc0.9902_eer0.0259.pth"

@@ -1,0 +1,82 @@
+[
+  {
+    "ckpt": "P8A",
+    "layer": 3,
+    "within_dev_AUC": 0.9390421620905507,
+    "within_dev_rec@fpr_0.05": 0.555956678700361,
+    "within_lb_AUC": 0.972872340425532,
+    "within_lb_rec@fpr_0.05": 0.9787234042553191,
+    "transfer_dev_to_lb_AUC": 0.9494680851063829,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.9148936170212766
+  },
+  {
+    "ckpt": "P8A",
+    "layer": 6,
+    "within_dev_AUC": 0.994419236246812,
+    "within_dev_rec@fpr_0.05": 0.9819494584837545,
+    "within_lb_AUC": 0.9968085106382978,
+    "within_lb_rec@fpr_0.05": 1.0,
+    "transfer_dev_to_lb_AUC": 0.3872340425531915,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.1276595744680851
+  },
+  {
+    "ckpt": "P8A",
+    "layer": 9,
+    "within_dev_AUC": 0.986660815420793,
+    "within_dev_rec@fpr_0.05": 0.9205776173285198,
+    "within_lb_AUC": 0.9973404255319149,
+    "within_lb_rec@fpr_0.05": 0.9787234042553191,
+    "transfer_dev_to_lb_AUC": 0.40053191489361706,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.1276595744680851
+  },
+  {
+    "ckpt": "P8A",
+    "layer": 11,
+    "within_dev_AUC": 0.9827526247805782,
+    "within_dev_rec@fpr_0.05": 0.8772563176895307,
+    "within_lb_AUC": 0.9356382978723404,
+    "within_lb_rec@fpr_0.05": 0.6382978723404256,
+    "transfer_dev_to_lb_AUC": 0.6595744680851063,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.3404255319148936
+  },
+  {
+    "ckpt": "MCLIOEXB",
+    "layer": 3,
+    "within_dev_AUC": 0.9392408836485278,
+    "within_dev_rec@fpr_0.05": 0.5740072202166066,
+    "within_lb_AUC": 0.9696808510638298,
+    "within_lb_rec@fpr_0.05": 0.9787234042553191,
+    "transfer_dev_to_lb_AUC": 0.9409574468085108,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.8723404255319149
+  },
+  {
+    "ckpt": "MCLIOEXB",
+    "layer": 6,
+    "within_dev_AUC": 0.9951810022190574,
+    "within_dev_rec@fpr_0.05": 0.9783393501805054,
+    "within_lb_AUC": 0.9946808510638299,
+    "within_lb_rec@fpr_0.05": 0.9574468085106383,
+    "transfer_dev_to_lb_AUC": 0.3563829787234042,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.1276595744680851
+  },
+  {
+    "ckpt": "MCLIOEXB",
+    "layer": 9,
+    "within_dev_AUC": 0.9917944556685325,
+    "within_dev_rec@fpr_0.05": 0.9350180505415162,
+    "within_lb_AUC": 0.9925531914893617,
+    "within_lb_rec@fpr_0.05": 0.9574468085106383,
+    "transfer_dev_to_lb_AUC": 0.400531914893617,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.10638297872340426
+  },
+  {
+    "ckpt": "MCLIOEXB",
+    "layer": 11,
+    "within_dev_AUC": 0.9874391415228696,
+    "within_dev_rec@fpr_0.05": 0.8989169675090253,
+    "within_lb_AUC": 0.9436170212765956,
+    "within_lb_rec@fpr_0.05": 0.574468085106383,
+    "transfer_dev_to_lb_AUC": 0.5893617021276596,
+    "transfer_dev_to_lb_rec@fpr_0.05": 0.2978723404255319
+  }
+]

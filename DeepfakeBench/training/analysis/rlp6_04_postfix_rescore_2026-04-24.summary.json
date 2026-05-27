@@ -1,0 +1,85 @@
+{
+  "run_generated_at": "2026-04-24T12:22:24Z",
+  "checkpoint": "gs://training-job-outputs/phase2r13_experiments/h2pdu6i5/value_composite_effort_20260424_step23500_auc0.9942_eer0.0169.pth",
+  "n_frames_total": 180,
+  "device": "cpu",
+  "pools": [
+    {
+      "pool": "dor-real-laptop-correct-no-virtual-bg-whiteish",
+      "n_frames": 30,
+      "pre_fix_mean": 0.018,
+      "post_fix_mean": 0.012597115151584149,
+      "delta_post_minus_pre": -0.00540288484841585,
+      "std": 0.010186529128528504,
+      "min": 0.004844287410378456,
+      "max": 0.04509817063808441,
+      "frac_gt_0_9": 0.0,
+      "frac_lt_0_1": 1.0
+    },
+    {
+      "pool": "dor-real-laptop-correct-no-virtual-bg-yellowish",
+      "n_frames": 30,
+      "pre_fix_mean": 0.04,
+      "post_fix_mean": 0.014436461481576164,
+      "delta_post_minus_pre": -0.025563538518423835,
+      "std": 0.014722294062391523,
+      "min": 0.005589108914136887,
+      "max": 0.06919218599796295,
+      "frac_gt_0_9": 0.0,
+      "frac_lt_0_1": 1.0
+    },
+    {
+      "pool": "roee-real-windows-laptop-correct",
+      "n_frames": 30,
+      "pre_fix_mean": 0.007,
+      "post_fix_mean": 0.006001271059115728,
+      "delta_post_minus_pre": -0.0009987289408842723,
+      "std": 0.0018665078352968587,
+      "min": 0.0048253233544528484,
+      "max": 0.015438476577401161,
+      "frac_gt_0_9": 0.0,
+      "frac_lt_0_1": 1.0
+    },
+    {
+      "pool": "dor-real-webcam-false-flag",
+      "n_frames": 30,
+      "pre_fix_mean": 0.878,
+      "post_fix_mean": 0.9640364785989125,
+      "delta_post_minus_pre": 0.0860364785989125,
+      "std": 0.034099482535815684,
+      "min": 0.8599348068237305,
+      "max": 0.992254376411438,
+      "frac_gt_0_9": 0.9333333333333333,
+      "frac_lt_0_1": 0.0
+    },
+    {
+      "pool": "dor-real-webcam-false-flag-no-virtual-bg",
+      "n_frames": 30,
+      "pre_fix_mean": 0.94,
+      "post_fix_mean": 0.9316849172115326,
+      "delta_post_minus_pre": -0.008315082788467376,
+      "std": 0.09036851972554916,
+      "min": 0.5989141464233398,
+      "max": 0.9941603541374207,
+      "frac_gt_0_9": 0.8,
+      "frac_lt_0_1": 0.0
+    },
+    {
+      "pool": "roee-mac-laptop-false-flag-virtual-bg",
+      "n_frames": 30,
+      "pre_fix_mean": 0.9,
+      "post_fix_mean": 0.7514556576808293,
+      "delta_post_minus_pre": -0.14854434231917069,
+      "std": 0.21249618583118382,
+      "min": 0.35565927624702454,
+      "max": 0.9883825182914734,
+      "frac_gt_0_9": 0.3,
+      "frac_lt_0_1": 0.0
+    }
+  ],
+  "decision_tree": {
+    "anchor_pool": "dor-real-webcam-false-flag-no-virtual-bg",
+    "anchor_delta": -0.008315082788467376,
+    "verdict": "fully_structural__launch_full_subset"
+  }
+}

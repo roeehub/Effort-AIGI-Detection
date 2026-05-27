@@ -1,0 +1,58 @@
+# =============================================================================
+# Promotion-contract scorecard map — auto-mode 2026-05-16
+#
+# Two FT-from-T5C-step3500 packets launched 2026-05-16 evening under auto mode:
+#
+#   Slot A (R13_T5C_ANCHOR_AWARE_2026-05-16): T5C step3500 base + anchor_aware
+#                       penalty enabled (weight=5.0, target=0.10, samples=16,
+#                       pool=dor-real-webcam-false-flag-no-virtual-bg).
+#                       us-east1, seed 9913. Tests training-time anchoring of
+#                       the encoder boundary away from the chronic-FP region.
+#
+#   Slot B (R13_T5C_REAL_REBALANCE_2026-05-16): T5C step3500 base +
+#                       family_weight rebalance (realpool_real 1.5→5.0,
+#                       external_real 2.0→6.0, df40_real 0.5→0.25).
+#                       us-west4, seed 9914. Tests data-composition lever —
+#                       boosting non-df40 identity-diverse real pools to
+#                       populate the 6+ band region (per RESULTS_FACTS_v3,v4).
+#
+# MOTIVATION (FACTS):
+#   Encoder probe 2026-05-16 (analysis/slot_b_property_shortcut_2026-05-16/
+#   RESULTS_FACTS_v5_ENCODER_PROBE) showed:
+#     - Vanilla OpenCLIP ViT-B-16 separates Roy_D from ilan/orel at AUC 1.0
+#       (PC1 = -3.5 vs +7.1, +7.3) — the encoder ALREADY has the axis.
+#     - Training data has 0 reals at n_bands ≥ 6 (per v4) — Roy_D-region is
+#       unanchored.
+#     - Hand-crafted compositional augmentation moves frames into the 6+
+#       band region but does NOT move them in encoder embedding space toward
+#       Roy_D (only 30% closer vs 24% baseline — not enough anchoring).
+#
+#   Two distinct levers therefore tested:
+#     A: training-time penalty supervision on the actual chronic-FP frames
+#     B: training-data composition that puts more diverse real-label frames
+#        in encoder regions adjacent to chronic-FPs
+#
+# CKPT SELECTION (5 ckpts total):
+#   - Slot A step3500: terminal, the main contract test
+#   - Slot A step1500: mid-trajectory sanity check (potential overfit)
+#   - Slot B step3500: terminal
+#   - Slot B step1500: mid-trajectory sanity check
+#   - Anchors: P8A_REFERENCE_STEP5000, T5C_PERIODIC_STEP3500
+#
+# Suite manifest: minimal 9-suite at
+#   arena/target_domain_suites.teams_promotion_contract_minimal_9suite_2026-05-14.yaml
+# Cell count: 6 × 9 = 54 cells.
+# Policy: standing v3-fix (target_real_fpr=0.07, target_stress_fpr=0.10,
+#         target_fake_recall_min=0.30).
+# =============================================================================
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+
+# PLACEHOLDERS — will be filled in after jobs start and run IDs are known.
+# Filled by analysis/auto_mode_2026-05-16/fill_ckpt_paths.py once W&B run IDs
+# and final periodic ckpt paths are available.
+SLOT_A_ANCHOR_AWARE_STEP1500:  "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step1500_auc0.9950_eer0.0165.pth"
+SLOT_A_ANCHOR_AWARE_STEP3500:  "gs://training-job-outputs/best_checkpoints/hp35c51p/periodic_effort_20260516_step3500_auc0.9952_eer0.0123.pth"
+SLOT_B_REAL_REBAL_STEP1500:    "gs://training-job-outputs/best_checkpoints/iw2kk1h0/periodic_effort_20260516_step1500_auc0.9939_eer0.0204.pth"
+SLOT_B_REAL_REBAL_STEP3500:    "gs://training-job-outputs/best_checkpoints/iw2kk1h0/periodic_effort_20260516_step3500_auc0.9953_eer0.0143.pth"

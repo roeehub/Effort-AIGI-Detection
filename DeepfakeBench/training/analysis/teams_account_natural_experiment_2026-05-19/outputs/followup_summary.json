@@ -1,0 +1,18 @@
+{
+  "baselines": {
+    "T5C_STEP3500": {
+      "Roy_D": 0.7952109575271606,
+      "Guest": 0.6275060772895813
+    },
+    "SLOT_B_6AXIS_GRL": {
+      "Roy_D": 0.8132284879684448,
+      "Guest": 0.6097336411476135
+    }
+  },
+  "clip_cosines": {
+    "L11_cls": null,
+    "L23_cls": null,
+    "projection_head": null
+  },
+  "arcface_cosine": 0.9203445911407471
+}

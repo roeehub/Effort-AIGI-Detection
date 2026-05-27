@@ -1,0 +1,36 @@
+# Promotion-contract validation map for S1 + S2 packets (2026-05-02 evening).
+#
+# Run context:
+# - S1 (R13_S1_P22_REDUX_SHORT, run padjfsoq, us-west4): 1000-step cap, s_end=8,
+#   FT from P8A_step5000.
+# - S2 (R13_S2_P22_EARLIER_BASE, run evm4y66r, us-east1): 1000-step cap, s_end=8,
+#   FT from P8A_step2500.
+#
+# Selected ckpts per Probe 1 output (class_separation peak):
+#
+# S2 (run evm4y66r, COMPLETED at 22:32 UTC, picked from probe1 output JSON):
+#   - step 200: class_sep 4.89 (peak)
+#   - step 300: class_sep 4.67
+#   - step 600: class_sep 3.92 (val_AUC-comparable region)
+#
+# S1 (run padjfsoq, IN-PROGRESS — placeholders):
+#   - 3 ckpts will be selected post-completion via Probe 1
+#
+# Plus baseline references:
+#   - P8A_REFERENCE_STEP5000 (control)
+#   - P22_AUG_STEP1000 (informative comparison — best P22 ckpt under joint cal)
+
+P8A_REFERENCE_STEP5000:    "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+P22_AUG_STEP1000:          "gs://training-job-outputs/phase2r13_experiments/dot1buye/periodic_effort_20260502_step1000_auc0.9903_eer0.0282.pth"
+
+S2_EARLIER_BASE_STEP200:   "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step200_auc0.9853_eer0.0412.pth"
+S2_EARLIER_BASE_STEP300:   "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step300_auc0.9818_eer0.0593.pth"
+S2_EARLIER_BASE_STEP600:   "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step600_auc0.9867_eer0.0361.pth"
+
+# S1 ckpts selected by Probe 1 (class_separation top-3):
+#   step 600: class_sep 3.91 (peak — just below F-A threshold of 4.0)
+#   step 100: class_sep 3.89 (early-training; informative comparison)
+#   step 400: class_sep 3.58 (mid-training)
+S1_REDUX_SHORT_STEP600:    "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step600_auc0.9867_eer0.0447.pth"
+S1_REDUX_SHORT_STEP100:    "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step100_auc0.9860_eer0.0395.pth"
+S1_REDUX_SHORT_STEP400:    "gs://training-job-outputs/phase2r13_experiments/padjfsoq/periodic_effort_20260502_step400_auc0.9853_eer0.0395.pth"

@@ -1,0 +1,296 @@
+{
+  "metadata": {
+    "checkpoint": "value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth",
+    "checkpoint_alias": "P8A_REFERENCE_STEP5000",
+    "substrate": "v3-retag (production-tight crop, RFA=0.85)",
+    "substrate_source": "analysis/eval_substrate_v3_retag_2026-05-01/outputs/eval_substrate_v3_retag.parquet",
+    "n_lockbox_frames": 839,
+    "n_lockbox_frames_modern_v2": 648,
+    "contract_target_real_fpr": 0.07,
+    "contract_recall_floor_default": 0.7,
+    "contract_recall_floor_relaxed": 0.3,
+    "pareto_recall_targets": [
+      0.2,
+      0.3,
+      0.5,
+      0.7
+    ],
+    "selection_caveat": "Frame-level analog. Canonical scorer uses VIDEO-level avg_video_prob and selects tau on DEV pool; this analog uses lockbox frames as both selection and readout (no held-out dev within v3 substrate). The asis-vs-prod delta is the load-bearing signal; absolute numbers are not directly comparable to canonical video-level scorecards."
+  },
+  "canonical_p8a_reference_video_level": {
+    "source": "analysis/policy_reruns_2026-04-29_floor_0p70/promotion_contract.json",
+    "checkpoint_key": "P8A_REFERENCE_STEP5000",
+    "selected_threshold": 0.915605,
+    "lockbox_real_fpr_video_level": 0.018369,
+    "lockbox_fake_recall_video_level": 0.387352,
+    "dev_fake_macro_recall": 0.30028,
+    "lockbox_real_n_videos": 1361,
+    "lockbox_fake_n_videos": 253
+  },
+  "scorecards": {
+    "asis_full": {
+      "arm_name": "asis_full",
+      "score_col": "prob_fake_asis",
+      "n_real": 414,
+      "n_fake": 425,
+      "selection_default_floor_0.70": {
+        "selected_threshold": 0.9524008631706238,
+        "selected_real_fpr": 0.06280193236714976,
+        "selected_fake_recall": 0.40705882352941175,
+        "selected_tier": 1,
+        "selected_meets_recall_floor": false,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 836,
+        "n_tier0_candidates": 0,
+        "n_tier1_candidates": 197
+      },
+      "selection_relaxed_floor_0.30": {
+        "selected_threshold": 0.9524008631706238,
+        "selected_real_fpr": 0.06280193236714976,
+        "selected_fake_recall": 0.40705882352941175,
+        "selected_tier": 0,
+        "selected_meets_recall_floor": true,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 836,
+        "n_tier0_candidates": 59,
+        "n_tier1_candidates": 138
+      },
+      "pareto_at_recall_targets": [
+        {
+          "target_recall": 0.2,
+          "achievable": true,
+          "min_fpr": 0.007246376811594203,
+          "threshold_at_min_fpr": 0.9932438731193542,
+          "actual_recall": 0.2
+        },
+        {
+          "target_recall": 0.3,
+          "achievable": true,
+          "min_fpr": 0.036231884057971016,
+          "threshold_at_min_fpr": 0.9840038418769836,
+          "actual_recall": 0.30117647058823527
+        },
+        {
+          "target_recall": 0.5,
+          "achievable": true,
+          "min_fpr": 0.11352657004830918,
+          "threshold_at_min_fpr": 0.8570090532302856,
+          "actual_recall": 0.5011764705882353
+        },
+        {
+          "target_recall": 0.7,
+          "achievable": true,
+          "min_fpr": 0.21980676328502416,
+          "threshold_at_min_fpr": 0.49760702252388,
+          "actual_recall": 0.7011764705882353
+        }
+      ],
+      "grid_summary": {
+        "n_grid_points": 836,
+        "min_fpr": 0.0,
+        "max_fpr": 1.0,
+        "min_recall": 0.0,
+        "max_recall": 1.0
+      },
+      "subset": "full"
+    },
+    "prod_full": {
+      "arm_name": "prod_full",
+      "score_col": "prob_fake_prod",
+      "n_real": 414,
+      "n_fake": 425,
+      "selection_default_floor_0.70": {
+        "selected_threshold": 0.9944838881492615,
+        "selected_real_fpr": 0.06763285024154589,
+        "selected_fake_recall": 0.11058823529411765,
+        "selected_tier": 1,
+        "selected_meets_recall_floor": false,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 835,
+        "n_tier0_candidates": 0,
+        "n_tier1_candidates": 71
+      },
+      "selection_relaxed_floor_0.30": {
+        "selected_threshold": 0.9944838881492615,
+        "selected_real_fpr": 0.06763285024154589,
+        "selected_fake_recall": 0.11058823529411765,
+        "selected_tier": 1,
+        "selected_meets_recall_floor": false,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 835,
+        "n_tier0_candidates": 0,
+        "n_tier1_candidates": 71
+      },
+      "pareto_at_recall_targets": [
+        {
+          "target_recall": 0.2,
+          "achievable": true,
+          "min_fpr": 0.15458937198067632,
+          "threshold_at_min_fpr": 0.9904378056526184,
+          "actual_recall": 0.2
+        },
+        {
+          "target_recall": 0.3,
+          "achievable": true,
+          "min_fpr": 0.178743961352657,
+          "threshold_at_min_fpr": 0.9651960730552673,
+          "actual_recall": 0.30117647058823527
+        },
+        {
+          "target_recall": 0.5,
+          "achievable": true,
+          "min_fpr": 0.30434782608695654,
+          "threshold_at_min_fpr": 0.7761166095733643,
+          "actual_recall": 0.5011764705882353
+        },
+        {
+          "target_recall": 0.7,
+          "achievable": true,
+          "min_fpr": 0.41545893719806765,
+          "threshold_at_min_fpr": 0.43632927536964417,
+          "actual_recall": 0.7011764705882353
+        }
+      ],
+      "grid_summary": {
+        "n_grid_points": 835,
+        "min_fpr": 0.0,
+        "max_fpr": 1.0,
+        "min_recall": 0.0,
+        "max_recall": 1.0
+      },
+      "subset": "full"
+    },
+    "asis_modern_v2": {
+      "arm_name": "asis_modern_v2",
+      "score_col": "prob_fake_asis",
+      "n_real": 281,
+      "n_fake": 367,
+      "selection_default_floor_0.70": {
+        "selected_threshold": 0.4451499879360199,
+        "selected_real_fpr": 0.06761565836298933,
+        "selected_fake_recall": 0.6784741144414169,
+        "selected_tier": 1,
+        "selected_meets_recall_floor": false,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 650,
+        "n_tier0_candidates": 0,
+        "n_tier1_candidates": 269
+      },
+      "selection_relaxed_floor_0.30": {
+        "selected_threshold": 0.4451499879360199,
+        "selected_real_fpr": 0.06761565836298933,
+        "selected_fake_recall": 0.6784741144414169,
+        "selected_tier": 0,
+        "selected_meets_recall_floor": true,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 650,
+        "n_tier0_candidates": 156,
+        "n_tier1_candidates": 113
+      },
+      "pareto_at_recall_targets": [
+        {
+          "target_recall": 0.2,
+          "achievable": true,
+          "min_fpr": 0.0071174377224199285,
+          "threshold_at_min_fpr": 0.9858253598213196,
+          "actual_recall": 0.2016348773841962
+        },
+        {
+          "target_recall": 0.3,
+          "achievable": true,
+          "min_fpr": 0.0071174377224199285,
+          "threshold_at_min_fpr": 0.9583871960639954,
+          "actual_recall": 0.3024523160762943
+        },
+        {
+          "target_recall": 0.5,
+          "achievable": true,
+          "min_fpr": 0.021352313167259787,
+          "threshold_at_min_fpr": 0.7729173898696899,
+          "actual_recall": 0.5013623978201635
+        },
+        {
+          "target_recall": 0.7,
+          "achievable": true,
+          "min_fpr": 0.0711743772241993,
+          "threshold_at_min_fpr": 0.3884933888912201,
+          "actual_recall": 0.7002724795640327
+        }
+      ],
+      "grid_summary": {
+        "n_grid_points": 650,
+        "min_fpr": 0.0,
+        "max_fpr": 1.0,
+        "min_recall": 0.0,
+        "max_recall": 1.0
+      },
+      "subset": "modern_v2"
+    },
+    "prod_modern_v2": {
+      "arm_name": "prod_modern_v2",
+      "score_col": "prob_fake_prod",
+      "n_real": 281,
+      "n_fake": 367,
+      "selection_default_floor_0.70": {
+        "selected_threshold": 0.9380097389221191,
+        "selected_real_fpr": 0.06761565836298933,
+        "selected_fake_recall": 0.26975476839237056,
+        "selected_tier": 1,
+        "selected_meets_recall_floor": false,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 649,
+        "n_tier0_candidates": 0,
+        "n_tier1_candidates": 118
+      },
+      "selection_relaxed_floor_0.30": {
+        "selected_threshold": 0.9380097389221191,
+        "selected_real_fpr": 0.06761565836298933,
+        "selected_fake_recall": 0.26975476839237056,
+        "selected_tier": 1,
+        "selected_meets_recall_floor": false,
+        "selected_meets_fpr_budget": true,
+        "n_grid_points": 649,
+        "n_tier0_candidates": 0,
+        "n_tier1_candidates": 118
+      },
+      "pareto_at_recall_targets": [
+        {
+          "target_recall": 0.2,
+          "achievable": true,
+          "min_fpr": 0.03914590747330961,
+          "threshold_at_min_fpr": 0.9684892296791077,
+          "actual_recall": 0.2016348773841962
+        },
+        {
+          "target_recall": 0.3,
+          "achievable": true,
+          "min_fpr": 0.08896797153024912,
+          "threshold_at_min_fpr": 0.9115375280380249,
+          "actual_recall": 0.3024523160762943
+        },
+        {
+          "target_recall": 0.5,
+          "achievable": true,
+          "min_fpr": 0.2206405693950178,
+          "threshold_at_min_fpr": 0.6580415964126587,
+          "actual_recall": 0.5013623978201635
+        },
+        {
+          "target_recall": 0.7,
+          "achievable": true,
+          "min_fpr": 0.33451957295373663,
+          "threshold_at_min_fpr": 0.35999956727027893,
+          "actual_recall": 0.7002724795640327
+        }
+      ],
+      "grid_summary": {
+        "n_grid_points": 649,
+        "min_fpr": 0.0,
+        "max_fpr": 1.0,
+        "min_recall": 0.0,
+        "max_recall": 1.0
+      },
+      "subset": "modern_v2"
+    }
+  }
+}

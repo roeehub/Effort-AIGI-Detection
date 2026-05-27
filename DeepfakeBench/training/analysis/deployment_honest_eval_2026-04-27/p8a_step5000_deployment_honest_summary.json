@@ -1,0 +1,17 @@
+{
+  "checkpoint": "P8A_step5000",
+  "n_dev_test_frames": 9446,
+  "n_production_frames": 180,
+  "tau_for_5pct_production_fpr": 0.9740786,
+  "tau_for_3pct_production_fpr": 0.97652799,
+  "production_fpr_at_tau_0.50": 0.3,
+  "production_fpr_at_tau_0.99": 0.005555555555555556,
+  "dev_recall_at_tau_5pct_per_method": {
+    "teams_passthrough": 0.5202078521939953,
+    "ALL": 0.5202078521939953
+  },
+  "dev_recall_at_tau_0.50_per_method": {
+    "teams_passthrough": 0.7560623556581986,
+    "ALL": 0.7560623556581986
+  }
+}

@@ -1,0 +1,146 @@
+# Per-checkpoint configuration for production-aggregation calibration framework.
+# Adding a new ckpt = add an entry here. Each entry maps suite_name -> CSV path.
+#
+# Suites are FRAME-LEVEL score reports with cols: method, label, video_id,
+# frame_path, frame_prob, group_key, family_key.
+#
+# label_class is "real" or "fake" — used to compute video-level recall vs FPR.
+
+ckpts:
+  e2b:
+    full_name: E2B_TOP_N_STEP3200
+    score_dir: analysis/cpu_followups_2026-05-04/raw_reports
+    team_sanity_csv: analysis/team_sanity_check_2026-05-05/scores/E2B_TOP_N_STEP3200.csv
+    suites:
+      teams_real_all_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_dev_e2b_top_n_step3200_frames_report.csv
+        label_class: real
+      teams_real_all_lockbox:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_lockbox_e2b_top_n_step3200_frames_report.csv
+        label_class: real
+      teams_real_dor_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_dor_dev_e2b_top_n_step3200_frames_report.csv
+        label_class: real
+      teams_real_poor_quality_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_poor_quality_dev_e2b_top_n_step3200_frames_report.csv
+        label_class: real
+      teams_real_lighting_extreme_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_lighting_extreme_dev_e2b_top_n_step3200_frames_report.csv
+        label_class: real
+      teams_fake_all_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_dev_e2b_top_n_step3200_frames_report.csv
+        label_class: fake
+      teams_fake_all_lockbox:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_lockbox_e2b_top_n_step3200_frames_report.csv
+        label_class: fake
+      deeplive_enhanced_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/deeplive_enhanced_dev_e2b_top_n_step3200_frames_report.csv
+        label_class: fake
+
+  p8a:
+    full_name: P8A_REFERENCE_STEP5000
+    score_dir: analysis/cpu_followups_2026-05-04/raw_reports
+    team_sanity_csv: analysis/team_sanity_check_2026-05-05/scores/P8A_REFERENCE_STEP5000.csv
+    suites:
+      teams_real_all_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_dev_p8a_reference_step5000_frames_report.csv
+        label_class: real
+      teams_real_all_lockbox:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_lockbox_p8a_reference_step5000_frames_report.csv
+        label_class: real
+      teams_real_dor_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_dor_dev_p8a_reference_step5000_frames_report.csv
+        label_class: real
+      teams_real_poor_quality_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_poor_quality_dev_p8a_reference_step5000_frames_report.csv
+        label_class: real
+      teams_real_lighting_extreme_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_lighting_extreme_dev_p8a_reference_step5000_frames_report.csv
+        label_class: real
+      teams_fake_all_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_dev_p8a_reference_step5000_frames_report.csv
+        label_class: fake
+      teams_fake_all_lockbox:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_lockbox_p8a_reference_step5000_frames_report.csv
+        label_class: fake
+      deeplive_enhanced_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/deeplive_enhanced_dev_p8a_reference_step5000_frames_report.csv
+        label_class: fake
+
+  e3:
+    full_name: E3_TOP_N_STEP6600
+    score_dir: analysis/cpu_followups_2026-05-04/raw_reports
+    team_sanity_csv: analysis/team_sanity_check_2026-05-05/scores/E3_TOP_N_STEP6600.csv
+    suites:
+      teams_real_all_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_dev_e3_top_n_step6600_frames_report.csv
+        label_class: real
+      teams_real_all_lockbox:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_all_lockbox_e3_top_n_step6600_frames_report.csv
+        label_class: real
+      teams_real_dor_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_dor_dev_e3_top_n_step6600_frames_report.csv
+        label_class: real
+      teams_real_poor_quality_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_poor_quality_dev_e3_top_n_step6600_frames_report.csv
+        label_class: real
+      teams_real_lighting_extreme_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_real_lighting_extreme_dev_e3_top_n_step6600_frames_report.csv
+        label_class: real
+      teams_fake_all_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_dev_e3_top_n_step6600_frames_report.csv
+        label_class: fake
+      teams_fake_all_lockbox:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/teams_fake_all_lockbox_e3_top_n_step6600_frames_report.csv
+        label_class: fake
+      deeplive_enhanced_dev:
+        csv: analysis/cpu_followups_2026-05-04/raw_reports/deeplive_enhanced_dev_e3_top_n_step6600_frames_report.csv
+        label_class: fake
+
+  pa_3800:
+    full_name: PA_TOP_N_STEP3800
+    score_dir: analysis/pa_pc_eval_2026-05-05/raw_reports
+    team_sanity_csv: analysis/team_sanity_check_2026-05-05/scores/PA_TOP_N_STEP3800.csv
+    # 2026-05-05: hard-substrate real suites added (dor_dev, poor_quality_dev,
+    # lighting_extreme_dev) — scored on the same cpu_followups frame substrate
+    # via analysis/pa_pc_eval_2026-05-05/scripts/score_pa_3800_hard_suites.py
+    # so PA_3800 now has the same 8-suite coverage as E2B/P8A/E3.
+    suites:
+      teams_real_all_dev:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_all_dev_pa_top_n_step3800_frames_report.csv
+        label_class: real
+      teams_real_all_lockbox:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_all_lockbox_pa_top_n_step3800_frames_report.csv
+        label_class: real
+      teams_real_dor_dev:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_dor_dev_pa_top_n_step3800_frames_report.csv
+        label_class: real
+      teams_real_poor_quality_dev:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_poor_quality_dev_pa_top_n_step3800_frames_report.csv
+        label_class: real
+      teams_real_lighting_extreme_dev:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_real_lighting_extreme_dev_pa_top_n_step3800_frames_report.csv
+        label_class: real
+      teams_fake_all_dev:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_fake_all_dev_pa_top_n_step3800_frames_report.csv
+        label_class: fake
+      teams_fake_all_lockbox:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/teams_fake_all_lockbox_pa_top_n_step3800_frames_report.csv
+        label_class: fake
+      deeplive_enhanced_dev:
+        csv: analysis/pa_pc_eval_2026-05-05/raw_reports/deeplive_enhanced_dev_pa_top_n_step3800_frames_report.csv
+        label_class: fake
+
+# Stratification parquet — Phase 5 cross-condition probe
+parquet:
+  path: analysis/lockbox_tagging/full_tags_2026-04-27.parquet
+  # Column to join on. The parquet has gcs_uri + blob_path; CSVs use frame_path
+  # which is gs://... — we'll attempt join on gcs_uri first, then on basename.
+  join_keys: [gcs_uri, blob_path, local_path]
+  strat_columns:
+    - clip_capture_mode
+    - face_area_quartile
+    - sharpness_quartile
+    - clip_lighting
+    - is_low_quality
+    - is_no_face

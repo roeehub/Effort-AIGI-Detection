@@ -1,0 +1,29 @@
+{
+  "probe_name": "FROZEN_PAIR_HEAD_PROBE_2026-05-06",
+  "verdict": "INSUFFICIENT_COVERAGE",
+  "n_pairs_covered_by_cache": 0,
+  "details": {
+    "n_unique_paired_frames_total": 5311,
+    "n_unique_paired_real_frames": 1812,
+    "n_unique_paired_fake_frames": 3499,
+    "cached_p8a_overlap_real": 131,
+    "cached_p8a_overlap_fake": 0,
+    "n_cross_product_pairs_audit": 37327,
+    "n_canonical_subjects_with_pairs": 11
+  },
+  "caches_inspected": {
+    "analysis/clip_vs_p8a_viso_2026-05-03/outputs/p8a__features.npz": "1100 frames, 131 reals overlap with paired identities, 0 fakes overlap",
+    "analysis/clip_vs_p8a_viso_2026-05-03/outputs/clip_b16_raw__features.npz": "identical frame_paths to p8a cache",
+    "analysis/_features_cache_2026-04-30/*.npz": "no frame_path stored, 31 caches across P8A/P18T/P18C/MCLIOEXB/SLOT2_GRL/SLOT3_JITTER, 800 valid_idx positional only, sampling_manifest.json not co-located locally"
+  },
+  "frame_path_in_cached_files": {
+    "clip_vs_p8a_viso_2026-05-03/p8a__features.npz": true,
+    "clip_vs_p8a_viso_2026-05-03/clip_b16_raw__features.npz": true,
+    "_features_cache_2026-04-30/*": false
+  },
+  "head_a_ce": null,
+  "head_b_pair_rank": null,
+  "head_c_pair_rank_groupweighted": null,
+  "head_side_signal_verdict": "INSUFFICIENT_COVERAGE",
+  "implication_for_p1": "Cannot rule head-side or encoder-side from cached features alone. Recommend a single fresh feature-extraction pass over the 5311 paired frames (~3 GPU-hours) before launching P1 encoder-FT, to localise the lever and avoid spending GPU-weeks on encoder-FT if a head-only retrain with pair-rank is sufficient. Blueprint in FINDINGS.md and run_probe.py."
+}

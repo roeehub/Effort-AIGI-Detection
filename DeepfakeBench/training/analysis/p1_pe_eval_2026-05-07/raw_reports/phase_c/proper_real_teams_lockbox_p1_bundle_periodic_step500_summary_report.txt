@@ -1,0 +1,28 @@
+Validation Summary Report for: td_proper_real_teams_lockbox_p1_bundle_periodic_step500
+Run Name: TargetDomain proper_real_teams_lockbox P1_BUNDLE_PERIODIC_STEP500
+Generated on: 2026-05-07 08:55:48
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 382
+Accuracy: 0.9319
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 356
+False Positives (Real misclassified as Fake): 26
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_real_teams (REAL) -----
+Total Videos: 382
+Accuracy: 0.9319 (356/382 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_real_teams (family=proper_real_teams): n=382, acc=0.9319, tpr=0.0000, fpr=0.0681, fnr=0.0000
+
+Best-group accuracy: proper_real_teams = 0.9319
+Worst-group accuracy: proper_real_teams = 0.9319
+Best-vs-worst group accuracy gap: 0.0000

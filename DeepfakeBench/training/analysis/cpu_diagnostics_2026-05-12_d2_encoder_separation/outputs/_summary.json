@@ -1,0 +1,12 @@
+{
+  "n_panel": 800,
+  "n_chronic_6": 282,
+  "clip_frozen_status": "ok",
+  "ckpts_processed": [
+    "CLIP_FROZEN",
+    "E2B",
+    "P8A",
+    "T3_S1_step1500",
+    "T5C_step3500"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "verdict": "\u03b3",
+  "verdict_text": "NO BITE. cos(head, dor_shkedi)=-0.153 (treatment) vs -0.279 (control). method-LR AUC=0.912 (treatment) vs 0.912 (control). 12-class method-conditional GRL also failed to bite. Pivot to Move 4 (paired same-identity contrastive) as the next architectural address.",
+  "treatment_final": {
+    "label": "xpbvc1e4__top_n_effort_20260501_step8000_auc0.9926_eer0.0228",
+    "arm": "treatment",
+    "ckpt_path": "/tmp/p18_ckpts/xpbvc1e4__top_n_effort_20260501_step8000_auc0.9926_eer0.0228.pth",
+    "cos_is_lockbox": 0.0455109184308805,
+    "cos_is_webcam": 0.0448911928645782,
+    "cos_is_phone_screen": 0.0173208329839489,
+    "cos_is_normal_photo": 0.036117391110336,
+    "cos_is_dor_shkedi": -0.1529094168744907,
+    "cos_is_deeplive_enhanced": 0.0460455392978913,
+    "cos_is_teams_capture": 0.5766746877207789,
+    "cos_fresh_LR_fake_vs_real": 0.5035401362929357,
+    "method_lr_macro_auc": 0.9115609620065516,
+    "recipe": "ARCFACE",
+    "use_quality_domain_head": false,
+    "quality_domain_count": 4,
+    "verdict_preliminary": "\u03b3 (no bite)",
+    "step": 8000
+  },
+  "control_final": {
+    "label": "rgt4kw2u__top_n_effort_20260501_step6500_auc0.9915_eer0.0330",
+    "arm": "control",
+    "ckpt_path": "/tmp/p18_ckpts/rgt4kw2u__top_n_effort_20260501_step6500_auc0.9915_eer0.0330.pth",
+    "cos_is_lockbox": -0.0592794751057886,
+    "cos_is_webcam": 0.0126093972927287,
+    "cos_is_phone_screen": -0.0928762188170461,
+    "cos_is_normal_photo": 0.2003861818564188,
+    "cos_is_dor_shkedi": -0.2792560930365035,
+    "cos_is_deeplive_enhanced": -0.0325188937746842,
+    "cos_is_teams_capture": 0.8174596452974323,
+    "cos_fresh_LR_fake_vs_real": 0.6644716648083202,
+    "method_lr_macro_auc": 0.9115609620065516,
+    "recipe": "ARCFACE",
+    "use_quality_domain_head": false,
+    "quality_domain_count": 4,
+    "verdict_preliminary": "\u03b3 (no bite)",
+    "step": 6500
+  },
+  "thresholds": {
+    "alpha_cos_dor_max": 0.05,
+    "alpha_method_auc_max": 0.85,
+    "alpha_cos_fresh_min": 0.5
+  },
+  "n_treatment_ckpts": 8,
+  "n_control_ckpts": 9
+}

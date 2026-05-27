@@ -1,0 +1,16 @@
+Stage 2 launch — 2026-05-08 23:41-23:42 local
+Image: us-docker.pkg.dev/train-cvit2/effort-detector/effort-detector:1.3.274
+W&B project: dtect-vision/enhanced-aug-test
+
+slot                    | wandb_run | vertex_job          | region      | yaml
+S1_REAL_AUG_OFF         | 4pf24vo7  | 7347212674217803776 | us-west4    | R13_S2_SLOT1_REAL_AUG_OFF.yaml
+S2_LOW_LR_FT            | rravpdb9  | 7961214395625766912 | us-east1    | R13_S2_SLOT2_LOW_LR_FT.yaml
+S3_WEAK_PAIRRANK        | wc6hvodm  | 5671407677603840000 | us-central1 | R13_S2_SLOT3_WEAK_PAIRRANK.yaml
+
+GCS output dirs (once ckpts saved):
+  gs://training-job-outputs/phase2r13_experiments/4pf24vo7/   (Slot 1)
+  gs://training-job-outputs/phase2r13_experiments/rravpdb9/   (Slot 2)
+  gs://training-job-outputs/phase2r13_experiments/wc6hvodm/   (Slot 3)
+
+Periodic save steps: 100, 500, 1000, 1500, 2500, 3500, 4500
+Total training steps: 4500 (12 epochs cap, early_stopping_patience=12)

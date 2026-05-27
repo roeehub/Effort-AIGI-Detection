@@ -1,0 +1,60 @@
+Validation Summary Report for: td_proper_visomaster_teams_dev_p1_pairrank_top_n_step6000
+Run Name: TargetDomain proper_visomaster_teams_dev P1_PAIRRANK_TOP_N_STEP6000
+Generated on: 2026-05-07 11:17:04
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 262
+Accuracy: 0.7748
+True Positives (Correctly identified Fake): 203
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 59
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: proper_visomaster_teams__cscs (FAKE) -----
+Total Videos: 9
+Accuracy: 1.0000 (9/9 correct)
+
+----- Method: proper_visomaster_teams__ghostface_v1 (FAKE) -----
+Total Videos: 38
+Accuracy: 0.6842 (26/38 correct)
+
+----- Method: proper_visomaster_teams__ghostface_v2 (FAKE) -----
+Total Videos: 27
+Accuracy: 0.6667 (18/27 correct)
+
+----- Method: proper_visomaster_teams__ghostface_v3 (FAKE) -----
+Total Videos: 29
+Accuracy: 0.8276 (24/29 correct)
+
+----- Method: proper_visomaster_teams__instyleswapper256_a (FAKE) -----
+Total Videos: 30
+Accuracy: 1.0000 (30/30 correct)
+
+----- Method: proper_visomaster_teams__instyleswapper256_b (FAKE) -----
+Total Videos: 32
+Accuracy: 0.9688 (31/32 correct)
+
+----- Method: proper_visomaster_teams__instyleswapper256_c (FAKE) -----
+Total Videos: 31
+Accuracy: 0.5806 (18/31 correct)
+
+----- Method: proper_visomaster_teams__inswapper128 (FAKE) -----
+Total Videos: 36
+Accuracy: 1.0000 (36/36 correct)
+
+----- Method: proper_visomaster_teams__simswap512 (FAKE) -----
+Total Videos: 30
+Accuracy: 0.3667 (11/30 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+proper_visomaster_teams_fake (family=proper_visomaster_teams_fake): n=262, acc=0.7748, tpr=0.7748, fpr=0.0000, fnr=0.2252
+
+Best-group accuracy: proper_visomaster_teams_fake = 0.7748
+Worst-group accuracy: proper_visomaster_teams_fake = 0.7748
+Best-vs-worst group accuracy gap: 0.0000

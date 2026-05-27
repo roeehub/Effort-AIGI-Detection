@@ -1,0 +1,34 @@
+# Promotion-contract validation map for P18 corrective scorecard
+# (Diagnostic D from HANDOFF_2026-05-02_P18_CORRECTIVE.md).
+#
+# Run context (2026-05-02):
+# - P18 launched 2026-05-01 evening: 12-class method-conditional GRL with
+#   λ ramped 0 → 0.95. Treatment (xpbvc1e4) and control (rgt4kw2u, no
+#   quality_domain_head) both succeeded.
+# - Local CPU corrective probes (analysis/p18_probe_2026-05-01/run_diagnostics_abce.py
+#   + run_minicard.py) found:
+#     B: paired Wilcoxon on n=25 dor lockbox reals: T-vs-C signed-rank p<0.0001
+#        with median Δp_fake = -0.39 (scaled). T scores dor reals systematically
+#        less fake than C does — robust at per-frame level.
+#     C: at deployment τ=0.92 with ArcFace s-scaling, dor lockbox FPR is
+#        P8A 0% / P18T 0% / P18C 52% — control catastrophically regresses
+#        from P8A; treatment preserves P8A's invariance.
+#     Mini-scorecard aggregate (n=40 lockbox reals, n=47 lockbox fakes):
+#        At τ=0.92, FPR P8A 12% / P18T 7% / P18C 40%; recall 47% / 38% / 43%.
+#        P18T trades ~9pp recall for 5pp FPR improvement vs P8A.
+#
+# This scorecard tests whether the local-substrate signal translates to the
+# full lockbox + the v3 contract floor (target_fake_recall_min=0.70, default
+# in image 1.3.240, commit 974e033).
+#
+# Three checkpoints:
+#   - P8A baseline (the FT origin every P-* packet inherits from)
+#   - P18T treatment (xpbvc1e4) periodic step4000 — matches local probe
+#   - P18C control   (rgt4kw2u) periodic step4000 — matches local probe
+#
+# Step4000 is the FT-final periodic checkpoint; matches local /tmp/p18_ckpts/
+# files used in the corrective probe.
+
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+P18T_GRL_TREATMENT_STEP4000:   "gs://training-job-outputs/phase2r13_experiments/xpbvc1e4/periodic_effort_20260501_step4000_auc0.9907_eer0.0279.pth"
+P18C_NO_GRL_CONTROL_STEP4000:  "gs://training-job-outputs/phase2r13_experiments/rgt4kw2u/periodic_effort_20260501_step4000_auc0.9871_eer0.0330.pth"

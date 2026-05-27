@@ -1,0 +1,41 @@
+# Promotion-contract validation map for the corr-penalty deeplive + viso runs
+#
+# Authored 2026-05-06 to evaluate:
+#   - R13_DEEPLIVE_CORR_PENALTY (run 8jgyw1am, "rogue-senate-951")
+#   - R13_VISO_CORR_PENALTY     (run 7u3zc5zt, "elegant-emperor-952")
+#
+# Both arms FT from E2B_TOP_N_STEP3200 with correlation_penalty(lambda=1.0)
+# on three pixel/geometry axes: sharpness_laplacian, luma_mean,
+# face_area_fraction. Differ only in whether visomaster sources are
+# enabled in the data plane.
+#
+# Close criterion (4/4 must pass):
+#   F1: lockbox recall >= 90% at FPR <= 10% (excluding no_face / extreme low IQ)
+#   F2: shortcut weakening >= 30% on >= 2 of 5 axes (vs E2B baseline)
+#   F3: no shortcut shifting (no untargeted axis +50%)
+#   F4: HDTF cross-substrate FPR <= 5%
+#
+# Baselines included for direct comparison:
+#   - P8A_REFERENCE_STEP5000: production anchor (27% viso ceiling)
+#   - E2B_TOP_N_STEP3200: FT base for both packets (must beat to justify)
+#
+# Checkpoint selection rationale:
+#   DEEPLIVE (8jgyw1am, 11 ckpts saved):
+#     top_n step4800: highest AUC top_n (0.9970, EER 0.0113)
+#     top_n step1800: mid-trajectory top_n (0.9962, EER 0.0169)
+#     periodic step2000: trajectory anchor for cross-packet comparison (0.9939)
+#   VISO (7u3zc5zt, 7 ckpts saved):
+#     top_n step600: highest AUC top_n (0.9934, EER 0.0273)
+#     periodic step2000: latest periodic anchor (0.9917)
+#     periodic step1000: mid-trajectory periodic (0.9910)
+
+P8A_REFERENCE_STEP5000:           "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:               "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+
+DEEPLIVE_CORR_TOP_N_STEP4800:     "gs://training-job-outputs/best_checkpoints/8jgyw1am/top_n_effort_20260506_step4800_auc0.9970_eer0.0113.pth"
+DEEPLIVE_CORR_TOP_N_STEP1800:     "gs://training-job-outputs/best_checkpoints/8jgyw1am/top_n_effort_20260505_step1800_auc0.9962_eer0.0169.pth"
+DEEPLIVE_CORR_PERIODIC_STEP2000:  "gs://training-job-outputs/best_checkpoints/8jgyw1am/periodic_effort_20260505_step2000_auc0.9939_eer0.0169.pth"
+
+VISO_CORR_TOP_N_STEP600:          "gs://training-job-outputs/best_checkpoints/7u3zc5zt/top_n_effort_20260506_step600_auc0.9934_eer0.0273.pth"
+VISO_CORR_PERIODIC_STEP2000:      "gs://training-job-outputs/best_checkpoints/7u3zc5zt/periodic_effort_20260506_step2000_auc0.9917_eer0.0182.pth"
+VISO_CORR_PERIODIC_STEP1000:      "gs://training-job-outputs/best_checkpoints/7u3zc5zt/periodic_effort_20260506_step1000_auc0.9910_eer0.0228.pth"

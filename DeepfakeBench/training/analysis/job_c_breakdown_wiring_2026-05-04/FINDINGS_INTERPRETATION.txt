@@ -1,0 +1,109 @@
+JOB C — Interpretation. 2026-05-04.
+
+DISCLAIMER: This document contains opinion + judgment. The supporting data is
+in FINDINGS_FACTS.txt and the artifacts referenced below. This agent has not
+modified any production yaml, launcher, or scorecard code; the proposed diff
+is uncommitted and awaits user authorization.
+
+==================================================================
+VERDICT
+==================================================================
+(a) Wiring is safe to merge as-is, with one schema-migration step that is
+    already baked into the proposed yaml.
+
+(b) Caveats: see "Caveats" section below. None are blockers; the largest one
+    is small-N for some per-session fakes (30-89 frames).
+
+(c) Path (a) — merge into the production yaml — is recommended over path (b).
+    Schemas are compatible; the loader silently ignores breakdown's extra
+    top-level keys; no launcher change is required; the diff is +20 suite
+    blocks (~250 lines) appended to the existing yaml without modifying any
+    of the 9 production-decisive suites. Path (b) — sister-yaml + multi-yaml
+    launcher loader — is more invasive (requires touching the launcher and
+    the loader) and offers no offsetting benefit since the schemas already
+    match.
+
+==================================================================
+WHY THIS MATTERS (one paragraph)
+==================================================================
+The 18 new diagnostic rows make per-identity / per-session FPR + recall
+visible in every future scorecard run, removing the need to re-run post-hoc
+analysis pipelines after each packet. Promotion-contract authority is
+unchanged: the new rows are read-only because they are NOT named in any of
+the --promotion_dev_real_* / --promotion_dev_fake_* / --promotion_lockbox_*
+launcher flags. The user has already paid the cost of generating these slices
+inside the manifest; the merge unlocks the diagnostic value at zero
+incremental run cost (the runner walks each suite from the same manifest
+that's already loaded).
+
+==================================================================
+CAVEATS
+==================================================================
+1. Small-N fakes. The smallest per-session fake suites are 30-46 frames
+   (pc_generator_s4, pc_generator_s9, cam_test_s38, xiang_xiang2_feng).
+   Per-suite recall on these will be high-variance; treat trends across
+   packets, not single-packet absolutes. Consistent with the existing
+   memory project_small_sample_guidance.
+
+2. Manifest mismatch. The breakdown yaml's hardcoded
+   teams_target_domain_manifest_2026-04-06_frozen.json is one version
+   behind production's _2026-04-23_with_dor.json. The proposed merged yaml
+   has been manifest-rewritten to the newer manifest; this is a
+   one-line-per-suite substitution that the validator confirms is a no-op
+   for slice resolution (every slice tag is in both manifests).
+
+3. Stale launcher default. arena/launch_teams_promotion_contract.sh:27 still
+   hardcodes the older (pre-dor) yaml as default. Operational launches
+   override this via --suite-manifest. The merge does not fix this stale
+   default; the user may want to bump the launcher default to the merged
+   yaml in the same commit, or in a follow-up.
+
+4. Lockbox stress-real granularity. Two of the 20 new suites are lockbox
+   real-side stress slices (poor_quality_lockbox = 22 videos / 31 frames;
+   lighting_extreme_lockbox = 207 videos / 214 frames). The 22-frame one is
+   noisy; recommend including it but flagging in any downstream report that
+   it's small-N.
+
+5. Identity-loose eval design (NOT a leakage problem). Per memory
+   project_lockbox_identity_looseness, same-person identities (PC_Generator,
+   dor_shkedi, bla_bla_chow) deliberately appear as both real and fake.
+   The new fake sub-suites (teams_capture_pc_generator_s3, dor_shkedi_s16,
+   etc.) reuse these identities. This is intentional eval design and the
+   user is already aware of it. The user should NOT read per-suite recall
+   numbers as "clean" deployment metrics for those identities — they are
+   diagnostic only.
+
+6. FP-offender mapping. The 6 chronic FP-offender identities surface ONLY
+   in real-side dev pools that are already in production
+   (teams_real_all_dev, teams_real_poor_quality_dev,
+   teams_real_lighting_extreme_dev). They do NOT appear in the 18 net-new
+   fake sub-suites. Task brief framed this as "make per-identity FP visible
+   as first-class rows", but the breakdown yaml as written does not split
+   the real-side pools by identity — only the fake-side. To get
+   per-FP-offender real-side rows, a separate breakdown of the real pools
+   would be needed (e.g., teams_real_bla_bla_chow_dev,
+   teams_real_PC_Generator_s22_dev). That is OUT OF SCOPE for this audit
+   and is a follow-up the user may want to consider.
+
+==================================================================
+CONCRETE NEXT STEPS FOR THE USER
+==================================================================
+- Review wiring_proposal.diff against
+  arena/target_domain_suites.teams_promotion_contract_2026-04-23_with_dor.yaml.
+- If approved, replace the production yaml with
+  proposed_teams_promotion_contract_with_breakdown.yaml (drop-in; same path).
+- Optionally bump the launcher default in arena/launch_teams_promotion_contract.sh:27
+  and arena/run_teams_promotion_contract.sh:32 from the 04-17 yaml to the
+  04-23_with_dor yaml in the same commit, fixing the stale-default drift.
+- Decide whether to follow up with a real-side per-identity breakdown to
+  surface the 6 chronic FP-offenders as first-class rows (separate audit).
+
+==================================================================
+STATUS
+==================================================================
+READY FOR USER AUTHORIZATION TO MERGE.
+- Schema verdict:           compatible (path a).
+- Validator verdict:        PASS.
+- Identity-overlap verdict: no training leakage in net-new rows.
+- Production change:        +20 diagnostic suites, 0 suites modified.
+- Code change:              none.

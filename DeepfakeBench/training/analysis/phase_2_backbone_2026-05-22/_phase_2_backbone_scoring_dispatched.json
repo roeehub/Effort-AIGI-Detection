@@ -1,0 +1,9 @@
+{
+  "phase": "phase_2_backbone_scoring_dispatched",
+  "status": "dispatched",
+  "completed_at_utc": "2026-05-22T17:51:56Z",
+  "slotav2_full_state": "NOT_LAUNCHED",
+  "slotav2_run_id": "",
+  "t5c_full_state": "NOT_LAUNCHED",
+  "t5c_run_id": ""
+}

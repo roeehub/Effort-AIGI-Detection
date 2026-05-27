@@ -1,0 +1,20 @@
+{
+  "verdict": "INSUFFICIENT_COVERAGE",
+  "localisation": "UNDETERMINED",
+  "head_side_signal_verdict": "INSUFFICIENT_COVERAGE",
+  "encoder_side_implication": "UNDETERMINED",
+  "p1_implication": "DEFERRED_PENDING_FROZEN_FEATURE_EXTRACTION",
+  "rationale": "On-disk feature caches contain zero same-source paired-fake feature vectors. The clip_vs_p8a_viso cache covers 131 / 1812 paired reals and 0 / 3499 paired fakes. The _features_cache_2026-04-30 caches store positional valid_idx without frame_path metadata and have no co-located sampling manifest locally. CE-only training on the existing 1100-frame fake/real-disjoint substrate cannot stress-test the pair-rank lever because there are no opposite-label same-source pairs to compute the rank loss against. The probe is structurally blocked at the data layer, not at the modelling layer.",
+  "recommended_followup": {
+    "name": "FROZEN_PAIR_FEATURE_EXTRACT_2026-05-07",
+    "scope": "Extract P8A, E2B (and optionally CLIP-B16 raw for baseline) frozen final-layer features for the 5311 unique frame_paths in pair_gap_audit_2026-05-06/outputs/pair_gaps.csv. After extraction, re-run THIS probe with the new cache.",
+    "estimated_compute": "~3 A100-hours (~5311 frames × 3 ckpts × <1 sec/frame)",
+    "estimated_storage": "~50 MB combined (5311 × 512 dims × 4 bytes × 3 ckpts ≈ 32 MB plus metadata)",
+    "blocking_decision": "P1 encoder-FT in NEXT_STEPS_PLAN_2026-05-06 §8.2 should not launch before this probe returns a YES/NO on head-side signal. Spending GPU-weeks on encoder-FT when a frozen head-only retrain with pair-rank suffices would be a multi-day cost waste. Conversely, if the probe returns NO head-side signal, P1 is justified."
+  },
+  "alternative_lever": {
+    "name": "PER_SUBSTRATE_TAU_CALIBRATION_LEVER_AVAILABLE_NOW",
+    "source_memory": "project_job7_head_retrain_REFUTED_2026-05-04",
+    "summary": "Job 7 result: 21pp lockbox recall lift available on P8A via per-substrate τ-calibration alone (no retraining required). This is a head-side OPERATING-POINT lever rather than a head-side WEIGHTS lever. It does not test the pair-rank weights hypothesis but it is deployable today and may close the gap that P1 was meant to close. Recommend a parallel scoping job alongside FROZEN_PAIR_FEATURE_EXTRACT_2026-05-07 to quantify the gap that pair-rank still has to bridge after τ-calibration."
+  }
+}

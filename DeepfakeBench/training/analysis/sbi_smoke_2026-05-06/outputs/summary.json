@@ -1,0 +1,31 @@
+{
+  "job": "SBI_SMOKE_2026-05-06",
+  "n_real_frames_used": 200,
+  "n_known_fake_frames_used": 200,
+  "n_sbi_pseudofakes_generated": 200,
+  "n_pseudofakes_saved_to_disk": 60,
+  "n_visual_panel_pairs": 24,
+  "landmark_detection": {
+    "ok": 195,
+    "total": 200,
+    "rate": 0.975,
+    "fallback_mask_count": 5
+  },
+  "iq_summary": {
+    "median_abs_cohen_d_real_vs_sbi": 0.04694732048216984,
+    "median_abs_cohen_d_real_vs_fake": 0.6031942398489841,
+    "median_abs_cohen_d_sbi_vs_fake": 0.6780360686554493,
+    "n_axes_evaluated": 20
+  },
+  "score_summary": {
+    "P8A_real_median": 0.005812585,
+    "P8A_fake_median": 0.88385084,
+    "P8A_headroom": 0.878038255,
+    "sbi_scores_status": "BLUEPRINT_NOT_RUN \u2014 see FINDINGS.md \u00a7Score-collection blueprint"
+  },
+  "verdicts": {
+    "visual_plausibility": "GREEN",
+    "iq_similarity": "GREEN",
+    "score_distribution": "GREEN"
+  }
+}

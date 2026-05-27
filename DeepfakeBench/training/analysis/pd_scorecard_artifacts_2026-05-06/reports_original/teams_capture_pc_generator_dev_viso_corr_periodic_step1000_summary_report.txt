@@ -1,0 +1,36 @@
+Validation Summary Report for: td_teams_capture_pc_generator_dev_viso_corr_periodic_step1000
+Run Name: TargetDomain teams_capture_pc_generator_dev VISO_CORR_PERIODIC_STEP1000
+Generated on: 2026-05-06 15:50:22
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 175
+Accuracy: 0.9943
+True Positives (Correctly identified Fake): 174
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 1
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_pc_generator_s3 (FAKE) -----
+Total Videos: 99
+Accuracy: 0.9899 (98/99 correct)
+
+----- Method: teams_capture_pc_generator_s4 (FAKE) -----
+Total Videos: 30
+Accuracy: 1.0000 (30/30 correct)
+
+----- Method: teams_capture_pc_generator_s9 (FAKE) -----
+Total Videos: 46
+Accuracy: 1.0000 (46/46 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=175, acc=0.9943, tpr=0.9943, fpr=0.0000, fnr=0.0057
+
+Best-group accuracy: unknown_fake = 0.9943
+Worst-group accuracy: unknown_fake = 0.9943
+Best-vs-worst group accuracy gap: 0.0000

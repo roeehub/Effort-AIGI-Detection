@@ -1,0 +1,23 @@
+# Promotion-contract validation of the P11 overnight slate (Plan v3 §5 Day-2 gate).
+#
+# Context:
+#   - 4 overnight P11 runs launched 2026-04-27 23:13 CEST.
+#   - 3 SUCCEEDED (MILD/HEAVY/HEAVY_DEEPLIVE), 1 FAILED (WEBCAM_HARDEN: NaN loss
+#     at step 5683 — webcam_harden aug compounds numerical instability).
+#   - Trainer's top_n + ood_composite checkpoint policies BOTH froze at step 1000
+#     (val_holdout AUC saturated early; the post-step-1000 anchor-suppression
+#     improvements seen in W&B history were never persisted as checkpoints).
+#   - This map evaluates what we have: step-1000 of all 4 candidates + P8A ref.
+#
+# Decision-grade question (Plan v3 §6):
+#   α — best candidate clears 90/5 on viso, deeplive, teams_fake_all
+#       AND modern_lockbox_v2 FPR ≤ 5% → ship.
+#   β — within 5pp on at least one family / FPR — relaunch with anchor-aware
+#       checkpoint policy + sharper recipe.
+#   γ — substrate ceiling — invoke Day 5-6 extension OR pivot to inference stack.
+
+P11_MILD_STEP1000:           "gs://training-job-outputs/phase2r13_experiments/u0whbpg5/top_n_effort_20260427_step1000_auc0.9920_eer0.0304.pth"
+P11_HEAVY_STEP1000:          "gs://training-job-outputs/phase2r13_experiments/lr916mpq/top_n_effort_20260427_step1000_auc0.9935_eer0.0270.pth"
+P11_HEAVY_DEEPLIVE_STEP1000: "gs://training-job-outputs/phase2r13_experiments/h7eqzw1j/top_n_effort_20260427_step1000_auc0.9928_eer0.0304.pth"
+P11_WEBCAM_HARDEN_STEP1000:  "gs://training-job-outputs/phase2r13_experiments/89ohe6l8/top_n_effort_20260427_step1000_auc0.9927_eer0.0405.pth"
+P8A_REFERENCE_STEP5000:      "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"

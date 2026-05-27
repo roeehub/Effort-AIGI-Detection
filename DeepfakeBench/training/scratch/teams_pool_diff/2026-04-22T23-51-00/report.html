@@ -1,0 +1,257 @@
+<!doctype html><meta charset='utf-8'><title>teams pool diff</title><style>
+    body { font-family: -apple-system, system-ui, sans-serif; max-width: 1200px;
+           margin: 2em auto; padding: 0 1em; color: #222; }
+    h1 { border-bottom: 2px solid #888; padding-bottom: 0.3em; }
+    h2 { margin-top: 2em; border-bottom: 1px solid #ddd; padding-bottom: 0.2em; }
+    table { border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid #ccc; padding: 0.3em 0.6em; text-align: left; }
+    th { background: #f4f4f4; }
+    tr.hi td { background: #fff4e0; font-weight: bold; }
+    .thumbs { display: flex; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0 1.5em; }
+    .thumbs figure { margin: 0; padding: 0; text-align: center; }
+    .thumbs img { width: 112px; height: 112px; object-fit: cover; border: 1px solid #ddd; }
+    .thumbs figcaption { font-size: 0.7em; color: #555; max-width: 112px; }
+    </style>
+    <h1>Teams pool comparison: teams_ood vs proper_visomaster_teams</h1>
+    <p>Run dir: <code>scratch/teams_pool_diff/2026-04-22T23-51-00</code></p>
+    <p>Frames analyzed — stats: 444, geometry: 444, model: 444.</p>
+
+    <h2>Executive summary</h2>
+    <p>KS distances across cross-pool same-label pairs. Rows highlighted in
+    orange exceed 0.2 (a notable distributional shift).</p>
+    <table class="summary"><thead><tr><th>Pass</th><th>Pair</th><th>Feature</th><th>KS distance</th></tr></thead><tbody>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>brightness</td><td>0.693</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>face_bbox_area_ratio</td><td>0.617</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>brightness</td><td>0.617</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>inter_eye_distance_ratio</td><td>0.570</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>contrast</td><td>0.526</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>bytes_per_pixel</td><td>0.490</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>face_bbox_area_ratio</td><td>0.486</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>resolution_w</td><td>0.467</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>resolution_h</td><td>0.467</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>resolution_w</td><td>0.463</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>resolution_h</td><td>0.463</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>inter_eye_distance_ratio</td><td>0.453</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>sharpness</td><td>0.381</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>contrast</td><td>0.375</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>bytes_per_pixel</td><td>0.375</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>saturation</td><td>0.355</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>colorfulness</td><td>0.300</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>saturation</td><td>0.300</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>yaw_deg</td><td>0.242</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>roll_deg</td><td>0.239</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>yaw_deg</td><td>0.232</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>sharpness</td><td>0.217</td></tr>
+<tr class="hi"><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>roll_deg</td><td>0.216</td></tr>
+<tr class="hi"><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>colorfulness</td><td>0.211</td></tr>
+<tr><td>geometry</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>pitch_deg</td><td>0.199</td></tr>
+<tr><td>stats</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>warmth</td><td>0.192</td></tr>
+<tr><td>geometry</td><td>teams_ood_real__vs__proper_visomaster_teams_real</td><td>pitch_deg</td><td>0.189</td></tr>
+<tr><td>stats</td><td>teams_ood_fake__vs__proper_visomaster_teams_fake</td><td>warmth</td><td>0.170</td></tr>
+</tbody></table>
+
+    <h2>Image stats</h2>
+    <h3>Image stats — per-group means</h3><table><thead><tr><th>Group</th><th>brightness</th><th>contrast</th><th>sharpness</th><th>colorfulness</th><th>saturation</th><th>resolution_w</th><th>resolution_h</th><th>bytes_per_pixel</th><th>warmth</th></tr></thead><tbody><tr><td>proper_visomaster_teams_fake</td><td>0.417</td><td>0.202</td><td>142.254</td><td>43.620</td><td>0.366</td><td>248.908</td><td>248.908</td><td>1.646</td><td>40.730</td></tr><tr><td>proper_visomaster_teams_real</td><td>0.424</td><td>0.205</td><td>137.944</td><td>41.161</td><td>0.352</td><td>250.467</td><td>250.467</td><td>1.623</td><td>40.284</td></tr><tr><td>teams_ood_fake</td><td>0.546</td><td>0.246</td><td>102.617</td><td>44.948</td><td>0.315</td><td>212.274</td><td>212.274</td><td>1.503</td><td>39.679</td></tr><tr><td>teams_ood_real</td><td>0.529</td><td>0.236</td><td>122.483</td><td>45.916</td><td>0.338</td><td>206.467</td><td>206.533</td><td>1.537</td><td>45.846</td></tr></tbody></table>
+
+    <h2>Face geometry</h2>
+    <h3>Face geometry — per-group means</h3><table><thead><tr><th>Group</th><th>face_bbox_area_ratio</th><th>inter_eye_distance_ratio</th><th>yaw_deg</th><th>pitch_deg</th><th>roll_deg</th></tr></thead><tbody><tr><td>proper_visomaster_teams_fake</td><td>0.526</td><td>0.428</td><td>-1.180</td><td>39.557</td><td>-1.724</td></tr><tr><td>proper_visomaster_teams_real</td><td>0.512</td><td>0.417</td><td>-1.062</td><td>39.969</td><td>-1.594</td></tr><tr><td>teams_ood_fake</td><td>0.471</td><td>0.394</td><td>1.666</td><td>40.184</td><td>-0.733</td></tr><tr><td>teams_ood_real</td><td>0.472</td><td>0.396</td><td>-2.867</td><td>40.340</td><td>-0.766</td></tr></tbody></table>
+
+    <h2>Model section</h2>
+    <h3>Model fake-probability + embedding dispersion</h3><table><thead><tr><th>Group</th><th>fake_prob_mean</th><th>fake_prob_median</th><th>fake_prob_p05</th><th>fake_prob_p95</th><th>embedding_dispersion_l2</th></tr></thead><tbody><tr><td>proper_visomaster_teams_fake</td><td>0.301</td><td>0.036</td><td>0.003</td><td>0.995</td><td>9.377</td></tr><tr><td>proper_visomaster_teams_real</td><td>0.004</td><td>0.001</td><td>0.001</td><td>0.021</td><td>6.867</td></tr><tr><td>teams_ood_fake</td><td>0.928</td><td>0.998</td><td>0.380</td><td>1.000</td><td>8.129</td></tr><tr><td>teams_ood_real</td><td>0.136</td><td>0.025</td><td>0.001</td><td>0.911</td><td>9.159</td></tr></tbody></table>
+    <h3>Centroid cosine distances (1 - cos)</h3><table><tbody><tr><td>proper_visomaster_teams_fake__proper_visomaster_teams_real</td><td>0.1110</td></tr><tr><td>proper_visomaster_teams_fake__teams_ood_fake</td><td>0.4456</td></tr><tr><td>proper_visomaster_teams_fake__teams_ood_real</td><td>0.0600</td></tr><tr><td>proper_visomaster_teams_real__teams_ood_fake</td><td>0.8128</td></tr><tr><td>proper_visomaster_teams_real__teams_ood_real</td><td>0.0861</td></tr><tr><td>teams_ood_fake__teams_ood_real</td><td>0.5139</td></tr></tbody></table>
+
+    <h2>Failures gallery</h2>
+    <h3>proper_visomaster_teams_fake</h3>
+<h4>confidently_wrong (30 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_01251</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00429__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00429</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00098__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00098</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_01251</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00098__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00098</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_01251</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00492__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00492</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00223__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00223</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00010</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00435__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00435</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00415__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00415</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00010</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00223__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00223</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00240__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00240</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00113__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00113</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00010</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00432__frame_0006.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00432</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00536__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00536</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00536__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00536</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01219__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_01219</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00113__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00113</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00098__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260417R2_00098</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00736__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00736</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00010__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00010</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_01251__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_01251</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00079__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>QCLIP20260418R2X_00079</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00435__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.00<br>HDTF20260416_00435</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/HDTF20260416_00536__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.01<br>HDTF20260416_00536</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260418R2X_00113__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.01<br>QCLIP20260418R2X_00113</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_wrong/QCLIP20260417R2_00492__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_wrong"><figcaption>p=0.01<br>QCLIP20260417R2_00492</figcaption></figure>
+</div>
+<h4>uncertain (2 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/proper_visomaster_teams_fake/uncertain/HDTF20260416_01212__frame_0000.jpg" alt="proper_visomaster_teams_fake/uncertain"><figcaption>p=0.44<br>HDTF20260416_01212</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/uncertain/HDTF20260416_00616__frame_0008.jpg" alt="proper_visomaster_teams_fake/uncertain"><figcaption>p=0.58<br>HDTF20260416_00616</figcaption></figure>
+</div>
+<h4>confidently_right (22 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00005__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.94<br>HDTF20260416_00005</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00005__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.90<br>HDTF20260416_00005</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00008__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.95<br>HDTF20260416_00008</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00008__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.96<br>HDTF20260416_00008</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00008__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.98<br>HDTF20260416_00008</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00180__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.93<br>HDTF20260416_00180</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00180__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00180</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00593</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00593</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00593</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00593__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00593</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00938</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=1.00<br>HDTF20260416_00938</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.96<br>HDTF20260416_00938</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_00938__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_00938</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=1.00<br>HDTF20260416_01070</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0004.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=1.00<br>HDTF20260416_01070</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=1.00<br>HDTF20260416_01070</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01070__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=1.00<br>HDTF20260416_01070</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01227__frame_0000.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.97<br>HDTF20260416_01227</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/HDTF20260416_01227__frame_0012.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=0.99<br>HDTF20260416_01227</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_fake/confidently_right/QCLIP20260418R2X_00099__frame_0008.jpg" alt="proper_visomaster_teams_fake/confidently_right"><figcaption>p=1.00<br>QCLIP20260418R2X_00099</figcaption></figure>
+</div>
+<h3>proper_visomaster_teams_real</h3>
+<h4>confidently_wrong (0 frames)</h4>
+<p><em>(no frames in this bucket)</em></p>
+<h4>uncertain (0 frames)</h4>
+<p><em>(no frames in this bucket)</em></p>
+<h4>confidently_right (30 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00008__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.09<br>HDTF20260416_00008</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00240__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00240</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00240__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00240</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00429__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00429</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00432__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00432</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00435__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00435</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00485__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00485</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00536__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00536</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00593__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00593</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00593__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00593</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00616__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00616</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00616__frame_0012.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00616</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00736__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00736</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_00938__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_00938</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01070__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_01070</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01070__frame_0012.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_01070</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01212__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_01212</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01219__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_01219</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01227__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_01227</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/HDTF20260416_01250__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>HDTF20260416_01250</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00098__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00098</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00098__frame_0012.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00098</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00223__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00223</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00223__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00223</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00260__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00260</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00260__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.01<br>QCLIP20260417R2_00260</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00466__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00466</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00492__frame_0000.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.00<br>QCLIP20260417R2_00492</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260417R2_00492__frame_0004.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.03<br>QCLIP20260417R2_00492</figcaption></figure>
+<figure><img src="thumbnails/proper_visomaster_teams_real/confidently_right/QCLIP20260418R2X_00079__frame_0008.jpg" alt="proper_visomaster_teams_real/confidently_right"><figcaption>p=0.02<br>QCLIP20260418R2X_00079</figcaption></figure>
+</div>
+<h3>teams_ood_fake</h3>
+<h4>confidently_wrong (1 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/teams_ood_fake/confidently_wrong/edge_cases_0016__frame_0015.jpg" alt="teams_ood_fake/confidently_wrong"><figcaption>p=0.04<br>edge_cases_0016</figcaption></figure>
+</div>
+<h4>uncertain (1 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/teams_ood_fake/uncertain/edge_cases_0016__frame_0010.jpg" alt="teams_ood_fake/uncertain"><figcaption>p=0.53<br>edge_cases_0016</figcaption></figure>
+</div>
+<h4>confidently_right (30 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_0009__frame_0010.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_0009</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_0009__frame_0015.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_0009</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_0640__frame_0009.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_0640</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_0951__frame_0011.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>edge_cases_0951</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_0951__frame_0016.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>edge_cases_0951</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_1412__frame_0011.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>edge_cases_1412</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_1412__frame_0016.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_1412</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_1985__frame_0000.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_1985</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_1988__frame_0004.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_1988</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_1988__frame_0009.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_1988</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/edge_cases_1988__frame_0014.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>edge_cases_1988</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0000__frame_0009.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>minimal_processing_0000</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0000__frame_0013.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>minimal_processing_0000</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0010__frame_0010.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0010</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0112__frame_0010.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0112</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0112__frame_0015.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>minimal_processing_0112</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0199__frame_0000.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0199</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0199__frame_0009.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0199</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0199__frame_0014.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=0.99<br>minimal_processing_0199</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0327__frame_0005.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0327</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0606__frame_0000.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0606</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0000.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0771</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0004.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0771</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0009.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0771</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_0771__frame_0014.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_0771</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/minimal_processing_1400__frame_0000.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>minimal_processing_1400</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/quality_enhancement_0355__frame_0004.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>quality_enhancement_0355</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/quality_enhancement_0408__frame_0016.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>quality_enhancement_0408</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/quality_enhancement_1181__frame_0009.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>quality_enhancement_1181</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_fake/confidently_right/visomaster_InStyleSwapper256-B_12005__frame_0014.jpg" alt="teams_ood_fake/confidently_right"><figcaption>p=1.00<br>visomaster_InStyleSwapper256-B_12005</figcaption></figure>
+</div>
+<h3>teams_ood_real</h3>
+<h4>confidently_wrong (7 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0004.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=1.00<br>visomaster_GhostFace-v2_04354</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/visomaster_CSCS_00094__frame_0004.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=0.98<br>visomaster_CSCS_00094</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0012.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=0.97<br>visomaster_GhostFace-v2_04354</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0008.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=0.94<br>visomaster_GhostFace-v2_04354</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/visomaster_GhostFace-v2_04354__frame_0000.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=0.93<br>visomaster_GhostFace-v2_04354</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/minimal_processing_0000__frame_0000.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=0.92<br>minimal_processing_0000</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_wrong/visomaster_CSCS_00094__frame_0012.jpg" alt="teams_ood_real/confidently_wrong"><figcaption>p=0.91<br>visomaster_CSCS_00094</figcaption></figure>
+</div>
+<h4>uncertain (2 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/teams_ood_real/uncertain/visomaster_CSCS_00111__frame_0015.jpg" alt="teams_ood_real/uncertain"><figcaption>p=0.47<br>visomaster_CSCS_00111</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/uncertain/visomaster_CSCS_00301__frame_0008.jpg" alt="teams_ood_real/uncertain"><figcaption>p=0.40<br>visomaster_CSCS_00301</figcaption></figure>
+</div>
+<h4>confidently_right (30 frames)</h4>
+<div class="thumbs">
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_0009__frame_0000.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>edge_cases_0009</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_0009__frame_0004.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>edge_cases_0009</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_0009__frame_0009.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.04<br>edge_cases_0009</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_0951__frame_0009.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>edge_cases_0951</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_0951__frame_0014.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>edge_cases_0951</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_1412__frame_0009.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>edge_cases_1412</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_1985__frame_0004.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>edge_cases_1985</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/edge_cases_1988__frame_0011.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.02<br>edge_cases_1988</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_0010__frame_0000.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>minimal_processing_0010</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_0010__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.04<br>minimal_processing_0010</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_0010__frame_0015.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.03<br>minimal_processing_0010</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_0140__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.04<br>minimal_processing_0140</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_0771__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>minimal_processing_0771</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_0771__frame_0016.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>minimal_processing_0771</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/minimal_processing_1400__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.03<br>minimal_processing_1400</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/quality_enhancement_0355__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.05<br>quality_enhancement_0355</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/quality_enhancement_0355__frame_0017.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.04<br>quality_enhancement_0355</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/quality_enhancement_0408__frame_0009.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>quality_enhancement_0408</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/quality_enhancement_1181__frame_0010.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>quality_enhancement_1181</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00111__frame_0010.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.03<br>visomaster_CSCS_00111</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00153__frame_0008.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>visomaster_CSCS_00153</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00295__frame_0000.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.03<br>visomaster_CSCS_00295</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00295__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.04<br>visomaster_CSCS_00295</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_CSCS_00295__frame_0011.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.02<br>visomaster_CSCS_00295</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v1_02457__frame_0010.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.02<br>visomaster_GhostFace-v1_02457</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v1_02457__frame_0015.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>visomaster_GhostFace-v1_02457</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v2_04206__frame_0008.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.01<br>visomaster_GhostFace-v2_04206</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v2_04206__frame_0012.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.00<br>visomaster_GhostFace-v2_04206</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v3_06027__frame_0000.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.02<br>visomaster_GhostFace-v3_06027</figcaption></figure>
+<figure><img src="thumbnails/teams_ood_real/confidently_right/visomaster_GhostFace-v3_06027__frame_0005.jpg" alt="teams_ood_real/confidently_right"><figcaption>p=0.04<br>visomaster_GhostFace-v3_06027</figcaption></figure>
+</div>
+    

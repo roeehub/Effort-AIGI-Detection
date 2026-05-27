@@ -1,0 +1,25 @@
+# =============================================================================
+# T5C HDTF cross-substrate follow-up — one missing data point from the
+# 2026-05-13 best-candidate-search. P8A, E2B, P2D already have HDTF results
+# in analysis/p2_d_hdtf_2026-05-08/. This map adds T5C step3500 alongside.
+#
+# Use case: confirm T5C generalizes to HDTF substrate before flipping
+# production from E2B to T5C. ~$15-25 Vertex spend, 4-8h runtime.
+#
+# Launch (after morning user-confirmation):
+#   ./arena/launch_teams_promotion_contract.sh \
+#       --checkpoint-map arena/checkpoint_maps/teams_target_domain.t5c_hdtf_followup_2026-05-14.yaml \
+#       --suite-manifest arena/target_domain_suites.proper_data_future.provisional_2026-04-19.yaml \
+#       --checkpoints T5C_PERIODIC_STEP3500,P8A_REFERENCE_STEP5000,E2B_TOP_N_STEP3200,P2_D_FOURIER_PERIODIC_STEP3000 \
+#       --job-name t5c-hdtf-followup-2026-05-14 \
+#       --region us-east1
+#
+# Anchors: P8A, E2B, P2D are re-included as cross-checks against the existing
+# analysis/p2_d_hdtf_2026-05-08/scorecard.csv. If their numbers differ from
+# the 2026-05-08 run, something has drifted in the eval pipeline.
+# =============================================================================
+
+T5C_PERIODIC_STEP3500:         "gs://training-job-outputs/best_checkpoints/jrlldtem/periodic_effort_20260511_step3500_auc0.9944_eer0.0197.pth"
+P8A_REFERENCE_STEP5000:        "gs://training-job-outputs/phase2r13_experiments/9lmvb5b4/value_composite_effort_20260424_step5000_auc0.9926_eer0.0270.pth"
+E2B_TOP_N_STEP3200:            "gs://training-job-outputs/best_checkpoints/rmat8lwx/top_n_effort_20260503_step3200_auc0.9863_eer0.0310.pth"
+P2_D_FOURIER_PERIODIC_STEP3000: "gs://training-job-outputs/best_checkpoints/89tt9xyz/periodic_effort_20260507_step3000_auc0.9738_eer0.0823.pth"

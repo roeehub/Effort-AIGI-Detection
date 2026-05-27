@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_capture_dor_shkedi_s16_dev_e2b_top_n_step3200
+Run Name: TargetDomain teams_capture_dor_shkedi_s16_dev E2B_TOP_N_STEP3200
+Generated on: 2026-05-06 17:41:38
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 57
+Accuracy: 0.8070
+True Positives (Correctly identified Fake): 46
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 11
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_dor_shkedi_s16 (FAKE) -----
+Total Videos: 57
+Accuracy: 0.8070 (46/57 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=57, acc=0.8070, tpr=0.8070, fpr=0.0000, fnr=0.1930
+
+Best-group accuracy: unknown_fake = 0.8070
+Worst-group accuracy: unknown_fake = 0.8070
+Best-vs-worst group accuracy gap: 0.0000

@@ -1,0 +1,8 @@
+# Auto-generated checkpoint map for Phase 2 HEAD all-ckpt contract scoring
+# Run: kwhju7im
+# Generated: 2026-05-22T16:59:14Z
+HEAD_kwhju7im_STEP250: "gs://training-job-outputs/best_checkpoints/kwhju7im/top_n_effort_20260522_step250_auc0.9895_eer0.0490.pth"
+HEAD_kwhju7im_STEP500: "gs://training-job-outputs/best_checkpoints/kwhju7im/periodic_effort_20260522_step500_auc0.9888_eer0.0490.pth"
+HEAD_kwhju7im_STEP1000: "gs://training-job-outputs/best_checkpoints/kwhju7im/periodic_effort_20260522_step1000_auc0.9880_eer0.0490.pth"
+HEAD_kwhju7im_STEP1500: "gs://training-job-outputs/best_checkpoints/kwhju7im/periodic_effort_20260522_step1500_auc0.9878_eer0.0490.pth"
+HEAD_kwhju7im_STEP2500: "gs://training-job-outputs/best_checkpoints/kwhju7im/periodic_effort_20260522_step2500_auc0.9878_eer0.0490.pth"

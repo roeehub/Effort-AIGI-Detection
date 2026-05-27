@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_dor_dev_viso_corr_periodic_step2000
+Run Name: TargetDomain teams_real_dor_dev VISO_CORR_PERIODIC_STEP2000
+Generated on: 2026-05-06 14:55:53
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 50
+Accuracy: 0.4000
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 20
+False Positives (Real misclassified as Fake): 30
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: dor_real_passthrough (REAL) -----
+Total Videos: 50
+Accuracy: 0.4000 (20/50 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=50, acc=0.4000, tpr=0.0000, fpr=0.6000, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.4000
+Worst-group accuracy: unknown_real = 0.4000
+Best-vs-worst group accuracy gap: 0.0000

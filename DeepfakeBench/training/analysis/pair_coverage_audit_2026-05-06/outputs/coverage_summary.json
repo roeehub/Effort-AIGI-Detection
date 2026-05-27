@@ -1,0 +1,197 @@
+{
+  "audit_date": "2026-05-06",
+  "audit_name": "PAIR_COVERAGE_AUDIT_2026-05-06",
+  "ship_yaml": "experiments/phase2_round13/R13_VISO_CORR_PENALTY.yaml",
+  "lanes": {
+    "df40": {
+      "n_paired_base_samples": 4698,
+      "n_unpaired_base_samples": 0,
+      "n_unique_identities": 953,
+      "method_family": "df40",
+      "enhancer_family": "none",
+      "transport": "raw_clean",
+      "fake_per_base": 1,
+      "real_per_base": 1,
+      "pair_keys": [
+        "pair_id",
+        "frame_idx"
+      ],
+      "iterator": "_iterate_df40_sample",
+      "method_breakdown": {
+        "blendface": 676,
+        "facedancer": 680,
+        "inswap": 678,
+        "mobileswap": 682,
+        "simswap": 944,
+        "uniface": 357,
+        "e4s": 681
+      }
+    },
+    "deeplive": {
+      "n_paired_base_samples": 4067,
+      "n_unpaired_base_samples": 0,
+      "n_unique_identities": 4067,
+      "method_family": "deeplive",
+      "enhancer_family": "split",
+      "transport": "raw_clean",
+      "fake_per_base": 1,
+      "real_per_base": 1,
+      "pair_keys": [
+        "sample_id",
+        "frame_idx"
+      ],
+      "iterator": "_iterate_deeplive_sample",
+      "method_breakdown": {
+        "deeplive_minimal_processing_enhanced": 848,
+        "deeplive_minimal_processing": 848,
+        "deeplive_quality_enhancement": 639,
+        "deeplive_edge_cases": 866,
+        "deeplive_edge_cases_enhanced": 866
+      },
+      "n_frames_real": 32568,
+      "n_frames_fake": 32634,
+      "approx_identity_count": true
+    },
+    "visomaster_v1_base": {
+      "n_paired_base_samples": 342,
+      "n_paired_base_samples_upper": 430,
+      "n_unpaired_base_samples": 0,
+      "n_unique_identities": 292,
+      "method_family": "visomaster",
+      "enhancer_family": "none",
+      "transport": "raw_clean",
+      "fake_per_base": 1,
+      "real_per_base": 1,
+      "pair_keys": [
+        "sample_id",
+        "frame_idx"
+      ],
+      "iterator": "_iterate_visomaster_sample",
+      "method_breakdown": {
+        "visomaster_CSCS": "approx",
+        "visomaster_GhostFace-v1": "approx",
+        "visomaster_GhostFace-v2": "approx",
+        "visomaster_GhostFace-v3": "approx",
+        "visomaster_InStyleSwapper256-A": "approx",
+        "visomaster_InStyleSwapper256-B": "approx",
+        "visomaster_InStyleSwapper256-C": "approx",
+        "visomaster_Inswapper128": "approx",
+        "visomaster_SimSwap512": "approx"
+      },
+      "approx_identity_count": true
+    },
+    "visomaster_enhanced": {
+      "n_paired_base_samples": 1484,
+      "n_unpaired_base_samples": 0,
+      "n_unique_identities": 689,
+      "method_family": "visomaster",
+      "enhancer_family": "enhanced",
+      "transport": "raw_clean",
+      "fake_per_base": 1,
+      "real_per_base": 1,
+      "pair_keys": [
+        "sample_id",
+        "frame_idx"
+      ],
+      "iterator": "_iterate_visomaster_enhanced_sample",
+      "method_breakdown": "see proper_visomaster_enhanced_clean by-method counts",
+      "approx_identity_count": true
+    },
+    "visomaster_teams_enhanced": {
+      "n_paired_base_samples": 997,
+      "n_paired_teams_v2": 54,
+      "n_paired_clean_fallback": 943,
+      "n_unpaired_base_samples": 0,
+      "n_unique_identities": "approx 700+",
+      "method_family": "visomaster_enhanced",
+      "enhancer_family": "enhanced + original branch",
+      "transport_breakdown": {
+        "teams_v2": 54,
+        "clean_fallback": 943
+      },
+      "fake_per_base": "1 of N+1 branches per epoch",
+      "real_per_base": 1,
+      "pair_keys": [
+        "sample_id",
+        "frame_idx"
+      ],
+      "iterator": "_iterate_visomaster_teams_enhanced_sample",
+      "p_original": 0.5,
+      "approx_identity_count": true
+    },
+    "deeplive_teams": {
+      "n_paired_base_samples": 1300,
+      "n_unpaired_base_samples": 0,
+      "n_unique_identities": "approx 1300",
+      "method_family": "deeplive",
+      "enhancer_family": "split (5 strategies)",
+      "transport": "teams_v2",
+      "fake_per_base": 1,
+      "real_per_base": 1,
+      "pair_keys": [
+        "sample_id",
+        "frame_idx"
+      ],
+      "iterator": "_iterate_teams_sample",
+      "approx_identity_count": true,
+      "approx_base_count": true,
+      "note": "Discovery requires GCS listing; not available in this audit. Family weight 7.0 (highest in yaml) implies lane is large."
+    },
+    "external_vcd_real": {
+      "n_paired_base_samples": 0,
+      "n_unpaired_base_samples": 1200,
+      "n_unique_identities": "approx 80",
+      "method_family": "external_real",
+      "enhancer_family": "n/a",
+      "transport": "webcam_codec",
+      "fake_per_base": 0,
+      "real_per_base": 1,
+      "pair_keys": "n/a \u2014 REAL-ONLY",
+      "iterator": "_iterate_unpaired_real_sample",
+      "approx_identity_count": true
+    },
+    "visomaster_hints": {
+      "n_paired_base_samples": 0,
+      "n_unpaired_base_samples": 0,
+      "enabled_in_ship_yaml": false,
+      "note": "Disabled \u2014 bad data per project_visomaster_hints_lanes_bad_data.md"
+    },
+    "proper_data_INACTIVE_in_ship": {
+      "n_paired_base_samples": 0,
+      "n_unpaired_base_samples": 0,
+      "enabled_in_ship_yaml": false,
+      "note": "proper_data lane not enabled in R13_VISO_CORR_PENALTY. If reactivated for future packets, would add ~1826 paired real captures \u00d7 6 lane families."
+    }
+  },
+  "totals": {
+    "n_paired_base_samples": 12888,
+    "n_unpaired_base_samples": 1200,
+    "paired_fraction_base_unit": 0.9148,
+    "paired_frames_per_epoch_estimate": 206208,
+    "unpaired_frames_per_epoch_estimate": 7200,
+    "paired_fraction_frame_unit": 0.9663,
+    "real_only_batch_share_by_family_weight": 0.0673,
+    "paired_batch_share_by_family_weight": 0.9327
+  },
+  "key_gaps": {
+    "external_vcd_real": "1200 unpaired real samples (~80 identities) \u2014 pair-rank cannot fire; multi-axis GroupDRO real-side should still group by source/transport/quality_band.",
+    "visomaster_teams_enhanced_transport_conjunction": "Only 54/997 (5.4%) of viso teams_enhanced base samples have a true Teams-v2 real companion; the rest fall back to clean transport. The *conjunction* slice (viso enhanced \u00d7 teams transport) is narrow.",
+    "deeplive_teams_count_unverified": "Discovery requires GCS listing; not in audit. Family weight 7.0 implies lane is large but exact count needs separate GCS probe."
+  },
+  "conclusions": {
+    "paired_fraction_headline": "~91.5% of training BASE samples are paired (real+fake same source). ~93.3% of effective BATCH content is paired by family-weight share.",
+    "lanes_pair_rank_can_apply": [
+      "df40",
+      "deeplive",
+      "visomaster_v1_base",
+      "visomaster_enhanced",
+      "visomaster_teams_enhanced",
+      "deeplive_teams"
+    ],
+    "lanes_pair_rank_cannot_apply": [
+      "external_vcd_real"
+    ],
+    "recommendation": "Apply pair-rank UNIFORMLY to all paired lanes. The unpaired external_real lane already requires special handling (no pair-rank loss term \u2014 only CE) since it has no fake counterpart. Restricting pair-rank to a subset of paired lanes is NOT recommended: (a) all 6 paired lanes share the same (real, fake same-source) structure that pair-rank is designed for; (b) Teams passthrough lane (deeplive_teams) is high-value for the binding metric and should not be excluded."
+  },
+  "pairing_semantics_note": "see pairing_semantics_notes.md"
+}

@@ -1,0 +1,273 @@
+Job 9 -- Per-frame disagreement audit (P8A vs E2B_3200 vs E3_6600)
+==================================================================
+
+Date: 2026-05-04. Pure CPU. Cached scores only. n_jobs=1.
+
+This document is FACTS-ONLY. No checkpoint is named "the leader."
+Disagreement patterns are reported, not adjudicated.
+For per-pair opinion reads see FINDINGS_INTERPRETATION.txt.
+
+(Written as .txt instead of .md because the dispatching agent's harness
+blocks .md report writes; .txt fallback authorised by task prompt.)
+
+
+INPUTS
+------
+- Per-frame frame_prob from analysis/cpu_followups_2026-05-04/raw_reports/:
+    P8A = *_p8a_reference_step5000_frames_report.csv
+    E2B = *_e2b_top_n_step3200_frames_report.csv
+    E3  = *_e3_top_n_step6600_frames_report.csv
+- IQ source on viso fakes:
+    analysis/score_distribution_2026-05-02/outputs/crop_attributes.csv
+    (550 / 550 viso fakes matched by filename).
+- Capture-mode + width/height:
+    analysis/lockbox_tagging/full_tags_2026-04-27.parquet
+    (covers 4006/4564 of teams_real_all_dev and 414/1418 of
+    teams_real_all_lockbox; remainder report capture-mode = NaN).
+- Bands:
+    AGREE_HIGH = both > 0.8
+    AGREE_LOW  = both < 0.2
+    DISAGREE_A_HIGH_B_LOW = A > 0.8 AND B < 0.2
+    DISAGREE_A_LOW_B_HIGH = A < 0.2 AND B > 0.8
+    else MIXED_MIDDLE
+- Chronic-offender set (from prompt's Job 3 reference):
+    {bla_bla_chow, bla_bla_chow__s2, PC_Generator__s22, PC_Generator__s45,
+     roy_d, Q__s6}  -- match is case-insensitive.
+- Viso fake "identity" = the 2-identity subtype raw / teams from
+  suite_composition_audit_2026-05-04/FINDINGS.md  Section 5.1.
+
+
+JOINED FRAME COUNTS (sanity check)
+-----------------------------------
+suite                              | label | rows
+visomaster_enhanced_macro_dev      | 1     | 550
+teams_real_all_dev                 | 0     | 4564
+teams_real_all_lockbox             | 0     | 1418
+                                                     TOTAL = 6532
+
+All 3 ckpts joined cleanly on frame_path.
+Source: disagreement_bands_counts.csv.
+
+
+STEP 2 -- BAND COUNTS PER PAIR x SUITE x LABEL
+----------------------------------------------
+Source: disagreement_bands_counts.csv. Each row totals the suite size.
+
+VISO FAKES (n=550)
+
+  pair          AGREE_HIGH  AGREE_LOW  DIS_A_HIGH_B_LOW  DIS_A_LOW_B_HIGH  MIXED
+  P8A vs E2B    21          239         85                1                 204
+  P8A vs E3     49          199         37                21                244
+  E2B vs E3     26          306          0                35                183
+
+The largest viso-fake DISAGREE_HIGH_LOW band is P8A vs E2B = 85 frames
+(P8A > 0.8, E2B < 0.2) versus only 1 in the inverse direction.
+E2B vs E3 is also asymmetric: 0 vs 35 (E3 > 0.8, E2B < 0.2).
+
+teams_real_all_dev (n=4564 reals)
+
+  pair          AGREE_HIGH  AGREE_LOW  DIS_A_HIGH_B_LOW  DIS_A_LOW_B_HIGH  MIXED
+  P8A vs E2B    67          3429        127              47                894
+  P8A vs E3     126         3307        185              263               683
+  E2B vs E3     125         3389        16               126               908
+
+teams_real_all_lockbox (n=1418 reals)
+
+  pair          AGREE_HIGH  AGREE_LOW  DIS_A_HIGH_B_LOW  DIS_A_LOW_B_HIGH  MIXED
+  P8A vs E2B    9           1112        13               2                 282
+  P8A vs E3     22          1163        5                57                171
+  E2B vs E3     13          1094        3                50                258
+
+SMALL-N CAVEAT (lockbox)
+Multiple lockbox DISAGREE_*_HIGH cells have n <= 13:
+  P8A_vs_E2B / DIS_A_HIGH_B_LOW = 13
+  P8A_vs_E2B / DIS_A_LOW_B_HIGH = 2
+  P8A_vs_E3  / DIS_A_HIGH_B_LOW = 5
+  E2B_vs_E3  / DIS_A_HIGH_B_LOW = 3
+Treat per-cell percentages on these cells as illustrative only.
+
+
+STEP 3 -- IMAGE-QUALITY STATS ON VISO FAKES PER PAIR x BAND
+-----------------------------------------------------------
+Source: disagreement_iq_per_pair.csv (n=550 viso fakes only).
+
+Sharpness (laplacian_var_mean) by band:
+
+  pair          DIS_HIGH_LOW (mean / n)   DIS_LOW_HIGH (mean / n)   AGREE_HIGH    AGREE_LOW
+  P8A vs E2B    85.8 / n=85               10.5 / n=1 (small-N)      14.6 / n=21   33.4 / n=239
+  P8A vs E3     75.2 / n=37               19.2 / n=21               43.1 / n=49   34.6 / n=199
+  E2B vs E3     n=0  / no frames          55.2 / n=35               14.9 / n=26   47.1 / n=306
+
+Pattern: every DISAGREE_HIGH_LOW band where one ckpt scores high (P8A
+in the first two pairs, E3 in E2B_vs_E3) shows substantially elevated
+laplacian_var (sharpness) relative to AGREE_HIGH and AGREE_LOW within
+the same pair.
+
+Subtype split inside DISAGREE bands (raw / teams):
+
+  pair          band                              raw    teams
+  P8A vs E2B    DIS_A_HIGH_B_LOW (P8A>, E2B<)     65     20
+  P8A vs E2B    DIS_A_LOW_B_HIGH (P8A<, E2B>)     0      1
+  P8A vs E3     DIS_A_HIGH_B_LOW (P8A>, E3<)      23     14
+  P8A vs E3     DIS_A_LOW_B_HIGH (P8A<, E3>)      16     5
+  E2B vs E3     DIS_A_HIGH_B_LOW (E2B>, E3<)      0      0
+  E2B vs E3     DIS_A_LOW_B_HIGH (E2B<, E3>)      35     0
+
+P8A's high-side DISAGREE concentrates on raw (76% in P8A vs E2B,
+62% in P8A vs E3). E3's high-side DISAGREE vs E2B is 100% raw / 0% teams.
+
+luma / saturation / skin context:
+DISAGREE_HIGH_LOW bands also show somewhat lower luma_p10 and luma_p90
+(darker) than AGREE_HIGH cells in the same pair. skin_frac and
+saturation_mean are within +/- 0.03 across all bands (uninformative).
+Magnitudes in disagreement_iq_per_pair.csv.
+
+
+STEP 4 -- IDENTITY / CAPTURE-MODE COMPOSITION ON DISAGREEMENT BANDS (REALS)
+---------------------------------------------------------------------------
+Source: disagreement_identities_per_pair.csv.
+
+Reads "DIS_A_HIGH_B_LOW" as: ckpt A flags as fake (FP), ckpt B does not.
+"DIS_A_LOW_B_HIGH" is the symmetric inverse.
+
+teams_real_all_dev (n=4564 reals):
+
+  pair        band                   n    uniq_id  chronic  %chr   top identities
+  P8A vs E2B  DIS_A_HIGH_B_LOW(P8A)  127  10       109      85.8%  PC_Generator__s22:95, PC_Generator__s45:8, Test_Cam__s73:7, Md_noyn_Sharker__s15:5
+  P8A vs E2B  DIS_A_LOW_B_HIGH(E2B)  47   6        31       66.0%  bla_bla_chow:27, xiang:13, PC_Generator__s13:2, Roy_D:2
+  P8A vs E3   DIS_A_HIGH_B_LOW(P8A)  185  10       154      83.2%  PC_Generator__s22:95, Q__s6:40, PC_Generator__s45:19, Test_Cam__s41:12
+  P8A vs E3   DIS_A_LOW_B_HIGH(E3)   263  6        244      92.8%  bla_bla_chow:142, bla_bla_chow__s2:66, Roy_D:36, xiang:13
+  E2B vs E3   DIS_A_HIGH_B_LOW(E2B)  16   6        7        43.8%  Q__s6:4, Test_Cam__s41:4, PC_Generator__s13:3, PC_Generator__s45:2
+  E2B vs E3   DIS_A_LOW_B_HIGH(E3)   126  7        122      96.8%  bla_bla_chow__s2:55, Roy_D:35, bla_bla_chow:28, PC_Generator__s22:4
+
+Capture-mode top counts (full_tags coverage ~88% on dev):
+
+  pair         band                   top capture-modes
+  P8A vs E2B   DIS_A_HIGH_B_LOW(P8A)  webcam:106, phone_screen:8, normal_photo:7
+  P8A vs E2B   DIS_A_LOW_B_HIGH(E2B)  screen:20, webcam:6, phone_screen:4
+  P8A vs E3    DIS_A_HIGH_B_LOW(P8A)  webcam:150, normal_photo:17, phone_screen:16
+  P8A vs E3    DIS_A_LOW_B_HIGH(E3)   phone_screen:92, screen:89, webcam:32
+  E2B vs E3    DIS_A_HIGH_B_LOW(E2B)  normal_photo:7, webcam:5, phone_screen:2
+  E2B vs E3    DIS_A_LOW_B_HIGH(E3)   phone_screen:63, screen:14, webcam:13
+
+teams_real_all_lockbox (n=1418 reals):
+
+Lockbox identity space is narrow (only 5 identities total: dor_shkedi
+1170, real_dor 109, bla_bla_chow__s1 68, Chikara_Takahashi__s22 42,
+PC_Generator__s15 29). NONE of the 6 chronic-offender labels appears
+in lockbox frame_paths; chronic% is 0 in every lockbox cell.
+
+  pair        band                  n   uniq  top identities                                                top capture-modes
+  P8A vs E2B  DIS_A_HIGH_B_LOW(P8A) 13  1     Chikara_Takahashi__s22:13                                     webcam:12, screen:1
+  P8A vs E2B  DIS_A_LOW_B_HIGH(E2B) 2   1     dor_shkedi:2                                                  webcam:2
+  P8A vs E3   DIS_A_HIGH_B_LOW(P8A) 5   3     Chikara_Takahashi__s22:2, PC_Generator__s15:2, dor_shkedi:1   webcam:3, screen:1
+  P8A vs E3   DIS_A_LOW_B_HIGH(E3)  57  2     bla_bla_chow__s1:54, dor_shkedi:3                             phone_screen:54, webcam:2
+  E2B vs E3   DIS_A_HIGH_B_LOW(E2B) 3   1     dor_shkedi:3                                                  webcam:2, normal_photo:1
+  E2B vs E3   DIS_A_LOW_B_HIGH(E3)  50  2     bla_bla_chow__s1:42, Chikara_Takahashi__s22:8                 phone_screen:42, webcam:8
+
+bla_bla_chow__s1 (lockbox) is NOT the same string as bla_bla_chow or
+bla_bla_chow__s2 (dev) -- flagged here rather than auto-collapsed.
+
+Source-resolution flag (min(W,H) < 200):
+
+  pair        band                  suite               n    n_low_res  pct_lowres
+  P8A vs E2B  DIS_A_HIGH_B_LOW(P8A) teams_real_all_dev  127  116        91.3%
+  P8A vs E3   DIS_A_HIGH_B_LOW(P8A) teams_real_all_dev  185  172        93.0%
+  P8A vs E2B  DIS_A_LOW_B_HIGH(E2B) teams_real_all_dev  47   4          8.5%
+  P8A vs E3   DIS_A_LOW_B_HIGH(E3)  teams_real_all_dev  263  68         25.9%
+  E2B vs E3   DIS_A_LOW_B_HIGH(E3)  teams_real_all_dev  126  60         47.6%
+
+Pattern: rows where P8A uniquely flags are >90% low-resolution
+(min(W,H) < 200) on the dev real pool. Rows where E2B or E3 uniquely
+flag are predominantly normal/high-resolution. (Lockbox sample sizes
+too small to draw similar conclusions.)
+
+
+STEP 5 -- UNIQUE-CATCH SUMMARY ON VISO FAKES (LABEL=1)
+------------------------------------------------------
+Source: unique_catches_viso_per_ckpt.csv.
+
+A "unique catch" = a viso fake where one ckpt scores > 0.8 while the
+other in the pair scores < 0.2.
+
+  pair          unique catcher  n_ALL   n_raw   n_teams
+  P8A vs E2B    P8A             85      65      20
+  P8A vs E2B    E2B             1       0       1
+  P8A vs E3     P8A             37      23      14
+  P8A vs E3     E3              21      16      5
+  E2B vs E3     E2B             0       0       0
+  E2B vs E3     E3              35      35      0
+
+Per-ckpt totals (one frame may appear in both pairs the ckpt is in):
+  P8A unique catches: 85 (vs E2B) and 37 (vs E3); 88 raw + 34 teams (72% raw).
+  E2B unique catches: 1  (vs P8A) and 0  (vs E3);  0 raw +  1 teams (small-N).
+  E3  unique catches: 21 (vs P8A) and 35 (vs E2B); 51 raw +  5 teams (91% raw).
+
+In every disagreement pair, the ckpt with the larger DISAGREE_HIGH_LOW
+catch count concentrates on the raw subtype.
+
+
+STEP 6 -- UNIQUE-FP SUMMARY ON REAL FRAMES (LABEL=0)
+----------------------------------------------------
+Source: unique_fps_real_per_ckpt.csv.
+
+A "unique FP" = a real frame where one ckpt scores > 0.8 while the
+other in the pair scores < 0.2.
+
+teams_real_all_dev (n=4564 reals):
+
+  pair        unique FP owner   n     n_chronic   pct_chronic
+  P8A vs E2B  P8A               127   109         85.8%
+  P8A vs E2B  E2B               47    31          66.0%
+  P8A vs E3   P8A               185   154         83.2%
+  P8A vs E3   E3                263   244         92.8%
+  E2B vs E3   E2B               16    7           43.8%
+  E2B vs E3   E3                126   122         96.8%
+
+Per-ckpt totals on dev (one frame may appear in both pairs the ckpt is in):
+  P8A unique FPs on dev: 127 (vs E2B) + 185 (vs E3) = 312 incidents
+                         identity-concentrated on PC_Generator__s22,
+                         PC_Generator__s45, Q__s6, Test_Cam__s41,
+                         Test_Cam__s73.
+  E2B unique FPs on dev: 47 (vs P8A) + 16 (vs E3) = 63 incidents
+                         identity-concentrated on bla_bla_chow, xiang,
+                         Q__s6, Test_Cam__s41.
+  E3  unique FPs on dev: 263 (vs P8A) + 126 (vs E2B) = 389 incidents
+                         identity-concentrated on bla_bla_chow,
+                         bla_bla_chow__s2, Roy_D, xiang.
+
+Concentration on the 6 chronic offenders, by ckpt:
+  P8A: 109/127 = 86% chronic (vs E2B); 154/185 = 83% (vs E3).
+  E2B:  31/47 = 66% chronic (vs P8A);   7/16  = 44% (vs E3).
+  E3:  244/263 = 93% chronic (vs P8A); 122/126 = 97% (vs E2B).
+
+PC_Generator__s22 and Q__s6 dominate P8A's unique-FP list.
+bla_bla_chow family + Roy_D dominate E3's unique-FP list.
+E2B straddles both clusters at lower count.
+
+teams_real_all_lockbox (n=1418 reals):
+
+  pair        unique FP owner  n   n_chronic   top identity-counts
+  P8A vs E2B  P8A              13  0           Chikara_Takahashi__s22:13
+  P8A vs E2B  E2B              2   0           dor_shkedi:2
+  P8A vs E3   P8A              5   0           Chikara_Takahashi__s22:2, PC_Generator__s15:2, dor_shkedi:1
+  P8A vs E3   E3               57  0           bla_bla_chow__s1:54, dor_shkedi:3
+  E2B vs E3   E2B              3   0           dor_shkedi:3
+  E2B vs E3   E3               50  0           bla_bla_chow__s1:42, Chikara_Takahashi__s22:8
+
+No chronic-offender match in any lockbox cell because the lockbox real
+pool draws on a disjoint identity set.
+
+
+OUTPUTS
+-------
+All numerical outputs in analysis/job_9_disagreement_audit_2026-05-04/:
+
+  filename                                    rows  content
+  disagreement_bands_counts.csv               45    pair x suite x label x band -> counts
+  disagreement_iq_per_pair.csv                15    pair x band -> IQ feature mean/std on viso fakes
+  disagreement_identities_per_pair.csv        17    pair x band x suite x label -> identity, capture-mode, low-res
+  unique_catches_viso_per_ckpt.csv            24    pair x catcher x subtype -> unique-catch count on viso fakes
+  unique_fps_real_per_ckpt.csv                12    pair x FP-owner x suite -> unique-FP count + chronic concentration
+  _joined_with_bands.csv                      6532  full per-frame joined table with band assignments
+  run_analysis.py                             --    reproducer

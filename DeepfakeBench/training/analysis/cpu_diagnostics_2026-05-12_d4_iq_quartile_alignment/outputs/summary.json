@@ -1,0 +1,60 @@
+{
+  "tau_by_ckpt": {
+    "P8A": 0.9752188086509702,
+    "T5C_step3500": 0.8464740306138987,
+    "T3_S1_step1500": 0.77287071943283
+  },
+  "dev_fpr_check": {
+    "P8A": 0.050175284837861524,
+    "T5C_step3500": 0.050175284837861524,
+    "T3_S1_step1500": 0.050175284837861524
+  },
+  "lockbox_fpr_at_dev_calibrated_tau": {
+    "P8A": 0.009167842031029619,
+    "T5C_step3500": 0.023977433004231313,
+    "T3_S1_step1500": 0.021861777150916785
+  },
+  "n_dev_real": 4564,
+  "n_dev_real_all_iq_nonnull": 1623,
+  "n_lockbox_real": 1418,
+  "n_lockbox_real_all_iq_nonnull": 597,
+  "mean_pearson_r_per_ckpt": {
+    "P8A": 0.7164024532078616,
+    "T3_S1_step1500": -0.0323618153322028,
+    "T5C_step3500": 0.508435861950743
+  },
+  "mean_abs_delta_per_ckpt": {
+    "P8A": 0.0260110999631525,
+    "T3_S1_step1500": 0.04577786753458626,
+    "T5C_step3500": 0.04961319974799594
+  },
+  "largest_delta_cell": [
+    {
+      "ckpt": "T3_S1_step1500",
+      "axis": "color_a_dev",
+      "quartile": "Q4",
+      "dev_fpr": 0.14285714285714285,
+      "lockbox_fpr": 0.0,
+      "delta_dev_minus_lockbox": 0.14285714285714285,
+      "abs_delta": 0.14285714285714285
+    },
+    {
+      "ckpt": "T5C_step3500",
+      "axis": "color_a_dev",
+      "quartile": "Q4",
+      "dev_fpr": 0.18472906403940886,
+      "lockbox_fpr": 0.04225352112676056,
+      "delta_dev_minus_lockbox": 0.1424755429126483,
+      "abs_delta": 0.1424755429126483
+    },
+    {
+      "ckpt": "P8A",
+      "axis": "saturation_mean",
+      "quartile": "Q1",
+      "dev_fpr": 0.059113300492610835,
+      "lockbox_fpr": 0.125,
+      "delta_dev_minus_lockbox": -0.06588669950738917,
+      "abs_delta": 0.06588669950738917
+    }
+  ]
+}

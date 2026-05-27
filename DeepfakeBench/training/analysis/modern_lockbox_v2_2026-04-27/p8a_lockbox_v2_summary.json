@@ -1,0 +1,34 @@
+{
+  "checkpoint": "P8A_step5000",
+  "tau_5pct_production": 0.9741,
+  "filter": "v2_recommended",
+  "filter_definition": {
+    "drop_clip_capture_mode_in": [
+      "webcam",
+      "screen"
+    ],
+    "min_face_area_ratio": 0.1,
+    "drop_is_pose_extreme": true,
+    "drop_is_no_face": true,
+    "_excluded_filters": {
+      "is_likely_screen_capture": "over-aggressive on lockbox \u2014 flags ~90% of fakes"
+    }
+  },
+  "lockbox_real": {
+    "n_baseline": 414,
+    "n_v2_recommended": 281,
+    "frac_kept": 0.679,
+    "fpr_at_tau_0.5_baseline": 0.2198,
+    "fpr_at_tau_0.5_v2": 0.0676,
+    "fpr_at_tau_0.9741_baseline": 0.0459,
+    "fpr_at_tau_0.9741_v2": 0.0071
+  },
+  "lockbox_fake": {
+    "n_baseline": 425,
+    "n_v2_recommended": 367,
+    "recall_at_tau_0.5_baseline": 0.6988,
+    "recall_at_tau_0.5_v2": 0.6567,
+    "recall_at_tau_0.9741_baseline": 0.3294,
+    "recall_at_tau_0.9741_v2": 0.2398
+  }
+}

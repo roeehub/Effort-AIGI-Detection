@@ -1,0 +1,31 @@
+{
+  "verdict": "\u03b3",
+  "winner": {
+    "checkpoint_key": "P13_FROM_SCRATCH_STEP2000",
+    "checkpoint_path": "gs://training-job-outputs/phase2r13_experiments/fi8aka7z/periodic_effort_20260428_step2000_auc0.9658_eer0.0964.pth",
+    "suffix": "p13_from_scratch_step2000",
+    "selected_threshold": 0.5,
+    "verdict": "\u03b3"
+  },
+  "winner_metrics": {
+    "axis1": {
+      "viso_dev_recall": 0.001818,
+      "deeplive_dev_recall": 0.0,
+      "teams_fake_dev_recall": 0.085513,
+      "modern_v2_fpr": 0.2313167259786477,
+      "teams_real_dev_fpr": 0.019982
+    },
+    "axis2": {
+      "recall": 0.7692307692307693,
+      "n_matched": 26,
+      "n_total": 26
+    },
+    "axis3": {
+      "max_delta": 0.5728178173303604,
+      "max_pair": 5,
+      "n_resolved": 11
+    }
+  },
+  "candidates_evaluated": 9,
+  "p13_candidates_evaluated": 7
+}

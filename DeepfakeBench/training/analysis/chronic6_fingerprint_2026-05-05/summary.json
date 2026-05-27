@@ -1,0 +1,9 @@
+{
+  "n_chronic6_frames_covered": 830,
+  "n_nonchronic_webcam_frames": 2048,
+  "n_normal_photo_frames": 1128,
+  "top_separating_feature": "width",
+  "top_feature_KS_chronic_vs_nonchronic_webcam": 0.4829160391566265,
+  "top_feature_p_value": 1.1015848440751886e-125,
+  "interpretation": "If top KS_stat \u2265 0.5 with p<1e-5, chronic-6 has a tight in-frame fingerprint distinguishing them from non-chronic webcam users \u2014 deployment-viable per-frame gate possible. If top KS < 0.3, chronic-6 are not separable from other webcam users by IQ/face features alone \u2014 need training-side intervention."
+}

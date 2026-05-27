@@ -1,0 +1,28 @@
+Validation Summary Report for: td_teams_real_poor_quality_dev_p1_bundle_top_n_step3750
+Run Name: TargetDomain teams_real_poor_quality_dev P1_BUNDLE_TOP_N_STEP3750
+Generated on: 2026-05-07 09:27:57
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 923
+Accuracy: 0.8234
+True Positives (Correctly identified Fake): 0
+True Negatives (Correctly identified Real): 760
+False Positives (Real misclassified as Fake): 163
+False Negatives (Fake misclassified as Real): 0
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_real (REAL) -----
+Total Videos: 923
+Accuracy: 0.8234 (760/923 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_real (family=realpool_real): n=923, acc=0.8234, tpr=0.0000, fpr=0.1766, fnr=0.0000
+
+Best-group accuracy: unknown_real = 0.8234
+Worst-group accuracy: unknown_real = 0.8234
+Best-vs-worst group accuracy gap: 0.0000

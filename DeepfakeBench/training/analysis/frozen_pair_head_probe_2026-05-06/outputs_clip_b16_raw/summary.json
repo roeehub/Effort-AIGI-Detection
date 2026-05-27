@@ -1,0 +1,132 @@
+{
+  "phase": "0h",
+  "source_npz": "analysis/path_a_launch_2026-05-07/outputs/clip_b16_raw_paired_features.npz",
+  "n_features_ok": 3604,
+  "n_features_total": 5311,
+  "n_pairs_covered": 25327,
+  "n_train_pairs": 21327,
+  "n_test_pairs": 4000,
+  "test_subjects": [
+    "xiang_xiang2_feng"
+  ],
+  "results": {
+    "ce": {
+      "train": {
+        "auc": 1.0,
+        "fpr_at_tau_logit_0": 0.0,
+        "recall_at_tau_logit_0": 1.0,
+        "accuracy_at_tau_logit_0": 1.0,
+        "p_fake_gt_real_on_pairs": 1.0,
+        "pair_gap_mean": 18.353443145751953,
+        "pair_gap_median": 18.1787052154541,
+        "pair_gap_p_le_0": 0.0,
+        "n_pairs": 21327
+      },
+      "test": {
+        "auc": 0.95549875,
+        "fpr_at_tau_logit_0": 0.05775,
+        "recall_at_tau_logit_0": 0.82775,
+        "accuracy_at_tau_logit_0": 0.885,
+        "p_fake_gt_real_on_pairs": 0.95675,
+        "pair_gap_mean": 6.883238315582275,
+        "pair_gap_median": 7.013359069824219,
+        "pair_gap_p_le_0": 0.04325,
+        "n_pairs": 4000
+      }
+    },
+    "ce_pair": {
+      "train": {
+        "auc": 1.0,
+        "fpr_at_tau_logit_0": 0.0,
+        "recall_at_tau_logit_0": 1.0,
+        "accuracy_at_tau_logit_0": 1.0,
+        "p_fake_gt_real_on_pairs": 1.0,
+        "pair_gap_mean": 18.354888916015625,
+        "pair_gap_median": 18.179702758789062,
+        "pair_gap_p_le_0": 0.0,
+        "n_pairs": 21327
+      },
+      "test": {
+        "auc": 0.95549875,
+        "fpr_at_tau_logit_0": 0.05775,
+        "recall_at_tau_logit_0": 0.82775,
+        "accuracy_at_tau_logit_0": 0.885,
+        "p_fake_gt_real_on_pairs": 0.95675,
+        "pair_gap_mean": 6.884048938751221,
+        "pair_gap_median": 7.0139594078063965,
+        "pair_gap_p_le_0": 0.04325,
+        "n_pairs": 4000
+      }
+    },
+    "ce_pair_group": {
+      "train": {
+        "auc": 1.0,
+        "fpr_at_tau_logit_0": 0.0,
+        "recall_at_tau_logit_0": 1.0,
+        "accuracy_at_tau_logit_0": 1.0,
+        "p_fake_gt_real_on_pairs": 1.0,
+        "pair_gap_mean": 18.354888916015625,
+        "pair_gap_median": 18.179702758789062,
+        "pair_gap_p_le_0": 0.0,
+        "n_pairs": 21327
+      },
+      "test": {
+        "auc": 0.95549875,
+        "fpr_at_tau_logit_0": 0.05775,
+        "recall_at_tau_logit_0": 0.82775,
+        "accuracy_at_tau_logit_0": 0.885,
+        "p_fake_gt_real_on_pairs": 0.95675,
+        "pair_gap_mean": 6.884048938751221,
+        "pair_gap_median": 7.0139594078063965,
+        "pair_gap_p_le_0": 0.04325,
+        "n_pairs": 4000
+      }
+    }
+  },
+  "lift_table": {
+    "head_a_ce_test": {
+      "auc": 0.95549875,
+      "fpr_at_tau_logit_0": 0.05775,
+      "recall_at_tau_logit_0": 0.82775,
+      "accuracy_at_tau_logit_0": 0.885,
+      "p_fake_gt_real_on_pairs": 0.95675,
+      "pair_gap_mean": 6.883238315582275,
+      "pair_gap_median": 7.013359069824219,
+      "pair_gap_p_le_0": 0.04325,
+      "n_pairs": 4000
+    },
+    "head_b_ce_pair_test": {
+      "auc": 0.95549875,
+      "fpr_at_tau_logit_0": 0.05775,
+      "recall_at_tau_logit_0": 0.82775,
+      "accuracy_at_tau_logit_0": 0.885,
+      "p_fake_gt_real_on_pairs": 0.95675,
+      "pair_gap_mean": 6.884048938751221,
+      "pair_gap_median": 7.0139594078063965,
+      "pair_gap_p_le_0": 0.04325,
+      "n_pairs": 4000
+    },
+    "head_c_ce_pair_group_test": {
+      "auc": 0.95549875,
+      "fpr_at_tau_logit_0": 0.05775,
+      "recall_at_tau_logit_0": 0.82775,
+      "accuracy_at_tau_logit_0": 0.885,
+      "p_fake_gt_real_on_pairs": 0.95675,
+      "pair_gap_mean": 6.884048938751221,
+      "pair_gap_median": 7.0139594078063965,
+      "pair_gap_p_le_0": 0.04325,
+      "n_pairs": 4000
+    },
+    "lift_b_minus_a_pair_gap_pp": 0.0,
+    "lift_b_minus_a_accuracy_pp": 0.0,
+    "lift_b_minus_a_auc_pp": 0.0,
+    "lift_c_minus_a_pair_gap_pp": 0.0,
+    "lift_c_minus_a_accuracy_pp": 0.0,
+    "lift_c_minus_a_auc_pp": 0.0
+  },
+  "promotion_gate": {
+    "lift_b_minus_a_pair_gap_pp": 0.0,
+    "verdict": "BORDERLINE",
+    "recommendation": "P1 viable but expected ROI lower than headline"
+  }
+}

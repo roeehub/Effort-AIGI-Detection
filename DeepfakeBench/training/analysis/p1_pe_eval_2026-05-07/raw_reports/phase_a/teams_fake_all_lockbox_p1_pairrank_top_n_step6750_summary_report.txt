@@ -1,0 +1,32 @@
+Validation Summary Report for: td_teams_fake_all_lockbox_p1_pairrank_top_n_step6750
+Run Name: TargetDomain teams_fake_all_lockbox P1_PAIRRANK_TOP_N_STEP6750
+Generated on: 2026-05-07 12:01:03
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 253
+Accuracy: 0.9368
+True Positives (Correctly identified Fake): 237
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 16
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: teams_capture_cam_test_s33 (FAKE) -----
+Total Videos: 191
+Accuracy: 0.9162 (175/191 correct)
+
+----- Method: teams_capture_pc_generator_s15 (FAKE) -----
+Total Videos: 62
+Accuracy: 1.0000 (62/62 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+unknown_fake (family=unknown_fake): n=253, acc=0.9368, tpr=0.9368, fpr=0.0000, fnr=0.0632
+
+Best-group accuracy: unknown_fake = 0.9368
+Worst-group accuracy: unknown_fake = 0.9368
+Best-vs-worst group accuracy gap: 0.0000

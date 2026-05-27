@@ -1,0 +1,50 @@
+{
+  "run_id": "evm4y66r",
+  "saves_uri": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/",
+  "peaks": {
+    "class_separation": {
+      "peak_step": 200.0,
+      "peak_value": 4.8935546875,
+      "closest_ckpt_step": 200,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step200_auc0.9853_eer0.0412.pth"
+    },
+    "logit_std": {
+      "peak_step": 300.0,
+      "peak_value": 3.3359375,
+      "closest_ckpt_step": 300,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step300_auc0.9818_eer0.0593.pth"
+    },
+    "val_holdout_auc": {
+      "peak_step": 500.0,
+      "peak_value": 0.9889543446244476,
+      "closest_ckpt_step": 500,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step500_auc0.9890_eer0.0361.pth"
+    },
+    "val_in_dist_auc": {
+      "peak_step": 500.0,
+      "peak_value": 0.9872880941502599,
+      "closest_ckpt_step": 500,
+      "closest_ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step500_auc0.9890_eer0.0361.pth"
+    }
+  },
+  "top3_by_class_separation": [
+    {
+      "wandb_step": 200,
+      "class_separation": 4.8935546875,
+      "ckpt_step": 200,
+      "ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step200_auc0.9853_eer0.0412.pth"
+    },
+    {
+      "wandb_step": 300,
+      "class_separation": 4.666015625,
+      "ckpt_step": 300,
+      "ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step300_auc0.9818_eer0.0593.pth"
+    },
+    {
+      "wandb_step": 650,
+      "class_separation": 3.9248046875,
+      "ckpt_step": 600,
+      "ckpt_path": "gs://training-job-outputs/phase2r13_experiments/evm4y66r/periodic_effort_20260502_step600_auc0.9867_eer0.0361.pth"
+    }
+  ]
+}

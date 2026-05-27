@@ -1,0 +1,13 @@
+{
+  "median_pair_feat_cosine_distance_p8a": 0.05834866945555128,
+  "median_pair_feat_cosine_distance_clip_b16": 0.09448082254755252,
+  "delta_median_p8a_minus_clip": -0.03613215309200124,
+  "pct_pairs_p8a_dist_smaller_than_clip": 54.90909090909091,
+  "n_pairs": 275,
+  "thresholds": {
+    "encoder_invariant_max_median_cos_dist": 0.05,
+    "encoder_not_invariant_min_median_cos_dist": 0.15
+  },
+  "verdict": "ENCODER_PARTIAL_INVARIANCE",
+  "recommendation": "Encoder is partially invariant. Both head-axis (AugMix on frozen encoder + new head) and encoder-axis (PD-class FT, SBI) levers are worth pursuing."
+}

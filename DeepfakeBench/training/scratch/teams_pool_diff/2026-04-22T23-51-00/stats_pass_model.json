@@ -1,0 +1,46 @@
+{
+  "per_group": {
+    "proper_visomaster_teams_fake": {
+      "fake_prob_mean": 0.3009260892868042,
+      "fake_prob_median": 0.036383870989084244,
+      "fake_prob_p05": 0.002642608620226383,
+      "fake_prob_p95": 0.9946090638637543,
+      "embedding_dispersion_l2": 9.37740707397461,
+      "n": 120
+    },
+    "proper_visomaster_teams_real": {
+      "fake_prob_mean": 0.004410512279719114,
+      "fake_prob_median": 0.0014745574444532394,
+      "fake_prob_p05": 0.0006669307069387287,
+      "fake_prob_p95": 0.02090301448479294,
+      "embedding_dispersion_l2": 6.867091178894043,
+      "n": 120
+    },
+    "teams_ood_fake": {
+      "fake_prob_mean": 0.9281296730041504,
+      "fake_prob_median": 0.9979340434074402,
+      "fake_prob_p05": 0.380494211614132,
+      "fake_prob_p95": 0.9996624529361725,
+      "embedding_dispersion_l2": 8.129426956176758,
+      "n": 84
+    },
+    "teams_ood_real": {
+      "fake_prob_mean": 0.13627558946609497,
+      "fake_prob_median": 0.025165405124425888,
+      "fake_prob_p05": 0.0014548608218319715,
+      "fake_prob_p95": 0.911109897494316,
+      "embedding_dispersion_l2": 9.158565521240234,
+      "n": 120
+    }
+  },
+  "centroid_distances": {
+    "proper_visomaster_teams_fake__proper_visomaster_teams_real": 0.11103659394640997,
+    "proper_visomaster_teams_fake__teams_ood_fake": 0.4456006559916592,
+    "proper_visomaster_teams_fake__teams_ood_real": 0.059962126027046425,
+    "proper_visomaster_teams_real__teams_ood_fake": 0.8128110993039112,
+    "proper_visomaster_teams_real__teams_ood_real": 0.08610160530442657,
+    "teams_ood_fake__teams_ood_real": 0.5139035099683935
+  },
+  "n_frames": 444,
+  "embedding_dim": 512
+}

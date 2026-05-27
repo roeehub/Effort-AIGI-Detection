@@ -1,0 +1,17 @@
+{
+  "target_far": 0.45,
+  "splits": {
+    "lockbox": {
+      "n_real": 4,
+      "n_fake": 4,
+      "n_frames_tightened": 4,
+      "frac_tightened": 0.5,
+      "before_fpr": 0.0,
+      "before_recall": 0.25,
+      "after_fpr": 0.0,
+      "after_recall": 0.25,
+      "fpr_delta": 0.0,
+      "recall_delta": 0.0
+    }
+  }
+}

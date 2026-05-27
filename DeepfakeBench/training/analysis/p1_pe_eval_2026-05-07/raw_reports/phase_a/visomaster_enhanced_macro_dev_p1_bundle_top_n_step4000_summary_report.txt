@@ -1,0 +1,28 @@
+Validation Summary Report for: td_visomaster_enhanced_macro_dev_p1_bundle_top_n_step4000
+Run Name: TargetDomain visomaster_enhanced_macro_dev P1_BUNDLE_TOP_N_STEP4000
+Generated on: 2026-05-07 11:05:46
+========================================
+Overall Performance
+----------------------------------------
+Total Videos: 550
+Accuracy: 0.6309
+True Positives (Correctly identified Fake): 347
+True Negatives (Correctly identified Real): 0
+False Positives (Real misclassified as Fake): 0
+False Negatives (Fake misclassified as Real): 203
+
+========================================
+Per-Method Performance
+----------------------------------------
+----- Method: visomaster_enhanced_macro (FAKE) -----
+Total Videos: 550
+Accuracy: 0.6309 (347/550 correct)
+
+========================================
+Per-Group Performance
+----------------------------------------
+visomaster_enhanced_fake (family=visomaster_enhanced_fake): n=550, acc=0.6309, tpr=0.6309, fpr=0.0000, fnr=0.3691
+
+Best-group accuracy: visomaster_enhanced_fake = 0.6309
+Worst-group accuracy: visomaster_enhanced_fake = 0.6309
+Best-vs-worst group accuracy gap: 0.0000

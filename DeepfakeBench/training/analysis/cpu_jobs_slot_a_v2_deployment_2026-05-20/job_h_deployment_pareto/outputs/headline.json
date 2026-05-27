@@ -1,0 +1,66 @@
+{
+  "E2B": {
+    "recall_at_lockbox_fpr_2pct": 0.6007905138339921,
+    "recall_at_lockbox_fpr_5pct": 0.8221343873517787,
+    "recall_at_lockbox_fpr_10pct": 0.9525691699604744,
+    "auc_recall_below_fpr_25pct": 0.8884829510967581,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "P8A": {
+    "recall_at_lockbox_fpr_2pct": 0.42292490118577075,
+    "recall_at_lockbox_fpr_5pct": 0.6205533596837944,
+    "recall_at_lockbox_fpr_10pct": 0.7786561264822134,
+    "auc_recall_below_fpr_25pct": 0.7590384889046359,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "SlotAv2": {
+    "recall_at_lockbox_fpr_2pct": 0.6956521739130435,
+    "recall_at_lockbox_fpr_5pct": 0.7628458498023716,
+    "recall_at_lockbox_fpr_10pct": 0.8537549407114624,
+    "auc_recall_below_fpr_25pct": 0.8487772011395944,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "T5C": {
+    "recall_at_lockbox_fpr_2pct": 0.5928853754940712,
+    "recall_at_lockbox_fpr_5pct": 0.7154150197628458,
+    "recall_at_lockbox_fpr_10pct": 0.8379446640316206,
+    "auc_recall_below_fpr_25pct": 0.7934179994365919,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "ENSEMBLE_mean": {
+    "recall_at_lockbox_fpr_2pct": 0.6284584980237155,
+    "recall_at_lockbox_fpr_5pct": 0.7391304347826086,
+    "recall_at_lockbox_fpr_10pct": 0.83399209486166,
+    "auc_recall_below_fpr_25pct": 0.8227791120804568,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "ENSEMBLE_max": {
+    "recall_at_lockbox_fpr_2pct": 0.4980237154150198,
+    "recall_at_lockbox_fpr_5pct": 0.7628458498023716,
+    "recall_at_lockbox_fpr_10pct": 0.8142292490118577,
+    "auc_recall_below_fpr_25pct": 0.7915825668756697,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "ENSEMBLE_min": {
+    "recall_at_lockbox_fpr_2pct": 0.6126482213438735,
+    "recall_at_lockbox_fpr_5pct": 0.7509881422924901,
+    "recall_at_lockbox_fpr_10pct": 0.8181818181818182,
+    "auc_recall_below_fpr_25pct": 0.8073463769083997,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  },
+  "ENSEMBLE_geomean": {
+    "recall_at_lockbox_fpr_2pct": 0.6284584980237155,
+    "recall_at_lockbox_fpr_5pct": 0.7272727272727273,
+    "recall_at_lockbox_fpr_10pct": 0.83399209486166,
+    "auc_recall_below_fpr_25pct": 0.8186029221712702,
+    "n_real_lockbox": 1361,
+    "n_fake_lockbox": 253
+  }
+}
