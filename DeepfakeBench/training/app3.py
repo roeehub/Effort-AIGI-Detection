@@ -18,6 +18,7 @@ from torch import nn  # noqa
 
 import video_preprocessor
 import observability  # per-request capture → GCS (fail-open, never blocks inference)
+from batch_assembly import assemble_probs_list  # pure helper: t5c index-aligned response probs (B1)
 from detectors import DETECTOR, EffortDetector  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
@@ -1204,14 +1205,17 @@ async def check_frame_batch(
                     capture_frames[idx].scored = True
                     capture_frames[idx].verdict = "FAKE" if prob >= threshold else "REAL"
 
-        # Build the response probs list.
-        # - t5c (align_to_input=True): every input file gets a slot. Real model
-        #   probs for scored frames, GATE_SENTINEL_PROB (-1.0) for gated and
-        #   decode-failed frames. len(probs) == len(files), so downstream
-        #   index-based per-participant attribution works.
-        # - legacy (align_to_input=False): gated frames carry the 0.25 vote,
-        #   decode-failed frames are dropped. Pre-existing contract.
-        probs_list = [s["prob"] for s in per_frame_status if "prob" in s]
+        # Build the response probs list via the pure helper so the t5c alignment
+        # contract is guaranteed by construction (see batch_assembly.py + tests):
+        # - t5c (align_to_input=True): EVERY input frame gets one slot, in order.
+        #   Real prob for scored frames; GATE_SENTINEL_PROB (-1.0) for ANY
+        #   non-scored frame — gated, decode-failed, AND processing-failed (the
+        #   except path below, which previously dropped its slot — B1). So
+        #   len(probs) == len(files) and client-side positional per-participant
+        #   attribution can't shift across pid boundaries.
+        # - legacy (align_to_input=False): gated frames carry the 0.25 vote;
+        #   decode/processing failures are dropped. Pre-existing contract.
+        probs_list = assemble_probs_list(per_frame_status, align_to_input, GATE_SENTINEL_PROB)
         successful_frames = sum(1 for s in per_frame_status if s["kind"] == "tensor")
 
         # For the confidence mean, drop sentinel slots (they represent rejected
