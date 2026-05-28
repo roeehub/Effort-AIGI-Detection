@@ -126,6 +126,54 @@ def sanitize_filename(name, seq: int) -> str:
     return base[:_MAX_FILENAME_LEN]
 
 
+# Tight regex for the WMA-side encoded filename:
+#   pid=<pid>__seq=<seq>__frame_<i>.<ext>
+# `pid` matches non-greedily so the FIRST `__seq=` boundary ends the pid —
+# this lets pids contain a single underscore (sanitization on the WMA side
+# collapses `__` to `_` so the separator is never ambiguous). `seq` is a
+# digit run; non-numeric `seq` returns (None, None) and downstream
+# participant_id stays None (treated as a legacy/unlabeled frame).
+_PID_FILENAME_RE = re.compile(
+    r"^pid=(?P<pid>.+?)__seq=(?P<seq>\d+)__frame_\d+\.[A-Za-z0-9]+$"
+)
+
+
+def parse_pid_from_filename(filename):
+    """Extract (participant_id, participant_seq) from the encoded filename.
+
+    Returns (None, None) for any filename that doesn't match the encoding —
+    legacy callers that upload `frame_<i>.<ext>` flow through unchanged so
+    historical data and unmodified clients stay compatible.
+    """
+    if not filename:
+        return None, None
+    m = _PID_FILENAME_RE.match(filename)
+    if not m:
+        return None, None
+    try:
+        return m.group("pid"), int(m.group("seq"))
+    except (TypeError, ValueError):
+        return None, None
+
+
+# Pid-segment safety for the GCS object key. WMA already sanitizes
+# pre-encoding (matching this allowed set), but the uploader treats the pid
+# as untrusted input — any unexpected `/` or `..` would either create a
+# spurious "subdir" in the bucket or look like path traversal to a reader
+# script that splits on `/`. Anything outside [A-Za-z0-9._ -] collapses to
+# `_`; length is capped so a long display name can't bloat the key.
+_NON_PID_KEY_SAFE = re.compile(r"[^A-Za-z0-9._ -]+")
+_MAX_PID_IN_KEY = 64
+
+
+def _safe_pid_for_key(pid):
+    if not pid:
+        return ""
+    s = _NON_PID_KEY_SAFE.sub("_", str(pid))
+    s = s.strip(". ")
+    return s[:_MAX_PID_IN_KEY]
+
+
 # ──────────────────────────────────────────
 # Capture records (serializable; no GCS)
 # ──────────────────────────────────────────
@@ -150,6 +198,12 @@ class FrameCapture:
     verdict: Optional[str] = None
     gcs_object_path: Optional[str] = None       # set by the uploader ONLY after a successful upload
     capture_skipped: bool = False               # image bytes intentionally not retained (over byte budget)
+    # Participant labeling — populated by the request handler when the WMA
+    # client encodes `pid=…__seq=…__frame_…` into the multipart filename.
+    # `participant_id` stays None for legacy callers; the uploader then
+    # falls back to the flat key layout so historical data stays compatible.
+    participant_id: Optional[str] = None
+    participant_seq: Optional[int] = None
 
     @property
     def bytes_size(self) -> int:
@@ -176,6 +230,8 @@ class FrameCapture:
             "verdict": self.verdict,
             "gcs_object_path": self.gcs_object_path,
             "capture_skipped": self.capture_skipped,
+            "participant_id": self.participant_id,
+            "participant_seq": self.participant_seq,
         }
 
 
@@ -224,6 +280,30 @@ class CaptureRecord:
         failed = total - scored - gated
         return {"total": total, "scored": scored, "gated": gated, "failed": failed}
 
+    @staticmethod
+    def _classify_frame(f) -> str:
+        # Same triage as counts() so the per-pid totals reconcile with the
+        # request-level totals byte-for-byte.
+        if f.scored:
+            return "scored"
+        if f.gate_pass is False or f.face_found is False:
+            return "gated"
+        return "failed"
+
+    def participants_summary(self) -> Dict[str, Dict[str, int]]:
+        """Per-pid {total, scored, gated, failed}; unlabeled frames roll up
+        under the literal key 'unknown' so the breakdown is exhaustive (the
+        sum over all entries equals `counts()['total']`)."""
+        out: Dict[str, Dict[str, int]] = {}
+        for f in self.frames:
+            key = f.participant_id or "unknown"
+            bucket = out.setdefault(
+                key, {"total": 0, "scored": 0, "gated": 0, "failed": 0}
+            )
+            bucket["total"] += 1
+            bucket[self._classify_frame(f)] += 1
+        return out
+
     def to_meta_dict(self, static: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         static = static or {}
         checkpoint_paths = static.get("checkpoint_paths", {}) or {}
@@ -266,6 +346,10 @@ class CaptureRecord:
                 "confidence": self.confidence,
             },
             "counts": self.counts(),
+            # Per-pid breakdown is a separate top-level block so the
+            # existing `counts` shape (total/scored/gated/failed) stays
+            # byte-identical for any downstream that strict-compares it.
+            "participants": self.participants_summary(),
             "frames": [f.to_meta() for f in self.frames],
         }
 
@@ -292,6 +376,10 @@ class CaptureRecord:
             "n_gated": c["gated"],
             "n_failed": c["failed"],
             "gcs_prefix": self.gcs_prefix,
+            # Per-pid breakdown — lets the offline-sessionization reader
+            # filter / group by participant without dereferencing meta.json
+            # for each request. Empty {} for requests with no labeled frames.
+            "participants": self.participants_summary(),
         }
 
 
@@ -559,7 +647,14 @@ class ObservabilityUploader:
             if f.capture_skipped or not f.raw_bytes:
                 f.gcs_object_path = None
                 continue
-            name = f"{prefix}/frame_{f.seq:03d}{_ext_for(f.content_type)}"
+            # Partition by participant when known so a single `pid=…/`
+            # prefix scan yields one participant's frames. Frames without a
+            # pid (legacy callers / parse miss) keep the historical flat
+            # layout so old data and unmodified clients stay readable in
+            # the same bucket.
+            pid_safe = _safe_pid_for_key(f.participant_id)
+            pid_segment = f"/pid={pid_safe}" if pid_safe else ""
+            name = f"{prefix}{pid_segment}/frame_{f.seq:03d}{_ext_for(f.content_type)}"
             if self._upload_blob(name, f.raw_bytes, f.content_type or "application/octet-stream"):
                 f.gcs_object_path = name      # set ONLY after a confirmed upload
                 objs_ok += 1

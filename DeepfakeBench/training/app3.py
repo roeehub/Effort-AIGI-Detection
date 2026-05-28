@@ -892,6 +892,13 @@ async def check_frame(
             fcap = observability.FrameCapture(
                 seq=0, raw_bytes=b"", filename=file.filename, content_type=file.content_type,
             )
+            # WMA encodes pid + per-pid seq into the multipart filename
+            # (`pid=…__seq=…__frame_…`). Returns (None, None) for legacy
+            # callers that don't carry the encoding — participant_id then
+            # stays None and the uploader falls back to the flat key layout.
+            fcap.participant_id, fcap.participant_seq = (
+                observability.parse_pid_from_filename(file.filename)
+            )
             cap.frames.append(fcap)
         except Exception:
             cap = fcap = None
@@ -1071,6 +1078,11 @@ async def check_frame_batch(
             if cap is not None:
                 fc = observability.FrameCapture(
                     seq=i, raw_bytes=b"", filename=f.filename, content_type=f.content_type,
+                )
+                # Per-frame pid extraction so the GCS capture partitions
+                # by participant (see /check_frame for the contract).
+                fc.participant_id, fc.participant_seq = (
+                    observability.parse_pid_from_filename(f.filename)
                 )
                 capture_frames.append(fc)
             try:
