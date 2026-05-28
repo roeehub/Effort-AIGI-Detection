@@ -88,6 +88,31 @@ class TestParsePidFromFilename:
         # Anything that fails the integer parse safely degrades to (None, None).
         assert obs.parse_pid_from_filename("pid=A__seq=NOTANUMBER__frame_0.png") == (None, None)
 
+    def test_parses_percent_encoded_wire_filename(self):
+        # REGRESSION (observed live 2026-05-28): WMA posts frames via aiohttp
+        # `FormData(quote_fields=True)` (the default), which percent-encodes the
+        # multipart filename on the wire — `=` -> %3D, space -> %20. The other
+        # tests in this class feed the PRE-encoding literal, so they never
+        # exercised the real wire form; the live meta.json filename is encoded.
+        # If the parser doesn't URL-decode first, the `^pid=` anchor never
+        # matches `pid%3D…`, so labeling is a SILENT no-op (participant_id stays
+        # None for every real request) even after this code is deployed.
+        #
+        # This exact string is copied from a production meta.json frame entry.
+        pid, seq = obs.parse_pid_from_filename(
+            "pid%3Done%20_Guest___seq%3D342__frame_0.png"
+        )
+        assert pid == "one _Guest_"
+        assert seq == 342
+
+    def test_percent_encoded_round_trips_like_literal(self):
+        # The URL-encoded form of a filename must parse identically to its
+        # plain literal — decoding is transparent, not lossy.
+        from urllib.parse import quote
+        encoded = quote("pid=Alice Smith__seq=5__frame_2.png")
+        assert "%3D" in encoded and "%20" in encoded  # guard: actually encoded
+        assert obs.parse_pid_from_filename(encoded) == ("Alice Smith", 5)
+
 
 # ──────────────────────────────────────────
 # B4 — FrameCapture.participant_id + per-pid GCS key

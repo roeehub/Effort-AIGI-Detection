@@ -29,6 +29,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import unquote
 
 logger = logging.getLogger("effort-aigi-api-v3.observability")
 
@@ -147,7 +148,14 @@ def parse_pid_from_filename(filename):
     """
     if not filename:
         return None, None
-    m = _PID_FILENAME_RE.match(filename)
+    # WMA posts frames via aiohttp `FormData(quote_fields=True)` (the default),
+    # which percent-encodes the multipart filename on the wire: `=` -> %3D,
+    # ` ` -> %20. Decode before matching so the encoded wire form parses
+    # identically to the plain literal. `unquote` is a no-op for already-plain
+    # filenames, so legacy `frame_<i>.<ext>` callers are unaffected. Without
+    # this, the `^pid=` anchor never matches `pid%3D…` and labeling is a silent
+    # no-op for every real request (observed live 2026-05-28).
+    m = _PID_FILENAME_RE.match(unquote(filename))
     if not m:
         return None, None
     try:
