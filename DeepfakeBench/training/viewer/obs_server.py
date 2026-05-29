@@ -51,8 +51,18 @@ BUCKET = os.environ.get("OBS_BUCKET", "remote-live-data")
 PREFIX = os.environ.get("OBS_PREFIX", "v1")
 CONFIG_PATH = "_viewer/config.json"               # bucket-root, version-independent
 OBS_FRAME_CACHE_DIR = Path(".viewer_cache/obs_frames").resolve()
+# Bound the on-disk thumbnail cache so a long QC session over a big meeting
+# (tens of thousands of frames) can't fill the disk. Oldest thumbnails evicted
+# first once MAX is exceeded, down to TARGET. Tunable via env.
+OBS_FRAME_CACHE_MAX_BYTES = int(os.environ.get("OBS_FRAME_CACHE_MAX_BYTES", 300 * 1024 * 1024))
+OBS_FRAME_CACHE_TARGET_BYTES = int(os.environ.get("OBS_FRAME_CACHE_TARGET_BYTES",
+                                                  int(OBS_FRAME_CACHE_MAX_BYTES * 0.8)))
+OBS_FRAME_CACHE_CHECK_EVERY = int(os.environ.get("OBS_FRAME_CACHE_CHECK_EVERY", 40))
 DEFAULT_SETTINGS = {"gap_minutes": 30, "lookup_days": 14}
 _INDEX_CACHE_MAX_DATES = 8
+# Max request meta.json files the participant board reads per fetch — bounds work
+# for huge meetings (4000+ requests); the UI raises it via "load more".
+DEFAULT_BOARD_REQUEST_LIMIT = int(os.environ.get("OBS_BOARD_REQUEST_LIMIT", 80))
 
 app = Flask(__name__, template_folder="templates", static_folder="templates")
 
@@ -315,6 +325,58 @@ def _load_meta_for_prefix(prefix: str) -> Optional[Dict[str, Any]]:
     return meta
 
 
+_cache_write_lock = threading.Lock()
+_cache_write_count = 0
+
+
+def _evict_frame_cache(max_bytes, target_bytes, cache_dir=None):
+    """LRU-ish cap on the thumbnail cache: if it exceeds ``max_bytes``, delete
+    files oldest-first (by mtime) until the total is <= ``target_bytes``. Returns
+    bytes freed. Safe if the dir is missing or a file vanishes mid-scan."""
+    d = Path(cache_dir) if cache_dir is not None else OBS_FRAME_CACHE_DIR
+    if not d.exists():
+        return 0
+    files, total = [], 0
+    for f in d.rglob("*"):
+        if not f.is_file():
+            continue
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        files.append((st.st_mtime, st.st_size, f))
+        total += st.st_size
+    if total <= max_bytes:
+        return 0
+    files.sort(key=lambda t: t[0])         # oldest mtime first
+    freed = 0
+    for _mtime, size, f in files:
+        if total - freed <= target_bytes:
+            break
+        try:
+            f.unlink()
+            freed += size
+        except OSError:
+            continue
+    return freed
+
+
+def _maybe_evict_cache():
+    """Throttle: run a full eviction sweep only every OBS_FRAME_CACHE_CHECK_EVERY
+    cached writes, so the cap is enforced cheaply (no dir scan per request)."""
+    global _cache_write_count
+    with _cache_write_lock:
+        _cache_write_count += 1
+        due = (_cache_write_count % OBS_FRAME_CACHE_CHECK_EVERY) == 0
+    if due:
+        try:
+            freed = _evict_frame_cache(OBS_FRAME_CACHE_MAX_BYTES, OBS_FRAME_CACHE_TARGET_BYTES)
+            if freed:
+                logger.info("frame cache evicted %s", _human_size(freed))
+        except Exception as e:
+            logger.warning("frame cache eviction failed: %s", e)
+
+
 def _cache_size_human() -> str:
     if not OBS_FRAME_CACHE_DIR.exists():
         return "0 B"
@@ -412,11 +474,20 @@ def api_participants():
     if not prefixes:
         return jsonify({"error": "prefixes required"}), 400
 
-    # meta.json reads are IO-bound; fan them out so a multi-minute session
-    # (hundreds of 2-second requests) still loads quickly.
+    try:
+        limit = int(body.get("limit") or DEFAULT_BOARD_REQUEST_LIMIT)
+    except (TypeError, ValueError):
+        limit = DEFAULT_BOARD_REQUEST_LIMIT
+    limit = max(1, limit)
+    # `prefixes` arrive chronological ascending; read only the most-recent
+    # `limit` so a 4000-request meeting doesn't fetch every meta.json. The UI
+    # raises `limit` ("load more") to reach older history.
+    used = prefixes[-limit:]
+
+    # meta.json reads are IO-bound; fan them out so even `limit` reads are quick.
     metas: List[Dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=8) as ex:
-        for m in ex.map(_load_meta_for_prefix, prefixes):
+        for m in ex.map(_load_meta_for_prefix, used):
             if m is not None:
                 metas.append(m)
 
@@ -436,6 +507,9 @@ def api_participants():
         "participants": participants,
         "n_participants": len(participants),
         "n_frames": len(frames),
+        "n_requests_total": len(prefixes),
+        "n_requests_read": len(used),
+        "truncated": len(prefixes) > len(used),
         "threshold": threshold,
     })
 
@@ -518,6 +592,7 @@ def proxy_frame(bucket, blob_path):
 
     local_path.parent.mkdir(parents=True, exist_ok=True)
     local_path.write_bytes(data)
+    _maybe_evict_cache()                       # keep the on-disk cache under its size cap
     return send_file(io.BytesIO(data), mimetype=mimetype)
 
 

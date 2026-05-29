@@ -165,3 +165,32 @@ def test_route_participants_skips_unreadable_meta(client, monkeypatch):
     # the good request still yields a participant; the bad one is skipped, not fatal
     assert body["n_frames"] == 1
     assert len(body["participants"]) == 1
+
+
+def test_route_participants_caps_to_most_recent_limit(client, monkeypatch):
+    # prefixes are chronological ascending; a huge session must read only the
+    # most-recent `limit` requests, not every meta.json (4000+ would be fatal).
+    prefixes = [f"v1/d/ip/req={i}/" for i in range(5)]    # req=0 oldest … req=4 newest
+    read = []
+
+    def fake_dl(pfx):
+        read.append(pfx)
+        i = pfx.split("req=")[1].rstrip("/")
+        return _meta([_mframe(0, f"pid=A__seq={i}__frame_0.png", 0.5, pfx)])
+
+    monkeypatch.setattr(obs, "download_meta", fake_dl)
+    body = client.post("/api/participants", json={"prefixes": prefixes, "limit": 2}).get_json()
+    assert body["n_requests_total"] == 5
+    assert body["n_requests_read"] == 2
+    assert body["truncated"] is True
+    assert sorted(read) == ["v1/d/ip/req=3/", "v1/d/ip/req=4/"]   # only the 2 newest read
+
+
+def test_route_participants_not_truncated_when_under_limit(client, monkeypatch):
+    monkeypatch.setattr(obs, "download_meta",
+                        lambda pfx: _meta([_mframe(0, "pid=A__seq=1__frame_0.png", 0.5, pfx)]))
+    body = client.post("/api/participants",
+                       json={"prefixes": ["v1/d/ip/req=A/", "v1/d/ip/req=B/"], "limit": 80}).get_json()
+    assert body["n_requests_total"] == 2
+    assert body["n_requests_read"] == 2
+    assert body["truncated"] is False

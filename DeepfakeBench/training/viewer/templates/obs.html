@@ -90,6 +90,14 @@
   .p-bar{flex:0 0 120px;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
   .p-bar-fill{display:block;height:100%}
   .p-counts{font-size:12px;color:var(--muted);margin-left:auto}
+  .p-hd{cursor:pointer}
+  .p-hd:hover{background:var(--bg3)}
+  .caret{display:inline-block;color:var(--muted);font-size:11px;width:10px;transition:transform .12s}
+  .participant.popen .caret{transform:rotate(90deg)}
+  .p-frames{display:none;margin-top:8px}
+  .participant.popen .p-frames{display:block}
+  .trunc{padding:8px 12px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--border);background:var(--bg3)}
+  .trunc button{margin-left:4px;padding:2px 8px;font-size:12px}
   /* lightbox */
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:60;
             flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px}
@@ -156,6 +164,7 @@ const state = {
   framesOpen: [],          // frames of the currently open request (modal lightbox)
   sessionsById: {},        // first_request_id -> session summary (for lazy participant load)
   boardFramesBySid: {},    // first_request_id -> flat frame list (board lightbox index)
+  boardBySid: {},          // first_request_id -> {participants, read} (for lazy strip render + load-more)
 };
 
 const nameFor = ip => { const n = state.labels[ip]?.name; return n ? `${n} (${ip})` : ip; };
@@ -171,12 +180,13 @@ async function boot(){
     const lookup = (cfg.config && cfg.config.settings && cfg.config.settings.lookup_days) || 14;
     refreshSidebar(lookup);
     if(!state.dates.length){ $('#main').innerHTML='<div class="empty">No data in this bucket yet.</div>'; return; }
-    $('#main').innerHTML='';
+    $('#main').innerHTML='<div class="spin" id="boot-spin">loading sessions…</div>';
     await loadNextDate();           // most recent date
   }catch(e){ $('#main').innerHTML=`<div class="empty">Error: ${esc(e.message)}</div>`; }
 }
 
 async function refreshSidebar(days){
+  $('#ip-list').innerHTML = '<div class="spin" style="padding:14px">loading users…</div>';
   try{ const d = await api(`/api/ips?days=${days||14}`); state.directory = d.ips || []; }
   catch(e){ state.directory = []; }
   renderSidebar();
@@ -205,7 +215,8 @@ async function loadNextDate(){
   if(!date) return;
   let payload;
   try{ payload = await api(`/api/sessions?date=${date}`); }
-  catch(e){ appendHtml(`<div class="empty">Error loading ${date}: ${esc(e.message)}</div>`); return; }
+  catch(e){ document.getElementById('boot-spin')?.remove(); appendHtml(`<div class="empty">Error loading ${date}: ${esc(e.message)}</div>`); return; }
+  document.getElementById('boot-spin')?.remove();
   setHeader(payload, date);
   renderDateGroup(date, payload.sessions);
   renderLoadMore();
@@ -339,52 +350,96 @@ async function toggleSession(el){
   const box = el.querySelector('.req-list');
   if(!box || box.dataset.loaded === '1') return;             // already loaded this session
   box.dataset.loaded = '1';
-  const sid = el.dataset.sid, s = state.sessionsById[sid];
+  await loadParticipants(box, el.dataset.sid, 0);            // 0 → server default request limit
+}
+
+async function loadParticipants(box, sid, limit){
+  const s = state.sessionsById[sid];
   if(!s){ box.innerHTML = '<div class="empty">session not found</div>'; return; }
-  box.innerHTML = '<div class="spin">loading participants…</div>';
+  const total = (s.gcs_prefixes || []).length;
+  box.innerHTML = `<div class="spin">loading participants… (reading ${limit?('up to '+limit):'recent'} of ${total} request${total===1?'':'s'})</div>`;
   try{
+    const payload = {prefixes: s.gcs_prefixes || []};
+    if(limit) payload.limit = limit;
     const r = await fetch('/api/participants', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({prefixes: s.gcs_prefixes || []})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
     });
     const body = await r.json();
     if(body.error) throw new Error(body.error);
-    renderParticipants(box, sid, body.participants || []);
+    renderBoard(box, sid, body);
   }catch(e){
     box.dataset.loaded = '0';                                // let the next expand retry
     box.innerHTML = `<div class="empty">Error loading participants: ${esc(e.message)}</div>`;
   }
 }
 
-function renderParticipants(box, sid, participants){
-  if(!participants.length){ box.innerHTML = '<div class="empty">no frames captured for this session</div>'; return; }
-  const flat = [];                                           // flat list → board lightbox indices
-  let html = '';
-  for(const p of participants){
-    const start = flat.length;
-    for(const f of p.frames) flat.push(f);
-    html += participantHtml(p, sid, start);
-  }
+function renderBoard(box, sid, body){
+  const participants = body.participants || [];
+  // flat frame list for the board lightbox; keep participants for lazy strip render
+  const flat = [];
+  participants.forEach(p => { p._start = flat.length; (p.frames||[]).forEach(f => flat.push(f)); });
   state.boardFramesBySid[sid] = flat;
+  state.boardBySid[sid] = { participants, read: body.n_requests_read || participants.length };
+  if(!participants.length){ box.innerHTML = '<div class="empty">no frames captured for these requests</div>'; return; }
+  let html = '';
+  if(body.truncated){
+    html += `<div class="trunc">showing most recent <b>${body.n_requests_read}</b> of <b>${body.n_requests_total}</b> requests ·
+      <button data-action="loadmore-parts" data-sid="${esc(sid)}">load more</button></div>`;
+  }
+  html += participants.map((p,i)=>participantHtml(p, sid, i)).join('');
   box.innerHTML = html;
+  applyParticipantFilter(box);                               // respect the active verdict filter
 }
 
-function participantHtml(p, sid, startIdx){
+function participantHtml(p, sid, pidx){
   const score = (p.mean_score!=null) ? p.mean_score.toFixed(3) : '—';
   const vcls = p.verdict==='FAKE' ? 'badge-fake' : (p.verdict==='REAL' ? 'badge-real' : 'badge-gate');
   const pct = (p.mean_score!=null) ? Math.round(Math.max(0,Math.min(1,p.mean_score))*100) : 0;
   const col = p.verdict==='FAKE' ? 'var(--red)' : 'var(--green)';
-  const tiles = p.frames.map((f,k)=>boardFrameTile(f, sid, startIdx+k)).join('');
-  return `<div class="participant">
-    <div class="p-hd">
+  // Header only — the frame IMAGES render lazily on click (toggleParticipant),
+  // so opening a session shows lightweight summaries you can browse/filter fast.
+  return `<div class="participant" data-verdict="${esc(p.verdict||'')}" data-gated="${p.n_gated||0}">
+    <div class="p-hd" data-action="ptoggle" data-sid="${esc(sid)}" data-pidx="${pidx}">
+      <span class="caret">▸</span>
       <span class="p-name">${esc(p.participant_id)}</span>
       <span class="badge ${vcls}">${esc(p.verdict||'n/a')}</span>
       <span class="p-score">${score}</span>
       <span class="p-bar"><span class="p-bar-fill" style="width:${pct}%;background:${col}"></span></span>
-      <span class="p-counts">${p.n_frames}f · ${p.n_scored} scored · ${p.n_gated} gated</span>
+      <span class="p-counts">${p.n_frames}f · ${p.n_scored} scored · ${p.n_gated} gated · click to view</span>
     </div>
-    <div class="frames">${tiles}</div>
+    <div class="p-frames" data-rendered="0"></div>
   </div>`;
+}
+
+// Render a participant's frame IMAGES only when its row is expanded — thumbnails
+// (and their GCS fetches) load on demand, not all at once.
+function toggleParticipant(hd){
+  const row = hd.closest('.participant');
+  row.classList.toggle('popen');
+  const cont = row.querySelector('.p-frames');
+  if(!row.classList.contains('popen') || cont.dataset.rendered === '1') return;
+  cont.dataset.rendered = '1';
+  const board = state.boardBySid[hd.dataset.sid]; if(!board) return;
+  const p = board.participants[+hd.dataset.pidx]; if(!p) return;
+  cont.innerHTML = `<div class="frames">${(p.frames||[]).map((f,k)=>boardFrameTile(f, hd.dataset.sid, p._start + k)).join('')}</div>`;
+}
+
+async function loadMoreParts(sid){
+  const box = document.querySelector(`.session[data-sid="${sid}"] .req-list`);
+  if(!box) return;
+  const cur = (state.boardBySid[sid] && state.boardBySid[sid].read) || 80;
+  await loadParticipants(box, sid, cur + 200);               // pull more (older) requests
+}
+
+function applyParticipantFilter(scope){
+  const v = $('#f-verdict').value;
+  (scope || document).querySelectorAll('.participant').forEach(row=>{
+    let ok = true;
+    if(v==='FAKE') ok = row.dataset.verdict==='FAKE';
+    else if(v==='REAL') ok = row.dataset.verdict==='REAL';
+    else if(v==='gated') ok = (+row.dataset.gated) > 0;
+    row.style.display = ok ? '' : 'none';
+  });
 }
 
 function boardFrameTile(f, sid, idx){
@@ -428,6 +483,8 @@ document.addEventListener('click', e => {
   if(a==='open') return openRequest(t.dataset.prefix);
   if(a==='zoom') return openLightbox(+t.dataset.idx);
   if(a==='zoomboard') return openBoardLightbox(t.dataset.sid, +t.dataset.idx);
+  if(a==='ptoggle') return toggleParticipant(t);
+  if(a==='loadmore-parts') return loadMoreParts(t.dataset.sid);
 });
 $('#ip-search').addEventListener('input', renderSidebar);
 $('#panel-close').onclick = ()=> $('#overlay').classList.remove('open');
@@ -450,7 +507,7 @@ function applyFilters(){
     r.style.display = ok?'':'none';
   });
 }
-$('#f-verdict').onchange = applyFilters;
+$('#f-verdict').onchange = ()=>{ applyFilters(); applyParticipantFilter(); };
 $('#f-status').onchange = applyFilters;
 
 boot();
