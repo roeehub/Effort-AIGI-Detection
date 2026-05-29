@@ -81,6 +81,15 @@
   .fr .ph{height:140px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;padding:6px}
   .fr .ov{position:absolute;top:4px;left:4px;display:flex;gap:4px}
   .fr .cap{font-size:11px;color:var(--muted);padding:4px 6px}
+  /* participant board */
+  .participant{border-top:1px solid var(--border);padding:9px 12px}
+  .participant:first-child{border-top:none}
+  .p-hd{display:flex;align-items:center;gap:10px;margin-bottom:7px;flex-wrap:wrap}
+  .p-name{font-weight:600;min-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .p-score{font-variant-numeric:tabular-nums}
+  .p-bar{flex:0 0 120px;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
+  .p-bar-fill{display:block;height:100%}
+  .p-counts{font-size:12px;color:var(--muted);margin-left:auto}
   /* lightbox */
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:60;
             flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px}
@@ -144,7 +153,9 @@ const api = async (u) => { const r = await fetch(u); if(!r.ok){throw new Error((
 const state = {
   dates: [], loadedIdx: -1, labels: {}, view: 'latest',
   selectedIp: null, directory: [], filters: {verdict:'', status:''},
-  framesOpen: [],   // frames of the currently open request (for lightbox)
+  framesOpen: [],          // frames of the currently open request (modal lightbox)
+  sessionsById: {},        // first_request_id -> session summary (for lazy participant load)
+  boardFramesBySid: {},    // first_request_id -> flat frame list (board lightbox index)
 };
 
 const nameFor = ip => { const n = state.labels[ip]?.name; return n ? `${n} (${ip})` : ip; };
@@ -210,14 +221,15 @@ function renderDateGroup(date, sessions){
 function sessionHtml(s){
   const cls = s.fake_requests>0 ? 'fake' : (s.n_gated>0 ? 'warn' : 'clean');
   const dur = (s.duration_ms/60000).toFixed(1);
-  const reqs = s.requests.map(reqHtml).join('');
-  return `<div class="session ${cls}" data-sid="${esc(s.first_request_id)}">
+  const sid = s.first_request_id;
+  state.sessionsById[sid] = s;          // kept for lazy per-participant load on expand
+  return `<div class="session ${cls}" data-sid="${esc(sid)}">
     <div class="session-hd" data-action="toggle">
       <span class="who">${esc(nameFor(s.client_ip))}</span>
       <span class="meta">${s.n_requests} req · ${s.n_frames} frames · ${s.fake_requests} fake · ${dur}m</span>
       <span class="meta">${fmtUtc(s.start_utc)} → ${fmtUtc(s.end_utc)}</span>
     </div>
-    <div class="req-list">${reqs}</div></div>`;
+    <div class="req-list" data-loaded="0"><div class="spin">loading participants…</div></div></div>`;
 }
 
 function reqHtml(r){
@@ -308,14 +320,84 @@ function frameTile(f, i){
     <div class="cap">#${f.seq} · ${esc(f.content_type||'')} · ${p}</div></div>`;
 }
 
-function openLightbox(i){
-  const f = state.framesOpen[i]; if(!f) return;
-  if(!f.frame_url){ return; }
+function showLightbox(f){
+  if(!f || !f.frame_url) return;
   $('#lb-img').src = f.frame_url + '?full=1';
   const d = f.dims ? `${f.dims.w}×${f.dims.h}` : '—';
+  const who = f.participant_id ? `${f.participant_id} #${f.participant_seq!=null?f.participant_seq:f.seq}` : `#${f.seq}`;
   $('#lb-cap').textContent =
-    `#${f.seq} ${f.filename||''} · ${f.verdict||'?'} prob=${f.prob} · gate_pass=${f.gate_pass} ${f.gate_reason?('('+f.gate_reason+')'):''} · ${d} · ${f.bytes_human} · sha256=${(f.sha256||'').slice(0,16)}…`;
+    `${who} ${f.filename||''} · ${f.verdict||'?'} prob=${f.prob} · gate_pass=${f.gate_pass} ${f.gate_reason?('('+f.gate_reason+')'):''} · ${d} · ${f.bytes_human||''} · sha256=${(f.sha256||'').slice(0,16)}…`;
   $('#lightbox').classList.add('open');
+}
+function openLightbox(i){ showLightbox(state.framesOpen[i]); }                  // request-modal lightbox
+function openBoardLightbox(sid, i){ showLightbox((state.boardFramesBySid[sid]||[])[i]); }
+
+// ── session → participant board (lazy-loaded on first expand) ─────────────────
+async function toggleSession(el){
+  el.classList.toggle('open');
+  if(!el.classList.contains('open')) return;                 // collapsing — nothing to do
+  const box = el.querySelector('.req-list');
+  if(!box || box.dataset.loaded === '1') return;             // already loaded this session
+  box.dataset.loaded = '1';
+  const sid = el.dataset.sid, s = state.sessionsById[sid];
+  if(!s){ box.innerHTML = '<div class="empty">session not found</div>'; return; }
+  box.innerHTML = '<div class="spin">loading participants…</div>';
+  try{
+    const r = await fetch('/api/participants', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prefixes: s.gcs_prefixes || []})
+    });
+    const body = await r.json();
+    if(body.error) throw new Error(body.error);
+    renderParticipants(box, sid, body.participants || []);
+  }catch(e){
+    box.dataset.loaded = '0';                                // let the next expand retry
+    box.innerHTML = `<div class="empty">Error loading participants: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderParticipants(box, sid, participants){
+  if(!participants.length){ box.innerHTML = '<div class="empty">no frames captured for this session</div>'; return; }
+  const flat = [];                                           // flat list → board lightbox indices
+  let html = '';
+  for(const p of participants){
+    const start = flat.length;
+    for(const f of p.frames) flat.push(f);
+    html += participantHtml(p, sid, start);
+  }
+  state.boardFramesBySid[sid] = flat;
+  box.innerHTML = html;
+}
+
+function participantHtml(p, sid, startIdx){
+  const score = (p.mean_score!=null) ? p.mean_score.toFixed(3) : '—';
+  const vcls = p.verdict==='FAKE' ? 'badge-fake' : (p.verdict==='REAL' ? 'badge-real' : 'badge-gate');
+  const pct = (p.mean_score!=null) ? Math.round(Math.max(0,Math.min(1,p.mean_score))*100) : 0;
+  const col = p.verdict==='FAKE' ? 'var(--red)' : 'var(--green)';
+  const tiles = p.frames.map((f,k)=>boardFrameTile(f, sid, startIdx+k)).join('');
+  return `<div class="participant">
+    <div class="p-hd">
+      <span class="p-name">${esc(p.participant_id)}</span>
+      <span class="badge ${vcls}">${esc(p.verdict||'n/a')}</span>
+      <span class="p-score">${score}</span>
+      <span class="p-bar"><span class="p-bar-fill" style="width:${pct}%;background:${col}"></span></span>
+      <span class="p-counts">${p.n_frames}f · ${p.n_scored} scored · ${p.n_gated} gated</span>
+    </div>
+    <div class="frames">${tiles}</div>
+  </div>`;
+}
+
+function boardFrameTile(f, sid, idx){
+  const v = f.verdict==='FAKE'?`<span class="badge badge-fake">F</span>`:(f.verdict==='REAL'?`<span class="badge badge-real">R</span>`:'');
+  const g = (f.gate_pass===false)?`<span class="badge badge-gate" title="${esc(f.gate_reason||'gated')}">gate</span>`:'';
+  const score = (f.prob!=null && f.prob>=0) ? f.prob.toFixed(2) : ((f.prob!=null && f.prob<0) ? 'gated' : '');
+  const cap = `#${f.participant_seq!=null?f.participant_seq:f.seq}${score?(' · '+score):''}`;
+  const body = f.frame_url
+    ? `<img loading="lazy" src="${esc(f.frame_url)}?size=224" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph',textContent:'image error'}))"/>`
+    : `<div class="ph">${f.capture_skipped?'capture skipped':'not stored'}</div>`;
+  return `<div class="fr" data-action="zoomboard" data-sid="${esc(sid)}" data-idx="${idx}">
+    <div class="ov">${v}${g}</div>${body}
+    <div class="cap">${cap}</div></div>`;
 }
 
 // ── name editing (persisted to bucket) ─────────────────────────────────────
@@ -342,9 +424,10 @@ document.addEventListener('click', e => {
   if(a==='latest') return showLatest();
   if(a==='pick') return pickIp(t.dataset.ip);
   if(a==='edit'){ e.stopPropagation(); return editName(t.dataset.ip); }
-  if(a==='toggle') return t.closest('.session').classList.toggle('open');
+  if(a==='toggle') return toggleSession(t.closest('.session'));
   if(a==='open') return openRequest(t.dataset.prefix);
   if(a==='zoom') return openLightbox(+t.dataset.idx);
+  if(a==='zoomboard') return openBoardLightbox(t.dataset.sid, +t.dataset.idx);
 });
 $('#ip-search').addEventListener('input', renderSidebar);
 $('#panel-close').onclick = ()=> $('#overlay').classList.remove('open');

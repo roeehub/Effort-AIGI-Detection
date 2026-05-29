@@ -26,6 +26,7 @@ import re
 import shutil
 import threading
 from collections import OrderedDict, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -39,6 +40,9 @@ from analysis.observability_sessions.sessionize import (
     sessionize,
     summarize_session,
 )
+# Reuse the server's pid parser so the viewer and the capture path share ONE
+# source of truth for the WMA filename wire-format (incl. the URL-decode).
+from observability import parse_pid_from_filename
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +157,61 @@ def attach_frame_urls(meta: Dict[str, Any], bucket: str) -> Dict[str, Any]:
     return meta
 
 
+def group_frames_by_participant(frames, threshold: float = 0.5):
+    """Group a session's frames by participant identity for the session board.
+
+    `frames` is the flat list of frame dicts from one or more request meta.json
+    records (optionally already passed through `attach_frame_urls`). Identity is
+    parsed from each frame's WMA-encoded filename via the shared
+    `parse_pid_from_filename`, so the percent-encoded wire form (`pid%3D…`)
+    groups correctly on today's already-captured data. Frames with no encoded
+    pid land under participant_id ``"unknown"``. Each frame is annotated in
+    place with ``participant_id`` + ``participant_seq``.
+
+    Returns a list of participant dicts::
+
+        {participant_id, n_frames, n_scored, n_gated, mean_score, verdict, frames}
+
+    Sorted most-fake-suspicious first (mean_score desc, unscored/None last), then
+    by frame count desc. Frames within a participant are ordered by
+    ``participant_seq`` (the WMA per-participant counter), falling back to the
+    request-local frame ``seq``. ``mean_score`` averages only model-scored frames
+    (``scored`` true and a real, non-sentinel prob); ``verdict`` is by
+    ``mean_score`` vs ``threshold`` (``None`` when nothing was scored).
+    """
+    groups: Dict[str, List[dict]] = defaultdict(list)
+    for f in frames or []:
+        pid, pseq = parse_pid_from_filename(f.get("filename"))
+        f["participant_id"] = pid or "unknown"
+        f["participant_seq"] = pseq
+        groups[f["participant_id"]].append(f)
+
+    out: List[Dict[str, Any]] = []
+    for pid, fs in groups.items():
+        fs.sort(key=lambda f: f["participant_seq"] if f.get("participant_seq") is not None
+                else _as_int(f.get("seq")))
+        scored = [f for f in fs
+                  if f.get("scored") and f.get("prob") is not None and f["prob"] >= 0.0]
+        n_gated = sum(1 for f in fs if not f.get("scored")
+                      and (f.get("gate_pass") is False or f.get("face_found") is False))
+        mean_score = (sum(f["prob"] for f in scored) / len(scored)) if scored else None
+        verdict = None if mean_score is None else ("FAKE" if mean_score >= threshold else "REAL")
+        out.append({
+            "participant_id": pid,
+            "n_frames": len(fs),
+            "n_scored": len(scored),
+            "n_gated": n_gated,
+            "mean_score": mean_score,
+            "verdict": verdict,
+            "frames": fs,
+        })
+
+    # Most fake-suspicious first; participants with nothing scored sort last.
+    out.sort(key=lambda p: (p["mean_score"] if p["mean_score"] is not None else -1.0,
+                            p["n_frames"]), reverse=True)
+    return out
+
+
 def normalize_config(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     raw = raw or {}
     settings = dict(DEFAULT_SETTINGS)
@@ -245,6 +304,17 @@ def download_meta(gcs_prefix: str) -> Dict[str, Any]:
     return json.loads(blob.download_as_text())
 
 
+def _load_meta_for_prefix(prefix: str) -> Optional[Dict[str, Any]]:
+    """Read one request's meta.json and attach frame URLs. Fail-soft: returns
+    None for a missing/corrupt meta so one bad request can't break the board."""
+    try:
+        meta = download_meta(prefix)
+    except Exception:
+        return None
+    attach_frame_urls(meta, BUCKET)
+    return meta
+
+
 def _cache_size_human() -> str:
     if not OBS_FRAME_CACHE_DIR.exists():
         return "0 B"
@@ -325,6 +395,49 @@ def api_request():
     except Exception as e:
         return jsonify({"error": str(e)}), 502
     return jsonify(attach_frame_urls(meta, BUCKET))
+
+
+@app.route("/api/participants", methods=["POST"])
+def api_participants():
+    """Per-participant board for ONE session.
+
+    Body: ``{"prefixes": [<request gcs_prefix>, ...], "threshold"?: float}``.
+    Reads each request's meta.json, groups every frame by participant identity
+    (parsed from the encoded filename) and returns frames + per-participant
+    scores so the browser can show each image next to the score it got.
+    Threshold defaults to the session's own request params (else 0.5).
+    """
+    body = request.get_json(silent=True) or {}
+    prefixes = body.get("prefixes") or []
+    if not prefixes:
+        return jsonify({"error": "prefixes required"}), 400
+
+    # meta.json reads are IO-bound; fan them out so a multi-minute session
+    # (hundreds of 2-second requests) still loads quickly.
+    metas: List[Dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for m in ex.map(_load_meta_for_prefix, prefixes):
+            if m is not None:
+                metas.append(m)
+
+    # Threshold: trust the session's own request params; allow a body override.
+    thr = body.get("threshold")
+    if thr is None:
+        thr = next((m.get("params", {}).get("threshold")
+                    for m in metas if (m.get("params") or {}).get("threshold") is not None), 0.5)
+    try:
+        threshold = float(thr)
+    except (TypeError, ValueError):
+        threshold = 0.5
+
+    frames = [f for m in metas for f in (m.get("frames") or [])]
+    participants = group_frames_by_participant(frames, threshold=threshold)
+    return jsonify({
+        "participants": participants,
+        "n_participants": len(participants),
+        "n_frames": len(frames),
+        "threshold": threshold,
+    })
 
 
 @app.route("/api/config")
