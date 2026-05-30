@@ -36,7 +36,6 @@ from google.cloud import storage
 from PIL import Image
 
 from analysis.observability_sessions.sessionize import (
-    read_index_lines,
     sessionize,
     summarize_session,
 )
@@ -59,7 +58,7 @@ OBS_FRAME_CACHE_TARGET_BYTES = int(os.environ.get("OBS_FRAME_CACHE_TARGET_BYTES"
                                                   int(OBS_FRAME_CACHE_MAX_BYTES * 0.8)))
 OBS_FRAME_CACHE_CHECK_EVERY = int(os.environ.get("OBS_FRAME_CACHE_CHECK_EVERY", 40))
 DEFAULT_SETTINGS = {"gap_minutes": 30, "lookup_days": 14}
-_INDEX_CACHE_MAX_DATES = 8
+_INDEX_CACHE_MAX_DATES = 16   # >= the sidebar/IP lookup window so /api/ips then /api/ip don't re-download
 # Max request meta.json files the participant board reads per fetch — bounds work
 # for huge meetings (4000+ requests); the UI raises it via "load more".
 DEFAULT_BOARD_REQUEST_LIMIT = int(os.environ.get("OBS_BOARD_REQUEST_LIMIT", 80))
@@ -293,13 +292,44 @@ def list_dates() -> List[str]:
     return parse_dates(getattr(it, "prefixes", []) or [])
 
 
+def _safe_index_text(blob) -> str:
+    try:
+        return blob.download_as_text()
+    except Exception:
+        return ""
+
+
+def _download_index_rows(date: str) -> List[Dict[str, Any]]:
+    """Download + parse all `_index/*.jsonl` part-files for one date, downloading
+    the parts CONCURRENTLY. A busy day has hundreds of tiny part-files; on a slow
+    link the time is almost all round-trip latency, so fan-out is a big win."""
+    client = _get_gcs_client()
+    bucket = client.bucket(BUCKET)
+    blobs = [b for b in client.list_blobs(bucket, prefix=f"{PREFIX}/date={date}/_index/")
+             if b.name.endswith(".jsonl")]
+    rows: List[Dict[str, Any]] = []
+    if not blobs:
+        return rows
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        for text in ex.map(_safe_index_text, blobs):
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return rows
+
+
 def read_index_rows(date: str) -> List[Dict[str, Any]]:
     """All index lines for one date, with a small LRU in-memory cache."""
     with _cache_lock:
         if date in _date_cache:
             _date_cache.move_to_end(date)
             return _date_cache[date]
-    rows = read_index_lines(BUCKET, PREFIX, [date])
+    rows = _download_index_rows(date)
     with _cache_lock:
         _date_cache[date] = rows
         _date_cache.move_to_end(date)
@@ -435,15 +465,21 @@ def api_ip():
     ip = request.args.get("ip")
     if not ip:
         return jsonify({"error": "ip required"}), 400
-    days = _as_int(request.args.get("days"), DEFAULT_SETTINGS["lookup_days"])
     gap = _as_int(request.args.get("gap_minutes"), 30)
+    date = request.args.get("date")
     try:
-        dates = list_dates()[:max(1, days)]
-        rows = [r for d in dates for r in read_index_rows(d) if r.get("client_ip") == ip]
+        if date:
+            # Single-day load: cheap, lets the UI page a user's history in parts
+            # (newest day first) instead of sweeping every recent day at once.
+            rows = [r for r in read_index_rows(date) if r.get("client_ip") == ip]
+        else:
+            days = _as_int(request.args.get("days"), DEFAULT_SETTINGS["lookup_days"])
+            dates = list_dates()[:max(1, days)]
+            rows = [r for d in dates for r in read_index_rows(d) if r.get("client_ip") == ip]
     except Exception as e:
         return jsonify({"error": str(e)}), 502
     body = sessions_payload(rows, gap_minutes=gap)
-    body.update(ip=ip, days=days)
+    body.update(ip=ip, date=date)
     return jsonify(body)
 
 

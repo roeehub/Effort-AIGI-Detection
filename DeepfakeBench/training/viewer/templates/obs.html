@@ -165,6 +165,7 @@ const state = {
   sessionsById: {},        // first_request_id -> session summary (for lazy participant load)
   boardFramesBySid: {},    // first_request_id -> flat frame list (board lightbox index)
   boardBySid: {},          // first_request_id -> {participants, read} (for lazy strip render + load-more)
+  ipDates: [], ipLoadedIdx: -1, ipTotals: null,   // per-user incremental day paging
 };
 
 const nameFor = ip => { const n = state.labels[ip]?.name; return n ? `${n} (${ip})` : ip; };
@@ -279,12 +280,50 @@ function setHeader(p, date){
 // ── targeted IP view ──────────────────────────────────────────────────────
 async function pickIp(ip){
   state.view='ip'; state.selectedIp=ip; renderSidebar();
-  $('#main').innerHTML='<div class="spin">loading user history…</div>';
-  try{
-    const lookup=14, p = await api(`/api/ip?ip=${encodeURIComponent(ip)}&days=${lookup}`);
-    $('#main').innerHTML=''; setHeader(p, null);
-    renderDateGroup(`${nameFor(ip)} — last ${lookup} days`, p.sessions);
-  }catch(e){ $('#main').innerHTML=`<div class="empty">Error: ${esc(e.message)}</div>`; }
+  $('#main').innerHTML='';
+  // Page this user's history one day at a time (newest first), reading only the
+  // days they actually appear on — so a slow link shows recent activity at once.
+  const entry = state.directory.find(e => e.ip === ip);
+  state.ipDates = (entry && entry.dates && entry.dates.length) ? entry.dates.slice() : state.dates.slice();
+  state.ipLoadedIdx = -1;
+  state.ipTotals = {sess:0, req:0, fake:0, err:0};
+  $('#c-date').textContent = nameFor(ip);
+  $('#c-sess').textContent='0'; $('#c-req').textContent='0'; $('#c-fake').textContent='0'; $('#c-err').textContent='0';
+  api('/api/cache-size').then(c=>$('#c-cache').textContent=c.human).catch(()=>{});
+  if(!state.ipDates.length){ $('#main').innerHTML='<div class="empty">no history for this user in range</div>'; return; }
+  await loadNextIpDate(ip);
+}
+
+async function loadNextIpDate(ip){
+  state.ipLoadedIdx++;
+  const date = state.ipDates[state.ipLoadedIdx];
+  if(!date) return;
+  $('#btn-ip-more')?.remove();
+  const spin = document.createElement('div');
+  spin.className='spin'; spin.textContent=`loading ${nameFor(ip)} — ${date}…`;
+  $('#main').appendChild(spin);
+  let p;
+  try{ p = await api(`/api/ip?ip=${encodeURIComponent(ip)}&date=${date}`); }
+  catch(e){ spin.remove(); appendHtml(`<div class="empty">Error loading ${date}: ${esc(e.message)}</div>`); return; }
+  spin.remove();
+  if(state.view!=='ip' || state.selectedIp!==ip) return;       // user navigated away mid-load
+  renderDateGroup(`${nameFor(ip)} — ${date}`, p.sessions);
+  state.ipTotals.sess += p.n_sessions||0; state.ipTotals.req += p.n_requests||0;
+  for(const s of (p.sessions||[])){ state.ipTotals.fake += s.fake_requests||0;
+    state.ipTotals.err += (s.requests||[]).filter(r=>r.status!=='ok').length; }
+  $('#c-sess').textContent=state.ipTotals.sess; $('#c-req').textContent=state.ipTotals.req;
+  $('#c-fake').textContent=state.ipTotals.fake; $('#c-err').textContent=state.ipTotals.err;
+  renderIpLoadMore(ip);
+}
+
+function renderIpLoadMore(ip){
+  $('#btn-ip-more')?.remove();
+  if(state.ipLoadedIdx < state.ipDates.length-1){
+    const b=document.createElement('button'); b.id='btn-ip-more'; b.className='loadmore';
+    b.textContent=`Load older day (${state.ipDates[state.ipLoadedIdx+1]})`;
+    b.onclick=()=>{ b.disabled=true; loadNextIpDate(ip); };
+    $('#main').appendChild(b);
+  }
 }
 async function showLatest(){
   state.view='latest'; state.selectedIp=null; state.loadedIdx=-1; renderSidebar();

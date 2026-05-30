@@ -194,3 +194,26 @@ def test_route_participants_not_truncated_when_under_limit(client, monkeypatch):
     assert body["n_requests_total"] == 2
     assert body["n_requests_read"] == 2
     assert body["truncated"] is False
+
+
+def test_route_ip_single_date_reads_only_that_date(client, monkeypatch):
+    # Incremental "load in parts": /api/ip?date=Y reads ONLY day Y (one cheap day),
+    # never the full list_dates() sweep — so a slow link pages history day-by-day.
+    read = []
+
+    def fake_rows(date):
+        read.append(date)
+        return [{"request_id": "r1", "client_ip": "1.2.3.4", "ts_epoch_ms": 1,
+                 "utc": "u", "n_frames": 2, "gcs_prefix": "p"}]
+
+    def boom_list_dates():
+        raise AssertionError("list_dates must NOT run in single-date mode")
+
+    monkeypatch.setattr(obs, "read_index_rows", fake_rows)
+    monkeypatch.setattr(obs, "list_dates", boom_list_dates)
+    r = client.get("/api/ip?ip=1.2.3.4&date=2026-05-28")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert read == ["2026-05-28"]          # only the requested day was read
+    assert body["date"] == "2026-05-28"
+    assert body["n_requests"] == 1
