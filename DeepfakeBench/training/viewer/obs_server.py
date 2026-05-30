@@ -34,6 +34,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 from google.api_core.exceptions import NotFound, PreconditionFailed
 from google.cloud import storage
 from PIL import Image
+import requests  # to enlarge the GCS client's HTTP connection pool for parallel reads
 
 from analysis.observability_sessions.sessionize import (
     sessionize,
@@ -59,6 +60,10 @@ OBS_FRAME_CACHE_TARGET_BYTES = int(os.environ.get("OBS_FRAME_CACHE_TARGET_BYTES"
 OBS_FRAME_CACHE_CHECK_EVERY = int(os.environ.get("OBS_FRAME_CACHE_CHECK_EVERY", 40))
 DEFAULT_SETTINGS = {"gap_minutes": 30, "lookup_days": 14}
 _INDEX_CACHE_MAX_DATES = 16   # >= the sidebar/IP lookup window so /api/ips then /api/ip don't re-download
+# A live day can fragment its _index into thousands of tiny part-files (app3
+# flushes every ~10s), so reading one day is round-trip-bound on file count.
+# High fan-out is what cuts it on a slow link. Tunable via env.
+OBS_INDEX_READ_WORKERS = int(os.environ.get("OBS_INDEX_READ_WORKERS", 48))
 # Max request meta.json files the participant board reads per fetch — bounds work
 # for huge meetings (4000+ requests); the UI raises it via "load more".
 DEFAULT_BOARD_REQUEST_LIMIT = int(os.environ.get("OBS_BOARD_REQUEST_LIMIT", 80))
@@ -77,6 +82,16 @@ def _get_gcs_client():
     if _gcs_client is None:
         proj = os.environ.get("GOOGLE_CLOUD_PROJECT", "train-cvit2")
         _gcs_client = storage.Client(project=proj)
+        # Parallel index reads open many concurrent connections to GCS. The
+        # default HTTP pool (10) is smaller than our worker count, so it churns
+        # connections — each replacement pays a fresh TLS handshake, which is
+        # brutal on a slow link. Enlarge the pool so connections get reused.
+        try:
+            adapter = requests.adapters.HTTPAdapter(pool_connections=64, pool_maxsize=64)
+            _gcs_client._http.mount("https://", adapter)
+            _gcs_client._http.mount("http://", adapter)
+        except Exception as e:
+            logger.warning("could not enlarge GCS connection pool: %s", e)
     return _gcs_client
 
 
@@ -310,7 +325,7 @@ def _download_index_rows(date: str) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     if not blobs:
         return rows
-    with ThreadPoolExecutor(max_workers=16) as ex:
+    with ThreadPoolExecutor(max_workers=OBS_INDEX_READ_WORKERS) as ex:
         for text in ex.map(_safe_index_text, blobs):
             for line in text.splitlines():
                 line = line.strip()
