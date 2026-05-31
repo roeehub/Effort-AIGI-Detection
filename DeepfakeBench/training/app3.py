@@ -19,6 +19,7 @@ from torch import nn  # noqa
 import video_preprocessor
 import observability  # per-request capture → GCS (fail-open, never blocks inference)
 from batch_assembly import assemble_probs_list  # pure helper: t5c index-aligned response probs (B1)
+import live_log  # pure console-logging: IP badges, per-participant blocks, anomalies, rolling dashboard
 from detectors import DETECTOR, EffortDetector  # noqa
 from google.cloud import storage  # noqa
 from google.api_core import exceptions  # noqa
@@ -142,71 +143,6 @@ def resolve_gate_profile(query_value: Optional[str]) -> str:
                    f"Must be one of {sorted(GATE_PROFILES.keys())}.",
         )
     return profile
-
-
-def pretty_print_batch(
-    files: List,
-    per_frame_status: List[Dict[str, Any]],
-    confidence: float,
-    threshold: float,
-    pred_label: str,
-) -> None:
-    """ANSI-coloured per-frame readout, printed to the same logger.
-
-    Emits a single multi-line block. Per-frame lines are GREEN when prob<threshold
-    (REAL) and RED when prob>=threshold (FAKE). Gated frames are shown in DIM.
-    The final mean line is colour-keyed by the batch verdict.
-    """
-    RED = "\033[91m"
-    GREEN = "\033[92m"
-    DIM = "\033[2m"
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-
-    total = len(files)
-    bar_w = 16
-
-    lines = []
-    sep = "═" * 78
-    lines.append(sep)
-    head_color = RED if pred_label == "FAKE" else GREEN
-    lines.append(
-        f"{BOLD}[BATCH {total}] threshold={threshold:.2f}  "
-        f"mean={head_color}{confidence:.3f}{RESET}{BOLD} → {head_color}{pred_label}{RESET}"
-    )
-    lines.append("─" * 78)
-
-    for i, (f, s) in enumerate(zip(files, per_frame_status)):
-        name = (f.filename or f"frame_{i}")[:28].ljust(28)
-        kind = s.get("kind")
-        prob = s.get("prob")
-        # Sentinel slots (t5c profile): gated frames and decode failures keep
-        # their place in `probs` for index alignment but carry GATE_SENTINEL_PROB.
-        is_sentinel = prob is not None and prob < 0.0
-        if kind == "failed" and not is_sentinel:
-            lines.append(f"  {DIM}{name}  [decode failed]{RESET}")
-            continue
-        if is_sentinel:
-            reason = s.get("reason", kind or "gated")
-            blank_bar = "·" * bar_w
-            label = "GATED" if kind == "gated" else "FAILED"
-            lines.append(f"  {DIM}{name}  {blank_bar}  sentl  {label}  ({reason}){RESET}")
-            continue
-        if prob is None:
-            lines.append(f"  {DIM}{name}  [no prob]{RESET}")
-            continue
-        filled = int(round(prob * bar_w))
-        bar = "█" * filled + "░" * (bar_w - filled)
-        if kind == "gated":
-            reason = s.get("reason", "gated")
-            lines.append(f"  {DIM}{name}  {bar}  {prob:.3f}  GATED  ({reason}){RESET}")
-        else:
-            color = RED if prob >= threshold else GREEN
-            verdict = "FAKE" if prob >= threshold else "REAL"
-            lines.append(f"  {name}  {color}{bar}  {prob:.3f}  {verdict}{RESET}")
-
-    lines.append(sep)
-    logger.info("\n" + "\n".join(lines))
 
 
 def quality_gate(
@@ -631,6 +567,7 @@ def startup_event() -> None:
     app.state.models = {}
     app.state.loaded_weights_paths = {}
     app.state.obs = None  # observability uploader (set in step 9; None = disabled)
+    app.state.live = None  # live console logger (rich readout + rolling dashboard; set below)
 
     # 1) Device Check
     if device.type == "cuda" and not torch.cuda.is_available():
@@ -762,6 +699,22 @@ def startup_event() -> None:
         logger.exception("⚠️  Observability init failed — serving inference without it.")
         app.state.obs = None
 
+    # Live console logging (IP badges, per-participant blocks, anomalies, rolling
+    # dashboard). Created unconditionally — it's pure stdout formatting, independent
+    # of observability/GCS. Fail-open so a logging issue can never block startup.
+    try:
+        app.state.live = live_log.LiveLog(
+            log_fn=logger.info,
+            cfg=live_log.LogConfig.from_env(),
+            pid_parser=observability.parse_pid_from_filename,
+        )
+        app.state.live.start()
+        logger.info("✅ Live console logging active (rolling dashboard every %ss).",
+                    app.state.live.cfg.dashboard_seconds)
+    except Exception:
+        logger.exception("⚠️  Live console logging init failed — serving without the rich readout.")
+        app.state.live = None
+
     logger.info("Startup complete. Available models: %s, YOLO: %s",
                 list(app.state.models.keys()), app.state.yolo_available)
 
@@ -779,6 +732,13 @@ def shutdown_event() -> None:
             obs.stop(observability.OBS_DRAIN_TIMEOUT_S)
         except Exception:
             logger.exception("Observability shutdown drain failed.")
+
+    live = getattr(app.state, "live", None)
+    if live is not None:
+        try:
+            live.stop()
+        except Exception:
+            logger.exception("Live console logging shutdown failed.")
 
 
 # --- Utility: assert YOLO is loaded ---
@@ -1248,7 +1208,15 @@ async def check_frame_batch(
             profile, successful_frames, total_frames, gated_note, failed_frames, align_to_input,
         )
 
-        pretty_print_batch(files, per_frame_status, confidence, threshold, pred_label)
+        live = getattr(request.app.state, "live", None)
+        if live is not None:
+            # IP = the same client identity the viewer sessionizes on; per-frame
+            # pid is parsed from the filename inside log_batch (fail-open there).
+            client_ip = observability.get_client_ip(request)[0]
+            latency_ms = (time.perf_counter() - _t0) * 1000.0
+            live.log_batch(
+                [f.filename for f in files], per_frame_status, threshold, client_ip, latency_ms,
+            )
 
         if cap is not None:
             cap.status = "ok"
