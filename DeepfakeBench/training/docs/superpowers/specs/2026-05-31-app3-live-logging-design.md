@@ -94,6 +94,7 @@ The per-batch block was reworked for readability after watching it on a real cal
 - **One line per frame** (dropped the multi-cell packing; removed the `OBS_LOG_FRAMES_PER_LINE` knob). "Four lines for four frames" reads far better than packed cells.
 - Each scored frame shows `bar · prob · VERDICT`; each **rejected** frame shows the **full** gate reason (e.g. `min_dim=89<120`) — previously truncated to 8 chars (`min_dim=`), which lost the value.
 - Block header folds in `N scored / N gated / N failed` (so app3's own "Batch inference complete" line is redundant).
+- **ASCII frame** around each batch (restored from the original format the operator was used to): a bold `═` rule top and bottom with a dim `─` under the header, width `OBS_LOG_BOX_WIDTH` (default 72), so consecutive batches don't blur together.
 - app3's redundant per-request INFO logs demoted to **DEBUG** so the block stands alone: the per-frame `[QUALITY-GATE] … REJECTED` lines (now shown per-participant in the block), `Using '<model>' model for inference`, and `Batch inference complete …`. Re-enable with `LOG_LEVEL=DEBUG`. The uvicorn `INFO: POST … 200 OK` access line remains (uvicorn-owned; silence via `--no-access-log` in the launch script if wanted).
 
 ## Out of scope (revisit later if wanted)

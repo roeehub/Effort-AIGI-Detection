@@ -71,6 +71,7 @@ def _bar(prob: float, width: int) -> str:
 class LogConfig:
     frame_cap: int = 8
     bar_width: int = 12
+    box_width: int = 72                # width of the ═ frame drawn around each batch
     no_face_frac: float = 0.5          # flag when MORE THAN this fraction is no-face
     slow_ms: float = 1000.0
     dashboard_seconds: float = 15.0
@@ -93,6 +94,7 @@ class LogConfig:
         return cls(
             frame_cap=_i("OBS_LOG_FRAME_CAP", 8),
             bar_width=_i("OBS_LOG_BAR_WIDTH", 12),
+            box_width=_i("OBS_LOG_BOX_WIDTH", 72),
             no_face_frac=_f("OBS_LOG_NOFACE_FRAC", 0.5),
             slow_ms=_f("OBS_LOG_SLOW_MS", 1000.0),
             dashboard_seconds=_f("OBS_LOG_DASHBOARD_SECONDS", 15.0),
@@ -233,8 +235,8 @@ def format_batch_block(badge: Badge, ip, participants, threshold, latency_ms, cf
         counts += f" / {gated} gated"
     if failed:
         counts += f" / {failed} failed"
-    head = f"═ {clock} {badge.tag()} {ip}  BATCH·{total} thr={_fmt_thr(threshold)}{lat}{counts} ═"
-    lines = [head]
+    head = f" {clock}  {badge.tag()}  {ip}  BATCH·{total}  thr={_fmt_thr(threshold)}{lat}{counts}"
+    lines = [head, f"{DIM}{'─' * cfg.box_width}{RESET}"]
     for p in participants:
         if p.mean is None:
             lines.append(f" {p.name}  — none scored ({p.n}f)")
@@ -265,9 +267,16 @@ def detect_anomalies(badge: Optional[Badge], ip, participants, latency_ms, cfg) 
 
 
 def render_batch(badge: Badge, ip, participants, threshold, latency_ms, cfg, clock="") -> str:
+    """The full framed batch: a ═ rule, the block (+ any anomaly lines), a ═ rule.
+    The frame brackets each batch so consecutive ones don't blur together."""
+    bar = f"{BOLD}{'═' * cfg.box_width}{RESET}"
     block = format_batch_block(badge, ip, participants, threshold, latency_ms, cfg, clock)
     anomalies = detect_anomalies(badge, ip, participants, latency_ms, cfg)
-    return block + "\n" + "\n".join(anomalies) if anomalies else block
+    lines = [bar, block]
+    if anomalies:
+        lines.append("\n".join(anomalies))
+    lines.append(bar)
+    return "\n".join(lines)
 
 
 # --- Rolling dashboard ----------------------------------------------------- #

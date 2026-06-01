@@ -183,6 +183,26 @@ class TestFrameCellAndBlock:
         assert "2 scored" in head
         assert "1 gated" in head
 
+    def test_render_batch_is_framed_top_and_bottom(self):
+        cfg = live_log.LogConfig()
+        badge = live_log.BadgeRegistry().badge("1.2.3.4")
+        parts = live_log.group_by_participant(["a#0"], [{"kind": "tensor", "prob": 0.9}], fake_parser, 0.5)
+        lines = strip(live_log.render_batch(
+            badge, "1.2.3.4", parts, 0.5, 10.0, cfg, clock="00:00:00")).splitlines()
+        assert set(lines[0]) == {"═"}        # solid top border
+        assert set(lines[-1]) == {"═"}       # solid bottom border
+        assert any("1.2.3.4" in ln for ln in lines)   # header lives inside the frame
+
+    def test_render_batch_keeps_anomaly_inside_the_frame(self):
+        cfg = live_log.LogConfig()
+        badge = live_log.BadgeRegistry().badge("1.2.3.4")
+        parts = live_log.group_by_participant(
+            ["a#0"], [{"kind": "gated", "prob": -1.0, "reason": "min_dim=80<110"}], fake_parser, 0.5)
+        lines = strip(live_log.render_batch(
+            badge, "1.2.3.4", parts, 0.5, 10.0, cfg, clock="00:00:00")).splitlines()
+        assert set(lines[-1]) == {"═"}                                  # bottom border last
+        assert any("nothing scored" in ln for ln in lines[:-1])          # anomaly above it
+
     def test_block_header_carries_identity_and_meta(self):
         cfg = live_log.LogConfig()
         reg = live_log.BadgeRegistry()
@@ -331,7 +351,7 @@ class TestActivityRegistry:
 class TestLogConfig:
     def test_defaults(self, monkeypatch):
         for var in (
-            "OBS_LOG_FRAME_CAP", "OBS_LOG_BAR_WIDTH",
+            "OBS_LOG_FRAME_CAP", "OBS_LOG_BAR_WIDTH", "OBS_LOG_BOX_WIDTH",
             "OBS_LOG_NOFACE_FRAC", "OBS_LOG_SLOW_MS", "OBS_LOG_DASHBOARD_SECONDS",
             "OBS_LOG_WINDOW_SECONDS",
         ):
@@ -339,6 +359,7 @@ class TestLogConfig:
         cfg = live_log.LogConfig.from_env()
         assert cfg.frame_cap == 8
         assert cfg.bar_width == 12
+        assert cfg.box_width == 72
         assert cfg.no_face_frac == 0.5
         assert cfg.slow_ms == 1000.0
         assert cfg.dashboard_seconds == 15.0

@@ -100,8 +100,11 @@ GATE_PROFILES: Dict[str, Dict[str, Any]] = {
         # NOTE: ship spec said min_dim=200; relaxed in production after the
         # 2026-05-14 fine G2 sweep (combined-pool identity-correctness peaked
         # at 110-120, sub-200 reals were inflating the no-decision rate).
-        # Set to 120, at the upper edge of the sweep-optimum band.
-        "min_dim": 120,
+        # 2026-06-01: lowered 120→110 (the LOWER edge of that sweep-optimum band)
+        # — real Teams-capture crops were arriving at 117-119px and getting fully
+        # gated (the user was never scored); 110 admits them while staying inside
+        # the validated band. Going below 110 is unsupported by the sweep.
+        "min_dim": 110,
         "min_lap_var": None,            # laplacian check disabled
         "default_prob": GATE_SENTINEL_PROB,  # sentinel in probs (excluded from mean)
         "exclude_gated_from_vote": True,
