@@ -35,6 +35,7 @@ from google.api_core.exceptions import NotFound, PreconditionFailed
 from google.cloud import storage
 from PIL import Image
 import requests  # to enlarge the GCS client's HTTP connection pool for parallel reads
+import yaml       # local ip→name mirror (hand-editable companion to the GCS config)
 
 from analysis.observability_sessions.sessionize import (
     sessionize,
@@ -67,6 +68,11 @@ OBS_INDEX_READ_WORKERS = int(os.environ.get("OBS_INDEX_READ_WORKERS", 48))
 # Max request meta.json files the participant board reads per fetch — bounds work
 # for huge meetings (4000+ requests); the UI raises it via "load more".
 DEFAULT_BOARD_REQUEST_LIMIT = int(os.environ.get("OBS_BOARD_REQUEST_LIMIT", 80))
+# Local, hand-editable mirror of the IP→name labels. The GCS config stays the
+# source of truth for the running UI; this file lets you read/version/edit names
+# offline. Override path via OBS_IP_NAMES_FILE.
+IP_NAMES_FILE = Path(os.environ.get("OBS_IP_NAMES_FILE",
+                                    str(Path(__file__).resolve().parent / "ip_names.yaml")))
 
 app = Flask(__name__, template_folder="templates", static_folder="templates")
 
@@ -292,6 +298,75 @@ def set_label(client, ip: str, name: str, notes: Optional[str] = None,
         except PreconditionFailed as e:
             last_exc = e
     raise last_exc  # exhausted retries
+
+
+# ── Local ip→name mirror (the "Both" half: GCS authoritative + hand-editable file)
+def labels_to_name_map(ip_labels: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """GCS-style {ip: {name, notes}} (or already-flat {ip: name}) → flat {ip: name}."""
+    out: Dict[str, str] = {}
+    for ip, entry in (ip_labels or {}).items():
+        name = entry.get("name") if isinstance(entry, dict) else entry
+        if isinstance(name, str) and name.strip():
+            out[ip] = name
+    return out
+
+
+def load_local_names(path=IP_NAMES_FILE) -> Dict[str, str]:
+    """Read the local ip→name YAML; fail-open to {} on missing/garbage."""
+    try:
+        text = Path(path).read_text()
+    except (FileNotFoundError, OSError):
+        return {}
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(ip): v for ip, v in data.items() if isinstance(v, str) and v.strip()}
+
+
+def dump_local_names(ip_labels: Optional[Dict[str, Any]], path=IP_NAMES_FILE) -> None:
+    """Write the flat ip→name map to YAML atomically (tmp + os.replace)."""
+    names = labels_to_name_map(ip_labels)
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    tmp.write_text(yaml.safe_dump(names, default_flow_style=False, sort_keys=True))
+    os.replace(tmp, p)
+
+
+def compute_label_merge(local_names: Dict[str, str],
+                        gcs_labels: Dict[str, Any]) -> Dict[str, str]:
+    """IPs whose local-file name should be pushed to GCS (file wins on conflict).
+
+    Returns only the deltas — a local name GCS is missing or that differs from
+    GCS. IPs present only in GCS are left untouched.
+    """
+    out: Dict[str, str] = {}
+    for ip, name in (local_names or {}).items():
+        if not (isinstance(name, str) and name.strip()):
+            continue
+        entry = (gcs_labels or {}).get(ip)
+        gcs_name = entry.get("name") if isinstance(entry, dict) else None
+        if name != gcs_name:
+            out[ip] = name
+    return out
+
+
+def merge_local_into_config(client, path=IP_NAMES_FILE) -> Dict[str, Any]:
+    """Startup reconcile: push local-file names into the GCS config (file wins),
+    then mirror the resulting union back to the file. Fail-open at the edges."""
+    local = load_local_names(path)
+    cfg, _gen = read_config(client)
+    for ip, name in compute_label_merge(local, cfg.get("ip_labels", {})).items():
+        cfg = set_label(client, ip, name)
+    final = read_config(client)[0]
+    try:
+        dump_local_names(final.get("ip_labels", {}), path)
+    except OSError:
+        logger.warning("could not mirror IP names to %s", path)
+    return final
 
 
 # ── Data access (GCS; monkeypatched in route tests) ───────────────────────────
@@ -585,6 +660,10 @@ def api_label():
         cfg = set_label(_get_gcs_client(), ip, name, body.get("notes"))
     except Exception as e:
         return jsonify({"error": f"could not save label: {e}"}), 502
+    try:
+        dump_local_names(cfg.get("ip_labels", {}))  # write-through to the local mirror
+    except OSError:
+        logger.warning("label saved to GCS but local mirror write failed")
     return jsonify(cfg)
 
 
@@ -674,6 +753,13 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logger.info("Observability viewer → gs://%s/%s  at http://%s:%d",
                 BUCKET, PREFIX, args.host, args.port)
+    # Reconcile the local ip-name mirror with the GCS config (file wins on
+    # conflict so a hand-edit applies). Best-effort — never blocks startup.
+    try:
+        labelled = (merge_local_into_config(_get_gcs_client()) or {}).get("ip_labels", {})
+        logger.info("IP names reconciled: %d labelled (local mirror: %s)", len(labelled), IP_NAMES_FILE)
+    except Exception:
+        logger.warning("IP-name mirror/merge skipped (GCS or file unavailable).")
     app.run(host=args.host, port=args.port, debug=False)
 
 

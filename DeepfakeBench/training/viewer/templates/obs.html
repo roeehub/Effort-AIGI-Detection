@@ -123,6 +123,8 @@
   <label class="chip">status
     <select id="f-status"><option value="">all</option><option value="ok">ok</option><option value="err">errored</option></select>
   </label>
+  <label class="chip" title="show calls whose start time (UTC) is at/after this">start UTC ≥ <input type="time" id="f-from"></label>
+  <label class="chip" title="…and at/before this (UTC)">≤ <input type="time" id="f-to"></label>
   <span class="chip">cache <b id="c-cache">—</b></span>
   <button id="btn-cache" title="Clear local thumbnail cache">clear cache</button>
 </header>
@@ -268,7 +270,7 @@ function renderLoadMore(){
   }
 }
 
-function appendHtml(h){ const d=document.createElement('div'); d.innerHTML=h; while(d.firstChild) $('#main').appendChild(d.firstChild); }
+function appendHtml(h){ const d=document.createElement('div'); d.innerHTML=h; while(d.firstChild) $('#main').appendChild(d.firstChild); applySessionTimeFilter(); }
 function setHeader(p, date){
   $('#c-date').textContent = state.view==='latest' ? date : `${nameFor(state.selectedIp)}`;
   $('#c-sess').textContent = p.n_sessions; $('#c-req').textContent = p.n_requests;
@@ -548,6 +550,33 @@ function applyFilters(){
 }
 $('#f-verdict').onchange = ()=>{ applyFilters(); applyParticipantFilter(); };
 $('#f-status').onchange = applyFilters;
+
+// ── client-side session start-time filter (UTC, matches the displayed times) ──
+function parseHHMM(s){
+  const m=/^(\d{1,2}):(\d{2})$/.exec((s||'').trim());
+  if(!m) return null;
+  const h=+m[1], mm=+m[2];
+  return (h>=0 && h<24 && mm>=0 && mm<60) ? h*60+mm : null;
+}
+function sessionStartMinUTC(s){
+  const d=new Date(s.start_ts_epoch_ms||0);
+  return d.getUTCHours()*60 + d.getUTCMinutes();
+}
+function applySessionTimeFilter(){
+  const from=parseHHMM($('#f-from').value), to=parseHHMM($('#f-to').value);
+  document.querySelectorAll('.session').forEach(el=>{
+    const s=state.sessionsById[el.dataset.sid];
+    let ok=true;
+    if(s){
+      const m=sessionStartMinUTC(s);
+      if(from!=null && m<from) ok=false;
+      if(to!=null && m>to) ok=false;
+    }
+    el.style.display = ok ? '' : 'none';
+  });
+}
+$('#f-from').oninput = applySessionTimeFilter;
+$('#f-to').oninput = applySessionTimeFilter;
 
 boot();
 </script>
