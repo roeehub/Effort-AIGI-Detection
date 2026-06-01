@@ -47,15 +47,6 @@ PALETTE = [
     "\033[33m",  # yellow
 ]
 
-_REASON_TAGS = {
-    "no_face_detected": "no-face",
-    "min_dim": "min-dim",
-    "decode_failed": "decode",
-    "processing_failed": "failed",
-    "laplacian_var": "blur",
-}
-
-
 def _stable_hash(s: str) -> int:
     """Deterministic across processes (unlike salted builtin hash())."""
     return int(hashlib.md5(s.encode("utf-8")).hexdigest(), 16)
@@ -75,17 +66,10 @@ def _bar(prob: float, width: int) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
-def _short_reason(reason: Optional[str]) -> str:
-    if not reason:
-        return "gated"
-    return _REASON_TAGS.get(reason, reason[:8])
-
-
 # --- Config ---------------------------------------------------------------- #
 @dataclass
 class LogConfig:
     frame_cap: int = 8
-    frames_per_line: int = 3
     bar_width: int = 12
     no_face_frac: float = 0.5          # flag when MORE THAN this fraction is no-face
     slow_ms: float = 1000.0
@@ -108,7 +92,6 @@ class LogConfig:
 
         return cls(
             frame_cap=_i("OBS_LOG_FRAME_CAP", 8),
-            frames_per_line=_i("OBS_LOG_FRAMES_PER_LINE", 3),
             bar_width=_i("OBS_LOG_BAR_WIDTH", 12),
             no_face_frac=_f("OBS_LOG_NOFACE_FRAC", 0.5),
             slow_ms=_f("OBS_LOG_SLOW_MS", 1000.0),
@@ -227,33 +210,42 @@ def group_by_participant(filenames, per_frame_status, pid_parser, threshold) -> 
 
 # --- Formatting ------------------------------------------------------------ #
 def format_frame_cell(frame: FrameView, threshold: float, cfg: LogConfig) -> str:
+    """One frame as its own line: scored → coloured bar + prob + verdict word; a
+    rejected frame → dim dots + the FULL reason (e.g. 'min_dim=89<120'), kept
+    whole so you can see exactly why each frame was rejected."""
     w = cfg.bar_width
     if frame.is_voting and frame.prob is not None:
         color = RED if frame.prob >= threshold else GREEN
-        return f"{color}{_bar(frame.prob, w)}{RESET} {_fmt_prob(frame.prob)}"
-    if frame.kind == "failed":
-        tag = _short_reason(frame.reason) if frame.reason else "failed"
-    else:
-        tag = _short_reason(frame.reason)
-    return f"{DIM}{'·' * w} {tag}{RESET}"
+        verdict = "FAKE" if frame.prob >= threshold else "REAL"
+        return f"{color}{_bar(frame.prob, w)} {_fmt_prob(frame.prob)} {verdict}{RESET}"
+    reason = frame.reason or ("failed" if frame.kind == "failed" else "gated")
+    return f"{DIM}{'·' * w} {reason}{RESET}"
 
 
 def format_batch_block(badge: Badge, ip, participants, threshold, latency_ms, cfg, clock="") -> str:
     total = sum(p.n for p in participants)
+    scored = sum(p.n_voting for p in participants)
+    gated = sum(p.n_gated for p in participants)
+    failed = sum(p.n_failed for p in participants)
     lat = f"  {int(round(latency_ms))}ms" if latency_ms is not None else ""
-    head = f"═ {clock} {badge.tag()} {ip}  BATCH·{total} thr={_fmt_thr(threshold)}{lat} ═"
+    counts = f"  ·  {scored} scored"
+    if gated:
+        counts += f" / {gated} gated"
+    if failed:
+        counts += f" / {failed} failed"
+    head = f"═ {clock} {badge.tag()} {ip}  BATCH·{total} thr={_fmt_thr(threshold)}{lat}{counts} ═"
     lines = [head]
     for p in participants:
-        m = "—" if p.mean is None else _fmt_prob(p.mean)
-        vcolor = RED if p.verdict == "FAKE" else (GREEN if p.verdict == "REAL" else DIM)
-        lines.append(f" {p.name}  mean {m} {vcolor}{p.verdict}{RESET} ({p.n}f)")
+        if p.mean is None:
+            lines.append(f" {p.name}  — none scored ({p.n}f)")
+        else:
+            vcolor = RED if p.verdict == "FAKE" else GREEN
+            lines.append(f" {p.name}  mean {_fmt_prob(p.mean)} {vcolor}{p.verdict}{RESET} ({p.n}f)")
         shown = p.frames[: cfg.frame_cap]
-        cells = [format_frame_cell(f, threshold, cfg) for f in shown]
-        for i in range(0, len(cells), cfg.frames_per_line):
-            lines.append("  " + "   ".join(cells[i: i + cfg.frames_per_line]))
-        overflow = p.n - len(shown)
-        if overflow > 0:
-            lines.append(f"  +{overflow} more · mean {m}")
+        for fr in shown:                       # one line per frame (incl. rejects)
+            lines.append("   " + format_frame_cell(fr, threshold, cfg))
+        if p.n > len(shown):
+            lines.append(f"   +{p.n - len(shown)} more")
     return "\n".join(lines)
 
 

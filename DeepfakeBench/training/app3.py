@@ -789,7 +789,7 @@ def get_model_for_request(request: Request, model_type: Optional[str]) -> nn.Mod
 
     model = available[model_type]
     weights_path = request.app.state.loaded_weights_paths.get(model_type)
-    logger.info(f"Using '{model_type}' model for inference: {weights_path}")
+    logger.debug(f"Using '{model_type}' model for inference: {weights_path}")
     return model
 
 
@@ -1082,7 +1082,7 @@ async def check_frame_batch(
                     if not gate_passes:
                         fc.prob = gated_slot_prob
                 if not gate_passes:
-                    logger.info(
+                    logger.debug(
                         "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (%s)%s",
                         profile, i + 1, total_frames, f.filename or "[unnamed]", gate_reason,
                         f" → sentinel={GATE_SENTINEL_PROB}" if exclude_gated else f" → prob={gated_slot_prob:.2f}",
@@ -1100,7 +1100,7 @@ async def check_frame_batch(
                     processed_face_bgr = video_preprocessor.extract_yolo_face(img_bgr, yolo_conf_threshold)
                     if processed_face_bgr is None:
                         # G1 failure: face detector returned no face.
-                        logger.info(
+                        logger.debug(
                             "[QUALITY-GATE:%s] /check_frame_batch frame %d/%d REJECTED %s (no_face_detected)%s",
                             profile, i + 1, total_frames, f.filename or "[unnamed]",
                             f" → sentinel={GATE_SENTINEL_PROB}" if exclude_gated else f" → prob={gated_slot_prob:.2f}",
@@ -1203,7 +1203,7 @@ async def check_frame_batch(
             f"{gated_frames} gated (sentinel)" if exclude_gated
             else f"{gated_frames} gated (defaulted to {gated_slot_prob})"
         )
-        logger.info(
+        logger.debug(
             "Batch inference complete (profile=%s): %d/%d model-scored, %s, %d decode-failed, aligned=%s",
             profile, successful_frames, total_frames, gated_note, failed_frames, align_to_input,
         )

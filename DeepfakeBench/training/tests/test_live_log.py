@@ -134,25 +134,54 @@ class TestFrameCellAndBlock:
         parts = live_log.group_by_participant([filename], [status], fake_parser, threshold)
         return parts[0].frames[0]
 
-    def test_scored_fake_cell_is_red_and_shows_prob(self):
+    def test_scored_fake_cell_is_red_with_prob_and_verdict(self):
         cfg = live_log.LogConfig()
         cell = live_log.format_frame_cell(self._one({"kind": "tensor", "prob": 0.931}), 0.5, cfg)
         assert live_log.RED in cell
         assert "931" in strip(cell)
         assert "█" in strip(cell)
+        assert "FAKE" in strip(cell)        # verdict word on every frame line
 
-    def test_scored_real_cell_is_green(self):
+    def test_scored_real_cell_is_green_with_verdict(self):
         cfg = live_log.LogConfig()
         cell = live_log.format_frame_cell(self._one({"kind": "tensor", "prob": 0.12}), 0.5, cfg)
         assert live_log.GREEN in cell
+        assert "REAL" in strip(cell)
 
-    def test_gated_cell_is_dim_with_reason_tag(self):
+    def test_gated_cell_shows_full_reason(self):
+        # The whole gate reason (with the value) must survive — NOT truncated to
+        # "min_dim=" — so you can see WHY each frame was rejected.
         cfg = live_log.LogConfig()
-        frame = self._one({"kind": "gated", "prob": -1.0, "reason": "no_face_detected"})
+        frame = self._one({"kind": "gated", "prob": -1.0, "reason": "min_dim=89<120"})
         cell = live_log.format_frame_cell(frame, 0.5, cfg)
         assert live_log.DIM in cell
-        assert "no-face" in strip(cell)
+        assert "min_dim=89<120" in strip(cell)
         assert "·" in strip(cell)
+
+    def test_block_is_one_line_per_frame(self):
+        cfg = live_log.LogConfig()
+        badge = live_log.BadgeRegistry().badge("1.2.3.4")
+        names = [f"dor#{i}" for i in range(3)]
+        status = [{"kind": "tensor", "prob": p} for p in (0.2, 0.3, 0.4)]
+        parts = live_log.group_by_participant(names, status, fake_parser, 0.5)
+        block = strip(live_log.format_batch_block(badge, "1.2.3.4", parts, 0.5, None, cfg, clock="00:00:00"))
+        frame_lines = [ln for ln in block.splitlines() if "█" in ln]
+        assert len(frame_lines) == 3        # one line per frame, not packed
+
+    def test_block_header_shows_scored_and_gated_counts(self):
+        cfg = live_log.LogConfig()
+        badge = live_log.BadgeRegistry().badge("1.2.3.4")
+        names = ["a#0", "a#1", "b#0"]
+        status = [
+            {"kind": "tensor", "prob": 0.9},
+            {"kind": "gated", "prob": -1.0, "reason": "min_dim=89<120"},
+            {"kind": "tensor", "prob": 0.1},
+        ]
+        parts = live_log.group_by_participant(names, status, fake_parser, 0.5)
+        head = strip(live_log.format_batch_block(
+            badge, "1.2.3.4", parts, 0.5, None, cfg, clock="00:00:00")).splitlines()[0]
+        assert "2 scored" in head
+        assert "1 gated" in head
 
     def test_block_header_carries_identity_and_meta(self):
         cfg = live_log.LogConfig()
@@ -302,14 +331,13 @@ class TestActivityRegistry:
 class TestLogConfig:
     def test_defaults(self, monkeypatch):
         for var in (
-            "OBS_LOG_FRAME_CAP", "OBS_LOG_FRAMES_PER_LINE", "OBS_LOG_BAR_WIDTH",
+            "OBS_LOG_FRAME_CAP", "OBS_LOG_BAR_WIDTH",
             "OBS_LOG_NOFACE_FRAC", "OBS_LOG_SLOW_MS", "OBS_LOG_DASHBOARD_SECONDS",
             "OBS_LOG_WINDOW_SECONDS",
         ):
             monkeypatch.delenv(var, raising=False)
         cfg = live_log.LogConfig.from_env()
         assert cfg.frame_cap == 8
-        assert cfg.frames_per_line == 3
         assert cfg.bar_width == 12
         assert cfg.no_face_frac == 0.5
         assert cfg.slow_ms == 1000.0
