@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repository Understanding"
+  short_description: "Map ML architecture and execution flow"
+  default_prompt: "Use $repo-understanding to map this training or evaluation flow and identify the key files and risks."

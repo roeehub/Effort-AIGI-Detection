@@ -1,0 +1,4 @@
+interface:
+  display_name: "Experiment Memory"
+  short_description: "Recover and compare historical ML runs"
+  default_prompt: "Use $experiment-memory to compare these runs, recover prior conclusions, and identify experiment gaps."

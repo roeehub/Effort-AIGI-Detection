@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Understanding"
+  short_description: "Turn ML papers into experiment plans"
+  default_prompt: "Use $research-understanding to turn this paper into implementation blocks and reproducible experiments."
