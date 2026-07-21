@@ -45,14 +45,22 @@ class OVInt8Model:
         self._output = compiled_model.output(0)
 
     def __call__(self, data_dict: dict, inference: bool = True, batch_inference: bool = True) -> dict:
-        # OpenVINO accepts the numpy array directly; the IR input is dynamic-batch
-        # uint8 NHWC BGR [N, 224, 224, 3]. One synchronous call scores the batch.
-        image = data_dict["image"]
-        result = self._model(image)[self._output]
-        # Copy + reshape to a 1-D float32 array that owns its buffer, then expose
-        # it as a torch tensor so the caller's .detach().squeeze().cpu().numpy()
-        # works exactly as it does for the PyTorch model output.
-        probs = np.array(result, dtype=np.float32).reshape(-1)
+        # Score ONE frame per infer call (batch=1) to match the local build's
+        # OPENVINO_BATCH_SIZE=1 wrapper EXACTLY. OpenVINO's CPU plugin returns
+        # batch-size-dependent probabilities at large batches (measured: a
+        # 170-frame batch shifted some probs by up to ~0.08 vs batch=1; batches
+        # <=64 were bit-identical). Per-frame scoring keeps the cloud probs
+        # identical to the local per-frame inference regardless of how many frames
+        # WMA sends per request, and is immune to any machine-specific tiling
+        # threshold. Latency is irrelevant on this parity endpoint.
+        image = data_dict["image"]          # uint8 NHWC BGR [N, 224, 224, 3]
+        n = int(image.shape[0])
+        probs = np.empty(n, dtype=np.float32)
+        for i in range(n):
+            out = self._model(image[i:i + 1])[self._output]
+            probs[i] = float(np.asarray(out).reshape(-1)[0])
+        # Return a torch tensor so the caller's .detach().squeeze().cpu().numpy()
+        # chain works exactly as it does for the PyTorch model output.
         return {"prob": torch.from_numpy(probs)}
 
 
