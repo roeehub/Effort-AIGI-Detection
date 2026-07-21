@@ -1,0 +1,4 @@
+{
+  "_comment": "Plan A, Part A hot flag. Copy to the path in CUSTOM_BACKEND_FLAG_PATH (default: next to app3.py; on the VM set it next to launch_app3.sh). Controls what model_type=custom resolves to. Edit + save to flip live (no restart). 'int8' makes the cloud mirror the local NPU build; 'fp32' is the historical behavior. Absent file = fp32. model_type=custom_fp32 always forces FP32 regardless of this flag.",
+  "backend": "int8"
+}

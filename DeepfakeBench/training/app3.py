@@ -148,6 +148,53 @@ def resolve_gate_profile(query_value: Optional[str]) -> str:
     return profile
 
 
+# --- Custom-backend hot flag (Plan A, Part A) -------------------------------
+# WMA sends model_type=custom (FP32). To make the cloud MIRROR the local INT8
+# build with NO client change, a hot-readable flag remaps 'custom' -> the
+# already-loaded INT8 backend. Editing the flag file flips FP32<->INT8 live (no
+# restart) and it persists across restarts (it IS the durable default). File
+# absent -> 'fp32' (today's behavior, safe). FP32 stays reachable explicitly via
+# model_type=custom_fp32 (A/B + manifest reproduction). Mirrors the mtime-poll
+# pattern used on the WMA side (config/algo_live.json).
+CUSTOM_BACKEND_FLAG_PATH = os.getenv(
+    "CUSTOM_BACKEND_FLAG_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "custom_backend.json"),
+)
+_custom_backend_cache: Dict[str, Any] = {"mtime": None, "value": "fp32"}
+
+
+def resolve_custom_backend() -> str:
+    """Return 'int8' or 'fp32' — what model_type=custom should serve.
+
+    mtime-cached: cost is a single os.stat per call unless the file changed.
+    Absent / unreadable / invalid -> 'fp32' (safe default = pre-flag behavior).
+    """
+    import json  # local (module doesn't otherwise use json)
+    try:
+        mtime = os.path.getmtime(CUSTOM_BACKEND_FLAG_PATH)
+    except OSError:
+        if _custom_backend_cache["mtime"] is not None:
+            _custom_backend_cache["mtime"] = None
+            _custom_backend_cache["value"] = "fp32"
+        return "fp32"
+    if mtime == _custom_backend_cache["mtime"]:
+        return _custom_backend_cache["value"]
+    value = "fp32"
+    try:
+        with open(CUSTOM_BACKEND_FLAG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        raw = str(data.get("backend", "fp32")).lower().strip()
+        if raw in ("int8", "fp32"):
+            value = raw
+        else:
+            logger.warning("custom_backend.json backend=%r invalid; using fp32 (valid: int8|fp32)", raw)
+    except Exception:
+        logger.exception("Could not read %s; using fp32", CUSTOM_BACKEND_FLAG_PATH)
+    _custom_backend_cache["mtime"] = mtime
+    _custom_backend_cache["value"] = value
+    return value
+
+
 def quality_gate(
     img_bgr: Optional[np.ndarray],
     profile: str = "legacy",
@@ -741,6 +788,8 @@ def startup_event() -> None:
     else:
         logger.info("INT8 backend not configured (INT8_MODEL_PATH unset) — FP32 models only.")
 
+    logger.info("Custom-backend hot flag: model_type=custom -> %s (flag file: %s)",
+                resolve_custom_backend(), CUSTOM_BACKEND_FLAG_PATH)
     logger.info("Startup complete. Available models: %s, YOLO: %s",
                 list(app.state.models.keys()), app.state.yolo_available)
 
@@ -1027,6 +1076,18 @@ async def check_frame_batch(
     # In t5c profile this is the sentinel (-1.0). In legacy it's the 0.25 vote.
     gated_slot_prob = spec["default_prob"]
 
+    # Custom-backend hot flag: WMA sends model_type=custom; if the server flag is
+    # 'int8' (and the INT8 backend is loaded) serve INT8 so the cloud mirrors the
+    # local build. custom_fp32 pins FP32. `effective_model_type` is what actually
+    # scores — recorded in observability below so telemetry reflects the truth.
+    effective_model_type = model_type
+    if (model_type in (None, "", "custom")
+            and resolve_custom_backend() == "int8"
+            and request.app.state.models.get("custom_int8") is not None):
+        effective_model_type = "custom_int8"
+    elif model_type == "custom_fp32":
+        effective_model_type = "custom"  # explicit FP32 — never remapped
+
     # Observability: one record per request; one FrameCapture per input file
     # (kept 1:1 with `files`/`per_frame_status`). Fail-open; single enqueue in
     # `finally`. Defined before the try so the finally is always safe.
@@ -1038,7 +1099,7 @@ async def check_frame_batch(
     if _obs is not None:
         try:
             cap = observability.new_record(
-                request, "/check_frame_batch", model_type=model_type, threshold=threshold,
+                request, "/check_frame_batch", model_type=effective_model_type, threshold=threshold,
                 gate_profile=profile, gate_spec=spec, yolo_conf_threshold=yolo_conf_threshold,
                 recrop=recrop, debug=debug,
             )
@@ -1046,10 +1107,11 @@ async def check_frame_batch(
             cap = None
 
     try:
-        # INT8 backend (model_type=custom_int8) is served ONLY on this endpoint.
-        # Kept out of get_model_for_request so the other endpoints (single /
-        # gcs / video) reject it — they have no uint8-BGR preprocessing branch.
-        if model_type == "custom_int8":
+        # INT8 backend (effective model_type=custom_int8, whether requested
+        # explicitly or via the hot-flag remap above) is served ONLY on this
+        # endpoint. Kept out of get_model_for_request so the other endpoints
+        # (single / gcs / video) reject it — they have no uint8-BGR prep branch.
+        if effective_model_type == "custom_int8":
             model = request.app.state.models.get("custom_int8")
             if model is None:
                 raise HTTPException(
@@ -1058,7 +1120,7 @@ async def check_frame_batch(
                     "loaded (set INT8_MODEL_PATH before startup).",
                 )
         else:
-            model = get_model_for_request(request, model_type)
+            model = get_model_for_request(request, effective_model_type)
 
         # The INT8 IR has preprocessing baked in (consumes uint8 NHWC BGR; the IR
         # does BGR->RGB + uint8->float/255 + CLIP-normalize internally). The FP32
