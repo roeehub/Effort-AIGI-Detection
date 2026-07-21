@@ -718,6 +718,29 @@ def startup_event() -> None:
         logger.exception("⚠️  Live console logging init failed — serving without the rich readout.")
         app.state.live = None
 
+    # 10) Load INT8 OpenVINO model (optional, additive). Serves model_type=custom_int8
+    #     on /check_frame_batch for remote<->local INT8 parity (WMA_ACCURACY_PLAN_A).
+    #     Fully guarded: any failure (openvino missing, IR missing, compile error)
+    #     logs and continues with the FP32 models UNAFFECTED. Plain (unencrypted)
+    #     IR — the cloud model is server-side; TPM/encryption is a client-only concern.
+    int8_model_path = os.getenv("INT8_MODEL_PATH")
+    if int8_model_path:
+        try:
+            if not os.path.exists(int8_model_path):
+                raise FileNotFoundError(int8_model_path)
+            import ov_int8_backend  # lazy: openvino imported only when INT8 is enabled
+            int8_device = os.getenv("INT8_DEVICE", "CPU")
+            app.state.models['custom_int8'] = ov_int8_backend.load_int8_model(
+                int8_model_path, device=int8_device
+            )
+            app.state.loaded_weights_paths['custom_int8'] = int8_model_path
+            logger.info("✅ SUCCESS: INT8 OpenVINO model loaded from %s (device=%s)",
+                        int8_model_path, int8_device)
+        except Exception:
+            logger.exception("⚠️  INT8 OpenVINO backend load failed — serving FP32 models only.")
+    else:
+        logger.info("INT8 backend not configured (INT8_MODEL_PATH unset) — FP32 models only.")
+
     logger.info("Startup complete. Available models: %s, YOLO: %s",
                 list(app.state.models.keys()), app.state.yolo_available)
 
@@ -1023,10 +1046,34 @@ async def check_frame_batch(
             cap = None
 
     try:
-        model = get_model_for_request(request, model_type)
+        # INT8 backend (model_type=custom_int8) is served ONLY on this endpoint.
+        # Kept out of get_model_for_request so the other endpoints (single /
+        # gcs / video) reject it — they have no uint8-BGR preprocessing branch.
+        if model_type == "custom_int8":
+            model = request.app.state.models.get("custom_int8")
+            if model is None:
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "model_type=custom_int8 requested but the INT8 backend is not "
+                    "loaded (set INT8_MODEL_PATH before startup).",
+                )
+        else:
+            model = get_model_for_request(request, model_type)
 
-        # Prepare transform once
-        transform = video_preprocessor._get_transform()
+        # The INT8 IR has preprocessing baked in (consumes uint8 NHWC BGR; the IR
+        # does BGR->RGB + uint8->float/255 + CLIP-normalize internally). The FP32
+        # path applies that CLIP transform in code. `baked_int8` selects between
+        # them for the per-frame prep and the batch assembly below.
+        baked_int8 = getattr(model, "expects_uint8_bgr_nhwc", False)
+        if baked_int8 and recrop:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "recrop=true is not supported for model_type=custom_int8 (the parity "
+                "path expects pre-cropped faces, matching the local analyzer).",
+            )
+
+        # Prepare the FP32 CLIP transform once (unused on the baked INT8 path).
+        transform = None if baked_int8 else video_preprocessor._get_transform()
 
         # Per-frame status tracking. The model is run only on frames that pass
         # the quality gate; in legacy profile gated frames vote with prob=0.25,
@@ -1134,10 +1181,16 @@ async def check_frame_batch(
                     cv2.imwrite(save_path, processed_face_bgr)
                     logger.info(f"Debug frame saved to: {save_path}")
 
-                # To tensor (same as /check_frame) - convert to RGB and apply normalization
-                rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
-                image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
-                per_frame_status.append({"kind": "tensor", "tensor": image_tensor})
+                if baked_int8:
+                    # Baked-preprocessing INT8 IR: keep the uint8 BGR face as-is
+                    # (no cvtColor, no normalize — the IR does BGR->RGB + /255 +
+                    # CLIP-normalize internally).
+                    per_frame_status.append({"kind": "tensor", "face_bgr": processed_face_bgr})
+                else:
+                    # To tensor (same as /check_frame) - convert to RGB and apply normalization
+                    rgb_face = cv2.cvtColor(processed_face_bgr, cv2.COLOR_BGR2RGB)
+                    image_tensor = transform(rgb_face).unsqueeze(0)  # (1, C, H, W)
+                    per_frame_status.append({"kind": "tensor", "tensor": image_tensor})
 
             except Exception as e:
                 logger.warning(f"Frame {i+1}/{total_frames}: Processing failed: {e}")
@@ -1152,8 +1205,13 @@ async def check_frame_batch(
         tensor_indices = [i for i, s in enumerate(per_frame_status) if s["kind"] == "tensor"]
         model_probs = []
         if tensor_indices:
-            tensors = [per_frame_status[i]["tensor"] for i in tensor_indices]
-            batch_tensor = torch.cat(tensors, dim=0).to(device)  # (N, C, H, W)
+            if baked_int8:
+                # Stack uint8 BGR faces -> (N, 224, 224, 3) uint8 NHWC for the IR.
+                faces = [per_frame_status[i]["face_bgr"] for i in tensor_indices]
+                batch_tensor = np.ascontiguousarray(np.stack(faces, axis=0)).astype(np.uint8)
+            else:
+                tensors = [per_frame_status[i]["tensor"] for i in tensor_indices]
+                batch_tensor = torch.cat(tensors, dim=0).to(device)  # (N, C, H, W)
             with torch.inference_mode():
                 preds = model({'image': batch_tensor}, inference=True)
                 raw_probs = preds["prob"].detach().squeeze().cpu().numpy().tolist()
